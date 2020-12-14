@@ -353,42 +353,46 @@
     project.notes = notesQuill.getContents();
   });
   
-  document.addEventListener ("keydown", function (zEvent) {
-      if (zEvent.ctrlKey  && zEvent.shiftKey && zEvent.key === "ArrowUp") {  // case sensitive
-        stopDefaultPropagation(zEvent);
+  document.addEventListener ("keydown", function (e) {
+      if (e.ctrlKey  && e.shiftKey && e.key === "ArrowUp") {
+        stopDefaultPropagation(e);
         moveChapUp(project.activeChapterIndex);   
       }
-      else if(zEvent.ctrlKey && zEvent.shiftKey && zEvent.key === "ArrowDown"){
-        stopDefaultPropagation(zEvent);
+      else if(e.ctrlKey && e.shiftKey && e.key === "ArrowDown"){
+        stopDefaultPropagation(e);
         moveChapDown(project.activeChapterIndex);    
       }
-      else if(zEvent.ctrlKey && zEvent.key === "ArrowUp"){
-        stopDefaultPropagation(zEvent);
+      else if(e.ctrlKey && e.key === "ArrowUp"){
+        stopDefaultPropagation(e);
         displayPreviousChapter();
       }
-      else if(zEvent.ctrlKey && zEvent.key === "ArrowDown"){
-        stopDefaultPropagation(zEvent);
+      else if(e.ctrlKey && e.key === "ArrowDown"){
+        stopDefaultPropagation(e);
         displayNextChapter();
       }
-      else if(zEvent.ctrlKey && zEvent.key === "s"){
-        stopDefaultPropagation(zEvent);
+      else if(e.ctrlKey && e.key === "s"){
+        stopDefaultPropagation(e);
         saveProject();
       }
-      else if(zEvent.altKey && zEvent.key === "n"){
-        stopDefaultPropagation(zEvent);
+      else if(e.ctrlKey && e.key === "n"){
+        stopDefaultPropagation(e);
         addNewChapter();
       }
-      else if(zEvent.ctrlKey && zEvent.key === "d"){
-        stopDefaultPropagation(zEvent);
+      else if(e.ctrlKey && e.key === "d"){
+        stopDefaultPropagation(e);
         moveToTrash(project.activeChapterIndex);
       }
-      else if(zEvent.altKey && zEvent.key === "r"){
-        stopDefaultPropagation(zEvent);
+      else if(e.ctrlKey && e.key === "r"){
+        stopDefaultPropagation(e);
         restoreFromTrash(project.activeChapterIndex);
       }
-      else if(zEvent.ctrlKey && zEvent.key === "ArrowLeft"){
-        stopDefaultPropagation(zEvent);
+      else if(e.ctrlKey && e.key === "ArrowLeft"){
+        stopDefaultPropagation(e);
         changeChapterTitle(project.activeChapterIndex);
+      }
+      else if(e.ctrlKey && e.key === "ArrowRight"){
+        stopDefaultPropagation(e);
+        notesQuill.focus();
       }
   } );
   
