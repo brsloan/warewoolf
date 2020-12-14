@@ -27,7 +27,7 @@
   initialize();
   
   function initialize(){
-    project.loadFile("mobyDickProject.txt");
+    project.loadFile("mobyDickProject.woolf");
     updateFileList();
     updateTitleBar();
     displayNotes();

@@ -56,7 +56,7 @@ function newChapter(){
               largestFilename = nameNumber;  
           }
         });
-        return (largestFilename + 1).toString() + ".txt";
+        return (largestFilename + 1).toString() + ".pup";
       }
     }
   }
