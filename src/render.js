@@ -27,7 +27,7 @@
   initialize();
   
   function initialize(){
-    loadProject("mobyDickProject.txt");
+    project.loadFile("mobyDickProject.txt");
     updateFileList();
     updateTitleBar();
     displayNotes();
@@ -299,10 +299,7 @@
 
   
   function saveProject(){
-    var projFile = fakeFileSys.find(function(f){
-      return f.filename == project.filename;
-    });
-    projFile.file = project;
+    project.saveFile();
     saveChangedChapters();
   }
   
