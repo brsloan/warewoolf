@@ -1,0 +1,426 @@
+
+  var editorQuill = new Quill('#editor-container', {
+    modules: {
+      toolbar: [
+        [{ header: [1, 2, false] }],
+        ['italic'],
+        [{ 'align': [] }]
+      ]
+    },
+    placeholder: '',
+    theme: 'snow'  // or 'bubble'
+  });
+  
+  var notesQuill = new Quill('#notes-editor', {
+    modules: {
+      toolbar: [
+        [{ header: [1, 2, false] }],
+        ['bold', 'italic', 'underline']
+      ]
+    },
+    placeholder: 'Notes...',
+    theme: 'bubble'  // or 'bubble'
+  });
+  
+ var project = newProject();
+  
+  initialize();
+  
+  function initialize(){
+    loadProject("mobyDickProject.txt");
+    updateFileList();
+    updateTitleBar();
+    displayNotes();
+    displayInitialChapter();
+    editorQuill.focus();
+  }
+  
+  function updateFileList(){
+    var list = document.getElementById("chapter-list");
+    
+    clearList();
+    generateChapterList();
+    generateTrashList(); 
+
+    function clearList() {
+      while (list.hasChildNodes()) {
+        list.removeChild(list.firstChild);
+      }
+    }
+
+    function generateChapterList() {
+      project.chapters.forEach(function (chap, chapIndex) {
+        var listChap = document.createElement("li");
+        listChap.innerHTML = chap.title;
+        listChap.dataset.chapIndex = chapIndex;
+        listChap.onclick = function () {
+          displayChapterByIndex(this.dataset.chapIndex);
+        };
+        listChap.ondblclick = function () {
+          changeChapterTitle(this.dataset.chapIndex);
+        };
+        if (chapIndex == project.activeChapterIndex)
+          listChap.classList.add("activeChapter");
+        if (chap.hasUnsavedChanges == true)
+          listChap.innerHTML += "*";
+        list.appendChild(listChap);
+      });
+    }
+
+    function generateTrashList() {
+      var trashList = document.getElementById("trash-list");
+      while (trashList.hasChildNodes()) {
+        trashList.removeChild(trashList.firstChild);
+      }
+      project.trash.forEach(function (chap, chapIndex) {
+        var listChap = document.createElement("li");
+        listChap.innerHTML = chap.title;
+        listChap.dataset.chapIndex = project.chapters.length + chapIndex;
+        listChap.onclick = function () {
+          displayChapterByIndex(this.dataset.chapIndex);
+        };
+        listChap.ondblclick = function () {
+          changeChapterTitle(this.dataset.chapIndex);
+        };
+        if (chapIndex + project.chapters.length == project.activeChapterIndex)
+          listChap.classList.add("activeChapter");
+        if (chap.hasUnsavedChanges == true)
+          listChap.innerHTML += "*";
+        trashList.appendChild(listChap);
+      });
+    }
+
+  }
+  
+  function displayChapterByIndex(ind){
+    clearCurrentChapterIfUnchanged();
+    project.activeChapterIndex = ind;
+    
+    var chap;
+    if(ind < project.chapters.length){
+      chap = project.chapters[ind];  
+    }
+    else {
+      chap = project.trash[ind - project.chapters.length];  
+    }
+    
+    var contents;
+    if(chap.contents && chap.contents != null){
+      contents = chap.contents;
+    }
+    else{
+       contents = loadChapter(chap);
+    }
+        
+    editorQuill.setContents(contents);
+    updateFileList();
+  }
+  
+
+  
+
+  function updateTitleBar(){
+    var titlebar = document.getElementById("title-bar-text");
+    titlebar.innerHTML = project.title + " by " + project.author;
+  }
+  
+  function displayNotes(){
+    notesQuill.setContents(project.notes);
+  }
+  
+  function displayInitialChapter(){
+    displayChapterByIndex(project.activeChapterIndex);
+  }
+  
+  
+  //User Actions
+  
+  function changeChapterTitle(ind){
+    var chap;
+    if(indexIsTrash(ind))
+      chap = project.trash[ind - project.chapters.length];
+    else
+      chap = project.chapters[ind];
+      
+    var listName = document.querySelector("[data-chap-index='" + ind + "']");
+    var nameBox = document.createElement("input");
+    nameBox.type = "text";
+    nameBox.classList.add("name-box");
+    nameBox.addEventListener("keydown", function(e){
+      if(e.key === "Enter"){
+        stopDefaultPropagation(e);
+        chap.title = nameBox.value;
+        chap.hasUnsavedChanges = true;
+        nameBox.remove();
+        updateFileList();
+        editorQuill.focus();
+      }
+      else if (e.key === "Escape"){
+        nameBox.remove();
+        updateFileList();
+        editorQuill.focus();
+      }
+    });
+    nameBox.onblur = function(){
+      updateFileList();
+    };
+    
+    listName.firstChild.remove();
+    listName.appendChild(nameBox);
+    nameBox.focus();
+    
+  }
+  
+  function displayPreviousChapter(){
+    if(project.activeChapterIndex > 0)
+      displayChapterByIndex(project.activeChapterIndex - 1);
+  }
+  
+  function displayNextChapter(){
+    if(project.activeChapterIndex < project.chapters.length - 1 + project.trash.length)
+      displayChapterByIndex(project.activeChapterIndex + 1); 
+  }
+  
+  function moveToTrash(ind){
+    if(indexIsTrash(ind) == false){
+      var toTrash = project.chapters.splice(ind, 1)[0];
+      project.trash.push(toTrash);
+      
+      if(ind == project.activeChapterIndex){
+        if(project.chapters.length > 0){
+          var newInd = ind < project.chapters.length || ind == 0 ? ind : ind - 1;
+          displayChapterByIndex(newInd);
+        }
+        else{
+          displayChapterByIndex(0)
+        }
+      }
+      else
+        updateFileList();
+    }
+    else {
+      verifyToDelete(ind);
+    }
+  }
+  
+  function deleteChapter(ind){
+    var deletedChap = project.trash.splice(ind - project.chapters.length, 1)[0];
+    var indexToDelete = fakeFileSys.findIndex(function(f){
+      return f.filename == deletedChap.filename;
+    });
+    
+    if(indexToDelete > -1)
+      fakeFileSys.splice(indexToDelete, 1);
+    
+    if(ind == project.activeChapterIndex){
+      if(project.trash.length > 0){
+        var newInd = ind < project.trash.length + project.chapters.length || ind - project.chapters.length == 0 ? ind : ind - 1;
+        displayChapterByIndex(newInd);
+      }
+      else{
+        if(project.chapters.length > 0)
+          displayChapterByIndex(project.chapters.length - 1);
+        else{
+          editorQuill.disable();
+          editorQuill.setText("");
+        }
+      }
+    }
+    updateFileList();
+    console.log("deleted " + ind);
+  }
+  
+  function verifyToDelete(ind){
+    if(indexIsTrash(ind)){
+      var popup = document.createElement("div");
+      popup.classList.add("popup");
+      var message = document.createElement("p");
+      message.innerHTML = "Are you sure you want to delete this file? This is permanent.";
+      popup.appendChild(message);
+      /*var yesButton = document.createElement("div");
+      yesButton.innerHTML = "<p>Yes</p>";*/
+      var yesButton = document.createElement("input");
+      yesButton.type = "button";
+      yesButton.value = "Yes"
+      yesButton.onclick = function(){
+        deleteChapter(ind);
+        popup.remove();
+      }
+      var noButton = document.createElement("input");
+      noButton.type = "button";
+      noButton.value = "No";
+      noButton.onclick = function(){
+        popup.remove();
+      }
+      popup.appendChild(yesButton);
+      popup.appendChild(noButton);
+      document.body.appendChild(popup);
+      yesButton.focus();
+    }
+  }
+  
+  function indexIsTrash(ind){
+    return ind > project.chapters.length - 1;
+  }
+  
+  function restoreFromTrash(ind){
+    if(indexIsTrash(ind)){
+      var fromTrash = project.trash.splice(ind - project.chapters.length, 1)[0];
+      project.chapters.push(fromTrash);
+      updateFileList();
+    }
+  }
+  
+  function addNewChapter(){
+    var newChap = newChapter();
+    project.chapters.splice(project.activeChapterIndex + 1, 0, newChap);
+    updateFileList();
+    var thisIndex = project.chapters.indexOf(newChap);
+    displayChapterByIndex(thisIndex);
+    editorQuill.enable();
+    changeChapterTitle(thisIndex);
+  }
+  
+  function saveChangedChapters(){
+    project.chapters.forEach(function(chap, ind){
+      if(chap.hasUnsavedChanges){
+        saveChapter(chap);
+        chap.hasUnsavedChanges = false;
+        if(ind != project.activeChapterIndex){
+          chap.contents = null;
+        }
+      }
+    });
+    project.trash.forEach(function(chap, ind){
+      if(chap.hasUnsavedChanges){
+        saveChapter(chap);
+        chap.hasUnsavedChanges = false;
+        //TODO: handle active index stuff for trash items
+        chap.contents = null;
+      }
+    });
+    updateFileList();
+  }
+  
+  function saveChapter(chap){
+    var chapFile = fakeFileSys.find(function(f){
+      return f.filename == chap.filename;
+    });
+    
+    if(chapFile == undefined){
+      chap.filename = getNewFilename();
+      fakeFileSys.push({ filename: chap.filename, file: chap.contents });
+    }
+    else {
+      chapFile.file = chap.contents;  
+    }
+  }
+  
+  function getNewFilename(){
+    var largestFilename = 0;
+    fakeFileSys.forEach(function(ch){
+      if(ch.filename != null){
+        var nameNumber = parseInt(ch.filename.split(".")[0]);
+        if(nameNumber > largestFilename)
+          largestFilename = nameNumber;  
+      }
+    });
+    return (largestFilename + 1).toString() + ".txt";
+  }
+  
+  function saveProject(){
+    var projFile = fakeFileSys.find(function(f){
+      return f.filename == project.filename;
+    });
+    projFile.file = project;
+    saveChangedChapters();
+  }
+  
+  function moveChapUp(chapInd){
+    if(chapInd > 0 && chapInd < project.chapters.length){
+      var chap = project.chapters.splice(chapInd, 1)[0];
+      project.chapters.splice(chapInd - 1, 0, chap);  
+      project.activeChapterIndex--;
+    }
+    else if(chapInd > project.chapters.length){
+      var trashChap = project.trash.splice(chapInd - project.chapters.length, 1)[0];
+      project.trash.splice(chapInd - project.chapters.length - 1, 0, trashChap);
+      project.activeChapterIndex--;
+    }
+    updateFileList();
+  }
+  
+  function moveChapDown(chapInd){
+    if(chapInd < project.chapters.length - 1){
+      var chap = project.chapters.splice(chapInd, 1)[0];
+      project.chapters.splice(chapInd + 1, 0, chap);
+      project.activeChapterIndex++;
+    }
+    else if(chapInd > project.chapters.length - 1 && chapInd < project.chapters.length + project.trash.length - 1){
+      var trashChap = project.trash.splice(chapInd - project.chapters.length, 1)[0];
+      project.trash.splice(chapInd - project.chapters.length + 1, 0, trashChap);
+      project.activeChapterIndex++;
+    }
+    updateFileList();
+  }
+  
+  
+  //Event Handlers
+  
+  editorQuill.on('text-change', function(delta, oldDelta, source) {
+    if(source == "user"){
+      var chap = project.getActiveChapter();
+      chap.contents = editorQuill.getContents();
+      chap.hasUnsavedChanges = true;  
+    }
+    
+  });
+  
+  notesQuill.on('text-change', function(delta, oldDelta, source){
+    project.notes = notesQuill.getContents();
+  });
+  
+  document.addEventListener ("keydown", function (zEvent) {
+      if (zEvent.ctrlKey  && zEvent.shiftKey && zEvent.key === "ArrowUp") {  // case sensitive
+        stopDefaultPropagation(zEvent);
+        moveChapUp(project.activeChapterIndex);   
+      }
+      else if(zEvent.ctrlKey && zEvent.shiftKey && zEvent.key === "ArrowDown"){
+        stopDefaultPropagation(zEvent);
+        moveChapDown(project.activeChapterIndex);    
+      }
+      else if(zEvent.ctrlKey && zEvent.key === "ArrowUp"){
+        stopDefaultPropagation(zEvent);
+        displayPreviousChapter();
+      }
+      else if(zEvent.ctrlKey && zEvent.key === "ArrowDown"){
+        stopDefaultPropagation(zEvent);
+        displayNextChapter();
+      }
+      else if(zEvent.ctrlKey && zEvent.key === "s"){
+        stopDefaultPropagation(zEvent);
+        saveProject();
+      }
+      else if(zEvent.altKey && zEvent.key === "n"){
+        stopDefaultPropagation(zEvent);
+        addNewChapter();
+      }
+      else if(zEvent.ctrlKey && zEvent.key === "d"){
+        stopDefaultPropagation(zEvent);
+        moveToTrash(project.activeChapterIndex);
+      }
+      else if(zEvent.altKey && zEvent.key === "r"){
+        stopDefaultPropagation(zEvent);
+        restoreFromTrash(project.activeChapterIndex);
+      }
+      else if(zEvent.ctrlKey && zEvent.key === "ArrowLeft"){
+        stopDefaultPropagation(zEvent);
+        changeChapterTitle(project.activeChapterIndex);
+      }
+  } );
+  
+  function stopDefaultPropagation(keyEvent){
+    keyEvent.preventDefault();
+    keyEvent.stopPropagation();
+  }
+  
