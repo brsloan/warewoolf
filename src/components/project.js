@@ -1,3 +1,5 @@
+
+
 function newProject(){
     return {
         filename: "",
@@ -24,26 +26,44 @@ function newProject(){
 
     function loadFile(projName){
 
+
+      //var projectFile = ipcRenderer.sendSync('load-file', projName);
+      /*
       var projectFile = fakeFileSys.find(function(f){
         return f.filename == projName;
       });
+      /*
+      fs.readFile(projName, "utf8", (err, data) => {
+          if (err) throw err;
+          recieveFile(JSON.parse(data));
+      });*/
+
+      var projectFile = JSON.parse(fs.readFileSync("output/" + projName, "utf8"));
+
+     
+        console.log(projectFile);
+       // console.log(projectFile2);
+
+        Object.assign(this, projectFile);
+        this.filename = projName;
+
+        var chaps = [];
+        this.chapters.forEach(function (chap) {
+          chaps.push(newChapter().parseChapter(chap));
+        });
+        this.chapters = chaps;
+
+
+        var trashChaps = [];
+        this.trash.forEach(function (tr) {
+          trashChaps.push(newChapter().parseChapter(tr));
+        });
+        this.trash = trashChaps;
       
-      Object.assign(this, projectFile.file);
-      this.filename = projectFile.filename;
-    
-      var chaps = [];
-      this.chapters.forEach(function(chap){
-       chaps.push(newChapter().parseChapter(chap));
-      });
-      this.chapters = chaps;
-    
-    
-      var trashChaps = [];
-      this.trash.forEach(function(tr){
-        trashChaps.push(newChapter().parseChapter(tr));
-      });
-      this.trash = trashChaps;
     }
+
+
+
 
     function saveFile(){
       var proj = this;

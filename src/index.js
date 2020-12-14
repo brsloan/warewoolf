@@ -61,8 +61,8 @@ ipcMain.handle('save-file', (event, filename, file) => {
 
 ipcMain.handle('load-file', (event, filename) => {
   // ... do actions on behalf of the Renderer
- 
-      var obj = jetpack.dir("output").read(filename, 'json');
+ console.log(filename);
+      var obj = jetpack.read(filename, 'json');
 
-      return obj;
+      event.returnValue = obj;
 })

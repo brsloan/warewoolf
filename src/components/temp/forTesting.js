@@ -62,5 +62,10 @@ var fakeFileSys = [
     {
       filename: "0005.pup",
       file: {"ops":[{"insert":"\tPreviously rejhected chapter sitting int he trash\n"}]}
+    },
+    {
+      filename: "6.pup",
+      file: {"ops":[{"insert":"\tPreviously rejhected chapter sitting int he trash\n"}]}
     }
+    
   ];

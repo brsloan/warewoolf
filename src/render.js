@@ -1,3 +1,6 @@
+const { ipcRenderer } = require('electron');
+const fs = require('fs');
+
 
   var editorQuill = new Quill('#editor-container', {
     modules: {
@@ -103,13 +106,20 @@
     else {
       chap = project.trash[ind - project.chapters.length];  
     }
+
+    console.log("chap: ");
+    console.log(chap);
     
     var contents;
-    if(chap.contents && chap.contents != null){
+    if(chap.contents != undefined && chap.contents != null){
+      console.log("displaying contents: ");
+      console.log(chap.contents);
       contents = chap.contents;
     }
     else{
+      console.log("need to load file");
        contents = chap.getFile();
+       console.log(contents);
     }
         
     editorQuill.setContents(contents);
@@ -268,6 +278,7 @@
   function addNewChapter(){
     var newChap = newChapter();
     newChap.hasUnsavedChanges = true;
+    newChap.contents = {"ops":[{"insert":"\n"}]};
     project.chapters.splice(project.activeChapterIndex + 1, 0, newChap);
     updateFileList();
     var thisIndex = project.chapters.indexOf(newChap);
