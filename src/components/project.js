@@ -24,4 +24,18 @@ function loadProject(projName){
   });
   Object.assign(project, projectFile.file);
   project.filename = projectFile.filename;
+
+  var chaps = [];
+  project.chapters.forEach(function(chap){
+   chaps.push(newChapter().parseChapter(chap));
+  });
+  project.chapters = chaps;
+
+
+  var trashChaps = [];
+  project.trash.forEach(function(tr){
+    trashChaps.push(newChapter().parseChapter(tr));
+  });
+  project.trash = trashChaps;
+  
 }

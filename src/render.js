@@ -109,7 +109,7 @@
       contents = chap.contents;
     }
     else{
-       contents = loadChapter(chap);
+       contents = chap.getFile();
     }
         
     editorQuill.setContents(contents);
@@ -205,12 +205,8 @@
   
   function deleteChapter(ind){
     var deletedChap = project.trash.splice(ind - project.chapters.length, 1)[0];
-    var indexToDelete = fakeFileSys.findIndex(function(f){
-      return f.filename == deletedChap.filename;
-    });
     
-    if(indexToDelete > -1)
-      fakeFileSys.splice(indexToDelete, 1);
+    deletedChap.deleteFile();
     
     if(ind == project.activeChapterIndex){
       if(project.trash.length > 0){
@@ -237,8 +233,6 @@
       var message = document.createElement("p");
       message.innerHTML = "Are you sure you want to delete this file? This is permanent.";
       popup.appendChild(message);
-      /*var yesButton = document.createElement("div");
-      yesButton.innerHTML = "<p>Yes</p>";*/
       var yesButton = document.createElement("input");
       yesButton.type = "button";
       yesButton.value = "Yes"
@@ -273,6 +267,7 @@
   
   function addNewChapter(){
     var newChap = newChapter();
+    newChap.hasUnsavedChanges = true;
     project.chapters.splice(project.activeChapterIndex + 1, 0, newChap);
     updateFileList();
     var thisIndex = project.chapters.indexOf(newChap);
@@ -284,7 +279,7 @@
   function saveChangedChapters(){
     project.chapters.forEach(function(chap, ind){
       if(chap.hasUnsavedChanges){
-        saveChapter(chap);
+        chap.saveFile();
         chap.hasUnsavedChanges = false;
         if(ind != project.activeChapterIndex){
           chap.contents = null;
@@ -293,7 +288,7 @@
     });
     project.trash.forEach(function(chap, ind){
       if(chap.hasUnsavedChanges){
-        saveChapter(chap);
+        chap.saveFile();
         chap.hasUnsavedChanges = false;
         //TODO: handle active index stuff for trash items
         chap.contents = null;
@@ -301,32 +296,7 @@
     });
     updateFileList();
   }
-  
-  function saveChapter(chap){
-    var chapFile = fakeFileSys.find(function(f){
-      return f.filename == chap.filename;
-    });
-    
-    if(chapFile == undefined){
-      chap.filename = getNewFilename();
-      fakeFileSys.push({ filename: chap.filename, file: chap.contents });
-    }
-    else {
-      chapFile.file = chap.contents;  
-    }
-  }
-  
-  function getNewFilename(){
-    var largestFilename = 0;
-    fakeFileSys.forEach(function(ch){
-      if(ch.filename != null){
-        var nameNumber = parseInt(ch.filename.split(".")[0]);
-        if(nameNumber > largestFilename)
-          largestFilename = nameNumber;  
-      }
-    });
-    return (largestFilename + 1).toString() + ".txt";
-  }
+
   
   function saveProject(){
     var projFile = fakeFileSys.find(function(f){
@@ -363,7 +333,13 @@
     }
     updateFileList();
   }
-  
+
+  function clearCurrentChapterIfUnchanged(){
+    var ch = project.getActiveChapter();
+    if(ch && (ch.hasUnsavedChanges == undefined || ch.hasUnsavedChanges == false)){
+      ch.contents = null;
+    }
+  };
   
   //Event Handlers
   
