@@ -1,5 +1,6 @@
 function newProject(){
     return {
+        filename: "",
         title: "",
         author: "",
         notes: {},
@@ -44,9 +45,13 @@ function newProject(){
 
     function saveFile(){
       var proj = this;
-      var projFile = fakeFileSys.find(function(f){
-        return f.filename == proj.filename;
+      
+      var fileString = JSON.stringify(proj, function(k,v){
+        if (k == "contents") return undefined;
+        else if (k == "hasUnsavedChanges") return undefined;
+        else return v;
       });
-      projFile.file = proj;
+
+      ipcRenderer.invoke('save-file', proj.filename, fileString);
     }
 }

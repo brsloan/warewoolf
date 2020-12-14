@@ -299,8 +299,11 @@
 
   
   function saveProject(){
-    project.saveFile();
+    //MUST save chapters before project, as new chapters have their filenames generated when saved
     saveChangedChapters();
+    clearCurrentChapterIfUnchanged();
+    project.saveFile();
+    
   }
   
   function moveChapUp(chapInd){

@@ -1,3 +1,7 @@
+//const { jetpack } = require('fs-jetpack');
+const { ipcRenderer } = require('electron');
+const { valueOf } = require('electron-squirrel-startup');
+
 function newChapter(){
     return {
       title: "new",
@@ -35,6 +39,23 @@ function newChapter(){
 
     function saveFile(){
       var chap = this;
+
+      if(chap.filename == undefined || chap.filename == null)
+        chap.filename = getNewFilename();
+      /*
+      var fileString = JSON.stringify(chap.contents, function(k,v){
+        if (k == "contents") return undefined;
+        else if (k == "hasUnsavedChanges") return undefined;
+        else if (k == "filename") return undefined;
+        else return v;
+      });*/
+
+     
+
+      ipcRenderer.invoke('save-file', chap.filename, JSON.stringify(chap.contents));
+
+      /*
+
       var chapFile = fakeFileSys.find(function(f){
         return f.filename == chap.filename;
       });
@@ -45,7 +66,7 @@ function newChapter(){
       }
       else {
         chapFile.file = chap.contents;  
-      }
+      }*/
 
       function getNewFilename(){
         var largestFilename = 0;
