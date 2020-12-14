@@ -23,9 +23,11 @@ function newProject(){
     }
 
     function loadFile(projName){
+
       var projectFile = fakeFileSys.find(function(f){
         return f.filename == projName;
       });
+      
       Object.assign(this, projectFile.file);
       this.filename = projectFile.filename;
     

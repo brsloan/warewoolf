@@ -55,6 +55,14 @@ app.on('activate', () => {
 
 ipcMain.handle('save-file', (event, filename, file) => {
   // ... do actions on behalf of the Renderer
+ 
+      jetpack.dir("output").write(filename, file);
+})
 
-      jetpack.write(filename, file);
+ipcMain.handle('load-file', (event, filename) => {
+  // ... do actions on behalf of the Renderer
+ 
+      var obj = jetpack.dir("output").read(filename, 'json');
+
+      return obj;
 })
