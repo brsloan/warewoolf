@@ -12,7 +12,8 @@ function newChapter(){
       deleteFile: deleteChapterFile,
       parseChapter: parseChapter,
       getFile: getFile,
-      saveFile: saveFile
+      saveFile: saveFile,
+      saveFileNew: saveFileNew
     };
 
     function deleteChapterFile(){
@@ -53,6 +54,28 @@ function newChapter(){
         return (largestFilename + 1).toString() + ".pup";
       }
     }
+
+    function saveFileNew(){
+      var chap = this;
+
+      if(chap.filename == undefined || chap.filename == null)
+        chap.filename = getNewFilename();
+    
+      fs.writeFileSync(project.directory + chap.filename, JSON.stringify(chap.contents), "utf8");
+
+      function getNewFilename(){
+        var largestFilename = 0;
+
+        fs.readdirSync(project.directory).forEach(file => {
+          var nameNumber = parseInt(file.split(".")[0]);
+          if(nameNumber > largestFilename)
+            largestFilename = nameNumber;
+        });
+        
+        return (largestFilename + 1).toString() + ".pup";
+    }
   }
+
+}
 
   

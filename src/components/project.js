@@ -66,7 +66,14 @@ function newProject(){
       var proj = this;
       var filepathParts = filepath.split('\\');
       proj.filename = filepathParts.pop();
-      proj.directory = filepathParts.join('\\');
+      proj.directory = filepathParts.join('\\').concat("\\");
+
+      proj.chapters.forEach(function(chap){
+        chap.saveFileNew();
+      });
+      proj.trash.forEach(function(tr){
+        tr.saveFileNew();
+      });
 
 
       
