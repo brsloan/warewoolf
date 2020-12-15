@@ -6,16 +6,22 @@ body {
   padding: 2rem;
 */
   background-color: #F0F8FF;
-  padding: 0px;
+  margin: 0;
+  padding-top: 12px;
   font-family: Helvetica, sans-serif;
-  
 }
 
 #title-bar {
   width: 100%;
-  margin: 0px;
-  padding: 0px;
+  margin: 0;
+  padding: 6px;
   text-align: center;
+  overflow: hidden;
+}
+
+#title-bar h1{
+  margin: 0;
+  padding: 0;
 }
 
 .sidebar {

@@ -1,6 +1,8 @@
 const { ipcRenderer } = require('electron');
 const fs = require('fs');
-
+//const { remote } = require('electron');
+//const {Menu, MenuItem} = remote;
+//var menu = Menu.getApplicationMenu();
 
   var editorQuill = new Quill('#editor-container', {
     modules: {
@@ -123,8 +125,7 @@ const fs = require('fs');
   
 
   function updateTitleBar(){
-    var titlebar = document.getElementById("title-bar-text");
-    titlebar.innerHTML = project.title + " by " + project.author;
+    document.title = "Warewoolf: " + project.title;
   }
   
   function displayNotes(){
@@ -182,9 +183,7 @@ const fs = require('fs');
       //editorQuill.focus();
     }; */
 
-
-    
-    listName.innerText = "";
+    listName.firstChild.remove();
     listName.appendChild(nameBox);
     nameBox.focus();
     
@@ -401,10 +400,10 @@ const fs = require('fs');
         stopDefaultPropagation(e);
         displayNextChapter();
       }
-      else if(e.ctrlKey && e.key === "s"){
-        stopDefaultPropagation(e);
-        saveProject();
-      }
+     // else if(e.ctrlKey && e.key === "s"){
+     //   stopDefaultPropagation(e);
+     //   saveProject();
+    //  }
       else if(e.ctrlKey && e.key === "n"){
         stopDefaultPropagation(e);
         addNewChapter();
@@ -432,3 +431,6 @@ const fs = require('fs');
     keyEvent.stopPropagation();
   }
   
+  ipcRenderer.on("save-clicked", function(e){
+    saveProject();
+  });

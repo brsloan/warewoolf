@@ -1,4 +1,4 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, Menu } = require('electron');
 const path = require('path');
 const jetpack = require('fs-jetpack');
 const { ipcMain } = require('electron')
@@ -16,6 +16,7 @@ const createWindow = () => {
     height: 600,
     webPreferences: {
       nodeIntegration: true,
+      enableRemoteModule: true
     }
   });
 
@@ -26,6 +27,76 @@ const createWindow = () => {
 
   // Open the DevTools.
   mainWindow.webContents.openDevTools();
+
+  var menu = Menu.buildFromTemplate([
+    {
+      label: 'File',
+      submenu:[
+        {label: 'New Project'},
+        {label: 'Open Project'},
+        {label: 'Close Project'},
+        {type: 'separator'},
+        {
+          label: 'Save',
+          accelerator: 'CmdOrCtrl+S',
+          click(item, focusWindow){
+            console.log("clicked");
+            mainWindow.webContents.send("save-clicked");
+          }
+        },
+        {label: 'Save As'},
+        {type: 'separator'},
+        {label: 'Import'},
+        {label: 'Export'},
+        {type: 'separator'},
+        {
+          label: 'Exit',
+          click() {
+            app.quit();
+          },
+          accelerator: 'CmdOrCtrl+Shift+X'
+        }
+      ]
+    },
+    {
+      label: 'Edit',
+      submenu: [
+        {
+          label: 'Undo',
+          accelerator: 'CommandOrControl+Z',
+          role: 'undo',
+        },
+        {
+          label: 'Redo',
+          accelerator: 'Shift+CommandOrControl+Z',
+          role: 'redo',
+        },
+        { type: 'separator' },
+        {
+          label: 'Cut',
+          accelerator: 'CommandOrControl+X',
+          role: 'cut',
+        },
+        {
+          label: 'Copy',
+          accelerator: 'CommandOrControl+C',
+          role: 'copy',
+        },
+        {
+          label: 'Paste',
+          accelerator: 'CommandOrControl+V',
+          role: 'paste',
+        },
+        {
+          label: 'Select All',
+          accelerator: 'CommandOrControl+A',
+          role: 'selectall',
+        }
+      ]
+    }
+  ]);
+
+  Menu.setApplicationMenu(menu);
 };
 
 // This method will be called when Electron has finished
@@ -66,3 +137,4 @@ ipcMain.handle('load-file', (event, filename) => {
 
       event.returnValue = obj;
 })
+
