@@ -26,23 +26,7 @@ function newProject(){
 
     function loadFile(projName){
 
-
-      //var projectFile = ipcRenderer.sendSync('load-file', projName);
-      /*
-      var projectFile = fakeFileSys.find(function(f){
-        return f.filename == projName;
-      });
-      /*
-      fs.readFile(projName, "utf8", (err, data) => {
-          if (err) throw err;
-          recieveFile(JSON.parse(data));
-      });*/
-
       var projectFile = JSON.parse(fs.readFileSync("output/" + projName, "utf8"));
-
-     
-        console.log(projectFile);
-       // console.log(projectFile2);
 
         Object.assign(this, projectFile);
         this.filename = projName;

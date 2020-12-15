@@ -31,10 +31,10 @@ function newChapter(){
 
     function getFile(){
       var chap = this;
-      var chapterObj = fakeFileSys.find(function(f){
-        return f.filename == chap.filename;
-      });
-      return chapterObj.file;
+
+      var chapterObj = JSON.parse(fs.readFileSync("output/" + chap.filename, "utf8"));
+
+      return chapterObj;
     }
 
     function saveFile(){

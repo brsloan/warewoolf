@@ -106,20 +106,13 @@ const fs = require('fs');
     else {
       chap = project.trash[ind - project.chapters.length];  
     }
-
-    console.log("chap: ");
-    console.log(chap);
     
     var contents;
     if(chap.contents != undefined && chap.contents != null){
-      console.log("displaying contents: ");
-      console.log(chap.contents);
       contents = chap.contents;
     }
     else{
-      console.log("need to load file");
        contents = chap.getFile();
-       console.log(contents);
     }
         
     editorQuill.setContents(contents);
