@@ -43,13 +43,13 @@ function newChapter(){
 
       function getNewFilename(){
         var largestFilename = 0;
-        fakeFileSys.forEach(function(ch){
-          if(ch.filename != null){
-            var nameNumber = parseInt(ch.filename.split(".")[0]);
-            if(nameNumber > largestFilename)
-              largestFilename = nameNumber;  
-          }
+
+        fs.readdirSync("./output/").forEach(file => {
+          var nameNumber = parseInt(file.split(".")[0]);
+          if(nameNumber > largestFilename)
+            largestFilename = nameNumber;
         });
+        
         return (largestFilename + 1).toString() + ".pup";
       }
     }

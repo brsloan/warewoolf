@@ -150,7 +150,7 @@ const fs = require('fs');
     nameBox.type = "text";
     nameBox.classList.add("name-box");
     nameBox.addEventListener("keydown", function(e){
-      if(e.key === "Enter"){
+      if(e.key === "Enter" || e.key === "Tab"){
         stopDefaultPropagation(e);
         chap.title = nameBox.value;
         chap.hasUnsavedChanges = true;
@@ -164,11 +164,27 @@ const fs = require('fs');
         editorQuill.focus();
       }
     });
+
+    //TODO: Cannot for the life of me figure out how to make the goddam thing
+    //disappaer on blur without introducing errors when the updateFileList
+    //clears the old nodes before creating the new ones so fuck it
+    /*
+    var blur = false;
     nameBox.onblur = function(){
-      updateFileList();
-    };
+      if(!blur){
+        blur = true;
+        //nameBox.remove();
+        nameBox.style.display = "none";
+        updateFileList();
+      }
+      
+
+      //editorQuill.focus();
+    }; */
+
+
     
-    listName.firstChild.remove();
+    listName.innerText = "";
     listName.appendChild(nameBox);
     nameBox.focus();
     
