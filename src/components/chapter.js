@@ -17,12 +17,8 @@ function newChapter(){
 
     function deleteChapterFile(){
       var chap = this;
-      var indexToDelete = fakeFileSys.findIndex(function(f){
-        return f.filename == chap.filename;
-      });
-      
-      if(indexToDelete > -1)
-        fakeFileSys.splice(indexToDelete, 1);
+
+      fs.unlinkSync("output/" + chap.filename);
     }
 
     function parseChapter(chap){

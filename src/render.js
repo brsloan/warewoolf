@@ -209,7 +209,11 @@ const fs = require('fs');
   function deleteChapter(ind){
     var deletedChap = project.trash.splice(ind - project.chapters.length, 1)[0];
     
+    //Always save project file after deleting a chapter
+    //so if user closes without saving it won't expect
+    //the deleted chapter at next load...
     deletedChap.deleteFile();
+    
     
     if(ind == project.activeChapterIndex){
       if(project.trash.length > 0){
@@ -225,6 +229,10 @@ const fs = require('fs');
         }
       }
     }
+
+    //But save it *after* reassigning the activeChapterIndex
+    //in case it is the last chapter that was deleted
+    project.saveFile();
     updateFileList();
     console.log("deleted " + ind);
   }
