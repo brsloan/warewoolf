@@ -12,7 +12,8 @@ function newProject(){
         activeChapterIndex: 0,
         getActiveChapter: getActiveChapter,
         loadFile: loadFile,
-        saveFile: saveFile
+        saveFile: saveFile,
+        saveAs: saveAs
     };
 
     function getActiveChapter(){
@@ -59,5 +60,24 @@ function newProject(){
       });
 
       ipcRenderer.invoke('save-file', proj.filename, fileString);
+    }
+
+    function saveAs(filepath){
+      var proj = this;
+      var filepathParts = filepath.split('\\');
+      proj.filename = filepathParts.pop();
+      proj.directory = filepathParts.join('\\');
+
+
+      
+      var fileString = JSON.stringify(proj, function(k,v){
+        if (k == "contents") return undefined;
+        else if (k == "hasUnsavedChanges") return undefined;
+        else return v;
+      });
+
+      //ipcRenderer.invoke('save-file', filepath, fileString);
+      fs.writeFileSync(filepath, fileString, 'utf8');
+      
     }
 }

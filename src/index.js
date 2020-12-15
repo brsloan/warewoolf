@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu } = require('electron');
+const { app, BrowserWindow, Menu, dialog } = require('electron');
 const path = require('path');
 const jetpack = require('fs-jetpack');
 const { ipcMain } = require('electron')
@@ -40,11 +40,23 @@ const createWindow = () => {
           label: 'Save',
           accelerator: 'CmdOrCtrl+S',
           click(item, focusWindow){
-            console.log("clicked");
             mainWindow.webContents.send("save-clicked");
           }
         },
-        {label: 'Save As'},
+        {
+          label: 'Save As',
+          accelerator: 'CmdOrCtrl+Shift+S',
+          click(item, focusWindow){
+
+
+              mainWindow.webContents.send('save-as-clicked');
+           
+            
+
+
+            
+          }
+        },
         {type: 'separator'},
         {label: 'Import'},
         {label: 'Export'},

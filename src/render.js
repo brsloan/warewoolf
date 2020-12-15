@@ -3,6 +3,7 @@ const fs = require('fs');
 //const { remote } = require('electron');
 //const {Menu, MenuItem} = remote;
 //var menu = Menu.getApplicationMenu();
+const { dialog } = require('electron').remote;
 
   var editorQuill = new Quill('#editor-container', {
     modules: {
@@ -433,4 +434,17 @@ const fs = require('fs');
   
   ipcRenderer.on("save-clicked", function(e){
     saveProject();
+  });
+
+  ipcRenderer.on("save-as-clicked", function(e){
+    const options = {
+      title: 'Save project as...',
+      defaultPath: '/' + project.filename.split(".")[0],
+      filters: [
+        { name: 'WareWoolf Projects', extensions: ['woolf'] }
+      ]
+    }
+    var filepath = dialog.showSaveDialogSync(options);
+    project.saveAs(filepath);
+
   });
