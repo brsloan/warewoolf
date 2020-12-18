@@ -35,7 +35,7 @@ const createWindow = () => {
         {
           label: 'New Project',
           click(item, focusWindow){
-            mainWindow.webContents.send("new-project-clicked");
+            mainWindow.webContents.send("new-project-clicked", app.getPath("documents"));
           }
         },
         {

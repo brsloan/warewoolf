@@ -183,7 +183,7 @@ const { dialog } = require('electron').remote;
   
 
   function updateTitleBar(){
-    document.title = "Warewoolf: " + project.title;
+    document.title = "Warewoolf: " + (project.filename != "" ? project.filename : "unsaved project");
   }
   
   function displayNotes(){
@@ -383,10 +383,14 @@ const { dialog } = require('electron').remote;
   }
 
   
-  function saveProject(){
-    clearCurrentChapterIfUnchanged();
-    project.saveFile();
-    updateFileList();
+  function saveProject(docPath){
+    if(project.filename != ""){
+      clearCurrentChapterIfUnchanged();
+      project.saveFile();
+      updateFileList();
+    }
+    else
+      saveProjectAs(docPath);
   }
   
   function moveChapUp(chapInd){
@@ -487,8 +491,8 @@ const { dialog } = require('electron').remote;
     keyEvent.stopPropagation();
   }
   
-  ipcRenderer.on("save-clicked", function(e){
-    saveProject();
+  ipcRenderer.on("save-clicked", function(e, docPath){
+    saveProject(docPath);
   });
 
   ipcRenderer.on("save-as-clicked", function(e, docPath){
@@ -516,6 +520,7 @@ function saveProjectAs(docPath) {
   if (filepath)
     project.saveAs(filepath);
   updateFileList();
+  updateTitleBar();
 }
 
 function openAProject(docPath) {
