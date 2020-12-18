@@ -1,3 +1,4 @@
+const { TouchBarOtherItemsProxy } = require("electron");
 
 
 function newProject(){
@@ -12,6 +13,7 @@ function newProject(){
         activeChapterIndex: 0,
         getActiveChapter: getActiveChapter,
         loadFile: loadFile,
+        loadFileNew: loadFileNew,
         saveFile: saveFile,
         saveAs: saveAs
     };
@@ -47,6 +49,30 @@ function newProject(){
       
     }
 
+    function loadFileNew(projPath){
+      console.log(projPath);
+      var projectFile = JSON.parse(fs.readFileSync(projPath, "utf8"));
+
+      Object.assign(this, projectFile);
+      var projPathParts = projPath.split('/');
+
+      this.filename = projPathParts.pop();
+      this.directory = projPathParts.join('/').concat("/");
+      
+
+      var chaps = [];
+      this.chapters.forEach(function (chap) {
+        chaps.push(newChapter().parseChapter(chap));
+      });
+      this.chapters = chaps;
+
+
+      var trashChaps = [];
+      this.trash.forEach(function (tr) {
+        trashChaps.push(newChapter().parseChapter(tr));
+      });
+      this.trash = trashChaps;
+    }
 
 
 

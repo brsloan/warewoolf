@@ -33,12 +33,69 @@ const { dialog } = require('electron').remote;
   initialize();
   
   function initialize(){
-    project.loadFile("mobyDickProject.woolf");
+    //project.loadFile("mobyDickProject.woolf");
+    setProject("mobyDickProject.woolf");
+    
+  }
+
+  function setProject(filepath){
+    if(filepath && filepath != null){
+      project.loadFile(filepath);
+    }
+    else{/*
+      project = newProject();
+      requestProjectTitle();
+      addNewChapter();
+      console.log(project);*/
+    }
+      
+    displayProject();
+
+  }
+
+  function displayProject(){
     updateFileList();
     updateTitleBar();
     displayNotes();
     displayInitialChapter();
     editorQuill.focus();
+  }
+
+  function createNewProject(){
+    project = newProject();
+    //addNewChapter();
+    requestProjectTitle();
+    //console.log(project);
+
+    
+
+  }
+
+  function requestProjectTitle(){
+    var popup = document.createElement("div");
+    popup.classList.add("popup");
+    var message = document.createElement("p");
+    message.innerHTML = "What is the title of this project?";
+    popup.appendChild(message);
+    var titleInput = document.createElement("input");
+    titleInput.type = "text";
+    titleInput.placeholder = "Mrs. Dalloway 2: Back In Action";
+    popup.appendChild(titleInput);
+    var createButton = document.createElement("input");
+    createButton.type = "button";
+    createButton.value = "Create"
+    createButton.onclick = function(){
+      if(titleInput.value != "")
+        project.title = titleInput.value;
+      else
+        project.title = "New Project";
+      popup.remove();
+      addNewChapter();
+      displayProject();
+      
+    }
+    popup.appendChild(createButton);
+    document.body.appendChild(popup);
   }
   
   function updateFileList(){
@@ -436,15 +493,36 @@ const { dialog } = require('electron').remote;
     saveProject();
   });
 
-  ipcRenderer.on("save-as-clicked", function(e){
+  ipcRenderer.on("save-as-clicked", function(e, docPath){
     const options = {
       title: 'Save project as...',
-      defaultPath: '/' + project.filename.split(".")[0],
+      defaultPath: docPath + "/*",
       filters: [
         { name: 'WareWoolf Projects', extensions: ['woolf'] }
       ]
     }
     var filepath = dialog.showSaveDialogSync(options);
-    project.saveAs(filepath);
+    if(filepath)
+      project.saveAs(filepath);
 
+  });
+
+  ipcRenderer.on("open-clicked", function(e, docPath){
+    const options = {
+      title: 'Open project...',
+      defaultPath: docPath,
+      filters: [
+        { name: 'WareWoolf Projects', extensions: ['woolf'] }
+      ]
+    };
+    var filepath = dialog.showOpenDialogSync(options);
+    console.log(filepath);
+    if(filepath)
+      project.loadFileNew(filepath[0]);
+
+  });
+
+  ipcRenderer.on('new-project-clicked', function(e){
+    //setProject(null);
+    createNewProject();
   });

@@ -32,8 +32,19 @@ const createWindow = () => {
     {
       label: 'File',
       submenu:[
-        {label: 'New Project'},
-        {label: 'Open Project'},
+        {
+          label: 'New Project',
+          click(item, focusWindow){
+            mainWindow.webContents.send("new-project-clicked");
+          }
+        },
+        {
+          label: 'Open Project',
+          accelerator: 'CmdOrCtrl+O',
+          click(item, focusWindow){
+            mainWindow.webContents.send("open-clicked", app.getPath("documents"));
+          }
+        },
         {label: 'Close Project'},
         {type: 'separator'},
         {
@@ -47,14 +58,7 @@ const createWindow = () => {
           label: 'Save As',
           accelerator: 'CmdOrCtrl+Shift+S',
           click(item, focusWindow){
-
-
-              mainWindow.webContents.send('save-as-clicked');
-           
-            
-
-
-            
+              mainWindow.webContents.send('save-as-clicked', app.getPath("documents"));
           }
         },
         {type: 'separator'},
