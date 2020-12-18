@@ -1,1 +1,53 @@
-{"filename":"mobyDickProject.woolf","title":"Moby  D Dick","author":"Herman Melville","notes":{"ops":[{"insert":"\tMore whale facts\n"},{"attributes":{"underline":true},"insert":"More gayness"},{"insert":"\n"}]},"chapters":[{"title":"Chapter One","filename":"0001.pup","filter":null},{"title":"Chapter Two","filename":"0002.pup","filter":null},{"title":"Chapter Three","filename":"7.pup","filter":null},{"title":"even newer","filename":"8.pup","filter":null}],"filters":[],"trash":[{"title":"Rejected Chapter","filename":"0005.pup","filter":null}],"activeChapterIndex":2}
+{
+    "filename": "/home/pi/programming/warewoolf/output/mobyDickProject.woolf",
+    "title": "Moby  D Dick",
+    "author": "Herman Melville",
+    "notes": {
+        "ops": [
+            {
+                "insert": "\tMore whale facts\n"
+            },
+            {
+                "attributes": {
+                    "underline": true
+                },
+                "insert": "More gayness"
+            },
+            {
+                "insert": "\n"
+            }
+        ]
+    },
+    "chapters": [
+        {
+            "title": "Chapter One",
+            "filename": "0001.pup",
+            "filter": null
+        },
+        {
+            "title": "Chapter Two",
+            "filename": "0002.pup",
+            "filter": null
+        },
+        {
+            "title": "Chapter Three",
+            "filename": "7.pup",
+            "filter": null
+        },
+        {
+            "title": "even newer",
+            "filename": "8.pup",
+            "filter": null
+        }
+    ],
+    "filters": [],
+    "trash": [
+        {
+            "title": "Rejected Chapter",
+            "filename": "0005.pup",
+            "filter": null
+        }
+    ],
+    "activeChapterIndex": 2,
+    "directory": "\\"
+}

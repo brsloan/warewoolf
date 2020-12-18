@@ -61,7 +61,12 @@ function newChapter(){
       if(chap.filename == undefined || chap.filename == null)
         chap.filename = getNewFilename();
     
-      fs.writeFileSync(project.directory + chap.filename, JSON.stringify(chap.contents), "utf8");
+      var subDir = project.filename.split(".")[0].concat("_pups/");
+
+      if(!fs.existsSync(project.directory + subDir))
+        fs.mkdirSync(project.directory + subDir);
+      
+      fs.writeFileSync(project.directory + subDir + chap.filename, JSON.stringify(chap.contents), "utf8");
 
       function getNewFilename(){
         var largestFilename = 0;

@@ -64,9 +64,16 @@ function newProject(){
 
     function saveAs(filepath){
       var proj = this;
-      var filepathParts = filepath.split('\\');
+      var filepathParts = filepath.split('/');
+
       proj.filename = filepathParts.pop();
-      proj.directory = filepathParts.join('\\').concat("\\");
+      if(proj.filename.substr(proj.filename.length - 6, 6) != ".woolf")
+        proj.filename += ".woolf";
+
+      proj.directory = filepathParts.join('/').concat("/").concat(proj.filename.split('.')[0]).concat("/");
+
+      if(!fs.existsSync(proj.directory))
+        fs.mkdirSync(proj.directory);
 
       proj.chapters.forEach(function(chap){
         chap.saveFileNew();
@@ -84,7 +91,7 @@ function newProject(){
       });
 
       //ipcRenderer.invoke('save-file', filepath, fileString);
-      fs.writeFileSync(filepath, fileString, 'utf8');
+      fs.writeFileSync(proj.directory + proj.filename, fileString, 'utf8');
       
     }
 }
