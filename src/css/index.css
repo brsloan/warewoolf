@@ -73,7 +73,7 @@ ul {
   text-align: center;
 }
 
-.popup input{
+.popup input[type="button"]{
   background-color: gray;
   text-align: center;
   margin: 0px;

@@ -63,15 +63,15 @@ const { dialog } = require('electron').remote;
 
   function createNewProject(){
     project = newProject();
-    //addNewChapter();
-    requestProjectTitle();
-    //console.log(project);
-
-    
-
+    requestProjectTitle(function(title){
+      project.title = title;
+      addNewChapter();
+      displayProject();
+    });
   }
 
-  function requestProjectTitle(){
+
+  function requestProjectTitle(callback){
     var popup = document.createElement("div");
     popup.classList.add("popup");
     var message = document.createElement("p");
@@ -85,17 +85,17 @@ const { dialog } = require('electron').remote;
     createButton.type = "button";
     createButton.value = "Create"
     createButton.onclick = function(){
+      var title;
       if(titleInput.value != "")
-        project.title = titleInput.value;
+        title = titleInput.value;
       else
-        project.title = "New Project";
+        title = "New Project";
       popup.remove();
-      addNewChapter();
-      displayProject();
-      
+      callback(title);
     }
     popup.appendChild(createButton);
     document.body.appendChild(popup);
+    titleInput.focus();
   }
   
   function updateFileList(){
@@ -384,11 +384,9 @@ const { dialog } = require('electron').remote;
 
   
   function saveProject(){
-    //MUST save chapters before project, as new chapters have their filenames generated when saved
-    saveChangedChapters();
     clearCurrentChapterIfUnchanged();
     project.saveFile();
-    
+    updateFileList();
   }
   
   function moveChapUp(chapInd){
@@ -494,35 +492,44 @@ const { dialog } = require('electron').remote;
   });
 
   ipcRenderer.on("save-as-clicked", function(e, docPath){
-    const options = {
-      title: 'Save project as...',
-      defaultPath: docPath + "/*",
-      filters: [
-        { name: 'WareWoolf Projects', extensions: ['woolf'] }
-      ]
-    }
-    var filepath = dialog.showSaveDialogSync(options);
-    if(filepath)
-      project.saveAs(filepath);
+    saveProjectAs(docPath);
 
   });
 
   ipcRenderer.on("open-clicked", function(e, docPath){
-    const options = {
-      title: 'Open project...',
-      defaultPath: docPath,
-      filters: [
-        { name: 'WareWoolf Projects', extensions: ['woolf'] }
-      ]
-    };
-    var filepath = dialog.showOpenDialogSync(options);
-    console.log(filepath);
-    if(filepath)
-      project.loadFileNew(filepath[0]);
-
+    openAProject(docPath);
   });
 
   ipcRenderer.on('new-project-clicked', function(e){
-    //setProject(null);
     createNewProject();
   });
+
+function saveProjectAs(docPath) {
+  const options = {
+    title: 'Save project as...',
+    defaultPath: docPath + "/*",
+    filters: [
+      { name: 'WareWoolf Projects', extensions: ['woolf'] }
+    ]
+  };
+  var filepath = dialog.showSaveDialogSync(options);
+  if (filepath)
+    project.saveAs(filepath);
+  updateFileList();
+}
+
+function openAProject(docPath) {
+  const options = {
+    title: 'Open project...',
+    defaultPath: docPath,
+    filters: [
+      { name: 'WareWoolf Projects', extensions: ['woolf'] }
+    ]
+  };
+  var filepath = dialog.showOpenDialogSync(options);
+  //console.log(filepath);
+  if (filepath) {
+    project.loadFileNew(filepath[0]);
+    displayProject();
+  }
+}

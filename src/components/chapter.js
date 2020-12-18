@@ -58,13 +58,22 @@ function newChapter(){
     function saveFileNew(){
       var chap = this;
       var subDir = project.filename.split(".")[0].concat("_pups/");
-      if(!fs.existsSync(project.directory + subDir))
-        fs.mkdirSync(project.directory + subDir);
+      //if(!fs.existsSync(project.directory + subDir))
+        //fs.mkdirSync(project.directory + subDir);
 
-      //if(chap.filename == undefined || chap.filename == null)
+      //If it does NOT have unsaved changes, it must be already saved, so
+      //you're duplicating the old file to a new location. So load contents from file
+      //before saving.
+      //if(chap.hasUnsavedChanges == false || chap.hasUnsavedChanges == null)
+        //chap.contents = chap.getFile();
+
+      if(chap.filename == undefined || chap.filename == null)
         chap.filename = getNewFilename();
       
-      fs.writeFileSync(project.directory + chap.filename, JSON.stringify(chap.contents ? chap.contents : chap.getFile()), "utf8");
+      fs.writeFileSync(project.directory + chap.filename, JSON.stringify(chap.contents), "utf8");
+      chap.contents = null;
+      chap.hasUnsavedChanges = false;
+
 
       function getNewFilename(){
         var largestFilename = 0;

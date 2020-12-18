@@ -4,6 +4,7 @@ const { TouchBarOtherItemsProxy } = require("electron");
 function newProject(){
     return {
         filename: "",
+        directory: "",
         title: "",
         author: "",
         notes: {},
@@ -77,7 +78,7 @@ function newProject(){
 
 
     function saveFile(){
-      var proj = this;
+      /*var proj = this;
       
       var fileString = JSON.stringify(proj, function(k,v){
         if (k == "contents") return undefined;
@@ -85,38 +86,98 @@ function newProject(){
         else return v;
       });
 
-      ipcRenderer.invoke('save-file', proj.filename, fileString);
+      ipcRenderer.invoke('save-file', proj.filename, fileString);*/
+      var proj = this;
+      if(proj.filename != "" && proj.directory != ""){
+        
+        proj.chapters.forEach(function(chap){
+          if(chap.hasUnsavedChanges){
+            chap.saveFileNew();
+            //chap.hasUnsavedChanges = false;
+          }
+            
+        });
+        proj.trash.forEach(function(tr){
+          if(tr.hasUnsavedChanges){
+            tr.saveFileNew();
+            //tr.hasUnsavedChanges = false;
+          }
+            
+        });
+
+
+        var fileString = JSON.stringify(proj, function(k,v){
+          if (k == "contents") return undefined;
+          else if (k == "hasUnsavedChanges") return undefined;
+          else return v;
+        });
+  
+        fs.writeFileSync(proj.directory + proj.filename, fileString, 'utf8');
+
+      }
+      else
+        alert("Cannot save without filepath. Use Save As.");
     }
 
     function saveAs(filepath){
       var proj = this;
       var filepathParts = filepath.split('/');
+      var newFilename = filepathParts.pop();
+      var newDirectory = filepathParts.join('/').concat("/").concat(newFilename.split('.')[0]).concat("/");
+      var newSubDir = newFilename.split(".")[0].concat("_pups/");
+      
+      //Create new directories
+      if(!fs.existsSync(newDirectory))
+        fs.mkdirSync(newDirectory);
+      if(!fs.existsSync(newDirectory + newSubDir))
+        fs.mkdirSync(newDirectory + newSubDir);
 
-      proj.filename = filepathParts.pop();
+      //Copy any existing chapters over to new location and change name accordingly
+      proj.chapters.forEach(function(chap){
+        if(chap.filename != null){
+          var newChapFilename = newSubDir + chap.filename.split("/").pop();
+          fs.copyFileSync(proj.directory + chap.filename, newDirectory + newChapFilename);
+          chap.filename = newChapFilename;    
+        }
+      });
+      proj.trash.forEach(function(chap){
+        if(chap.filename != null){
+          var newChapFilename = newSubDir + chap.filename.split("/").pop();
+          fs.copyFileSync(proj.directory + chap.filename, newDirectory + newChapFilename);
+          chap.filename = newChapFilename;
+        }
+      });
+
+      //Update project info for new locations
+      proj.filename = newFilename;
       if(proj.filename.substr(proj.filename.length - 6, 6) != ".woolf")
         proj.filename += ".woolf";
-
-      proj.directory = filepathParts.join('/').concat("/").concat(proj.filename.split('.')[0]).concat("/");
-
-      if(!fs.existsSync(proj.directory))
-        fs.mkdirSync(proj.directory);
-
-      proj.chapters.forEach(function(chap){
-        chap.saveFileNew();
-      });
-      proj.trash.forEach(function(tr){
-        tr.saveFileNew();
-      });
-
+      proj.directory = newDirectory;
 
       
+      //Save any new or altered chapters
+      proj.chapters.forEach(function(chap){
+        if(chap.hasUnsavedChanges){
+          chap.saveFileNew();
+          //chap.hasUnsavedChanges = false;
+        }
+      });
+      proj.trash.forEach(function(tr){
+        if(tr.hasUnsavedChanges){
+          tr.saveFileNew();
+          //tr.hasUnsavedChanges = false;
+        }
+        
+      });
+
+
+      //Save new project file
       var fileString = JSON.stringify(proj, function(k,v){
         if (k == "contents") return undefined;
         else if (k == "hasUnsavedChanges") return undefined;
         else return v;
       });
 
-      //ipcRenderer.invoke('save-file', filepath, fileString);
       fs.writeFileSync(proj.directory + proj.filename, fileString, 'utf8');
       
     }
