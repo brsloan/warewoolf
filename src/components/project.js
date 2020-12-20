@@ -28,7 +28,6 @@ function newProject(){
     }
 
     function loadFile(projPath){
-      console.log(projPath);
       var projectFile = JSON.parse(fs.readFileSync(projPath, "utf8"));
 
       Object.assign(this, projectFile);

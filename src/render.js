@@ -1,8 +1,5 @@
 const { ipcRenderer } = require('electron');
 const fs = require('fs');
-//const { remote } = require('electron');
-//const {Menu, MenuItem} = remote;
-//var menu = Menu.getApplicationMenu();
 const { dialog } = require('electron').remote;
 
   var editorQuill = new Quill('#editor-container', {
@@ -40,15 +37,8 @@ const { dialog } = require('electron').remote;
     if(filepath && filepath != null){
       project.loadFile(filepath);
     }
-    else{/*
-      project = newProject();
-      requestProjectTitle();
-      addNewChapter();
-      console.log(project);*/
-    }
       
     displayProject();
-
   }
 
   function displayProject(){

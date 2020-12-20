@@ -1,6 +1,5 @@
 const { app, BrowserWindow, Menu, dialog } = require('electron');
 const path = require('path');
-const jetpack = require('fs-jetpack');
 const { ipcMain } = require('electron')
 
 
@@ -140,17 +139,5 @@ app.on('activate', () => {
 // In this file you can include the rest of your app's specific main process
 // code. You can also put them in separate files and import them here.
 
-ipcMain.handle('save-file', (event, filename, file) => {
-  // ... do actions on behalf of the Renderer
- 
-      jetpack.dir("output").write(filename, file);
-})
 
-ipcMain.handle('load-file', (event, filename) => {
-  // ... do actions on behalf of the Renderer
- console.log(filename);
-      var obj = jetpack.read(filename, 'json');
-
-      event.returnValue = obj;
-})
 
