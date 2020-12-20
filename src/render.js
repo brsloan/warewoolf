@@ -562,12 +562,12 @@ function showProperties(){
 function showCompileOptions(){
   var popup = document.createElement("div");
   popup.classList.add("popup");
-  var exportForm = document.createElement("form");
+  var compileForm = document.createElement("form");
 
   var typeLabel = document.createElement("label");
   typeLabel.innerText = "File Type";
   typeLabel.for = "filetype-select";
-  exportForm.appendChild(typeLabel);
+  compileForm.appendChild(typeLabel);
 
   var typeSelect = document.createElement("select");
   const typeOptions = [".txt", ".odt", "markup"];
@@ -577,34 +577,34 @@ function showCompileOptions(){
     txtOp.innerText = op;
     typeSelect.appendChild(txtOp);
   });
-  exportForm.appendChild(typeSelect);
+  compileForm.appendChild(typeSelect);
 
   var insertStrLabel = document.createElement("label");
   insertStrLabel.innerText = "Insert string to mark chapter breaks:";
   insertStrLabel.for = "insert-str-input";
-  exportForm.appendChild(insertStrLabel);
+  compileForm.appendChild(insertStrLabel);
 
   var insertStrInput = document.createElement("input");
   insertStrInput.type = "text";
   insertStrInput.value = "##";
   insertStrInput.id = "insert-str-input";
-  exportForm.appendChild(insertStrInput);
+  compileForm.appendChild(insertStrInput);
 
   var insertHeadLabel = document.createElement("label");
   insertHeadLabel.innerText = "Insert chapter titles as headings";
   insertHeadLabel.for = "insert-head-check";
-  exportForm.appendChild(insertHeadLabel);
+  compileForm.appendChild(insertHeadLabel);
 
   var insertHeadCheck = document.createElement("input");
   insertHeadCheck.type = "checkbox";
   //insertHeadCheck.value = "insert-head";
   insertHeadCheck.id = "insert-head-check";
-  exportForm.appendChild(insertHeadCheck);
+  compileForm.appendChild(insertHeadCheck);
 
   var compileBtn = document.createElement("input");
   compileBtn.type = "submit";
   compileBtn.value = "Compile";
-  exportForm.appendChild(compileBtn);
+  compileForm.appendChild(compileBtn);
 
   var cancelBtn = document.createElement("input");
   cancelBtn.type = "button";
@@ -612,9 +612,9 @@ function showCompileOptions(){
   cancelBtn.onclick = function(){
     popup.remove();
   };
-  exportForm.appendChild(cancelBtn);
+  compileForm.appendChild(cancelBtn);
 
-  exportForm.onsubmit = function(){
+  compileForm.onsubmit = function(){
     var options = {
       type: typeSelect.value,
       insertStrng: insertStrInput.value,
@@ -624,7 +624,7 @@ function showCompileOptions(){
     popup.remove();
   };
 
-  popup.appendChild(exportForm);
+  popup.appendChild(compileForm);
   document.body.appendChild(popup);
 
 }
