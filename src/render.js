@@ -68,17 +68,20 @@ const { dialog } = require('electron').remote;
   function requestProjectTitle(callback){
     var popup = document.createElement("div");
     popup.classList.add("popup");
-    var message = document.createElement("p");
-    message.innerHTML = "What is the title of this project?";
-    popup.appendChild(message);
+    var titleForm = document.createElement("form");
+    var message = document.createElement("label");
+    message.innerText = "What is the title of this project?";
+    message.for = "title-input";
+    titleForm.appendChild(message);
     var titleInput = document.createElement("input");
     titleInput.type = "text";
     titleInput.placeholder = "Mrs. Dalloway 2: Back In Action";
-    popup.appendChild(titleInput);
+    titleInput.id = "title-input";
+    titleForm.appendChild(titleInput);
     var createButton = document.createElement("input");
-    createButton.type = "button";
+    createButton.type = "submit";
     createButton.value = "Create"
-    createButton.onclick = function(){
+    titleForm.onsubmit = function(){
       var title;
       if(titleInput.value != "")
         title = titleInput.value;
@@ -87,7 +90,9 @@ const { dialog } = require('electron').remote;
       popup.remove();
       callback(title);
     }
-    popup.appendChild(createButton);
+
+    titleForm.appendChild(createButton);
+    popup.appendChild(titleForm);
     document.body.appendChild(popup);
     titleInput.focus();
   }
@@ -177,7 +182,7 @@ const { dialog } = require('electron').remote;
   
 
   function updateTitleBar(){
-    document.title = "Warewoolf: " + (project.filename != "" ? project.filename : "unsaved project");
+    document.title = "Warewoolf - " + (project.filename != "" ? project.filename : "unsaved project");
   }
   
   function displayNotes(){
@@ -354,7 +359,7 @@ const { dialog } = require('electron').remote;
     editorQuill.enable();
     changeChapterTitle(thisIndex);
   }
-  
+  /*
   function saveChangedChapters(){
     project.chapters.forEach(function(chap, ind){
       if(chap.hasUnsavedChanges){
@@ -374,7 +379,7 @@ const { dialog } = require('electron').remote;
       }
     });
     updateFileList();
-  }
+  }*/
 
   
   function saveProject(docPath){
@@ -510,37 +515,43 @@ const { dialog } = require('electron').remote;
 function showProperties(){
   var popup = document.createElement("div");
   popup.classList.add("popup");
+  var propForm = document.createElement("form");
   var titleLabel = document.createElement("label");
   titleLabel.innerText = "Project Title";
-  popup.appendChild(titleLabel);
+  titleLabel.for = "title-input";
+  propForm.appendChild(titleLabel);
   var titleInput = document.createElement("input");
   titleInput.type = "text";
   titleInput.value = project.title;
-  popup.appendChild(titleInput);
+  titleInput.id = "title-input";
+  propForm.appendChild(titleInput);
   var authorLabel = document.createElement("label");
   authorLabel.innerText = "Author";
-  popup.appendChild(authorLabel);
+  authorLabel.for = "author-input";
+  propForm.appendChild(authorLabel);
   var authorInput = document.createElement("input");
   authorInput.type = "text";
   authorInput.value = project.author;
-  popup.appendChild(authorInput);
+  authorInput.id = "author-input";
+  propForm.appendChild(authorInput);
   var apply = document.createElement("input");
-  apply.type = "button";
+  apply.type = "submit";
   apply.value = "Apply";
-  apply.onclick = function(e){
+  propForm.onsubmit = function(){
     project.title = titleInput.value;
     project.author = authorInput.value;
     popup.remove();
   }
-  popup.appendChild(apply);
+  propForm.appendChild(apply);
   var cancel = document.createElement("input");
   cancel.type = "button";
   cancel.value = "Cancel";
-  cancel.onclick = function(e){
+  cancel.onclick = function(){
     popup.remove();
   };
-  popup.appendChild(cancel);
+  propForm.appendChild(cancel);
 
+  popup.appendChild(propForm);
   document.body.appendChild(popup);
 
 }
