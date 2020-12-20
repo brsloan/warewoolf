@@ -1,7 +1,3 @@
-
-
-
-
 function newChapter(){
     return {
       title: "new",
@@ -12,8 +8,7 @@ function newChapter(){
       deleteFile: deleteChapterFile,
       parseChapter: parseChapter,
       getFile: getFile,
-      saveFile: saveFile,
-      saveFileNew: saveFileNew
+      saveFile: saveFile
     };
 
     function deleteChapterFile(){
@@ -34,38 +29,10 @@ function newChapter(){
       return chapterObj;
     }
 
+
     function saveFile(){
       var chap = this;
-
-      if(chap.filename == undefined || chap.filename == null)
-        chap.filename = getNewFilename();
-
-      ipcRenderer.invoke('save-file', chap.filename, JSON.stringify(chap.contents));
-
-      function getNewFilename(){
-        var largestFilename = 0;
-
-        fs.readdirSync("./output/").forEach(file => {
-          var nameNumber = parseInt(file.split(".")[0]);
-          if(nameNumber > largestFilename)
-            largestFilename = nameNumber;
-        });
-        
-        return (largestFilename + 1).toString() + ".pup";
-      }
-    }
-
-    function saveFileNew(){
-      var chap = this;
       var subDir = project.filename.split(".")[0].concat("_pups/");
-      //if(!fs.existsSync(project.directory + subDir))
-        //fs.mkdirSync(project.directory + subDir);
-
-      //If it does NOT have unsaved changes, it must be already saved, so
-      //you're duplicating the old file to a new location. So load contents from file
-      //before saving.
-      //if(chap.hasUnsavedChanges == false || chap.hasUnsavedChanges == null)
-        //chap.contents = chap.getFile();
 
       if(chap.filename == undefined || chap.filename == null)
         chap.filename = getNewFilename();

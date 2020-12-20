@@ -33,9 +33,7 @@ const { dialog } = require('electron').remote;
   initialize();
   
   function initialize(){
-    //project.loadFile("mobyDickProject.woolf");
-    setProject("mobyDickProject.woolf");
-    
+    setProject("/home/pi/Documents/TestProject/TestProject.woolf");
   }
 
   function setProject(filepath){
@@ -460,10 +458,6 @@ const { dialog } = require('electron').remote;
         stopDefaultPropagation(e);
         displayNextChapter();
       }
-     // else if(e.ctrlKey && e.key === "s"){
-     //   stopDefaultPropagation(e);
-     //   saveProject();
-    //  }
       else if(e.ctrlKey && e.key === "n"){
         stopDefaultPropagation(e);
         addNewChapter();
@@ -532,9 +526,8 @@ function openAProject(docPath) {
     ]
   };
   var filepath = dialog.showOpenDialogSync(options);
-  //console.log(filepath);
   if (filepath) {
-    project.loadFileNew(filepath[0]);
+    project.loadFile(filepath[0]);
     displayProject();
   }
 }

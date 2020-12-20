@@ -34,6 +34,7 @@ const createWindow = () => {
       submenu:[
         {
           label: 'New Project',
+          accelerator: 'CmdOrCtrl+Shift+N',
           click(item, focusWindow){
             mainWindow.webContents.send("new-project-clicked", app.getPath("documents"));
           }
@@ -45,7 +46,6 @@ const createWindow = () => {
             mainWindow.webContents.send("open-clicked", app.getPath("documents"));
           }
         },
-        {label: 'Close Project'},
         {type: 'separator'},
         {
           label: 'Save',

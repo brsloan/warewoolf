@@ -14,7 +14,6 @@ function newProject(){
         activeChapterIndex: 0,
         getActiveChapter: getActiveChapter,
         loadFile: loadFile,
-        loadFileNew: loadFileNew,
         saveFile: saveFile,
         saveAs: saveAs
     };
@@ -28,29 +27,7 @@ function newProject(){
         return chap;
     }
 
-    function loadFile(projName){
-
-      var projectFile = JSON.parse(fs.readFileSync("output/" + projName, "utf8"));
-
-        Object.assign(this, projectFile);
-        this.filename = projName;
-
-        var chaps = [];
-        this.chapters.forEach(function (chap) {
-          chaps.push(newChapter().parseChapter(chap));
-        });
-        this.chapters = chaps;
-
-
-        var trashChaps = [];
-        this.trash.forEach(function (tr) {
-          trashChaps.push(newChapter().parseChapter(tr));
-        });
-        this.trash = trashChaps;
-      
-    }
-
-    function loadFileNew(projPath){
+    function loadFile(projPath){
       console.log(projPath);
       var projectFile = JSON.parse(fs.readFileSync(projPath, "utf8"));
 
@@ -78,31 +55,16 @@ function newProject(){
 
 
     function saveFile(){
-      /*var proj = this;
-      
-      var fileString = JSON.stringify(proj, function(k,v){
-        if (k == "contents") return undefined;
-        else if (k == "hasUnsavedChanges") return undefined;
-        else return v;
-      });
-
-      ipcRenderer.invoke('save-file', proj.filename, fileString);*/
       var proj = this;
       if(proj.filename != "" && proj.directory != ""){
         
         proj.chapters.forEach(function(chap){
-          if(chap.hasUnsavedChanges){
-            chap.saveFileNew();
-            //chap.hasUnsavedChanges = false;
-          }
-            
+          if(chap.hasUnsavedChanges)
+            chap.saveFile();
         });
         proj.trash.forEach(function(tr){
-          if(tr.hasUnsavedChanges){
-            tr.saveFileNew();
-            //tr.hasUnsavedChanges = false;
-          }
-            
+          if(tr.hasUnsavedChanges)
+            tr.saveFile();
         });
 
 
@@ -157,17 +119,12 @@ function newProject(){
       
       //Save any new or altered chapters
       proj.chapters.forEach(function(chap){
-        if(chap.hasUnsavedChanges){
-          chap.saveFileNew();
-          //chap.hasUnsavedChanges = false;
-        }
+        if(chap.hasUnsavedChanges)
+          chap.saveFile();       
       });
       proj.trash.forEach(function(tr){
-        if(tr.hasUnsavedChanges){
-          tr.saveFileNew();
-          //tr.hasUnsavedChanges = false;
-        }
-        
+        if(tr.hasUnsavedChanges)
+          tr.saveFile();
       });
 
 
