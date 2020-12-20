@@ -512,6 +512,10 @@ const { dialog } = require('electron').remote;
     showProperties();
   });
 
+  ipcRenderer.on('compile-clicked', function(e){
+    showCompileOptions();
+  });
+
 function showProperties(){
   var popup = document.createElement("div");
   popup.classList.add("popup");
@@ -553,7 +557,80 @@ function showProperties(){
 
   popup.appendChild(propForm);
   document.body.appendChild(popup);
+}
 
+function showCompileOptions(){
+  var popup = document.createElement("div");
+  popup.classList.add("popup");
+  var exportForm = document.createElement("form");
+
+  var typeLabel = document.createElement("label");
+  typeLabel.innerText = "File Type";
+  typeLabel.for = "filetype-select";
+  exportForm.appendChild(typeLabel);
+
+  var typeSelect = document.createElement("select");
+  const typeOptions = [".txt", ".odt", "markup"];
+  typeOptions.forEach(function(op){
+    var txtOp = document.createElement("option");
+    txtOp.value = op;
+    txtOp.innerText = op;
+    typeSelect.appendChild(txtOp);
+  });
+  exportForm.appendChild(typeSelect);
+
+  var insertStrLabel = document.createElement("label");
+  insertStrLabel.innerText = "Insert string to mark chapter breaks:";
+  insertStrLabel.for = "insert-str-input";
+  exportForm.appendChild(insertStrLabel);
+
+  var insertStrInput = document.createElement("input");
+  insertStrInput.type = "text";
+  insertStrInput.value = "##";
+  insertStrInput.id = "insert-str-input";
+  exportForm.appendChild(insertStrInput);
+
+  var insertHeadLabel = document.createElement("label");
+  insertHeadLabel.innerText = "Insert chapter titles as headings";
+  insertHeadLabel.for = "insert-head-check";
+  exportForm.appendChild(insertHeadLabel);
+
+  var insertHeadCheck = document.createElement("input");
+  insertHeadCheck.type = "checkbox";
+  //insertHeadCheck.value = "insert-head";
+  insertHeadCheck.id = "insert-head-check";
+  exportForm.appendChild(insertHeadCheck);
+
+  var compileBtn = document.createElement("input");
+  compileBtn.type = "submit";
+  compileBtn.value = "Compile";
+  exportForm.appendChild(compileBtn);
+
+  var cancelBtn = document.createElement("input");
+  cancelBtn.type = "button";
+  cancelBtn.value = "Cancel";
+  cancelBtn.onclick = function(){
+    popup.remove();
+  };
+  exportForm.appendChild(cancelBtn);
+
+  exportForm.onsubmit = function(){
+    var options = {
+      type: typeSelect.value,
+      insertStrng: insertStrInput.value,
+      insertHead: insertHeadCheck.checked
+    }
+    compileProject(options);
+    popup.remove();
+  };
+
+  popup.appendChild(exportForm);
+  document.body.appendChild(popup);
+
+}
+
+function compileProject(options){
+  console.log(options);
 }
 
 function saveProjectAs(docPath) {
