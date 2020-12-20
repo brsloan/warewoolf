@@ -50,7 +50,7 @@ const createWindow = () => {
           label: 'Save',
           accelerator: 'CmdOrCtrl+S',
           click(item, focusWindow){
-            mainWindow.webContents.send("save-clicked");
+            mainWindow.webContents.send("save-clicked", app.getPath("documents"));
           }
         },
         {
@@ -61,8 +61,35 @@ const createWindow = () => {
           }
         },
         {type: 'separator'},
-        {label: 'Import'},
-        {label: 'Export'},
+        {
+          label: 'Import',
+          accelerator: 'CmdOrCtrl+Shift+I',
+          click(item, focusWindow){
+              mainWindow.webContents.send('import-clicked', app.getPath("documents"));
+          }
+        },
+        {
+          label: 'Export',
+          accelerator: 'CmdOrCtrl+Shift+E',
+          click(item, focusWindow){
+              mainWindow.webContents.send('export-clicked', app.getPath("documents"));
+          }
+        },
+        {
+          label: 'Compile',
+          accelerator: 'CmdOrCtrl+Shift+C',
+          click(item, focusWindow){
+              mainWindow.webContents.send('compile-clicked', app.getPath("documents"));
+          }
+        },
+        {type: 'separator'},
+        {
+          label: 'Properties',
+          accelerator: 'CmdOrCtrl+P',
+          click(item, focusWindow){
+            mainWindow.webContents.send('properties-clicked');
+          }
+        },
         {type: 'separator'},
         {
           label: 'Exit',

@@ -8,7 +8,10 @@ const { dialog } = require('electron').remote;
         [{ header: [1, 2, false] }],
         ['italic'],
         [{ 'align': [] }]
-      ]
+      ],
+      history: {
+        userOnly: true
+      }
     },
     placeholder: '',
     theme: 'snow'  // or 'bubble'
@@ -19,7 +22,10 @@ const { dialog } = require('electron').remote;
       toolbar: [
         [{ header: [1, 2, false] }],
         ['bold', 'italic', 'underline']
-      ]
+      ],
+      history: {
+        userOnly: true
+      }
     },
     placeholder: 'Notes...',
     theme: 'bubble'  // or 'bubble'
@@ -491,6 +497,53 @@ const { dialog } = require('electron').remote;
   ipcRenderer.on('new-project-clicked', function(e){
     createNewProject();
   });
+
+  ipcRenderer.on('export-clicked', function(e, docPath){
+    console.log(editorQuill.getText());
+    //console.log(editorQuill.root.innerHTML());
+  });
+
+  ipcRenderer.on('properties-clicked', function(e){
+    showProperties();
+  });
+
+function showProperties(){
+  var popup = document.createElement("div");
+  popup.classList.add("popup");
+  var titleLabel = document.createElement("label");
+  titleLabel.innerText = "Project Title";
+  popup.appendChild(titleLabel);
+  var titleInput = document.createElement("input");
+  titleInput.type = "text";
+  titleInput.value = project.title;
+  popup.appendChild(titleInput);
+  var authorLabel = document.createElement("label");
+  authorLabel.innerText = "Author";
+  popup.appendChild(authorLabel);
+  var authorInput = document.createElement("input");
+  authorInput.type = "text";
+  authorInput.value = project.author;
+  popup.appendChild(authorInput);
+  var apply = document.createElement("input");
+  apply.type = "button";
+  apply.value = "Apply";
+  apply.onclick = function(e){
+    project.title = titleInput.value;
+    project.author = authorInput.value;
+    popup.remove();
+  }
+  popup.appendChild(apply);
+  var cancel = document.createElement("input");
+  cancel.type = "button";
+  cancel.value = "Cancel";
+  cancel.onclick = function(e){
+    popup.remove();
+  };
+  popup.appendChild(cancel);
+
+  document.body.appendChild(popup);
+
+}
 
 function saveProjectAs(docPath) {
   const options = {
