@@ -28,6 +28,9 @@ function newProject(){
     }
 
     function loadFile(projPath){
+      //Convert Windows filepaths to maintain linux/windows compatibility
+      projPath = projPath.replaceAll('\\', '/');
+      
       var projectFile = JSON.parse(fs.readFileSync(projPath, "utf8"));
 
       Object.assign(this, projectFile);
@@ -81,6 +84,9 @@ function newProject(){
     }
 
     function saveAs(filepath){
+      //Convert Windows filepaths to maintain linux/windows compatibility
+      filepath = filepath.replaceAll('\\', '/');
+
       var proj = this;
       var filepathParts = filepath.split('/');
       var newFilename = filepathParts.pop();

@@ -36,7 +36,8 @@ const { dialog } = require('electron').remote;
   initialize();
   
   function initialize(){
-    setProject("/home/pi/Documents/TestProject/TestProject.woolf");
+    //setProject("/home/pi/Documents/TestProject/TestProject.woolf");
+    setProject("C:/Users/sloanb/Documents/TestProject/TestProject.Woolf");
   }
 
   function setProject(filepath){
@@ -636,7 +637,7 @@ function compileProject(options){
 function saveProjectAs(docPath) {
   const options = {
     title: 'Save project as...',
-    defaultPath: docPath + "/*",
+    defaultPath: docPath,
     filters: [
       { name: 'WareWoolf Projects', extensions: ['woolf'] }
     ]
