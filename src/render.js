@@ -36,8 +36,7 @@ const { dialog } = require('electron').remote;
   initialize();
   
   function initialize(){
-    //setProject("/home/pi/Documents/TestProject/TestProject.woolf");
-    setProject("C:/Users/sloanb/Documents/TestProject/TestProject.Woolf");
+    setProject("./examples/TestProject/TestProject.Woolf");
   }
 
   function setProject(filepath){
