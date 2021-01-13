@@ -6,6 +6,7 @@ body {
   padding: 2rem;
 */
   background-color: #F0F8FF;
+  /*background-color: #222222;*/
   margin: 0;
   padding-top: 12px;
   font-family: Helvetica, sans-serif;
@@ -28,6 +29,8 @@ body {
   width: 25%;
   display: block;
   float: left;
+  /*color: #dddddd;*/
+  height: 93vh;
 }
 
 .sidebar h1{
@@ -44,7 +47,7 @@ body {
 }
 
 #editor-container {
-  height: 375px;
+  height: 93vh;
 }
 
 .ql-editor {

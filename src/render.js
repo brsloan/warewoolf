@@ -36,7 +36,7 @@ const { dialog } = require('electron').remote;
   initialize();
   
   function initialize(){
-    setProject("./examples/TestProject/TestProject.Woolf");
+    setProject("./examples/Frankenstein/Frankenstein.Woolf");
   }
 
   function setProject(filepath){
@@ -649,6 +649,9 @@ function saveProjectAs(docPath) {
 }
 
 function openAProject(docPath) {
+  //Temp override doc path for testing in examples folder
+  docPath = "./examples";
+
   const options = {
     title: 'Open project...',
     defaultPath: docPath,
