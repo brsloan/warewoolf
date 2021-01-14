@@ -75,7 +75,7 @@ ul {
   font-size: 14pt;
   text-align: center;
 }
-
+/*
 .popup input[type="button"]{
   background-color: gray;
   text-align: center;
@@ -85,7 +85,7 @@ ul {
   line-height: 100%;
   border: 1px solid black;
   cursor: pointer;
-}
+}*/
 
 .name-box {
   width: 95%;

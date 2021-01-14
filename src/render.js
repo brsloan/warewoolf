@@ -504,8 +504,7 @@ const { dialog } = require('electron').remote;
   });
 
   ipcRenderer.on('export-clicked', function(e, docPath){
-    console.log(editorQuill.getText());
-    //console.log(editorQuill.root.innerHTML());
+    showExportOptions();
   });
 
   ipcRenderer.on('properties-clicked', function(e){
@@ -517,27 +516,38 @@ const { dialog } = require('electron').remote;
   });
 
 function showProperties(){
+  removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup");
+
   var propForm = document.createElement("form");
+  
   var titleLabel = document.createElement("label");
-  titleLabel.innerText = "Project Title";
+  titleLabel.innerText = "Project Title: ";
   titleLabel.for = "title-input";
   propForm.appendChild(titleLabel);
+
   var titleInput = document.createElement("input");
   titleInput.type = "text";
   titleInput.value = project.title;
   titleInput.id = "title-input";
   propForm.appendChild(titleInput);
+  
+  propForm.appendChild(document.createElement('br'));
+  
   var authorLabel = document.createElement("label");
-  authorLabel.innerText = "Author";
+  authorLabel.innerText = "Author: ";
   authorLabel.for = "author-input";
   propForm.appendChild(authorLabel);
+
   var authorInput = document.createElement("input");
   authorInput.type = "text";
   authorInput.value = project.author;
   authorInput.id = "author-input";
   propForm.appendChild(authorInput);
+
+  propForm.appendChild(document.createElement('br'));
+
   var apply = document.createElement("input");
   apply.type = "submit";
   apply.value = "Apply";
@@ -560,12 +570,13 @@ function showProperties(){
 }
 
 function showCompileOptions(){
+  removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup");
   var compileForm = document.createElement("form");
 
   var typeLabel = document.createElement("label");
-  typeLabel.innerText = "File Type";
+  typeLabel.innerText = "File Type: ";
   typeLabel.for = "filetype-select";
   compileForm.appendChild(typeLabel);
 
@@ -579,8 +590,10 @@ function showCompileOptions(){
   });
   compileForm.appendChild(typeSelect);
 
+  compileForm.appendChild(document.createElement('br'));
+
   var insertStrLabel = document.createElement("label");
-  insertStrLabel.innerText = "Insert string to mark chapter breaks:";
+  insertStrLabel.innerText = "Insert string to mark chapter breaks: ";
   insertStrLabel.for = "insert-str-input";
   compileForm.appendChild(insertStrLabel);
 
@@ -590,8 +603,10 @@ function showCompileOptions(){
   insertStrInput.id = "insert-str-input";
   compileForm.appendChild(insertStrInput);
 
+  compileForm.appendChild(document.createElement('br'));
+
   var insertHeadLabel = document.createElement("label");
-  insertHeadLabel.innerText = "Insert chapter titles as headings";
+  insertHeadLabel.innerText = "Insert chapter titles as headings: ";
   insertHeadLabel.for = "insert-head-check";
   compileForm.appendChild(insertHeadLabel);
 
@@ -600,6 +615,8 @@ function showCompileOptions(){
   //insertHeadCheck.value = "insert-head";
   insertHeadCheck.id = "insert-head-check";
   compileForm.appendChild(insertHeadCheck);
+
+  compileForm.appendChild(document.createElement('br'));
 
   var compileBtn = document.createElement("input");
   compileBtn.type = "submit";
@@ -627,6 +644,73 @@ function showCompileOptions(){
   popup.appendChild(compileForm);
   document.body.appendChild(popup);
 
+}
+
+function showExportOptions(){
+  removeElementsByClass('popup');
+  var popup = document.createElement("div");
+  popup.classList.add("popup");
+  var exportForm = document.createElement("form");
+
+  var typeLabel = document.createElement("label");
+  typeLabel.innerText = "File Type: ";
+  typeLabel.for = "filetype-select";
+  exportForm.appendChild(typeLabel);
+
+  var typeSelect = document.createElement("select");
+  const typeOptions = [".txt", ".odt", "markup"];
+  typeOptions.forEach(function(op){
+    var txtOp = document.createElement("option");
+    txtOp.value = op;
+    txtOp.innerText = op;
+    typeSelect.appendChild(txtOp);
+  });
+  exportForm.appendChild(typeSelect);
+
+  exportForm.appendChild(document.createElement('br'));
+
+  var insertHeadLabel = document.createElement("label");
+  insertHeadLabel.innerText = "Insert chapter titles as headings: ";
+  insertHeadLabel.for = "insert-head-check";
+  exportForm.appendChild(insertHeadLabel);
+
+  var insertHeadCheck = document.createElement("input");
+  insertHeadCheck.type = "checkbox";
+  insertHeadCheck.id = "insert-head-check";
+  exportForm.appendChild(insertHeadCheck);
+
+  exportForm.appendChild(document.createElement('br'));
+
+  var exportBtn = document.createElement("input");
+  exportBtn.type = "submit";
+  exportBtn.value = "Export";
+  exportForm.appendChild(exportBtn);
+
+  var cancelBtn = document.createElement("input");
+  cancelBtn.type = "button";
+  cancelBtn.value = "Cancel";
+  cancelBtn.onclick = function(){
+    popup.remove();
+  };
+  exportForm.appendChild(cancelBtn);
+
+  exportForm.onsubmit = function(){
+    var options = {
+      type: typeSelect.value,
+      insertHead: insertHeadCheck.checked
+    }
+    exportProject(options);
+    popup.remove();
+  };
+
+  popup.appendChild(exportForm);
+  document.body.appendChild(popup);
+
+}
+
+function exportProject(options){
+  //console.log(editorQuill.getText());
+  console.log(options);
 }
 
 function compileProject(options){
@@ -663,5 +747,15 @@ function openAProject(docPath) {
   if (filepath) {
     project.loadFile(filepath[0]);
     displayProject();
+  }
+}
+
+
+//*******/
+
+function removeElementsByClass(className){
+  var elements = document.getElementsByClassName(className);
+  while(elements.length > 0){
+      elements[0].parentNode.removeChild(elements[0]);
   }
 }
