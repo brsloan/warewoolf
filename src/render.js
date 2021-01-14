@@ -504,7 +504,7 @@ const { dialog } = require('electron').remote;
   });
 
   ipcRenderer.on('export-clicked', function(e, docPath){
-    showExportOptions();
+    showExportOptions(docPath);
   });
 
   ipcRenderer.on('properties-clicked', function(e){
@@ -646,7 +646,7 @@ function showCompileOptions(){
 
 }
 
-function showExportOptions(){
+function showExportOptions(docPath){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup");
@@ -699,7 +699,7 @@ function showExportOptions(){
       type: typeSelect.value,
       insertHead: insertHeadCheck.checked
     }
-    exportProject(options);
+    exportProject(options, docPath);
     popup.remove();
   };
 
@@ -708,9 +708,31 @@ function showExportOptions(){
 
 }
 
-function exportProject(options){
+function exportProject(options, docPath){
   //console.log(editorQuill.getText());
   console.log(options);
+
+  const saveOptions = {
+    title: 'Export files to... (Subdirectory will be created)',
+    defaultPath: docPath,
+    properties: ['openDirectory']
+  };
+  var filepath = convertFilepath(dialog.showOpenDialogSync(saveOptions)[0]);
+  
+  if(filepath){
+    //TODO: Need to create function to safely convert titles to folder/filenames
+    var newDir = filepath.concat("/").concat(project.title.replaceAll(' ','')); 
+    
+    if(!fs.existsSync(newDir))
+        fs.mkdirSync(newDir);
+
+    project.chapters.forEach(function(chap){
+      
+    });
+
+  }
+  
+
 }
 
 function compileProject(options){
@@ -758,4 +780,16 @@ function removeElementsByClass(className){
   while(elements.length > 0){
       elements[0].parentNode.removeChild(elements[0]);
   }
+}
+
+function convertFilepath(fpath){
+  //Convert Windows filepaths to maintain linux/windows compatibility
+  try{
+    var converted = fpath.replaceAll('\\', '/');
+  }
+  catch(err){
+    console.log(err);
+  }
+  
+  return converted;
 }
