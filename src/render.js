@@ -721,14 +721,39 @@ function exportProject(options, docPath){
   
   if(filepath){
     //TODO: Need to create function to safely convert titles to folder/filenames
-    var newDir = filepath.concat("/").concat(project.title.replaceAll(' ','')); 
+    var newDir = filepath.concat("/").concat(project.title.replace(/[^a-z0-9]/gi, '_')).concat("/"); 
     
     if(!fs.existsSync(newDir))
         fs.mkdirSync(newDir);
 
-    project.chapters.forEach(function(chap){
-      
+
+    var tempQuill = new Quill(document.createElement('div'), {
+      modules: {
+        history: {
+          userOnly: true
+        }
+      }
     });
+
+    for(i = 0; i < project.chapters.length ; i++){
+      var chapFile = project.chapters[i].getFile();
+      
+      try{
+
+        tempQuill.setContents(chapFile);
+
+        var outName = String(i + 1).padStart(4, '0') + "_" + project.chapters[i].title.replace(/[^a-z0-9]/gi, '_');
+        var outExt = ".txt";
+        fs.writeFileSync(newDir + outName + outExt, tempQuill.getText(), 'utf8');
+      }
+      catch(err){
+        console.log(err);
+      }
+      
+    }
+
+    tempQuill.setContents(project.notes);
+    fs.writeFileSync(newDir + "notes.txt", tempQuill.getText(), "utf8");
 
   }
   
