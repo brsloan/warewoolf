@@ -11,10 +11,6 @@ function exportProject(options, filepath){
         case ".txt":
             exportAsText(newDir);
             break;
-        case ".markdown":
-            break;
-        case ".odt":
-            break;
         case ".docx":
             exportAsWord(newDir);
             break;
