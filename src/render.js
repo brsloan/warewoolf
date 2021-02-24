@@ -720,9 +720,10 @@ function getExportFilePath(options, docPath){
     exportProject(options, filepath);
 }
 
-function compileProject(options){
-  console.log(options);
+function getCompileFilepath(options, docPath){
+  
 }
+
 
 function saveProjectAs(docPath) {
   const options = {

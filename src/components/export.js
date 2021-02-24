@@ -1,5 +1,7 @@
 const quillToWord = require('quill-to-word');
 
+//*************Export Functions************
+
 function exportProject(options, filepath){
     //TODO: Need to create function to safely convert titles to folder/filenames
     var newDir = filepath.concat("/").concat(project.title.replace(/[^a-z0-9]/gi, '_')).concat("/"); 
@@ -71,4 +73,40 @@ function exportNotesAsWord(dir){
 
 function generateChapterFilename(num){
     return String(num + 1).padStart(4, '0') + "_" + project.chapters[num].title.replace(/[^a-z0-9]/gi, '_');
+}
+
+//***********Compile Functions */
+
+function compileProject(options){
+    console.log(options);
+    var allChaps = compileChapterDeltas();
+    var newDir = "C:/Users/sloanb/Documents/compiletest.txt";
+
+    switch(options.type){
+        case ".txt":
+            compilePlainText(newDir, allChaps);
+            break;
+        case ".docx":
+            break;
+        default: 
+            console.log("No valid filetype selected for compile.");
+    }
+  }
+
+function compilePlainText(dir, allChaps){
+    var allText = convertToPlainText(allChaps);
+    fs.writeFileSync(dir, allText);
+}
+
+function compileChapterDeltas(divider = ''){
+    var Delta = Quill.import('delta');
+    var compiled = new Delta(project.chapters[0].getFile());
+
+    for(i=1; i<project.chapters.length; i++){
+        var thisDelta = new Delta(project.chapters[i].getFile());
+        compiled.insert(divider + '\n');
+        compiled = compiled.concat(thisDelta);
+    }
+
+    return compiled;
 }
