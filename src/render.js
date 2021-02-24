@@ -156,8 +156,9 @@ const { dialog } = require('electron').remote;
   
   function displayChapterByIndex(ind){
     clearCurrentChapterIfUnchanged();
+    ind = parseInt(ind);
     project.activeChapterIndex = ind;
-    
+
     var chap;
     if(ind < project.chapters.length){
       chap = project.chapters[ind];  
@@ -165,7 +166,7 @@ const { dialog } = require('electron').remote;
     else {
       chap = project.trash[ind - project.chapters.length];  
     }
-    
+
     var contents;
     if(chap.contents != undefined && chap.contents != null){
       contents = chap.contents;
@@ -581,7 +582,7 @@ function showCompileOptions(){
   compileForm.appendChild(typeLabel);
 
   var typeSelect = document.createElement("select");
-  const typeOptions = [".txt", ".odt", ".markdown"];
+  const typeOptions = [".txt", ".docx"];
   typeOptions.forEach(function(op){
     var txtOp = document.createElement("option");
     txtOp.value = op;
@@ -658,7 +659,7 @@ function showExportOptions(docPath){
   exportForm.appendChild(typeLabel);
 
   var typeSelect = document.createElement("select");
-  const typeOptions = [".txt", ".docx", ".odt", ".markdown"];
+  const typeOptions = [".txt", ".docx"];
   typeOptions.forEach(function(op){
     var txtOp = document.createElement("option");
     txtOp.value = op;
@@ -668,18 +669,18 @@ function showExportOptions(docPath){
   exportForm.appendChild(typeSelect);
 
   exportForm.appendChild(document.createElement('br'));
-
+/*
   var insertHeadLabel = document.createElement("label");
   insertHeadLabel.innerText = "Insert chapter titles as headings: ";
   insertHeadLabel.for = "insert-head-check";
-  exportForm.appendChild(insertHeadLabel);
+  exportForm.appendChild(insertHeadLabel); 
 
   var insertHeadCheck = document.createElement("input");
   insertHeadCheck.type = "checkbox";
   insertHeadCheck.id = "insert-head-check";
   exportForm.appendChild(insertHeadCheck);
 
-  exportForm.appendChild(document.createElement('br'));
+  exportForm.appendChild(document.createElement('br')); */
 
   var exportBtn = document.createElement("input");
   exportBtn.type = "submit";
@@ -696,8 +697,8 @@ function showExportOptions(docPath){
 
   exportForm.onsubmit = function(){
     var options = {
-      type: typeSelect.value,
-      insertHead: insertHeadCheck.checked
+      type: typeSelect.value
+      //insertHead: insertHeadCheck.checked
     }
     getExportFilePath(options, docPath);
     popup.remove();
