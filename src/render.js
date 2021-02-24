@@ -658,7 +658,7 @@ function showExportOptions(docPath){
   exportForm.appendChild(typeLabel);
 
   var typeSelect = document.createElement("select");
-  const typeOptions = [".txt", ".odt", ".markdown"];
+  const typeOptions = [".txt", ".docx", ".odt", ".markdown"];
   typeOptions.forEach(function(op){
     var txtOp = document.createElement("option");
     txtOp.value = op;
@@ -699,13 +699,24 @@ function showExportOptions(docPath){
       type: typeSelect.value,
       insertHead: insertHeadCheck.checked
     }
-    exportProject(options, docPath);
+    getExportFilePath(options, docPath);
     popup.remove();
   };
 
   popup.appendChild(exportForm);
   document.body.appendChild(popup);
 
+}
+
+function getExportFilePath(options, docPath){
+  const saveOptions = {
+    title: 'Export files to... (Subdirectory will be created)',
+    defaultPath: docPath,
+    properties: ['openDirectory']
+  };
+  var filepath = convertFilepath(dialog.showOpenDialogSync(saveOptions)[0]);
+  if(filepath)
+    exportProject(options, filepath);
 }
 
 function compileProject(options){

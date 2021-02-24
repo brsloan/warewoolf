@@ -1,49 +1,37 @@
+const quillToWord = require('quill-to-word');
 
-function exportProject(options, docPath){
-    console.log(options);
-  
-    const saveOptions = {
-      title: 'Export files to... (Subdirectory will be created)',
-      defaultPath: docPath,
-      properties: ['openDirectory']
-    };
-    var filepath = convertFilepath(dialog.showOpenDialogSync(saveOptions)[0]);
+function exportProject(options, filepath){
+    //TODO: Need to create function to safely convert titles to folder/filenames
+    var newDir = filepath.concat("/").concat(project.title.replace(/[^a-z0-9]/gi, '_')).concat("/"); 
     
-    if(filepath){
-      //TODO: Need to create function to safely convert titles to folder/filenames
-      var newDir = filepath.concat("/").concat(project.title.replace(/[^a-z0-9]/gi, '_')).concat("/"); 
-      
-      if(!fs.existsSync(newDir))
-          fs.mkdirSync(newDir);
-  
-      for(i = 0; i < project.chapters.length; i++){
-        var chapFile = project.chapters[i].getFile();
+    if(!fs.existsSync(newDir))
+        fs.mkdirSync(newDir);
 
-        var outName = String(i + 1).padStart(4, '0') + "_" + project.chapters[i].title.replace(/[^a-z0-9]/gi, '_');
-
-        fs.writeFileSync(newDir + outName + options.type, convertChapter(chapFile, options), 'utf8');
-      }
-
-      fs.writeFileSync(newDir + "notes" + options.type, convertChapter(project.notes, options), "utf8");
-    }
-  }
-  
-function convertChapter(chapFile, options){
-    var converted;
-    
     switch(options.type){
         case ".txt":
-            converted = convertToPlainText(chapFile);
+            exportAsText(newDir);
             break;
         case ".markdown":
             break;
         case ".odt":
             break;
+        case ".docx":
+            exportAsWord(newDir);
+            break;
         default: 
             console.log("No valid filetype selected for export.");
     }
+}
 
-    return converted;
+function exportAsText(dir){
+    for(i=0; i<project.chapters.length; i++){
+        var chapFile = project.chapters[i].getFile();
+        var outName = generateChapterFilename(i);
+
+        fs.writeFileSync(dir + outName + ".txt", convertToPlainText(chapFile));
+    }
+
+    fs.writeFileSync(dir + "notes" + ".txt", convertToPlainText(project.notes));
 }
 
 function convertToPlainText(chapFile){
@@ -58,4 +46,33 @@ function convertToPlainText(chapFile){
     tempQuill.setContents(chapFile);
 
     return tempQuill.getText();
+}
+
+function exportAsWord(dir){
+    exportChapsAsWord(dir);
+    exportNotesAsWord(dir);
+}
+  
+function exportChapsAsWord(dir, num = 0){
+    if (num < project.chapters.length){
+        var chapFile = project.chapters[num].getFile();
+        var outName = generateChapterFilename(num);
+
+        quillToWord.generateWord(chapFile, {exportAs: 'buffer'}).then(doc => {
+            fs.writeFileSync(dir + outName + ".docx", doc);
+            exportChapsAsWord(dir, num + 1);
+        });
+    }
+}
+
+function exportNotesAsWord(dir){
+    var chapFile = project.notes;
+
+    quillToWord.generateWord(chapFile, {exportAs: 'buffer'}).then(doc => {
+        fs.writeFileSync(dir + "notes" + ".docx", doc);
+        });
+}
+
+function generateChapterFilename(num){
+    return String(num + 1).padStart(4, '0') + "_" + project.chapters[num].title.replace(/[^a-z0-9]/gi, '_');
 }
