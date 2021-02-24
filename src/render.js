@@ -581,7 +581,7 @@ function showCompileOptions(){
   compileForm.appendChild(typeLabel);
 
   var typeSelect = document.createElement("select");
-  const typeOptions = [".txt", ".odt", "markup"];
+  const typeOptions = [".txt", ".odt", ".markdown"];
   typeOptions.forEach(function(op){
     var txtOp = document.createElement("option");
     txtOp.value = op;
@@ -658,7 +658,7 @@ function showExportOptions(docPath){
   exportForm.appendChild(typeLabel);
 
   var typeSelect = document.createElement("select");
-  const typeOptions = [".txt", ".odt", "markup"];
+  const typeOptions = [".txt", ".odt", ".markdown"];
   typeOptions.forEach(function(op){
     var txtOp = document.createElement("option");
     txtOp.value = op;

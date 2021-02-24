@@ -20,14 +20,32 @@ function exportProject(options, docPath){
         var chapFile = project.chapters[i].getFile();
 
         var outName = String(i + 1).padStart(4, '0') + "_" + project.chapters[i].title.replace(/[^a-z0-9]/gi, '_');
-        var outExt = ".txt";
-        fs.writeFileSync(newDir + outName + outExt, convertToPlainText(chapFile), 'utf8');
+
+        fs.writeFileSync(newDir + outName + options.type, convertChapter(chapFile, options), 'utf8');
       }
 
-      fs.writeFileSync(newDir + "notes.txt", convertToPlainText(project.notes), "utf8");
+      fs.writeFileSync(newDir + "notes" + options.type, convertChapter(project.notes, options), "utf8");
     }
   }
   
+function convertChapter(chapFile, options){
+    var converted;
+    
+    switch(options.type){
+        case ".txt":
+            converted = convertToPlainText(chapFile);
+            break;
+        case ".markdown":
+            break;
+        case ".odt":
+            break;
+        default: 
+            console.log("No valid filetype selected for export.");
+    }
+
+    return converted;
+}
+
 function convertToPlainText(chapFile){
     var tempQuill = new Quill(document.createElement('div'), {
         modules: {
