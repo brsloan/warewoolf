@@ -570,7 +570,7 @@ function showProperties(){
   document.body.appendChild(popup);
 }
 
-function showCompileOptions(){
+function showCompileOptions(docPath){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup");
@@ -638,7 +638,7 @@ function showCompileOptions(){
       insertStrng: insertStrInput.value,
       insertHead: insertHeadCheck.checked
     }
-    compileProject(options);
+    getCompileFilepath(options, docPath);
     popup.remove();
   };
 
@@ -721,7 +721,16 @@ function getExportFilePath(options, docPath){
 }
 
 function getCompileFilepath(options, docPath){
-  
+  const dialogOptions = {
+    title: 'Save compilation as...',
+    defaultPath: docPath,
+    filters: [
+      { name: 'Documents', extensions: [options.type.replaceAll('.','')] }
+    ]
+  };
+  var filepath = dialog.showSaveDialogSync(dialogOptions);
+  if (filepath)
+    compileProject(options, filepath);
 }
 
 

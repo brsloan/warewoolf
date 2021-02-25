@@ -77,21 +77,28 @@ function generateChapterFilename(num){
 
 //***********Compile Functions */
 
-function compileProject(options){
+function compileProject(options, filepath){
     console.log(options);
+    console.log(filepath);
     var allChaps = compileChapterDeltas();
-    var newDir = "C:/Users/sloanb/Documents/compiletest.txt";
 
     switch(options.type){
         case ".txt":
-            compilePlainText(newDir, allChaps);
+            compilePlainText(filepath, allChaps);
             break;
         case ".docx":
+            compileDocx(filepath, allChaps);
             break;
         default: 
             console.log("No valid filetype selected for compile.");
     }
-  }
+}
+
+function compileDocx(filepath, allChaps){
+    quillToWord.generateWord(allChaps, {exportAs: 'buffer'}).then(doc => {
+        fs.writeFileSync(filepath, doc);
+        });
+}
 
 function compilePlainText(dir, allChaps){
     var allText = convertToPlainText(allChaps);
