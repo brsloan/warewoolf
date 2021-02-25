@@ -1,6 +1,7 @@
 const { ipcRenderer } = require('electron');
 const fs = require('fs');
 const { dialog } = require('electron').remote;
+const Quill = require('quill');
 
   var editorQuill = new Quill('#editor-container', {
     modules: {
