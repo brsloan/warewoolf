@@ -521,6 +521,31 @@ const Quill = require('quill');
     showCompileOptions();
   });
 
+  ipcRenderer.on('word-count-clicked', function(e){
+    showWordCount();
+  });
+
+function showWordCount(){
+  var activeTotal = countWords(editorQuill.getText());
+
+  var total = 0;
+  project.chapters.forEach(function(chap){
+      var text = convertToPlainText(chap.contents ? chap.contents : chap.getFile());
+      total += countWords(text);
+  });
+  console.log("Chapter Word Count: " + activeTotal);
+  console.log("Total Word count: " + total);
+};
+
+function countWords(s){
+  return s.replaceAll('\n', ' ')
+  .replaceAll('\r', ' ')
+  .replaceAll('—', ' ')
+  .replaceAll('--', ' ')
+  .split(' ')
+  .filter(function(n) { return n != '' }).length;
+}
+
 function showProperties(){
   removeElementsByClass('popup');
   var popup = document.createElement("div");

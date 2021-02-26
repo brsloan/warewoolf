@@ -135,6 +135,29 @@ const createWindow = () => {
           role: 'selectall',
         }
       ]
+    },
+    {
+      label: 'Tools',
+      submenu: [
+        {
+          label: 'Word Count',
+          click(item, focusWindow){
+            mainWindow.webContents.send('word-count-clicked');
+          }
+        },
+        {
+          label: 'Search/Replace',
+          click(item, focusWindow){
+            mainWindow.webContents.send('search-replace-clicked');
+          }
+        },
+        {
+          label: 'Spell Check',
+          click(item, focusWindow){
+            mainWindow.webContents.send('spell-check-clicked');
+          }
+        }
+      ]
     }
   ]);
 
