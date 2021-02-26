@@ -22,15 +22,19 @@ function importPlainText(filepaths){
         var newChapContents = tempQuill.getContents();
 
         var filename = path.replaceAll('\\', '/').split('/').pop().split('.')[0];
-
-        var newChap = newChapter();
-        newChap.hasUnsavedChanges = true;
-        newChap.contents = newChapContents;
-        newChap.title = filename;
         
-        project.chapters.splice(project.activeChapterIndex + 1, 0, newChap);
-        updateFileList();
-        var thisIndex = project.chapters.indexOf(newChap);
-        displayChapterByIndex(thisIndex);
+        addImportedChapter(newChapContents, filename);
     });
+}
+
+function addImportedChapter(chapDelta, title){
+    var newChap = newChapter();
+    newChap.hasUnsavedChanges = true;
+    newChap.contents = chapDelta;
+    newChap.title = title;
+    
+    project.chapters.splice(project.activeChapterIndex + 1, 0, newChap);
+    updateFileList();
+    var thisIndex = project.chapters.indexOf(newChap);
+    displayChapterByIndex(thisIndex);
 }
