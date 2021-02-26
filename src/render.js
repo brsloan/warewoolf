@@ -37,7 +37,7 @@ const Quill = require('quill');
   initialize();
   
   function initialize(){
-    setProject("./examples/Frankenstein/Frankenstein.Woolf");
+    setProject("./examples/Frankenstein/Frankenstein.woolf");
   }
 
   function setProject(filepath){
@@ -505,6 +505,10 @@ const Quill = require('quill');
     createNewProject();
   });
 
+  ipcRenderer.on('import-clicked', function(e, docPath){
+    getImportFilepaths(docPath);
+  });
+
   ipcRenderer.on('export-clicked', function(e, docPath){
     showExportOptions(docPath);
   });
@@ -708,6 +712,20 @@ function showExportOptions(docPath){
   popup.appendChild(exportForm);
   document.body.appendChild(popup);
 
+}
+
+function getImportFilepaths(docPath){
+  const options = {
+    title: 'Import files...',
+    defaultPath: docPath,
+    properties: ['openFile', 'multiSelections'],
+    filters: [
+      { name: 'Text Files', extensions: ['txt'] }
+    ]
+  };
+  var filepaths = dialog.showOpenDialogSync(options);
+  if(filepaths)
+    importFiles(filepaths);
 }
 
 function getExportFilePath(options, docPath){
