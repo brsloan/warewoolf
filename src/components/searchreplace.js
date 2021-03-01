@@ -1,6 +1,11 @@
 function searchFor(str){
     removeHighlights();
-    var currentMatch = '0/0';
+    var currentMatch = {
+        index: null,
+        text:  '0/0'
+    };
+        
+       
     if(str){
         var totalText = editorQuill.getText();
         var re = new RegExp(str, "gi");
@@ -18,15 +23,16 @@ function searchFor(str){
             var nextSelection = nextIndex ? nextIndex : indices[0];
 
             editorQuill.setSelection(nextSelection);
-            currentMatch = (indices.indexOf(nextSelection) + 1) + "/" + indices.length;
+            currentMatch.index = nextSelection;
+            currentMatch.text = (indices.indexOf(nextSelection) + 1) + "/" + indices.length;
         }
     }
     return currentMatch;
 }
 
 function replace(ind, oldStr, newStr){
-    editorQuill.deleteText(ind, oldStr.length);
-    editorQuill.insertText(ind, newStr);
+    editorQuill.deleteText(ind, oldStr.length, 'user');
+    editorQuill.insertText(ind, newStr, 'user');
 }
 
 function removeHighlights() {

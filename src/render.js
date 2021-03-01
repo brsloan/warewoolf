@@ -561,10 +561,19 @@ function showSearchReplace(){
   findBtn.value = "Find";
   findBtn.onclick = function(){
     var results = searchFor(searchIn.value);
-    searchCount.innerText = "Results: " + results;
+    searchCount.innerText = "Results: " + results.text;
     if(results != "0/0"){
-      document.getElementById("replace-btn").disabled = false;
-      document.getElementById("replace-all-btn").disabled = false;
+      var replBtn = document.getElementById("replace-btn");
+      var replAllBtn = document.getElementById("replace-all-btn");
+
+      replBtn.onclick = function(){
+        replace(results.index, searchIn.value, replaceIn.value);
+        updateFileList();
+        findBtn.click();
+      }
+
+      replBtn.disabled = false;
+      replAllBtn.disabled = false;
     }
     else {
       document.getElementById("replace-btn").disabled = true;
