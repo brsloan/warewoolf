@@ -525,6 +525,92 @@ const Quill = require('quill');
     showWordCount();
   });
 
+  ipcRenderer.on('search-replace-clicked', function(e){
+    showSearchReplace();
+  });
+
+function showSearchReplace(){
+  removeElementsByClass('popup');
+  var popup = document.createElement("div");
+  popup.classList.add("popup");
+
+  var searchForm = document.createElement("form");
+
+  var searchIn = document.createElement("input");
+  searchIn.type = "text";
+  searchIn.placeholder = "Search...";
+  searchIn.id = "search-input";
+  searchForm.appendChild(searchIn);
+
+  var searchCount = document.createElement('label');
+  searchCount.innerText = "";
+  searchForm.appendChild(searchCount);
+
+  searchForm.appendChild(document.createElement('br'));
+
+  var replaceIn = document.createElement("input");
+  replaceIn.type = "text";
+  replaceIn.placeholder = "Replace...";
+  replaceIn.id = "replace-input";
+  searchForm.appendChild(replaceIn);
+
+  searchForm.appendChild(document.createElement('br'));
+
+  var findBtn = document.createElement("input");
+  findBtn.type = "button";
+  findBtn.value = "Find";
+  findBtn.onclick = function(){
+    var results = searchFor(searchIn.value);
+    searchCount.innerText = "Results: " + results;
+    if(results != "0/0"){
+      document.getElementById("replace-btn").disabled = false;
+      document.getElementById("replace-all-btn").disabled = false;
+    }
+    else {
+      document.getElementById("replace-btn").disabled = true;
+      document.getElementById("replace-all-btn").disabled = true;
+    }
+  };
+  searchForm.appendChild(findBtn);
+
+  var replaceBtn = document.createElement("input");
+  replaceBtn.type = "button";
+  replaceBtn.value = "Replace";
+  replaceBtn.disabled = true;
+  replaceBtn.id = "replace-btn";
+  replaceBtn.onclick = function(){
+    
+  };
+  searchForm.appendChild(replaceBtn);
+
+  searchForm.appendChild(document.createElement('br'));
+
+  var replaceAllBtn = document.createElement("input");
+  replaceAllBtn.type = "button";
+  replaceAllBtn.value = "Replace All";
+  replaceAllBtn.disabled = true;
+  replaceAllBtn.id = "replace-all-btn";
+  replaceAllBtn.onclick = function(){
+    
+  };
+  searchForm.appendChild(replaceAllBtn);
+
+  searchForm.appendChild(document.createElement('br'));
+
+  var cancel = document.createElement("input");
+  cancel.type = "button";
+  cancel.value = "Cancel";
+  cancel.onclick = function(){
+    removeHighlights();
+    popup.remove();
+  };
+  searchForm.appendChild(cancel);
+
+  popup.appendChild(searchForm);
+  document.body.appendChild(popup);
+}
+
+
 function showWordCount(){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
