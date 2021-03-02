@@ -525,54 +525,54 @@ const Quill = require('quill');
     showWordCount();
   });
 
-  ipcRenderer.on('search-replace-clicked', function(e){
-    showSearchReplace();
+  ipcRenderer.on('find-replace-clicked', function(e){
+    showFindReplace();
   });
 
-function showSearchReplace(){
+function showFindReplace(){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup");
 
-  var searchForm = document.createElement("form");
+  var findForm = document.createElement("form");
 
-  var searchIn = document.createElement("input");
-  searchIn.type = "text";
-  searchIn.placeholder = "Search...";
-  searchIn.id = "search-input";
-  searchForm.appendChild(searchIn);
+  var findIn = document.createElement("input");
+  findIn.type = "text";
+  findIn.placeholder = "Find...";
+  findIn.id = "find-input";
+  findForm.appendChild(findIn);
 
-  var searchCount = document.createElement('label');
-  searchCount.innerText = "";
-  searchForm.appendChild(searchCount);
+  var findCount = document.createElement('label');
+  findCount.innerText = "";
+  findForm.appendChild(findCount);
 
-  searchForm.appendChild(document.createElement('br'));
+  findForm.appendChild(document.createElement('br'));
 
   var replaceIn = document.createElement("input");
   replaceIn.type = "text";
   replaceIn.placeholder = "Replace...";
   replaceIn.id = "replace-input";
-  searchForm.appendChild(replaceIn);
+  findForm.appendChild(replaceIn);
 
-  searchForm.appendChild(document.createElement('br'));
+  findForm.appendChild(document.createElement('br'));
 
   var findBtn = document.createElement("input");
   findBtn.type = "button";
   findBtn.value = "Find";
   findBtn.onclick = function(){
-    var results = searchFor(searchIn.value);
-    searchCount.innerText = "Results: " + results.text;
+    var results = findFor(findIn.value);
+    findCount.innerText = "Results: " + results.text;
     if(results.index != null){
       var replBtn = document.getElementById("replace-btn");
       var replAllBtn = document.getElementById("replace-all-btn");
 
       replBtn.onclick = function(){
-        replace(results.index, searchIn.value, replaceIn.value);
+        replace(results.index, findIn.value, replaceIn.value);
         updateFileList();
         findBtn.click();
       }
       replAllBtn.onclick = function(){
-        replaceAll(searchIn.value, replaceIn.value);
+        replaceAll(findIn.value, replaceIn.value);
         updateFileList();
         findBtn.click();
       }
@@ -585,7 +585,7 @@ function showSearchReplace(){
       document.getElementById("replace-all-btn").disabled = true;
     }
   };
-  searchForm.appendChild(findBtn);
+  findForm.appendChild(findBtn);
 
   var replaceBtn = document.createElement("input");
   replaceBtn.type = "button";
@@ -595,9 +595,9 @@ function showSearchReplace(){
   replaceBtn.onclick = function(){
     
   };
-  searchForm.appendChild(replaceBtn);
+  findForm.appendChild(replaceBtn);
 
-  searchForm.appendChild(document.createElement('br'));
+  findForm.appendChild(document.createElement('br'));
 
   var replaceAllBtn = document.createElement("input");
   replaceAllBtn.type = "button";
@@ -607,9 +607,9 @@ function showSearchReplace(){
   replaceAllBtn.onclick = function(){
     
   };
-  searchForm.appendChild(replaceAllBtn);
+  findForm.appendChild(replaceAllBtn);
 
-  searchForm.appendChild(document.createElement('br'));
+  findForm.appendChild(document.createElement('br'));
 
   var cancel = document.createElement("input");
   cancel.type = "button";
@@ -618,9 +618,9 @@ function showSearchReplace(){
     removeHighlights();
     popup.remove();
   };
-  searchForm.appendChild(cancel);
+  findForm.appendChild(cancel);
 
-  popup.appendChild(searchForm);
+  popup.appendChild(findForm);
   document.body.appendChild(popup);
 }
 

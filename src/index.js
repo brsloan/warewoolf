@@ -146,9 +146,9 @@ const createWindow = () => {
           }
         },
         {
-          label: 'Search/Replace',
+          label: 'Find/Replace',
           click(item, focusWindow){
-            mainWindow.webContents.send('search-replace-clicked');
+            mainWindow.webContents.send('find-replace-clicked');
           }
         },
         {

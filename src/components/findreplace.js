@@ -1,4 +1,4 @@
-function searchFor(str){
+function findFor(str){
     removeHighlights();
     var currentMatch = {
         index: null,
@@ -40,7 +40,7 @@ function replace(ind, oldStr, newStr){
 function replaceAll(oldStr, newStr){
     var matchIndex = '';
     while(matchIndex != null){
-        var results = searchFor(oldStr);
+        var results = findFor(oldStr);
         matchIndex = results.index;
         if(matchIndex != null)
             replace(matchIndex, oldStr, newStr);
@@ -51,15 +51,15 @@ function removeHighlights() {
     editorQuill.formatText(0, editorQuill.getText().length, 'background', false);
 }
 
-function getIndicesOf(searchStr, fullStr){
-    var searchStrLen = searchStr.length;
+function getIndicesOf(findStr, fullStr){
+    var findStrLen = findStr.length;
     var startIndex = 0;
     var index;
     var indices = [];
 
-    while((index = fullStr.toLowerCase().indexOf(searchStr.toLowerCase(), startIndex)) > -1){
+    while((index = fullStr.toLowerCase().indexOf(findStr.toLowerCase(), startIndex)) > -1){
         indices.push(index);
-        startIndex = index + searchStrLen;
+        startIndex = index + findStrLen;
     }
 
     return indices;
