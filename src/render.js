@@ -562,12 +562,17 @@ function showSearchReplace(){
   findBtn.onclick = function(){
     var results = searchFor(searchIn.value);
     searchCount.innerText = "Results: " + results.text;
-    if(results != "0/0"){
+    if(results.index != null){
       var replBtn = document.getElementById("replace-btn");
       var replAllBtn = document.getElementById("replace-all-btn");
 
       replBtn.onclick = function(){
         replace(results.index, searchIn.value, replaceIn.value);
+        updateFileList();
+        findBtn.click();
+      }
+      replAllBtn.onclick = function(){
+        replaceAll(searchIn.value, replaceIn.value);
         updateFileList();
         findBtn.click();
       }

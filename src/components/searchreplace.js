@@ -31,8 +31,20 @@ function searchFor(str){
 }
 
 function replace(ind, oldStr, newStr){
-    editorQuill.deleteText(ind, oldStr.length, 'user');
-    editorQuill.insertText(ind, newStr, 'user');
+    if(ind != null){
+        editorQuill.deleteText(ind, oldStr.length, 'user');
+        editorQuill.insertText(ind, newStr, 'user');
+    }
+}
+
+function replaceAll(oldStr, newStr){
+    var matchIndex = '';
+    while(matchIndex != null){
+        var results = searchFor(oldStr);
+        matchIndex = results.index;
+        if(matchIndex != null)
+            replace(matchIndex, oldStr, newStr);
+    }
 }
 
 function removeHighlights() {
