@@ -1,4 +1,4 @@
-function find(str){
+function find(str, caseSensitive = true){
     removeHighlights();
     var currentMatch = {
         index: null,
@@ -10,7 +10,7 @@ function find(str){
         var re = new RegExp(str, "gi");
         var match = re.test(totalText);
         if(match){
-            var indices = getIndicesOf(str, totalText);
+            var indices = getIndicesOf(str, totalText, caseSensitive);
             var length = str.length;
 
             indices.forEach(function(index){
@@ -50,13 +50,17 @@ function removeHighlights() {
     editorQuill.formatText(0, editorQuill.getText().length, 'background', false);
 }
 
-function getIndicesOf(findStr, fullStr){
+function getIndicesOf(findStr, fullStr, caseSensitive = true){
     var findStrLen = findStr.length;
     var startIndex = 0;
     var index;
     var indices = [];
+    if(!caseSensitive){
+        findStr = findStr.toLowerCase();
+        fullStr = fullStr.toLowerCase();
+    }
 
-    while((index = fullStr.toLowerCase().indexOf(findStr.toLowerCase(), startIndex)) > -1){
+    while((index = fullStr.indexOf(findStr, startIndex)) > -1){
         indices.push(index);
         startIndex = index + findStrLen;
     }
@@ -65,7 +69,7 @@ function getIndicesOf(findStr, fullStr){
 }
 //****Rewrite to find/replace in all chapters */
 
-function findInAllChaps(str){
+function findInAllChaps(str, caseSensitive = true){
     var allMatches = [];
 
     if(str){
@@ -81,7 +85,7 @@ function findInAllChaps(str){
             var re = new RegExp(str, "gi");
             var match = re.test(chapText);
             if(match){
-                var matchIndices = getIndicesOf(str, chapText);
+                var matchIndices = getIndicesOf(str, chapText, caseSensitive);
                 allMatches.push({
                     chapIndex: i, 
                     matchIndices: matchIndices
@@ -95,7 +99,7 @@ function findInAllChaps(str){
 function replaceAllInAllChaps(allMatches, oldStr, newStr){
     allMatches.forEach(function(chapMatches){
         //As you replace each instance, if replacement is different length it shifts all 
-        //subsequent index values
+        //subsequent index values in that chapter
         var shiftVal = 0;
         displayChapterByIndex(chapMatches.chapIndex)
         chapMatches.matchIndices.forEach(function(ind){

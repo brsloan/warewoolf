@@ -542,6 +542,10 @@ function showFindReplace(){
   findIn.id = "find-input";
   findForm.appendChild(findIn);
 
+  var caseSensitive = document.createElement("input");
+  caseSensitive.type = "checkbox";
+  findForm.appendChild(caseSensitive);
+
   var findCount = document.createElement('label');
   findCount.innerText = "";
   findForm.appendChild(findCount);
@@ -560,8 +564,9 @@ function showFindReplace(){
   findBtn.type = "button";
   findBtn.value = "Find";
   findBtn.onclick = function(){
-    var results = find(findIn.value);
-    findInAllChaps(findIn.value);
+    var results = find(findIn.value, caseSensitive.checked);
+    console.log(caseSensitive.checked);
+    findInAllChaps(findIn.value, caseSensitive.checked);
     findCount.innerText = "Results: " + results.text;
     if(results.index != null){
       var replBtn = document.getElementById("replace-btn");
@@ -576,7 +581,7 @@ function showFindReplace(){
         //replaceAll(findIn.value, replaceIn.value);
         //updateFileList();
         //findBtn.click();
-        var res = findInAllChaps(findIn.value);
+        var res = findInAllChaps(findIn.value, caseSensitive.checked);
         replaceAllInAllChaps(res, findIn.value, replaceIn.value);
         updateFileList();
       }
