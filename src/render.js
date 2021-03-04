@@ -560,7 +560,8 @@ function showFindReplace(){
   findBtn.type = "button";
   findBtn.value = "Find";
   findBtn.onclick = function(){
-    var results = findFor(findIn.value);
+    var results = find(findIn.value);
+    findInAllChaps(findIn.value);
     findCount.innerText = "Results: " + results.text;
     if(results.index != null){
       var replBtn = document.getElementById("replace-btn");
@@ -572,9 +573,12 @@ function showFindReplace(){
         findBtn.click();
       }
       replAllBtn.onclick = function(){
-        replaceAll(findIn.value, replaceIn.value);
+        //replaceAll(findIn.value, replaceIn.value);
+        //updateFileList();
+        //findBtn.click();
+        var res = findInAllChaps(findIn.value);
+        replaceAllInAllChaps(res, findIn.value, replaceIn.value);
         updateFileList();
-        findBtn.click();
       }
 
       replBtn.disabled = false;
@@ -658,6 +662,7 @@ function showWordCount(){
 
   chapTotalDisplay.innerText = "Chapter Word Count: " + activeTotal;
   totalDisplay.innerText = "Total Word Count: " + total;
+  closeBtn.focus();
 };
 
 function countWords(s){
@@ -955,4 +960,14 @@ function convertFilepath(fpath){
   }
   
   return converted;
+}
+
+function getTempQuill(){
+  return new Quill(document.createElement('div'), {
+      modules: {
+          history: {
+              userOnly: true
+          }
+      }
+      });
 }

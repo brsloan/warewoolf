@@ -10,13 +10,7 @@ function importPlainText(filepaths){
     filepaths.forEach(function(path){
         var inText = fs.readFileSync(path, 'utf8');
 
-        var tempQuill = new Quill(document.createElement('div'), {
-            modules: {
-                history: {
-                    userOnly: true
-                }
-            }
-            });
+        var tempQuill = getTempQuill();
     
         tempQuill.setText(inText);
         var newChapContents = tempQuill.getContents();

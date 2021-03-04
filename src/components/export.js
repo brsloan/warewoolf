@@ -33,13 +33,7 @@ function exportAsText(dir){
 }
 
 function convertToPlainText(chapFile){
-    var tempQuill = new Quill(document.createElement('div'), {
-        modules: {
-            history: {
-            userOnly: true
-            }
-        }
-        });
+    var tempQuill = getTempQuill();
 
     tempQuill.setContents(chapFile);
 

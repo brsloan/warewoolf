@@ -141,18 +141,21 @@ const createWindow = () => {
       submenu: [
         {
           label: 'Word Count',
+          accelerator: 'CommandOrControl+8',
           click(item, focusWindow){
             mainWindow.webContents.send('word-count-clicked');
           }
         },
         {
           label: 'Find/Replace',
+          accelerator: 'CommandOrControl+F',
           click(item, focusWindow){
             mainWindow.webContents.send('find-replace-clicked');
           }
         },
         {
           label: 'Spell Check',
+          accelerator: 'CommandOrControl+7',
           click(item, focusWindow){
             mainWindow.webContents.send('spell-check-clicked');
           }

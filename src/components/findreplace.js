@@ -1,11 +1,10 @@
-function findFor(str){
+function find(str){
     removeHighlights();
     var currentMatch = {
         index: null,
         text:  '0/0'
     };
-        
-       
+         
     if(str){
         var totalText = editorQuill.getText();
         var re = new RegExp(str, "gi");
@@ -40,7 +39,7 @@ function replace(ind, oldStr, newStr){
 function replaceAll(oldStr, newStr){
     var matchIndex = '';
     while(matchIndex != null){
-        var results = findFor(oldStr);
+        var results = find(oldStr);
         matchIndex = results.index;
         if(matchIndex != null)
             replace(matchIndex, oldStr, newStr);
@@ -64,3 +63,48 @@ function getIndicesOf(findStr, fullStr){
 
     return indices;
 }
+//****Rewrite to find/replace in all chapters */
+
+function findInAllChaps(str){
+    var allIndices = [];
+
+    if(str){
+        console.log('search for ' + str);
+        var tempQuill = getTempQuill();
+
+        for(i = 0; i < project.chapters.length; i++){
+            var thisChap = project.chapters[i];
+            var chapContents = thisChap.contents ? thisChap.contents : thisChap.getFile();
+            tempQuill.setContents(chapContents);
+            var chapText = tempQuill.getText();
+
+            var re = new RegExp(str, "gi");
+            var match = re.test(chapText);
+            if(match){
+                var chapIndices = getIndicesOf(str, chapText);
+                allIndices.push({
+                    chapIndex: i, 
+                    indices: chapIndices
+                });
+            }
+        }
+    }
+    return allIndices;
+}
+
+function replaceAllInAllChaps(allIndices, oldStr, newStr){
+    allIndices.forEach(function(chapIndices){
+        //As you replace each instance, if replacement is different length it shifts all 
+        //subsequent index values
+        var shiftVal = 0;
+        chapIndices.indices.forEach(function(ind){
+            ind += shiftVal;
+            displayChapterByIndex(chapIndices.chapIndex)
+            console.log("for chap " + chapIndices.chapIndex + ", replace '" + editorQuill.getText(ind, oldStr.length) + "' with " + newStr);
+            editorQuill.deleteText(ind, oldStr.length, 'user');
+            editorQuill.insertText(ind, newStr, 'user');
+            shiftVal += (newStr.length - oldStr.length);
+        });
+    });
+}
+
