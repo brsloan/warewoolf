@@ -66,7 +66,7 @@ function getIndicesOf(findStr, fullStr){
 //****Rewrite to find/replace in all chapters */
 
 function findInAllChaps(str){
-    var allIndices = [];
+    var allMatches = [];
 
     if(str){
         console.log('search for ' + str);
@@ -81,26 +81,26 @@ function findInAllChaps(str){
             var re = new RegExp(str, "gi");
             var match = re.test(chapText);
             if(match){
-                var chapIndices = getIndicesOf(str, chapText);
-                allIndices.push({
+                var matchIndices = getIndicesOf(str, chapText);
+                allMatches.push({
                     chapIndex: i, 
-                    indices: chapIndices
+                    matchIndices: matchIndices
                 });
             }
         }
     }
-    return allIndices;
+    return allMatches;
 }
 
-function replaceAllInAllChaps(allIndices, oldStr, newStr){
-    allIndices.forEach(function(chapIndices){
+function replaceAllInAllChaps(allMatches, oldStr, newStr){
+    allMatches.forEach(function(chapMatches){
         //As you replace each instance, if replacement is different length it shifts all 
         //subsequent index values
         var shiftVal = 0;
-        chapIndices.indices.forEach(function(ind){
+        chapMatches.matchIndices.forEach(function(ind){
             ind += shiftVal;
-            displayChapterByIndex(chapIndices.chapIndex)
-            console.log("for chap " + chapIndices.chapIndex + ", replace '" + editorQuill.getText(ind, oldStr.length) + "' with " + newStr);
+            displayChapterByIndex(chapMatches.chapIndex)
+            console.log("for chap " + chapMatches.chapIndex + ", replace '" + editorQuill.getText(ind, oldStr.length) + "' with " + newStr);
             editorQuill.deleteText(ind, oldStr.length, 'user');
             editorQuill.insertText(ind, newStr, 'user');
             shiftVal += (newStr.length - oldStr.length);
