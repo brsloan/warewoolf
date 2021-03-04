@@ -97,9 +97,9 @@ function replaceAllInAllChaps(allMatches, oldStr, newStr){
         //As you replace each instance, if replacement is different length it shifts all 
         //subsequent index values
         var shiftVal = 0;
+        displayChapterByIndex(chapMatches.chapIndex)
         chapMatches.matchIndices.forEach(function(ind){
             ind += shiftVal;
-            displayChapterByIndex(chapMatches.chapIndex)
             console.log("for chap " + chapMatches.chapIndex + ", replace '" + editorQuill.getText(ind, oldStr.length) + "' with " + newStr);
             editorQuill.deleteText(ind, oldStr.length, 'user');
             editorQuill.insertText(ind, newStr, 'user');
