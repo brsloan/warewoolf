@@ -46,10 +46,6 @@ function replaceAll(oldStr, newStr){
     }
 }
 
-function removeHighlights() {
-    editorQuill.formatText(0, editorQuill.getText().length, 'background', false);
-}
-
 function getIndicesOf(findStr, fullStr, caseSensitive = true){
     var findStrLen = findStr.length;
     var startIndex = 0;
@@ -73,27 +69,34 @@ function findInAllChaps(str, caseSensitive = true){
     var allMatches = [];
 
     if(str){
-        console.log('search for ' + str);
-        var tempQuill = getTempQuill();
-
         for(i = 0; i < project.chapters.length; i++){
-            var thisChap = project.chapters[i];
-            var chapContents = thisChap.contents ? thisChap.contents : thisChap.getFile();
-            tempQuill.setContents(chapContents);
-            var chapText = tempQuill.getText();
-
-            var re = new RegExp(str, "gi");
-            var match = re.test(chapText);
-            if(match){
-                var matchIndices = getIndicesOf(str, chapText, caseSensitive);
-                allMatches.push({
-                    chapIndex: i, 
-                    matchIndices: matchIndices
-                });
-            }
+            var chapterMatches = findInChapter(i, str, caseSensitive);
+            if(chapterMatches)
+                allMatches.push(chapterMatches);
         }
     }
     return allMatches;
+}
+
+function findInChapter(chapIndex, str, caseSensitive = true){
+    var thisChap = project.chapters[chapIndex];
+    var chapContents = thisChap.contents ? thisChap.contents : thisChap.getFile();
+    var tempQuill = getTempQuill();
+    tempQuill.setContents(chapContents);
+    var chapText = tempQuill.getText();
+
+    var matches = null;
+    var re = new RegExp(str, "gi");
+    var match = re.test(chapText);
+    if(match){
+        var matchIndices = getIndicesOf(str, chapText, caseSensitive);
+        matches = {
+            chapIndex: chapIndex, 
+            matchIndices: matchIndices
+        };
+    }
+
+    return matches;
 }
 
 function replaceAllInAllChaps(allMatches, oldStr, newStr){

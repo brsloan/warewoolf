@@ -542,13 +542,29 @@ function showFindReplace(){
   findIn.id = "find-input";
   findForm.appendChild(findIn);
 
+  var findCount = document.createElement('label');
+  findCount.innerText = "";
+  findForm.appendChild(findCount);
+
+  findForm.appendChild(document.createElement('br'));
+
   var caseSensitive = document.createElement("input");
   caseSensitive.type = "checkbox";
   findForm.appendChild(caseSensitive);
 
-  var findCount = document.createElement('label');
-  findCount.innerText = "";
-  findForm.appendChild(findCount);
+  var caseSensLabel = document.createElement("label");
+  caseSensLabel.innerText = "Case Sensitive";
+  findForm.appendChild(caseSensLabel);
+
+  findForm.appendChild(document.createElement('br'));
+
+  var inAllChapters = document.createElement("input");
+  inAllChapters.type = "checkbox";
+  findForm.appendChild(inAllChapters)
+
+  var inAllChapLabel = document.createElement("label");
+  inAllChapLabel.innerText = "In All Chapters";
+  findForm.appendChild(inAllChapLabel);
 
   findForm.appendChild(document.createElement('br'));
 
@@ -564,11 +580,10 @@ function showFindReplace(){
   findBtn.type = "button";
   findBtn.value = "Find";
   findBtn.onclick = function(){
-    var results = find(findIn.value, caseSensitive.checked);
-    console.log(caseSensitive.checked);
-    findInAllChaps(findIn.value, caseSensitive.checked);
-    findCount.innerText = "Results: " + results.text;
-    if(results.index != null){
+    findMatches(findCount, inAllChapters, findIn, caseSensitive);
+
+
+    /*if(results.index != null){
       var replBtn = document.getElementById("replace-btn");
       var replAllBtn = document.getElementById("replace-all-btn");
 
@@ -592,7 +607,7 @@ function showFindReplace(){
     else {
       document.getElementById("replace-btn").disabled = true;
       document.getElementById("replace-all-btn").disabled = true;
-    }
+    }*/
   };
   findForm.appendChild(findBtn);
 
@@ -625,6 +640,7 @@ function showFindReplace(){
   cancel.value = "Cancel";
   cancel.onclick = function(){
     removeHighlights();
+    removeHighlightsInFileList();
     popup.remove();
   };
   findForm.appendChild(cancel);
@@ -633,6 +649,88 @@ function showFindReplace(){
   document.body.appendChild(popup);
 }
 
+
+function findMatches(findCount, inAllChapters, findInput, caseSensitive) {
+  var matches;
+
+  if (inAllChapters.checked){
+    matches = findInAllChaps(findInput.value, caseSensitive.checked);
+    displayMatches(matches, findInput, findCount);
+  }
+  else{
+    matches = findInChapter(project.activeChapterIndex, findInput.value, caseSensitive.checked);
+    displayMatches([matches], findInput, findCount);
+  }
+}
+
+function displayMatches(allChapMatches, findInput, findCount) {
+  removeHighlights();
+  removeHighlightsInFileList();
+  findCount.innerText = "(Matches: 0/0)";
+  
+  if (allChapMatches) {
+    var matches = allChapMatches.find(ma => ma.chapIndex >= project.activeChapterIndex);
+    if(!matches)
+      matches = allChapMatches.find(ma => ma.chapIndex < project.activeChapterIndex);
+
+    if(matches.chapIndex != project.activeChapterIndex){
+      displayChapterByIndex(matches.chapIndex);
+    }
+
+    var currentIndex = editorQuill.getSelection(true).index;
+    var nextIndex = matches.matchIndices.find(ind => ind > currentIndex);
+    var nextSelection;
+    if(!nextIndex){
+      matches = allChapMatches.find(ma => ma.chapIndex > project.activeChapterIndex);
+      if(!matches)
+        matches = allChapMatches.find(ma => ma.chapIndex < project.activeChapterIndex);
+      if(!matches)
+        matches = allChapMatches.find(ma => ma.chapIndex == project.activeChapterIndex);
+      displayChapterByIndex(matches.chapIndex);
+      nextSelection = matches.matchIndices[0];
+    }
+    else{
+      nextSelection = nextIndex;
+    }
+
+    highlightMatches(matches, findInput);
+    editorQuill.setSelection(nextSelection);
+
+    var totalMatches = 0;
+    allChapMatches.forEach(function(m){
+      totalMatches += m.matchIndices.length;
+      highlightChapInFileList(m.chapIndex);
+    });
+
+    findCount.innerText = "(Matches: " + 
+      (matches.matchIndices.indexOf(nextSelection) + 1) + 
+      "/" + matches.matchIndices.length + 
+      (totalMatches != matches.matchIndices.length ? (" of " + totalMatches + " total") : "") + 
+      ")";
+  }
+}
+
+function removeHighlights() {
+  editorQuill.formatText(0, editorQuill.getText().length, 'background', false);
+}
+
+function highlightMatches(matches, findInput) {
+  matches.matchIndices.forEach(function (indexToHighlight) {
+    editorQuill.formatText(indexToHighlight, findInput.value.length, { 'background': '#f8ff00' }, true);
+  });
+}
+
+function highlightChapInFileList(i) {
+  var liItem = document.querySelector("[data-chap-index='" + i + "']");
+  liItem.classList.add("highlighted");
+}
+
+function removeHighlightsInFileList(){
+  var liItems = document.getElementsByTagName("li");
+  for(i=0;i<liItems.length;i++){
+    liItems[i].classList.remove("highlighted");
+  }
+}
 
 function showWordCount(){
   removeElementsByClass('popup');

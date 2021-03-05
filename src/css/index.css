@@ -90,3 +90,7 @@ ul {
 .name-box {
   width: 95%;
 }
+
+.highlighted {
+  background-color: #f8ff00;
+}
