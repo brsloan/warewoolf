@@ -1,3 +1,77 @@
+function findSimple(str, caseSensitive = true, startingIndex, searchAllChapters){
+    var index = -1;
+    
+    if(str){
+        var totalText = editorQuill.getText();
+
+        if(!caseSensitive){
+            totalText = totalText.toLowerCase();
+            str = str.toLowerCase();
+        }
+
+        index = totalText.indexOf(str, startingIndex);
+        if(index == startingIndex)
+            index = totalText.indexOf(str, startingIndex + str.length);
+
+        if(index > -1)
+            editorQuill.setSelection(index, str.length);
+        else{
+            //No more results. Either start again at top of current chapter or move to next chapter.
+            if(searchAllChapters){
+                var startingChapIndex = project.activeChapterIndex;
+                var result = -1;
+                while(result < 0){
+                    if(project.activeChapterIndex < project.chapters.length - 1){
+                        displayChapterByIndex(project.activeChapterIndex + 1);
+                        result = findSimple(str, caseSensitive, 0);
+                    }
+                    else {
+                        //If search did not begin at first chapter, loop back to first chapter for one more go.
+                        if(startingChapIndex != 0){
+                            startingChapIndex = 0;
+                            displayChapterByIndex(0);
+                            result = findSimple(str, caseSensitive, 0);
+                        }
+                        else {
+                            result = 1;
+                        }
+                    }
+                }   
+            } else {
+                if(startingIndex != 0)
+                    findSimple(str, caseSensitive, 0);
+            }   
+        }
+    }
+    return index;
+}
+
+function replaceSimple(newStr){
+    var selectedRange = editorQuill.getSelection(true);
+    if(selectedRange.length > 0){
+        editorQuill.deleteText(selectedRange.index, selectedRange.length, 'user');
+        editorQuill.insertText(selectedRange.index, newStr, 'user');
+    }
+}
+
+function replaceAllSimple(oldStr, newStr, caseSensitive, searchAllChapters){
+    var res = 1;
+    while(res > 0){
+        res = findSimple(oldStr, caseSensitive, 0, searchAllChapters);
+        if(res > 0)
+            replaceSimple(newStr);
+    }
+}
+
+
+
+
+
+
+
+
+//TODO: Rewrite all this so it's not slow as molasses
+
 function find(str, caseSensitive = true){
     removeHighlights();
     var currentMatch = {
