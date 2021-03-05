@@ -645,8 +645,16 @@ function showFindReplace(){
   };
   findForm.appendChild(cancel);
 
+  findIn.addEventListener("keyup", function(event){
+    event.preventDefault();
+    if (event.key == "Enter") {
+        findBtn.click();
+    }
+  });
+
   popup.appendChild(findForm);
   document.body.appendChild(popup);
+  findIn.focus();
 }
 
 
