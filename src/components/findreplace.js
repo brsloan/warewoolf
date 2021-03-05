@@ -24,6 +24,7 @@ function findSimple(str, caseSensitive = true, startingIndex, searchAllChapters)
                     if(project.activeChapterIndex < project.chapters.length - 1){
                         displayChapterByIndex(project.activeChapterIndex + 1);
                         result = findSimple(str, caseSensitive, 0);
+                        index = result;
                     }
                     else {
                         //If search did not begin at first chapter, loop back to first chapter for one more go.
@@ -31,6 +32,7 @@ function findSimple(str, caseSensitive = true, startingIndex, searchAllChapters)
                             startingChapIndex = 0;
                             displayChapterByIndex(0);
                             result = findSimple(str, caseSensitive, 0);
+                            index = result;
                         }
                         else {
                             result = 1;
@@ -38,8 +40,10 @@ function findSimple(str, caseSensitive = true, startingIndex, searchAllChapters)
                     }
                 }   
             } else {
-                if(startingIndex != 0)
-                    findSimple(str, caseSensitive, 0);
+                if(startingIndex != 0){
+                    index =  findSimple(str, caseSensitive, 0);
+                }
+                   
             }   
         }
     }
