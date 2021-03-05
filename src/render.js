@@ -614,7 +614,7 @@ function showFindReplace(){
   var replaceBtn = document.createElement("input");
   replaceBtn.type = "button";
   replaceBtn.value = "Replace";
-  replaceBtn.disabled = true;
+  //replaceBtn.disabled = true;
   replaceBtn.id = "replace-btn";
   replaceBtn.onclick = function(){
     
@@ -626,10 +626,10 @@ function showFindReplace(){
   var replaceAllBtn = document.createElement("input");
   replaceAllBtn.type = "button";
   replaceAllBtn.value = "Replace All";
-  replaceAllBtn.disabled = true;
+  //replaceAllBtn.disabled = true;
   replaceAllBtn.id = "replace-all-btn";
   replaceAllBtn.onclick = function(){
-    
+    replaceAllClicked(inAllChapters, findIn, caseSensitive, replaceIn, findCount);
   };
   findForm.appendChild(replaceAllBtn);
 
@@ -657,6 +657,19 @@ function showFindReplace(){
   findIn.focus();
 }
 
+
+function replaceAllClicked(inAllChapters, findIn, caseSensitive, replaceIn, findCount) {
+  var res;
+  if (inAllChapters.checked)
+    res = findInAllChaps(findIn.value, caseSensitive.checked);
+
+  else
+    res = [findInChapter(project.activeChapterIndex, findIn.value, caseSensitive.checked)];
+
+  var totalReplaced = replaceAllInAllChaps(res, findIn.value, replaceIn.value);
+  findCount.innerText = totalReplaced + " replaced";
+  updateFileList();
+}
 
 function findMatches(findCount, inAllChapters, findInput, caseSensitive) {
   var matches;

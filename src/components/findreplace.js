@@ -100,6 +100,7 @@ function findInChapter(chapIndex, str, caseSensitive = true){
 }
 
 function replaceAllInAllChaps(allMatches, oldStr, newStr){
+    var totalReplaced = 0;
     allMatches.forEach(function(chapMatches){
         //As you replace each instance, if replacement is different length it shifts all 
         //subsequent index values in that chapter
@@ -111,7 +112,9 @@ function replaceAllInAllChaps(allMatches, oldStr, newStr){
             editorQuill.deleteText(ind, oldStr.length, 'user');
             editorQuill.insertText(ind, newStr, 'user');
             shiftVal += (newStr.length - oldStr.length);
+            totalReplaced++;
         });
     });
+    return totalReplaced;
 }
 
