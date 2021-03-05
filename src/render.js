@@ -580,44 +580,16 @@ function showFindReplace(){
   findBtn.type = "button";
   findBtn.value = "Find";
   findBtn.onclick = function(){
-    //findMatches(findCount, inAllChapters, findIn, caseSensitive);
-    console.log(findSimple(findIn.value, caseSensitive.checked, editorQuill.getSelection(true).index, inAllChapters.checked));
-
-    /*if(results.index != null){
-      var replBtn = document.getElementById("replace-btn");
-      var replAllBtn = document.getElementById("replace-all-btn");
-
-      replBtn.onclick = function(){
-        replace(results.index, findIn.value, replaceIn.value);
-        updateFileList();
-        findBtn.click();
-      }
-      replAllBtn.onclick = function(){
-        //replaceAll(findIn.value, replaceIn.value);
-        //updateFileList();
-        //findBtn.click();
-        var res = findInAllChaps(findIn.value, caseSensitive.checked);
-        replaceAllInAllChaps(res, findIn.value, replaceIn.value);
-        updateFileList();
-      }
-
-      replBtn.disabled = false;
-      replAllBtn.disabled = false;
-    }
-    else {
-      document.getElementById("replace-btn").disabled = true;
-      document.getElementById("replace-all-btn").disabled = true;
-    }*/
+    find(findIn.value, caseSensitive.checked, editorQuill.getSelection(true).index, inAllChapters.checked);
   };
   findForm.appendChild(findBtn);
 
   var replaceBtn = document.createElement("input");
   replaceBtn.type = "button";
   replaceBtn.value = "Replace";
-  //replaceBtn.disabled = true;
   replaceBtn.id = "replace-btn";
   replaceBtn.onclick = function(){
-    replaceSimple(replaceIn.value);
+    replace(replaceIn.value);
   };
   findForm.appendChild(replaceBtn);
 
@@ -626,11 +598,9 @@ function showFindReplace(){
   var replaceAllBtn = document.createElement("input");
   replaceAllBtn.type = "button";
   replaceAllBtn.value = "Replace All";
-  //replaceAllBtn.disabled = true;
   replaceAllBtn.id = "replace-all-btn";
   replaceAllBtn.onclick = function(){
-    //replaceAllClicked(inAllChapters, findIn, caseSensitive, replaceIn, findCount);
-    replaceAllSimple(findIn.value, replaceIn.value, caseSensitive.checked, inAllChapters.checked);
+    replaceAll(findIn.value, replaceIn.value, caseSensitive.checked, inAllChapters.checked);
   };
   findForm.appendChild(replaceAllBtn);
 
@@ -640,8 +610,6 @@ function showFindReplace(){
   cancel.type = "button";
   cancel.value = "Cancel";
   cancel.onclick = function(){
-    removeHighlights();
-    removeHighlightsInFileList();
     popup.remove();
   };
   findForm.appendChild(cancel);
@@ -658,106 +626,6 @@ function showFindReplace(){
   findIn.focus();
 }
 
-
-function replaceAllClicked(inAllChapters, findInput, caseSensitive, replaceIn, findCount) {
-  if(findInput.value){
-    var res;
-    if (inAllChapters.checked)
-      res = findInAllChaps(findInput.value, caseSensitive.checked);
-    else
-      res = [findInChapter(project.activeChapterIndex, findInput.value, caseSensitive.checked)];
-
-    if(res.length > 0 && res[0] != null){
-      var totalReplaced = replaceAllInAllChaps(res, findInput.value, replaceIn.value);
-      findCount.innerText = totalReplaced + " replaced";
-      updateFileList();
-    }
-  }
-}
-
-function findMatches(findCount, inAllChapters, findInput, caseSensitive) {
-  if(findInput.value){
-    var matches;
-
-    if (inAllChapters.checked){
-      matches = findInAllChaps(findInput.value, caseSensitive.checked);
-      displayMatches(matches, findInput, findCount);
-    }
-    else{
-      matches = findInChapter(project.activeChapterIndex, findInput.value, caseSensitive.checked);
-      displayMatches([matches], findInput, findCount);
-    }
-  }
-}
-
-function displayMatches(allChapMatches, findInput, findCount) {
-  removeHighlights();
-  removeHighlightsInFileList();
-  findCount.innerText = "(Matches: 0/0)";
-  
-  if (allChapMatches) {
-    var matches = allChapMatches.find(ma => ma.chapIndex >= project.activeChapterIndex);
-    if(!matches)
-      matches = allChapMatches.find(ma => ma.chapIndex < project.activeChapterIndex);
-
-    if(matches.chapIndex != project.activeChapterIndex){
-      displayChapterByIndex(matches.chapIndex);
-    }
-
-    var currentIndex = editorQuill.getSelection(true).index;
-    var nextIndex = matches.matchIndices.find(ind => ind > currentIndex);
-    var nextSelection;
-    if(!nextIndex){
-      matches = allChapMatches.find(ma => ma.chapIndex > project.activeChapterIndex);
-      if(!matches)
-        matches = allChapMatches.find(ma => ma.chapIndex < project.activeChapterIndex);
-      if(!matches)
-        matches = allChapMatches.find(ma => ma.chapIndex == project.activeChapterIndex);
-      displayChapterByIndex(matches.chapIndex);
-      nextSelection = matches.matchIndices[0];
-    }
-    else{
-      nextSelection = nextIndex;
-    }
-
-    highlightMatches(matches, findInput);
-    editorQuill.setSelection(nextSelection);
-
-    var totalMatches = 0;
-    allChapMatches.forEach(function(m){
-      totalMatches += m.matchIndices.length;
-      highlightChapInFileList(m.chapIndex);
-    });
-
-    findCount.innerText = "(Matches: " + 
-      (matches.matchIndices.indexOf(nextSelection) + 1) + 
-      "/" + matches.matchIndices.length + 
-      (totalMatches != matches.matchIndices.length ? (" of " + totalMatches + " total") : "") + 
-      ")";
-  }
-}
-
-function removeHighlights() {
-  editorQuill.formatText(0, editorQuill.getText().length, 'background', false);
-}
-
-function highlightMatches(matches, findInput) {
-  matches.matchIndices.forEach(function (indexToHighlight) {
-    editorQuill.formatText(indexToHighlight, findInput.value.length, { 'background': '#f8ff00' }, true);
-  });
-}
-
-function highlightChapInFileList(i) {
-  var liItem = document.querySelector("[data-chap-index='" + i + "']");
-  liItem.classList.add("highlighted");
-}
-
-function removeHighlightsInFileList(){
-  var liItems = document.getElementsByTagName("li");
-  for(i=0;i<liItems.length;i++){
-    liItems[i].classList.remove("highlighted");
-  }
-}
 
 function showWordCount(){
   removeElementsByClass('popup');
