@@ -542,10 +542,6 @@ function showFindReplace(){
   findIn.id = "find-input";
   findForm.appendChild(findIn);
 
-  var findCount = document.createElement('label');
-  findCount.innerText = "";
-  findForm.appendChild(findCount);
-
   findForm.appendChild(document.createElement('br'));
 
   var caseSensitive = document.createElement("input");
@@ -580,6 +576,7 @@ function showFindReplace(){
   findBtn.type = "button";
   findBtn.value = "Find";
   findBtn.onclick = function(){
+    replacementCount.innerText = "";
     find(findIn.value, caseSensitive.checked, editorQuill.getSelection(true).index, inAllChapters.checked);
   };
   findForm.appendChild(findBtn);
@@ -589,6 +586,7 @@ function showFindReplace(){
   replaceBtn.value = "Replace";
   replaceBtn.id = "replace-btn";
   replaceBtn.onclick = function(){
+    replacementCount.innerText = "";
     replace(replaceIn.value);
   };
   findForm.appendChild(replaceBtn);
@@ -600,7 +598,9 @@ function showFindReplace(){
   replaceAllBtn.value = "Replace All";
   replaceAllBtn.id = "replace-all-btn";
   replaceAllBtn.onclick = function(){
-    replaceAll(findIn.value, replaceIn.value, caseSensitive.checked, inAllChapters.checked);
+    replacementCount.innerText = "";
+    var numReplaced = replaceAll(findIn.value, replaceIn.value, caseSensitive.checked, inAllChapters.checked);
+    replacementCount.innerText = numReplaced + " instances replaced!";
   };
   findForm.appendChild(replaceAllBtn);
 
@@ -613,6 +613,12 @@ function showFindReplace(){
     popup.remove();
   };
   findForm.appendChild(cancel);
+
+  findForm.appendChild(document.createElement('br'));
+
+  var replacementCount = document.createElement('label');
+  replacementCount.innerText = "";
+  findForm.appendChild(replacementCount);
 
   findIn.addEventListener("keyup", function(event){
     event.preventDefault();

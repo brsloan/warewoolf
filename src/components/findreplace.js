@@ -60,11 +60,13 @@ function replace(newStr){
 
 function replaceAll(oldStr, newStr, caseSensitive, searchAllChapters){
     var res = 1;
+    var counter = 0;
     while(res > 0){
         res = find(oldStr, caseSensitive, 0, searchAllChapters);
         if(res > 0){
             replace(newStr);
-        }
-            
+            counter++;
+        }       
     }
+    return counter;
 }
