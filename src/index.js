@@ -15,7 +15,8 @@ const createWindow = () => {
     height: 600,
     webPreferences: {
       nodeIntegration: true,
-      enableRemoteModule: true
+      enableRemoteModule: true,
+      spellcheck: false
     }
   });
 
@@ -157,7 +158,7 @@ const createWindow = () => {
           label: 'Spell Check',
           accelerator: 'CommandOrControl+7',
           click(item, focusWindow){
-            mainWindow.webContents.send('spell-check-clicked');
+            mainWindow.webContents.send('spellcheck-clicked');
           }
         }
       ]

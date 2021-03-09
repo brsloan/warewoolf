@@ -3,6 +3,7 @@ const fs = require('fs');
 const { dialog } = require('electron').remote;
 const Quill = require('quill');
 
+
   var editorQuill = new Quill('#editor-container', {
     modules: {
       toolbar: [
@@ -528,6 +529,16 @@ const Quill = require('quill');
   ipcRenderer.on('find-replace-clicked', function(e){
     showFindReplace();
   });
+
+  ipcRenderer.on('spellcheck-clicked', function(e){
+    showSpellcheck();
+  });
+
+
+function showSpellcheck(){
+  runSpellcheck();
+}
+  
 
 function showFindReplace(){
   removeElementsByClass('popup');
