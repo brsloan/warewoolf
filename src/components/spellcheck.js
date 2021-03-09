@@ -1,5 +1,5 @@
-var dictionary = require('dictionary-en')
-var nspell = require('nspell')
+var dictionary = require('dictionary-en');
+var nspell = require('nspell');
 
 function prepareSpellcheck(){
     loadDictionaries();
@@ -13,44 +13,45 @@ function loadDictionaries(){
 
         var spell = nspell(dict)
         loadPersonalDictionary(spell);
-        runSpellcheck(spell);
+        console.log(runSpellcheck(spell));
     });
 }
 
-function runSpellcheck(spell) {
-    var text = editorQuill.getText();
-    //var text = " This is a test. A man's dog is his friend."
+function runSpellcheck(spell, startingIndex = 0) {
+    var invalidWord = null;
+
+    var text = editorQuill.getText().slice(startingIndex);
 
     var wordRegx = /(\w'*)+/;
     var match = {};
     var masterIndex = 0;
-    var validWord = true;
+    var wordIsValid = true;
 
-    while(match != null && validWord){
+    while(match != null && wordIsValid){
         match = text.match(wordRegx);
         if(match){
             var currentWordPosition = masterIndex + match.index;
-            //console.log('The next found word is -- ' + match[0] + " -- at index " + currentWordPosition);
             var nextStart = match.index + match[0].length;
             masterIndex += nextStart;
             text = text.slice(nextStart);
 
-            //var results = dict.lookup(match[0]);
-            validWord = spell.correct(match[0]);
-            if(!validWord){
-                editorQuill.setSelection(currentWordPosition, match[0].length);
-                console.log(match[0] + " is not a word! Suggestions:");
-                console.log(spell.suggest(match[0]));
+            wordIsValid = spell.correct(match[0]);
+            if(!wordIsValid){
+                invalidWord = { 
+                    word: match[0], 
+                    index: currentWordPosition, 
+                    suggestions: spell.suggest(match[0]) 
+                };
             }
                 
         }
     }
+
+    return invalidWord;
 }
 
 function loadPersonalDictionary(spell){
     var personal = getPersonalDict();
-    console.log("personal: ");
-    console.log(personal);
     personal.forEach(function(wrd){
         spell.add(wrd);
     });
