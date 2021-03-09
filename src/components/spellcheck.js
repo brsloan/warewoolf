@@ -1,7 +1,18 @@
-var spelling = require('spelling');
+var dictionary = require('dictionary-en')
+var nspell = require('nspell')
 
 function runSpellcheck(){
-    var dict = loadDictionary();
+    dictionary(ondictionary);
+}
+
+function ondictionary(err, dict) {
+  if (err) {
+    throw err
+  }
+
+  var spell = nspell(dict)
+  
+    //var dict = loadDictionary();
 
     var text = editorQuill.getText();
     //var text = " This is a test. A man's dog is his friend."
@@ -20,12 +31,12 @@ function runSpellcheck(){
             masterIndex += nextStart;
             text = text.slice(nextStart);
 
-            var results = dict.lookup(match[0]);
-            validWord = results.found;
+            //var results = dict.lookup(match[0]);
+            validWord = spell.correct(match[0]);
             if(!validWord){
-                editorQuill.setSelection(currentWordPosition);
-                console.log(results.word + " is not a word! Suggestions:");
-                console.log(results.suggestions);
+                editorQuill.setSelection(currentWordPosition, match[0].length);
+                console.log(match[0] + " is not a word! Suggestions:");
+                console.log(spell.suggest(match[0]));
             }
                 
         }
@@ -33,8 +44,7 @@ function runSpellcheck(){
 }
 
 function loadDictionary(){
-    var dictionary = require('./dictionaries/en_US.js');
-    var dict = new spelling(dictionary);
+    
 
     var personal = getPersonalDict();
     personal.forEach(function(wrd){
