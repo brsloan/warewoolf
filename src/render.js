@@ -548,12 +548,18 @@ function showSpellcheck(startingIndex = 0, wordsToIgnore = []){
   popup.appendChild(suggestionsHeader);
 
   var suggestions = document.createElement("ul");
-  if(invalidWord)
+  var selectedSuggestion = null;
+  if(invalidWord != null && invalidWord.suggestions.length > 0){
+    selectedSuggestion = invalidWord.suggestions[0];
     invalidWord.suggestions.forEach(function(sug){
       var sugLi = document.createElement("li");
       sugLi.innerText = sug;
+      sugLi.onclick = function(){
+        selectedSuggestion = sug;
+      }
       suggestions.appendChild(sugLi);
     });
+  }
   popup.appendChild(suggestions);
 
   var ignoreBtn = createButton("Ignore");
@@ -575,6 +581,13 @@ function showSpellcheck(startingIndex = 0, wordsToIgnore = []){
   popup.appendChild(document.createElement('br'));
 
   var changeBtn = createButton("Change");
+  changeBtn.onclick = function(){
+    if(invalidWord && selectedSuggestion != null){
+      editorQuill.setSelection(invalidWord.index, invalidWord.word.length);
+      replace(selectedSuggestion);
+      ignoreBtn.click();
+    }
+  }
   popup.appendChild(changeBtn);
 
   var changeAllBtn = createButton("Change All");
