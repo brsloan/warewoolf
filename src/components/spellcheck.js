@@ -38,11 +38,10 @@ function findInvalidWord(spellchecker, startingIndex = 0) {
             if(!wordIsValid){
                 invalidWord = { 
                     word: match[0], 
-                    index: currentWordPosition, 
+                    index: currentWordPosition + startingIndex, 
                     suggestions: spellchecker.suggest(match[0]) 
                 };
-            }
-                
+            }      
         }
     }
 
