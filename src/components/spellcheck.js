@@ -1,23 +1,19 @@
-var dictionary = require('dictionary-en');
 var nspell = require('nspell');
 
 function prepareSpellcheck(){
-    loadDictionaries();
+    var spellchecker = loadDictionaries();
+    console.log(findInvalidWord(spellchecker));
 }
 
 function loadDictionaries(){
-    dictionary(function(err, dict){
-        if (err) {
-            throw err
-        }
-
-        var spell = nspell(dict)
-        loadPersonalDictionary(spell);
-        console.log(runSpellcheck(spell));
-    });
+    var aff = fs.readFileSync(convertFilepath(__dirname) + '/dictionaries/en_us.aff', 'utf8');
+    var dic = fs.readFileSync(convertFilepath(__dirname) + '/dictionaries/en_us.dic', 'utf8');
+    var spellchecker = nspell({ aff: aff, dic: dic });
+    loadPersonalDictionary(spellchecker);
+    return spellchecker;
 }
 
-function runSpellcheck(spell, startingIndex = 0) {
+function findInvalidWord(spellchecker, startingIndex = 0) {
     var invalidWord = null;
 
     var text = editorQuill.getText().slice(startingIndex);
@@ -35,12 +31,12 @@ function runSpellcheck(spell, startingIndex = 0) {
             masterIndex += nextStart;
             text = text.slice(nextStart);
 
-            wordIsValid = spell.correct(match[0]);
+            wordIsValid = spellchecker.correct(match[0]);
             if(!wordIsValid){
                 invalidWord = { 
                     word: match[0], 
                     index: currentWordPosition, 
-                    suggestions: spell.suggest(match[0]) 
+                    suggestions: spellchecker.suggest(match[0]) 
                 };
             }
                 
@@ -50,10 +46,10 @@ function runSpellcheck(spell, startingIndex = 0) {
     return invalidWord;
 }
 
-function loadPersonalDictionary(spell){
+function loadPersonalDictionary(spellchecker){
     var personal = getPersonalDict();
     personal.forEach(function(wrd){
-        spell.add(wrd);
+        spellchecker.add(wrd);
     });
 }
 
