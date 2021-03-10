@@ -1,14 +1,14 @@
 var nspell = require('nspell');
 
-function runSpellcheck(startingIndex = 0){
+function runSpellcheck(startingIndex = 0, wordsToIgnore){
     var spellchecker = loadDictionaries();
-    return findInvalidWord(spellchecker, startingIndex)
+    return findInvalidWord(spellchecker, startingIndex, wordsToIgnore)
 }
 
 function loadDictionaries(){
     var baseFilepath = convertFilepath(__dirname);
-    var aff = fs.readFileSync(baseFilepath + '/dictionaries/en_us.aff', 'utf8');
-    var dic = fs.readFileSync(baseFilepath + '/dictionaries/en_us.dic', 'utf8');
+    var aff = fs.readFileSync(baseFilepath + '/dictionaries/en_us-large.aff', 'utf8');
+    var dic = fs.readFileSync(baseFilepath + '/dictionaries/en_us-large.dic', 'utf8');
     var personal = fs.readFileSync(baseFilepath + '/dictionaries/personal.dic', 'utf8');
 
     var spellchecker = nspell({ aff: aff, dic: dic });
@@ -16,31 +16,36 @@ function loadDictionaries(){
     return spellchecker;
 }
 
-function findInvalidWord(spellchecker, startingIndex = 0) {
+function findInvalidWord(spellchecker, startingIndex = 0, wordsToIgnore = []) {
     var invalidWord = null;
 
     var text = editorQuill.getText().slice(startingIndex);
 
     var wordRegx = /(\w'*)+/;
-    var match = {};
+    var nextWord = {};
     var masterIndex = 0;
     var wordIsValid = true;
 
-    while(match != null && wordIsValid){
-        match = text.match(wordRegx);
-        if(match){
-            var currentWordPosition = masterIndex + match.index;
-            var nextStart = match.index + match[0].length;
+    while(nextWord != null && wordIsValid){
+        nextWord = text.match(wordRegx);
+        if(nextWord){
+            var currentWordPosition = masterIndex + nextWord.index;
+            var nextStart = nextWord.index + nextWord[0].length;
             masterIndex += nextStart;
             text = text.slice(nextStart);
 
-            wordIsValid = spellchecker.correct(match[0]);
+            wordIsValid = spellchecker.correct(nextWord[0]);
             if(!wordIsValid){
                 invalidWord = { 
-                    word: match[0], 
+                    word: nextWord[0], 
                     index: currentWordPosition + startingIndex, 
-                    suggestions: spellchecker.suggest(match[0]) 
+                    suggestions: spellchecker.suggest(nextWord[0]) 
                 };
+                //Skip invalid word if in ignore list
+                if(wordsToIgnore.indexOf(nextWord[0]) > -1){
+                    wordIsValid = true;
+                    invalidWord = null;
+                }
             }      
         }
     }

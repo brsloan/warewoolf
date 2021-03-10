@@ -319,16 +319,12 @@ const Quill = require('quill');
       var message = document.createElement("p");
       message.innerHTML = "Are you sure you want to delete this file? This is permanent.";
       popup.appendChild(message);
-      var yesButton = document.createElement("input");
-      yesButton.type = "button";
-      yesButton.value = "Yes"
+      var yesButton = createButton("Yes");
       yesButton.onclick = function(){
         deleteChapter(ind);
         popup.remove();
       }
-      var noButton = document.createElement("input");
-      noButton.type = "button";
-      noButton.value = "No";
+      var noButton = createButton("No");
       noButton.onclick = function(){
         popup.remove();
       }
@@ -495,7 +491,6 @@ const Quill = require('quill');
 
   ipcRenderer.on("save-as-clicked", function(e, docPath){
     saveProjectAs(docPath);
-
   });
 
   ipcRenderer.on("open-clicked", function(e, docPath){
@@ -535,8 +530,62 @@ const Quill = require('quill');
   });
 
 
-function showSpellcheck(){
-  console.log(runSpellcheck());
+function showSpellcheck(startingIndex = 0, wordsToIgnore = []){
+  var invalidWord = runSpellcheck(startingIndex, wordsToIgnore);
+  if(invalidWord)
+    editorQuill.setSelection(invalidWord.index, invalidWord.word.length);
+
+  removeElementsByClass('popup');
+  var popup = document.createElement("div");
+  popup.classList.add("popup");
+
+  var wordDisplay = document.createElement("h2");
+  wordDisplay.innerText = invalidWord ? invalidWord.word : "n/a";
+  popup.appendChild(wordDisplay);
+
+  var suggestionsHeader = document.createElement("h3");
+  suggestionsHeader.innerText = "Suggested Replacements";
+  popup.appendChild(suggestionsHeader);
+
+  var suggestions = document.createElement("ul");
+  if(invalidWord)
+    invalidWord.suggestions.forEach(function(sug){
+      var sugLi = document.createElement("li");
+      sugLi.innerText = sug;
+      suggestions.appendChild(sugLi);
+    });
+  popup.appendChild(suggestions);
+
+  var ignoreBtn = createButton("Ignore");
+  ignoreBtn.onclick = function(){
+    var nextIndex = invalidWord ? invalidWord.index + invalidWord.word.length : 0;
+    showSpellcheck(nextIndex, wordsToIgnore);
+  }
+  popup.appendChild(ignoreBtn);
+
+  var ignoreAllBtn = createButton("Ignore All");
+  ignoreAllBtn.onclick = function(){
+    if(invalidWord){
+      wordsToIgnore.push(invalidWord.word);
+      ignoreBtn.click();
+    }
+  }
+  popup.appendChild(ignoreAllBtn);
+  
+  popup.appendChild(document.createElement('br'));
+
+  var changeBtn = createButton("Change");
+  popup.appendChild(changeBtn);
+
+  var changeAllBtn = createButton("Change All");
+  popup.appendChild(changeAllBtn);
+
+  popup.appendChild(document.createElement('br'));
+
+  var addToDic = createButton("Add To Dictionary");
+  popup.appendChild(addToDic);
+
+  document.body.appendChild(popup);
 }
   
 
@@ -583,18 +632,14 @@ function showFindReplace(){
 
   findForm.appendChild(document.createElement('br'));
 
-  var findBtn = document.createElement("input");
-  findBtn.type = "button";
-  findBtn.value = "Find";
+  var findBtn = createButton("Find");
   findBtn.onclick = function(){
     replacementCount.innerText = "";
     find(findIn.value, caseSensitive.checked, editorQuill.getSelection(true).index, inAllChapters.checked);
   };
   findForm.appendChild(findBtn);
 
-  var replaceBtn = document.createElement("input");
-  replaceBtn.type = "button";
-  replaceBtn.value = "Replace";
+  var replaceBtn = createButton("Replace");
   replaceBtn.id = "replace-btn";
   replaceBtn.onclick = function(){
     replacementCount.innerText = "";
@@ -604,9 +649,7 @@ function showFindReplace(){
 
   findForm.appendChild(document.createElement('br'));
 
-  var replaceAllBtn = document.createElement("input");
-  replaceAllBtn.type = "button";
-  replaceAllBtn.value = "Replace All";
+  var replaceAllBtn = createButton("Replace All");
   replaceAllBtn.id = "replace-all-btn";
   replaceAllBtn.onclick = function(){
     replacementCount.innerText = "";
@@ -617,9 +660,7 @@ function showFindReplace(){
 
   findForm.appendChild(document.createElement('br'));
 
-  var cancel = document.createElement("input");
-  cancel.type = "button";
-  cancel.value = "Cancel";
+  var cancel = createButton("Cancel");
   cancel.onclick = function(){
     popup.remove();
   };
@@ -657,9 +698,7 @@ function showWordCount(){
   totalDisplay.innerText = "Total Word Count: Calculating...";
   popup.appendChild(totalDisplay);
 
-  var closeBtn = document.createElement("input");
-  closeBtn.type = "button";
-  closeBtn.value = "Close";
+  var closeBtn = createButton("Close");
   closeBtn.onclick = function(){
     popup.remove();
   };
@@ -731,9 +770,7 @@ function showProperties(){
     popup.remove();
   }
   propForm.appendChild(apply);
-  var cancel = document.createElement("input");
-  cancel.type = "button";
-  cancel.value = "Cancel";
+  var cancel = createButton("Cancel");
   cancel.onclick = function(){
     popup.remove();
   };
@@ -797,9 +834,7 @@ function showCompileOptions(docPath){
   compileBtn.value = "Compile";
   compileForm.appendChild(compileBtn);
 
-  var cancelBtn = document.createElement("input");
-  cancelBtn.type = "button";
-  cancelBtn.value = "Cancel";
+  var cancelBtn = createButton("Cancel");
   cancelBtn.onclick = function(){
     popup.remove();
   };
@@ -860,9 +895,7 @@ function showExportOptions(docPath){
   exportBtn.value = "Export";
   exportForm.appendChild(exportBtn);
 
-  var cancelBtn = document.createElement("input");
-  cancelBtn.type = "button";
-  cancelBtn.value = "Cancel";
+  var cancelBtn = createButton("Cancel");
   cancelBtn.onclick = function(){
     popup.remove();
   };
@@ -985,4 +1018,11 @@ function getTempQuill(){
           }
       }
       });
+}
+
+function createButton(text){
+  var btn = document.createElement("input");
+  btn.type = "button";
+  btn.value = text;
+  return btn;
 }
