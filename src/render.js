@@ -180,10 +180,7 @@ const quillToWord = require('quill-to-word');
         
     editorQuill.setContents(contents);
     updateFileList();
-  }
-  
-
-  
+  }  
 
   function updateTitleBar(){
     document.title = "Warewoolf - " + (project.filename != "" ? project.filename : "unsaved project");
@@ -359,28 +356,6 @@ const quillToWord = require('quill-to-word');
     editorQuill.enable();
     changeChapterTitle(thisIndex);
   }
-  /*
-  function saveChangedChapters(){
-    project.chapters.forEach(function(chap, ind){
-      if(chap.hasUnsavedChanges){
-        chap.saveFile();
-        chap.hasUnsavedChanges = false;
-        if(ind != project.activeChapterIndex){
-          chap.contents = null;
-        }
-      }
-    });
-    project.trash.forEach(function(chap, ind){
-      if(chap.hasUnsavedChanges){
-        chap.saveFile();
-        chap.hasUnsavedChanges = false;
-        //TODO: handle active index stuff for trash items
-        chap.contents = null;
-      }
-    });
-    updateFileList();
-  }*/
-
   
   function saveProject(docPath){
     if(project.filename != ""){
@@ -435,7 +410,6 @@ const quillToWord = require('quill-to-word');
       chap.contents = editorQuill.getContents();
       chap.hasUnsavedChanges = true;  
     }
-    
   });
   
   notesQuill.on('text-change', function(delta, oldDelta, source){
