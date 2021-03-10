@@ -536,7 +536,7 @@ const Quill = require('quill');
 
 
 function showSpellcheck(){
-  prepareSpellcheck();
+  console.log(runSpellcheck());
 }
   
 

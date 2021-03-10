@@ -1,15 +1,18 @@
 var nspell = require('nspell');
 
-function prepareSpellcheck(){
+function runSpellcheck(startingIndex = 0){
     var spellchecker = loadDictionaries();
-    console.log(findInvalidWord(spellchecker));
+    return findInvalidWord(spellchecker, startingIndex)
 }
 
 function loadDictionaries(){
-    var aff = fs.readFileSync(convertFilepath(__dirname) + '/dictionaries/en_us.aff', 'utf8');
-    var dic = fs.readFileSync(convertFilepath(__dirname) + '/dictionaries/en_us.dic', 'utf8');
+    var baseFilepath = convertFilepath(__dirname);
+    var aff = fs.readFileSync(baseFilepath + '/dictionaries/en_us.aff', 'utf8');
+    var dic = fs.readFileSync(baseFilepath + '/dictionaries/en_us.dic', 'utf8');
+    var personal = fs.readFileSync(baseFilepath + '/dictionaries/personal.dic', 'utf8');
+
     var spellchecker = nspell({ aff: aff, dic: dic });
-    loadPersonalDictionary(spellchecker);
+    spellchecker.personal(personal);
     return spellchecker;
 }
 
@@ -46,21 +49,14 @@ function findInvalidWord(spellchecker, startingIndex = 0) {
     return invalidWord;
 }
 
-function loadPersonalDictionary(spellchecker){
-    var personal = getPersonalDict();
-    personal.forEach(function(wrd){
-        spellchecker.add(wrd);
-    });
-}
-
 function getPersonalDict(){
-    return fs.readFileSync(convertFilepath(__dirname) + '/dictionaries/personal.txt', 'utf8').split("\n");;
+    return fs.readFileSync(convertFilepath(__dirname) + '/dictionaries/personal.dic', 'utf8').split("\n");;
 }
 
-function addWordToDict(word){
+function addWordToPersonalDictFile(word){
     var personal = getPersonalDict();
     if(personal.indexOf(word) == -1){
         personal.push(word);
-        fs.writeFileSync(convertFilepath(__dirname) + '/dictionaries/personal.txt', personal.join("\n"), 'utf8');
+        fs.writeFileSync(convertFilepath(__dirname) + '/dictionaries/personal.dic', personal.join("\n"), 'utf8');
     }
 }
