@@ -583,7 +583,19 @@ function showSpellcheck(startingIndex = 0, wordsToIgnore = []){
   popup.appendChild(document.createElement('br'));
 
   var addToDic = createButton("Add To Dictionary");
+  addToDic.onclick = function(){
+    addWordToPersonalDictFile(invalidWord.word);
+    ignoreBtn.click();
+  }
   popup.appendChild(addToDic);
+
+  popup.appendChild(document.createElement('br'));
+
+  var cancelBtn = createButton("Cancel");
+  cancelBtn.onclick = function(){
+    popup.remove();
+  }
+  popup.appendChild(cancelBtn);
 
   document.body.appendChild(popup);
 }
