@@ -70,3 +70,45 @@ function replaceAll(oldStr, newStr, caseSensitive, searchAllChapters){
     }
     return counter;
 }
+
+function replaceAllBackground(oldStr, newStr, caseSensitive){
+    var tempQuill = getTempQuill();
+    var counter = 0;
+
+    project.chapters.forEach(function(chap){
+        var chapContents = chap.contents ? chap.contents : chap.getFile();
+        tempQuill.setContents(chapContents);
+        var text = tempQuill.getText();
+
+        var foundIndex = 0;
+        var startingIndex = 0;
+
+        while(foundIndex > -1){
+            foundIndex = findInText(oldStr, text, caseSensitive, startingIndex);
+            if(foundIndex > -1){
+                counter++;
+                tempQuill.deleteText(foundIndex, oldStr.length);
+                tempQuill.insertText(foundIndex, newStr);
+                chap.contents = tempQuill.getContents();
+                chap.hasUnsavedChanges = true;
+                startingIndex = foundIndex + newStr.length;
+                text = tempQuill.getText();
+            }
+        }
+    });
+
+    return counter;
+}
+
+function findInText(str, text, caseSensitive, startingIndex){
+    var index = -1;
+
+    if(!caseSensitive){
+        text = text.toLowerCase();
+        str = str.toLowerCase();
+    }
+
+    index = text.indexOf(str, startingIndex);
+
+    return index;
+}

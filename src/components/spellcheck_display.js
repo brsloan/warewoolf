@@ -59,6 +59,13 @@ function showSpellcheck(startingIndex = 0, wordsToIgnore = []){
     popup.appendChild(changeBtn);
   
     var changeAllBtn = createButton("Change All");
+    changeAllBtn.onclick = function(){
+      if(invalidWord && selectedSuggestion != null){
+        replaceAllBackground(invalidWord.word, selectedSuggestion, true);
+        displayChapterByIndex(project.activeChapterIndex);
+        ignoreBtn.click();
+      }      
+    };
     popup.appendChild(changeAllBtn);
   
     popup.appendChild(document.createElement('br'));
