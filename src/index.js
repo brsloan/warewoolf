@@ -16,8 +16,10 @@ const createWindow = () => {
     webPreferences: {
       nodeIntegration: true,
       enableRemoteModule: true,
-      spellcheck: false
-    }
+      spellcheck: false,
+      devTools: false
+    },
+    kiosk: false
   });
 
   mainWindow.maximize();

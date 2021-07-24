@@ -39,7 +39,7 @@ const quillToWord = require('quill-to-word');
   initialize();
   
   function initialize(){
-    setProject("./examples/Frankenstein/Frankenstein.woolf");
+    setProject(convertFilepath(__dirname) + "/examples/Frankenstein/Frankenstein.woolf");
   }
 
   function setProject(filepath){
