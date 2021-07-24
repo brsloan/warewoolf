@@ -7,8 +7,8 @@ function runSpellcheck(startingIndex = 0, wordsToIgnore){
 
 function loadDictionaries(){
     var baseFilepath = convertFilepath(__dirname);
-    var aff = fs.readFileSync(baseFilepath + '/dictionaries/en_us-large.aff', 'utf8');
-    var dic = fs.readFileSync(baseFilepath + '/dictionaries/en_us-large.dic', 'utf8');
+    var aff = fs.readFileSync(baseFilepath + '/dictionaries/en_US-large.aff', 'utf8');
+    var dic = fs.readFileSync(baseFilepath + '/dictionaries/en_US-large.dic', 'utf8');
     var personal = fs.readFileSync(baseFilepath + '/dictionaries/personal.dic', 'utf8');
 
     var spellchecker = nspell({ aff: aff, dic: dic });

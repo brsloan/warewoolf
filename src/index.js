@@ -17,7 +17,7 @@ const createWindow = () => {
       nodeIntegration: true,
       enableRemoteModule: true,
       spellcheck: false,
-      devTools: false
+      devTools: true
     },
     kiosk: false
   });
