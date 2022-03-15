@@ -22,6 +22,7 @@ function findInvalidWord(spellchecker, startingIndex = 0, wordsToIgnore = []) {
     var text = editorQuill.getText().slice(startingIndex);
 
     var wordRegx = /(\w'*)+/;
+    var numberRegx = /'*\d+'*s*/;
     var nextWord = {};
     var masterIndex = 0;
     var wordIsValid = true;
@@ -36,17 +37,17 @@ function findInvalidWord(spellchecker, startingIndex = 0, wordsToIgnore = []) {
 
             wordIsValid = spellchecker.correct(nextWord[0]);
             if(!wordIsValid){
-                invalidWord = { 
-                    word: nextWord[0], 
-                    index: currentWordPosition + startingIndex, 
-                    suggestions: spellchecker.suggest(nextWord[0]) 
+                invalidWord = {
+                    word: nextWord[0],
+                    index: currentWordPosition + startingIndex,
+                    suggestions: spellchecker.suggest(nextWord[0])
                 };
-                //Skip invalid word if in ignore list
-                if(wordsToIgnore.indexOf(nextWord[0]) > -1){
+                //Skip invalid word if in ignore list or a number
+                if(wordsToIgnore.indexOf(nextWord[0]) > -1 || nextWord[0].match(numberRegx)){
                     wordIsValid = true;
                     invalidWord = null;
                 }
-            }      
+            }
         }
     }
 
