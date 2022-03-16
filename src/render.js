@@ -19,7 +19,7 @@ const quillToWord = require('quill-to-word');
     placeholder: '',
     theme: 'snow'  // or 'bubble'
   });
-  
+
   var notesQuill = new Quill('#notes-editor', {
     modules: {
       toolbar: [
@@ -33,11 +33,11 @@ const quillToWord = require('quill-to-word');
     placeholder: 'Notes...',
     theme: 'bubble'  // or 'bubble'
   });
-  
+
  var project = newProject();
-  
+
   initialize();
-  
+
   function initialize(){
     setProject(convertFilepath(__dirname) + "/examples/Frankenstein/Frankenstein.woolf");
   }
@@ -46,7 +46,7 @@ const quillToWord = require('quill-to-word');
     if(filepath && filepath != null){
       project.loadFile(filepath);
     }
-      
+
     displayProject();
   }
 
@@ -99,13 +99,13 @@ const quillToWord = require('quill-to-word');
     document.body.appendChild(popup);
     titleInput.focus();
   }
-  
+
   function updateFileList(){
     var list = document.getElementById("chapter-list");
-    
+
     clearList();
     generateChapterList();
-    generateTrashList(); 
+    generateTrashList();
 
     function clearList() {
       while (list.hasChildNodes()) {
@@ -156,7 +156,7 @@ const quillToWord = require('quill-to-word');
     }
 
   }
-  
+
   function displayChapterByIndex(ind){
     clearCurrentChapterIfUnchanged();
     ind = parseInt(ind);
@@ -164,10 +164,10 @@ const quillToWord = require('quill-to-word');
 
     var chap;
     if(ind < project.chapters.length){
-      chap = project.chapters[ind];  
+      chap = project.chapters[ind];
     }
     else {
-      chap = project.trash[ind - project.chapters.length];  
+      chap = project.trash[ind - project.chapters.length];
     }
 
     var contents;
@@ -177,33 +177,33 @@ const quillToWord = require('quill-to-word');
     else{
        contents = chap.getFile();
     }
-        
+
     editorQuill.setContents(contents);
     updateFileList();
-  }  
+  }
 
   function updateTitleBar(){
     document.title = "Warewoolf - " + (project.filename != "" ? project.filename : "unsaved project");
   }
-  
+
   function displayNotes(){
     notesQuill.setContents(project.notes);
   }
-  
+
   function displayInitialChapter(){
     displayChapterByIndex(project.activeChapterIndex);
   }
-  
-  
+
+
   //User Actions
-  
+
   function changeChapterTitle(ind){
     var chap;
     if(indexIsTrash(ind))
       chap = project.trash[ind - project.chapters.length];
     else
       chap = project.chapters[ind];
-      
+
     var listName = document.querySelector("[data-chap-index='" + ind + "']");
     var nameBox = document.createElement("input");
     nameBox.type = "text";
@@ -236,7 +236,7 @@ const quillToWord = require('quill-to-word');
         nameBox.style.display = "none";
         updateFileList();
       }
-      
+
 
       //editorQuill.focus();
     }; */
@@ -244,24 +244,24 @@ const quillToWord = require('quill-to-word');
     listName.firstChild.remove();
     listName.appendChild(nameBox);
     nameBox.focus();
-    
+
   }
-  
+
   function displayPreviousChapter(){
     if(project.activeChapterIndex > 0)
       displayChapterByIndex(project.activeChapterIndex - 1);
   }
-  
+
   function displayNextChapter(){
     if(project.activeChapterIndex < project.chapters.length - 1 + project.trash.length)
-      displayChapterByIndex(project.activeChapterIndex + 1); 
+      displayChapterByIndex(project.activeChapterIndex + 1);
   }
-  
+
   function moveToTrash(ind){
     if(indexIsTrash(ind) == false){
       var toTrash = project.chapters.splice(ind, 1)[0];
       project.trash.push(toTrash);
-      
+
       if(ind == project.activeChapterIndex){
         if(project.chapters.length > 0){
           var newInd = ind < project.chapters.length || ind == 0 ? ind : ind - 1;
@@ -278,16 +278,16 @@ const quillToWord = require('quill-to-word');
       verifyToDelete(ind);
     }
   }
-  
+
   function deleteChapter(ind){
     var deletedChap = project.trash.splice(ind - project.chapters.length, 1)[0];
-    
+
     //Always save project file after deleting a chapter
     //so if user closes without saving it won't expect
     //the deleted chapter at next load...
     deletedChap.deleteFile();
-    
-    
+
+
     if(ind == project.activeChapterIndex){
       if(project.trash.length > 0){
         var newInd = ind < project.trash.length + project.chapters.length || ind - project.chapters.length == 0 ? ind : ind - 1;
@@ -309,7 +309,7 @@ const quillToWord = require('quill-to-word');
     updateFileList();
     console.log("deleted " + ind);
   }
-  
+
   function verifyToDelete(ind){
     if(indexIsTrash(ind)){
       var popup = document.createElement("div");
@@ -332,11 +332,11 @@ const quillToWord = require('quill-to-word');
       yesButton.focus();
     }
   }
-  
+
   function indexIsTrash(ind){
     return ind > project.chapters.length - 1;
   }
-  
+
   function restoreFromTrash(ind){
     if(indexIsTrash(ind)){
       var fromTrash = project.trash.splice(ind - project.chapters.length, 1)[0];
@@ -344,7 +344,7 @@ const quillToWord = require('quill-to-word');
       updateFileList();
     }
   }
-  
+
   function addNewChapter(){
     var newChap = newChapter();
     newChap.hasUnsavedChanges = true;
@@ -356,7 +356,7 @@ const quillToWord = require('quill-to-word');
     editorQuill.enable();
     changeChapterTitle(thisIndex);
   }
-  
+
   function saveProject(docPath){
     if(project.filename != ""){
       clearCurrentChapterIfUnchanged();
@@ -366,11 +366,11 @@ const quillToWord = require('quill-to-word');
     else
       saveProjectAs(docPath);
   }
-  
+
   function moveChapUp(chapInd){
     if(chapInd > 0 && chapInd < project.chapters.length){
       var chap = project.chapters.splice(chapInd, 1)[0];
-      project.chapters.splice(chapInd - 1, 0, chap);  
+      project.chapters.splice(chapInd - 1, 0, chap);
       project.activeChapterIndex--;
     }
     else if(chapInd > project.chapters.length){
@@ -380,7 +380,7 @@ const quillToWord = require('quill-to-word');
     }
     updateFileList();
   }
-  
+
   function moveChapDown(chapInd){
     if(chapInd < project.chapters.length - 1){
       var chap = project.chapters.splice(chapInd, 1)[0];
@@ -401,29 +401,29 @@ const quillToWord = require('quill-to-word');
       ch.contents = null;
     }
   };
-  
+
   //Event Handlers
-  
+
   editorQuill.on('text-change', function(delta, oldDelta, source) {
     if(source == "user"){
       var chap = project.getActiveChapter();
       chap.contents = editorQuill.getContents();
-      chap.hasUnsavedChanges = true;  
+      chap.hasUnsavedChanges = true;
     }
   });
-  
+
   notesQuill.on('text-change', function(delta, oldDelta, source){
     project.notes = notesQuill.getContents();
   });
-  
+
   document.addEventListener ("keydown", function (e) {
       if (e.ctrlKey  && e.shiftKey && e.key === "ArrowUp") {
         stopDefaultPropagation(e);
-        moveChapUp(project.activeChapterIndex);   
+        moveChapUp(project.activeChapterIndex);
       }
       else if(e.ctrlKey && e.shiftKey && e.key === "ArrowDown"){
         stopDefaultPropagation(e);
-        moveChapDown(project.activeChapterIndex);    
+        moveChapDown(project.activeChapterIndex);
       }
       else if(e.ctrlKey && e.key === "ArrowUp"){
         stopDefaultPropagation(e);
@@ -454,12 +454,12 @@ const quillToWord = require('quill-to-word');
         notesQuill.focus();
       }
   } );
-  
+
   function stopDefaultPropagation(keyEvent){
     keyEvent.preventDefault();
     keyEvent.stopPropagation();
   }
-  
+
   ipcRenderer.on("save-clicked", function(e, docPath){
     saveProject(docPath);
   });
@@ -502,7 +502,26 @@ const quillToWord = require('quill-to-word');
 
   ipcRenderer.on('spellcheck-clicked', function(e){
     showSpellcheck();
-  });  
+  });
+
+  ipcRenderer.on('convert-first-lines-clicked', function(e){
+    convertFirstLinesToTitles();
+    displayChapterByIndex(project.activeChapterIndex);
+  });
+
+function convertFirstLinesToTitles(){
+  var tempQuill = getTempQuill();
+
+  project.chapters.forEach(function(chap){
+    var chapContents = chap.contents ? chap.contents : chap.getFile();
+    tempQuill.setContents(chapContents);
+    tempQuill.formatLine(1, 1, 'header', 1);
+    tempQuill.formatLine(1, 1, 'align', 'center');
+    chap.contents = tempQuill.getContents();
+    chap.hasUnsavedChanges = true;
+  });
+
+}
 
 function saveProjectAs(docPath) {
   const options = {
@@ -556,7 +575,7 @@ function convertFilepath(fpath){
   catch(err){
     console.log(err);
   }
-  
+
   return converted;
 }
 
