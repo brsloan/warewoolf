@@ -509,6 +509,42 @@ const quillToWord = require('quill-to-word');
     displayChapterByIndex(project.activeChapterIndex);
   });
 
+  ipcRenderer.on('headings-to-chaps-clicked', function(e){
+    breakHeadingsIntoChapters();
+  });
+
+function breakHeadingsIntoChapters(headingLevel = 1){
+  var textDelta = editorQuill.getContents();
+  var generatedChaps = [];
+  var newChapIndex = -1;
+
+  for(i=0; i < textDelta.ops.length; i++){
+    var thisOp = textDelta.ops[i];
+    var nextOp = textDelta.ops[i + 1];
+
+    if(nextOp && nextOp.attributes && nextOp.attributes.header && nextOp.attributes.header == headingLevel){
+      generatedChaps.push([thisOp]);
+      newChapIndex++;
+    }
+    else {
+      if(newChapIndex == -1){
+        generatedChaps.push([]);
+        newChapIndex++;
+      }
+      generatedChaps[newChapIndex].push(thisOp);
+    }
+  }
+
+  if(generatedChaps.length > 1){
+    editorQuill.setContents({ops: generatedChaps.shift()}, "user");
+
+    generatedChaps.forEach(function(chap){
+      const titleCharacterLimit = 100;
+      addImportedChapter({ops: chap}, chap[0].insert.slice(0,titleCharacterLimit));
+    });
+  }
+}
+
 function convertFirstLinesToTitles(){
   var tempQuill = getTempQuill();
 

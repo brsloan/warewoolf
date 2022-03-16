@@ -168,6 +168,12 @@ const createWindow = () => {
           click(item, focusWindow){
             mainWindow.webContents.send('convert-first-lines-clicked');
           }
+        },
+        {
+          label: 'Break Headings Into Chapters',
+          click(item, focusWindow){
+            mainWindow.webContents.send('headings-to-chaps-clicked');
+          }
         }
       ]
     }
