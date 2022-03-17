@@ -1,7 +1,7 @@
 function exportProject(options, filepath){
     //TODO: Need to create function to safely convert titles to folder/filenames
-    var newDir = filepath.concat("/").concat(project.title.replace(/[^a-z0-9]/gi, '_')).concat("/"); 
-    
+    var newDir = filepath.concat("/").concat(project.title.replace(/[^a-z0-9]/gi, '_')).concat("/");
+
     if(!fs.existsSync(newDir))
         fs.mkdirSync(newDir);
 
@@ -12,7 +12,7 @@ function exportProject(options, filepath){
         case ".docx":
             exportAsWord(newDir);
             break;
-        default: 
+        default:
             console.log("No valid filetype selected for export.");
     }
 }
@@ -40,7 +40,7 @@ function exportAsWord(dir){
     exportChapsAsWord(dir);
     exportNotesAsWord(dir);
 }
-  
+
 function exportChapsAsWord(dir, num = 0){
     if (num < project.chapters.length){
         var chapFile = project.chapters[num].getFile();
@@ -62,5 +62,5 @@ function exportNotesAsWord(dir){
 }
 
 function generateChapterFilename(num){
-    return String(num + 1).padStart(4, '0') + "_" + project.chapters[num].title.replace(/[^a-z0-9]/gi, '_');
+    return String(num + 1).padStart(4, '0') + "_" + project.chapters[num].title.replace(/[^a-z0-9-]/gi, '_');
 }
