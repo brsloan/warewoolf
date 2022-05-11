@@ -174,6 +174,12 @@ const createWindow = () => {
           click(item, focusWindow){
             mainWindow.webContents.send('headings-to-chaps-clicked');
           }
+        },
+        {
+          label: 'Convert Marked Italics',
+          click(item, focusWindow){
+            mainWindow.webContents.send('convert-italics-clicked');
+          }
         }
       ]
     }
