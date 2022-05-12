@@ -514,8 +514,9 @@ const quillToWord = require('quill-to-word');
   });
 
   ipcRenderer.on('convert-italics-clicked', function(e){
-    convertMarkedItalics('_');
-    displayChapterByIndex(project.activeChapterIndex);
+    //convertMarkedItalics('_');
+    showItalicsOptions();
+    //displayChapterByIndex(project.activeChapterIndex);
   });
 
 
