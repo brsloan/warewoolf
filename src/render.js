@@ -477,7 +477,7 @@ const quillToWord = require('quill-to-word');
   });
 
   ipcRenderer.on('import-clicked', function(e, docPath){
-    getImportFilepaths(docPath);
+    showImportOptions(docPath);
   });
 
   ipcRenderer.on('export-clicked', function(e, docPath){
