@@ -163,6 +163,7 @@ const createWindow = () => {
             mainWindow.webContents.send('spellcheck-clicked');
           }
         },
+        { type: 'separator' },
         {
           label: 'Convert First Lines To Titles',
           click(item, focusWindow){
@@ -170,15 +171,16 @@ const createWindow = () => {
           }
         },
         {
-          label: 'Break Headings Into Chapters',
-          click(item, focusWindow){
-            mainWindow.webContents.send('headings-to-chaps-clicked');
-          }
-        },
-        {
           label: 'Convert Marked Italics',
           click(item, focusWindow){
             mainWindow.webContents.send('convert-italics-clicked');
+          }
+        },
+        { type: 'separator' },
+        {
+          label: 'Break Headings Into Chapters',
+          click(item, focusWindow){
+            mainWindow.webContents.send('headings-to-chaps-clicked');
           }
         }
       ]
