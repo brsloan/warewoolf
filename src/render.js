@@ -425,6 +425,10 @@ const quillToWord = require('quill-to-word');
         stopDefaultPropagation(e);
         moveChapDown(project.activeChapterIndex);
       }
+      else if(e.ctrlKey && e.shiftKey && e.key === "ArrowLeft"){
+        stopDefaultPropagation(e);
+        changeChapterTitle(project.activeChapterIndex);
+      }
       else if(e.ctrlKey && e.key === "ArrowUp"){
         stopDefaultPropagation(e);
         displayPreviousChapter();
@@ -435,11 +439,14 @@ const quillToWord = require('quill-to-word');
       }
       else if(e.ctrlKey && e.key === "ArrowLeft"){
         stopDefaultPropagation(e);
-        changeChapterTitle(project.activeChapterIndex);
+        editorQuill.focus();
       }
       else if(e.ctrlKey && e.key === "ArrowRight"){
         stopDefaultPropagation(e);
         notesQuill.focus();
+      }
+      else if(e.key === "Escape"){
+        removeElementsByClass('popup');
       }
   } );
 
