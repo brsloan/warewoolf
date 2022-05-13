@@ -510,7 +510,7 @@ const quillToWord = require('quill-to-word');
   });
 
   ipcRenderer.on('headings-to-chaps-clicked', function(e){
-    breakHeadingsIntoChapters();
+    showBreakHeadingsOptions();
   });
 
   ipcRenderer.on('convert-italics-clicked', function(e){
