@@ -163,7 +163,8 @@ const createWindow = () => {
           label: 'Split Chapter',
           click(item, focusWindow){
             mainWindow.webContents.send('split-chapter-clicked');
-          }
+          },
+          accelerator: 'CommandOrControl+\\',
         }
       ]
     },
