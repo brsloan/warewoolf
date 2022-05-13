@@ -139,6 +139,13 @@ const createWindow = () => {
         },
         { type: 'separator' },
         {
+          label: 'Add New Chapter',
+          click(item, focusWindow){
+            mainWindow.webContents.send('add-chapter-clicked');
+          },
+          accelerator: 'CommandOrControl+N',
+        },
+        {
           label: 'Split Chapter',
           click(item, focusWindow){
             mainWindow.webContents.send('split-chapter-clicked');

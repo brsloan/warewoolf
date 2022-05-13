@@ -433,10 +433,6 @@ const quillToWord = require('quill-to-word');
         stopDefaultPropagation(e);
         displayNextChapter();
       }
-      else if(e.ctrlKey && e.key === "n"){
-        stopDefaultPropagation(e);
-        addNewChapter();
-      }
       else if(e.ctrlKey && e.key === "d"){
         stopDefaultPropagation(e);
         moveToTrash(project.activeChapterIndex);
@@ -519,6 +515,10 @@ const quillToWord = require('quill-to-word');
 
   ipcRenderer.on('split-chapter-clicked', function(e){
     splitChapter();
+  });
+
+  ipcRenderer.on('add-chapter-clicked', function(e){
+    addNewChapter();
   });
 
 function splitChapter(){
