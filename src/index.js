@@ -136,6 +136,13 @@ const createWindow = () => {
           label: 'Select All',
           accelerator: 'CommandOrControl+A',
           role: 'selectall',
+        },
+        { type: 'separator' },
+        {
+          label: 'Split Chapter',
+          click(item, focusWindow){
+            mainWindow.webContents.send('split-chapter-clicked');
+          }
         }
       ]
     },

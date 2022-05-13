@@ -517,6 +517,21 @@ const quillToWord = require('quill-to-word');
     showItalicsOptions();
   });
 
+  ipcRenderer.on('split-chapter-clicked', function(e){
+    splitChapter();
+  });
+
+function splitChapter(){
+  var selection = editorQuill.getSelection(true);
+  if(selection){
+      var newChap = editorQuill.getContents(selection.index);
+      console.log("deleting " + selection.index + " to " + editorQuill.getLength());
+      editorQuill.deleteText(selection.index, editorQuill.getLength(), 'user');
+      addImportedChapter(newChap, "untitled");
+      changeChapterTitle(project.activeChapterIndex);
+  }
+}
+
 
 function convertFirstLinesToTitles(){
   var tempQuill = getTempQuill();
