@@ -433,14 +433,6 @@ const quillToWord = require('quill-to-word');
         stopDefaultPropagation(e);
         displayNextChapter();
       }
-      else if(e.ctrlKey && e.key === "d"){
-        stopDefaultPropagation(e);
-        moveToTrash(project.activeChapterIndex);
-      }
-      else if(e.ctrlKey && e.key === "r"){
-        stopDefaultPropagation(e);
-        restoreFromTrash(project.activeChapterIndex);
-      }
       else if(e.ctrlKey && e.key === "ArrowLeft"){
         stopDefaultPropagation(e);
         changeChapterTitle(project.activeChapterIndex);
@@ -519,6 +511,14 @@ const quillToWord = require('quill-to-word');
 
   ipcRenderer.on('add-chapter-clicked', function(e){
     addNewChapter();
+  });
+
+  ipcRenderer.on('delete-chapter-clicked', function(e){
+    moveToTrash(project.activeChapterIndex);
+  });
+
+  ipcRenderer.on('restore-chapter-clicked', function(e){
+    restoreFromTrash(project.activeChapterIndex);
   });
 
 function splitChapter(){

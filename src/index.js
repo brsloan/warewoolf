@@ -146,6 +146,20 @@ const createWindow = () => {
           accelerator: 'CommandOrControl+N',
         },
         {
+          label: 'Delete Chapter',
+          click(item, focusWindow){
+            mainWindow.webContents.send('delete-chapter-clicked');
+          },
+          accelerator: 'CommandOrControl+D',
+        },
+        {
+          label: 'Restore Deleted Chapter',
+          click(item, focusWindow){
+            mainWindow.webContents.send('restore-chapter-clicked');
+          },
+          accelerator: 'CommandOrControl+R',
+        },
+        {
           label: 'Split Chapter',
           click(item, focusWindow){
             mainWindow.webContents.send('split-chapter-clicked');
