@@ -4,31 +4,16 @@ function showImportOptions(docPath){
   popup.classList.add("popup");
   var importForm = document.createElement("form");
 
-  var convertHeadingsLabel = document.createElement("label");
-  convertHeadingsLabel.innerText = "Break Headings Into Chapters: ";
-  convertHeadingsLabel.for = "convert-headings-check";
-  importForm.appendChild(convertHeadingsLabel);
+  var convertFirstLinesLabel = document.createElement("label");
+  convertFirstLinesLabel.innerText = "Convert First Lines To Titles: ";
+  convertFirstLinesLabel.for = "convert-first-lines-check";
+  importForm.appendChild(convertFirstLinesLabel);
 
-  var convertHeadingsCheck = document.createElement("input");
-  convertHeadingsCheck.type = "checkbox";
-  convertHeadingsCheck.id = "convert-headings-check";
-  convertHeadingsCheck.checked = true;
-  importForm.appendChild(convertHeadingsCheck);
-
-  var headingLevelLabel = document.createElement("label");
-  headingLevelLabel.innerText = "Heading Level: ";
-  headingLevelLabel.for = "heading-level-select";
-  importForm.appendChild(headingLevelLabel);
-
-  var headingSelect = document.createElement("select");
-  const headingOptions = ["1", "2", "3", "4"];
-  headingOptions.forEach(function(op){
-    var hdOp = document.createElement("option");
-    hdOp.value = op;
-    hdOp.innerText = op;
-    headingSelect.appendChild(hdOp);
-  });
-  importForm.appendChild(headingSelect);
+  var convertFirstLinesCheck = document.createElement("input");
+  convertFirstLinesCheck.type = "checkbox";
+  convertFirstLinesCheck.id = "convert-first-lines-check";
+  convertFirstLinesCheck.checked = true;
+  importForm.appendChild(convertFirstLinesCheck);
 
   importForm.appendChild(document.createElement('br'));
 
@@ -69,8 +54,8 @@ function showImportOptions(docPath){
 
   importForm.onsubmit = function(){
     getImportFilepaths(docPath);
-    if(convertHeadingsCheck.checked)
-      breakHeadingsIntoChapters(headingSelect.value);
+    if(convertFirstLinesCheck.checked)
+      convertFirstLinesToTitles();
     if(convertItalicsCheck.checked)
       convertMarkedItalics(italicsStrInput.value);
     displayChapterByIndex(project.activeChapterIndex);
