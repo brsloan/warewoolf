@@ -12,6 +12,7 @@ function newProject(){
         filters: [],
         trash: [],
         activeChapterIndex: 0,
+        wordGoal: 0,
         getActiveChapter: getActiveChapter,
         loadFile: loadFile,
         saveFile: saveFile,
@@ -30,7 +31,7 @@ function newProject(){
     function loadFile(projPath){
       //Convert Windows filepaths to maintain linux/windows compatibility
       projPath = projPath.replaceAll('\\', '/');
-      
+
       var projectFile = JSON.parse(fs.readFileSync(projPath, "utf8"));
 
       Object.assign(this, projectFile);
@@ -38,7 +39,7 @@ function newProject(){
 
       this.filename = projPathParts.pop();
       this.directory = projPathParts.join('/').concat("/");
-      
+
 
       var chaps = [];
       this.chapters.forEach(function (chap) {
@@ -59,7 +60,7 @@ function newProject(){
     function saveFile(){
       var proj = this;
       if(proj.filename != "" && proj.directory != ""){
-        
+
         proj.chapters.forEach(function(chap){
           if(chap.hasUnsavedChanges)
             chap.saveFile();
@@ -75,7 +76,7 @@ function newProject(){
           else if (k == "hasUnsavedChanges") return undefined;
           else return v;
         });
-  
+
         fs.writeFileSync(proj.directory + proj.filename, fileString, 'utf8');
 
       }
@@ -92,7 +93,7 @@ function newProject(){
       var newFilename = filepathParts.pop();
       var newDirectory = filepathParts.join('/').concat("/").concat(newFilename.split('.')[0]).concat("/");
       var newSubDir = newFilename.split(".")[0].concat("_pups/");
-      
+
       //Create new directories
       if(!fs.existsSync(newDirectory))
         fs.mkdirSync(newDirectory);
@@ -104,7 +105,7 @@ function newProject(){
         if(chap.filename != null){
           var newChapFilename = newSubDir + chap.filename.split("/").pop();
           fs.copyFileSync(proj.directory + chap.filename, newDirectory + newChapFilename);
-          chap.filename = newChapFilename;    
+          chap.filename = newChapFilename;
         }
       });
       proj.trash.forEach(function(chap){
@@ -121,11 +122,11 @@ function newProject(){
         proj.filename += ".woolf";
       proj.directory = newDirectory;
 
-      
+
       //Save any new or altered chapters
       proj.chapters.forEach(function(chap){
         if(chap.hasUnsavedChanges)
-          chap.saveFile();       
+          chap.saveFile();
       });
       proj.trash.forEach(function(tr){
         if(tr.hasUnsavedChanges)
@@ -141,6 +142,6 @@ function newProject(){
       });
 
       fs.writeFileSync(proj.directory + proj.filename, fileString, 'utf8');
-      
+
     }
 }

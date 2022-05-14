@@ -1,5 +1,5 @@
 body {
-/*  
+/*
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   margin: auto;
   max-width: 38rem;
@@ -93,4 +93,22 @@ ul {
 
 .highlighted {
   background-color: #f8ff00;
+}
+
+#prog-bar-container {
+  display: block;
+  background-color: gray;
+  width: 90%;
+  height: 30px;
+  margin-left: auto;
+  margin-right: auto;
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+#prog-bar-fill {
+  display: block;
+  background-color: green;
+  height: 28px;
+  width: 100%;
 }
