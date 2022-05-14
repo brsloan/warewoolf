@@ -643,8 +643,8 @@ function getTempQuill(){
 }
 
 function createButton(text){
-  var btn = document.createElement("input");
+  var btn = document.createElement("button");
+  btn.innerHTML = text;
   btn.type = "button";
-  btn.value = text;
   return btn;
 }

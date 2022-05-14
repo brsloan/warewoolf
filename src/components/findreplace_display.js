@@ -2,92 +2,96 @@ function showFindReplace(){
     removeElementsByClass('popup');
     var popup = document.createElement("div");
     popup.classList.add("popup");
-  
+
     var findForm = document.createElement("form");
-  
+
     var findIn = document.createElement("input");
     findIn.type = "text";
     findIn.placeholder = "Find...";
     findIn.id = "find-input";
     findForm.appendChild(findIn);
-  
+
     findForm.appendChild(document.createElement('br'));
-  
+
     var caseSensitive = document.createElement("input");
     caseSensitive.type = "checkbox";
     findForm.appendChild(caseSensitive);
-  
+
     var caseSensLabel = document.createElement("label");
     caseSensLabel.innerText = "Case Sensitive";
     findForm.appendChild(caseSensLabel);
-  
+
     findForm.appendChild(document.createElement('br'));
-  
+
     var inAllChapters = document.createElement("input");
     inAllChapters.type = "checkbox";
     findForm.appendChild(inAllChapters)
-  
+
     var inAllChapLabel = document.createElement("label");
     inAllChapLabel.innerText = "In All Chapters";
     findForm.appendChild(inAllChapLabel);
-  
+
     findForm.appendChild(document.createElement('br'));
-  
+
     var replaceIn = document.createElement("input");
     replaceIn.type = "text";
     replaceIn.placeholder = "Replace...";
     replaceIn.id = "replace-input";
     findForm.appendChild(replaceIn);
-  
+
     findForm.appendChild(document.createElement('br'));
-  
-    var findBtn = createButton("Find");
+
+    var findBtn = createButton("<span class='access-key'>F</span>ind");
     findBtn.onclick = function(){
       replacementCount.innerText = "";
       find(findIn.value, caseSensitive.checked, editorQuill.getSelection(true).index, inAllChapters.checked);
     };
+    findBtn.accessKey = "f";
     findForm.appendChild(findBtn);
-  
-    var replaceBtn = createButton("Replace");
+
+    var replaceBtn = createButton("<span class='access-key'>R</span>eplace");
     replaceBtn.id = "replace-btn";
     replaceBtn.onclick = function(){
       replacementCount.innerText = "";
       replace(replaceIn.value);
     };
+    replaceBtn.accessKey = "r";
     findForm.appendChild(replaceBtn);
-  
+
     findForm.appendChild(document.createElement('br'));
-  
-    var replaceAllBtn = createButton("Replace All");
+
+    var replaceAllBtn = createButton("Replace <span class='access-key'>A</span>ll");
     replaceAllBtn.id = "replace-all-btn";
     replaceAllBtn.onclick = function(){
       replacementCount.innerText = "";
       var numReplaced = replaceAll(findIn.value, replaceIn.value, caseSensitive.checked, inAllChapters.checked);
       replacementCount.innerText = numReplaced + " instances replaced!";
     };
+    replaceAllBtn.accessKey = "a";
     findForm.appendChild(replaceAllBtn);
-  
+
     findForm.appendChild(document.createElement('br'));
-  
+
     var cancel = createButton("Cancel");
     cancel.onclick = function(){
+      console.log("remove");
       popup.remove();
     };
     findForm.appendChild(cancel);
-  
+
     findForm.appendChild(document.createElement('br'));
-  
+
     var replacementCount = document.createElement('label');
     replacementCount.innerText = "";
     findForm.appendChild(replacementCount);
-  
+
     findIn.addEventListener("keyup", function(event){
       event.preventDefault();
       if (event.key == "Enter") {
           findBtn.click();
       }
     });
-  
+
     popup.appendChild(findForm);
     document.body.appendChild(popup);
     findIn.focus();

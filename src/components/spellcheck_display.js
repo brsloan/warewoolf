@@ -38,13 +38,14 @@ function showSpellcheck(startingIndex = 0, wordsToIgnore = []){
     }
     popup.appendChild(ignoreBtn);
 
-    var ignoreAllBtn = createButton("Ignore All");
+    var ignoreAllBtn = createButton("<span class='access-key'>I</span>gnore All");
     ignoreAllBtn.onclick = function(){
       if(invalidWord){
         wordsToIgnore.push(invalidWord.word);
         ignoreBtn.click();
       }
     }
+    ignoreAllBtn.accessKey = "i";
     popup.appendChild(ignoreAllBtn);
 
     popup.appendChild(document.createElement('br'));
@@ -59,7 +60,7 @@ function showSpellcheck(startingIndex = 0, wordsToIgnore = []){
     }
     popup.appendChild(changeBtn);
 
-    var changeAllBtn = createButton("Change All");
+    var changeAllBtn = createButton("<span class='access-key'>C</span>hange All");
     changeAllBtn.onclick = function(){
       if(invalidWord && selectedSuggestion != null){
         replaceAllBackground(invalidWord.word, selectedSuggestion, true);
@@ -67,15 +68,17 @@ function showSpellcheck(startingIndex = 0, wordsToIgnore = []){
         ignoreBtn.click();
       }
     };
+    changeAllBtn.accessKey = "c";
     popup.appendChild(changeAllBtn);
 
     popup.appendChild(document.createElement('br'));
 
-    var addToDic = createButton("Add To Dictionary");
+    var addToDic = createButton("<span class='access-key'>A</span>dd To Dictionary");
     addToDic.onclick = function(){
       addWordToPersonalDictFile(invalidWord.word);
       ignoreBtn.click();
     }
+    addToDic.accessKey = "a";
     popup.appendChild(addToDic);
 
     popup.appendChild(document.createElement('br'));

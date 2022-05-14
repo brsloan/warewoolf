@@ -112,3 +112,8 @@ ul {
   height: 28px;
   width: 100%;
 }
+
+.access-key {
+  text-decoration: underline;
+  font-weight: bold;
+}
