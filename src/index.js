@@ -19,7 +19,8 @@ const createWindow = () => {
       spellcheck: false,
       devTools: true
     },
-    kiosk: false
+    kiosk: false,
+    icon: path.join(__dirname, 'assets/icon.png')
   });
 
   mainWindow.maximize();
