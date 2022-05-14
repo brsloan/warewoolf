@@ -528,6 +528,10 @@ const quillToWord = require('quill-to-word');
     restoreFromTrash(project.activeChapterIndex);
   });
 
+  ipcRenderer.on('shortcuts-clicked', function(e){
+    showShortcutsHelp();
+  });
+
 function splitChapter(){
   var selection = editorQuill.getSelection(true);
   if(selection){

@@ -214,6 +214,17 @@ const createWindow = () => {
           }
         }
       ]
+    },
+    {
+      label: 'Help',
+      submenu: [
+        {
+          label: 'Shortcuts...',
+          click(item, focusWindow){
+            mainWindow.webContents.send('shortcuts-clicked');
+          }
+        }
+      ]
     }
   ]);
 
