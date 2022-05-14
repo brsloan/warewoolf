@@ -39,7 +39,25 @@ const quillToWord = require('quill-to-word');
   initialize();
 
   function initialize(){
+    setUpQuills();
     setProject(convertFilepath(__dirname) + "/examples/Frankenstein/Frankenstein.woolf");
+  }
+
+  function setUpQuills(){
+    var toolbarPickers = document.getElementsByClassName("ql-picker-label");
+    var toolbarItalics = document.getElementsByClassName("ql-italic");
+    var editors = document.getElementsByClassName("ql-editor");
+
+    for(let i=0; i < toolbarPickers.length; i++){
+      toolbarPickers[i].tabIndex = -1;
+    }
+    for(let i=0; i < toolbarItalics.length; i++){
+      toolbarItalics[i].tabIndex = -1;
+    }
+    for(let i=0; i < editors.length; i++){
+      editors[i].tabIndex = -1;
+    }
+
   }
 
   function setProject(filepath){

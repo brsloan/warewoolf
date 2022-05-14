@@ -87,4 +87,5 @@ function showSpellcheck(startingIndex = 0, wordsToIgnore = []){
     popup.appendChild(cancelBtn);
 
     document.body.appendChild(popup);
+    changeAllBtn.focus();
   }

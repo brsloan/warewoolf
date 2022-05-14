@@ -36,5 +36,6 @@ function showItalicsOptions(){
 
     popup.appendChild(italicsForm);
     document.body.appendChild(popup);
+    italicsStrInput.focus();
 
   }
