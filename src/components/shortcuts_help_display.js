@@ -22,4 +22,5 @@ function showShortcutsHelp(){
     popup.appendChild(closeBtn);
 
     document.body.appendChild(popup);
+    closeBtn.focus();
 }
