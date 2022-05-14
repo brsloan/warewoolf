@@ -16,18 +16,32 @@ function showSpellcheck(startingIndex = 0, wordsToIgnore = []){
     popup.appendChild(suggestionsHeader);
 
     var suggestions = document.createElement("ul");
-    var selectedSuggestion = null;
+  //  var selectedSuggestion = null;
     if(invalidWord != null && invalidWord.suggestions.length > 0){
-      selectedSuggestion = invalidWord.suggestions[0];
-      invalidWord.suggestions.forEach(function(sug){
-        var sugLi = document.createElement("li");
-        sugLi.innerText = sug;
-        sugLi.onclick = function(){
-          selectedSuggestion = sug;
-          console.log("selected: " + selectedSuggestion);
-        }
+      //selectedSuggestion = invalidWord.suggestions[0];
+      /*invalidWord.suggestions.forEach(function(sug){
+        var sugLi = document.createElement("input");
+        sugLi.type = "radio";
+        sugLi.name = "suggestions";
+        sugLi.value = sug;
         suggestions.appendChild(sugLi);
-      });
+        var sugLabel = document.createElement("label");
+        sugLabel.innerText = sug;
+        suggestions.appendChild(sugLabel);
+      });*/
+
+      for(let i=0;i<invalidWord.suggestions.length;i++){
+        var sugLi = document.createElement("input");
+        sugLi.type = "radio";
+        sugLi.name = "suggestions";
+        sugLi.value = invalidWord.suggestions[i];
+        suggestions.appendChild(sugLi);
+        var sugLabel = document.createElement("label");
+        sugLabel.innerText = invalidWord.suggestions[i];
+        if(i==0)
+          sugLi.checked = true;
+        suggestions.appendChild(sugLabel);
+      }
     }
     popup.appendChild(suggestions);
 
@@ -54,7 +68,7 @@ function showSpellcheck(startingIndex = 0, wordsToIgnore = []){
     changeBtn.onclick = function(){
       if(invalidWord && selectedSuggestion != null){
         editorQuill.setSelection(invalidWord.index, invalidWord.word.length);
-        replace(selectedSuggestion);
+        replace(document.querySelector('input[name="suggestions"]:checked').value);
         ignoreBtn.click();
       }
     }
@@ -62,8 +76,8 @@ function showSpellcheck(startingIndex = 0, wordsToIgnore = []){
 
     var changeAllBtn = createButton("<span class='access-key'>C</span>hange All");
     changeAllBtn.onclick = function(){
-      if(invalidWord && selectedSuggestion != null){
-        replaceAllBackground(invalidWord.word, selectedSuggestion, true);
+      if(invalidWord && document.querySelector('input[name="suggestions"]:checked').value != null){
+        replaceAllBackground(invalidWord.word, document.querySelector('input[name="suggestions"]:checked').value, true);
         displayChapterByIndex(project.activeChapterIndex);
         ignoreBtn.click();
       }
