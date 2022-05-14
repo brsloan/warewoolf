@@ -8,7 +8,7 @@ function showSpellcheck(startingIndex = 0, wordsToIgnore = []){
     popup.classList.add("popup");
 
     var wordDisplay = document.createElement("h2");
-    wordDisplay.innerText = invalidWord ? invalidWord.word : "n/a";
+    wordDisplay.innerText = invalidWord ? invalidWord.word : "*spellcheck finished*";
     popup.appendChild(wordDisplay);
 
     var suggestionsHeader = document.createElement("h3");
@@ -16,20 +16,8 @@ function showSpellcheck(startingIndex = 0, wordsToIgnore = []){
     popup.appendChild(suggestionsHeader);
 
     var suggestions = document.createElement("ul");
-  //  var selectedSuggestion = null;
-    if(invalidWord != null && invalidWord.suggestions.length > 0){
-      //selectedSuggestion = invalidWord.suggestions[0];
-      /*invalidWord.suggestions.forEach(function(sug){
-        var sugLi = document.createElement("input");
-        sugLi.type = "radio";
-        sugLi.name = "suggestions";
-        sugLi.value = sug;
-        suggestions.appendChild(sugLi);
-        var sugLabel = document.createElement("label");
-        sugLabel.innerText = sug;
-        suggestions.appendChild(sugLabel);
-      });*/
 
+    if(invalidWord != null && invalidWord.suggestions.length > 0){
       for(let i=0;i<invalidWord.suggestions.length;i++){
         var sugLi = document.createElement("input");
         sugLi.type = "radio";
@@ -37,11 +25,16 @@ function showSpellcheck(startingIndex = 0, wordsToIgnore = []){
         sugLi.value = invalidWord.suggestions[i];
         suggestions.appendChild(sugLi);
         var sugLabel = document.createElement("label");
-        sugLabel.innerText = invalidWord.suggestions[i];
+        sugLabel.innerText = (i + 1) + ": " + invalidWord.suggestions[i];
         if(i==0)
           sugLi.checked = true;
         suggestions.appendChild(sugLabel);
       }
+    }
+    else {
+      var noSugsAlert = document.createElement("p");
+      noSugsAlert.innerText = "No suggestions available."
+      suggestions.appendChild(noSugsAlert);
     }
     popup.appendChild(suggestions);
 
@@ -66,9 +59,10 @@ function showSpellcheck(startingIndex = 0, wordsToIgnore = []){
 
     var changeBtn = createButton("Change");
     changeBtn.onclick = function(){
-      if(invalidWord && selectedSuggestion != null){
+      var selectedReplacement = document.querySelector('input[name="suggestions"]:checked');
+      if(invalidWord && selectedReplacement != null){
         editorQuill.setSelection(invalidWord.index, invalidWord.word.length);
-        replace(document.querySelector('input[name="suggestions"]:checked').value);
+        replace(selectedReplacement.value);
         ignoreBtn.click();
       }
     }
@@ -76,8 +70,9 @@ function showSpellcheck(startingIndex = 0, wordsToIgnore = []){
 
     var changeAllBtn = createButton("<span class='access-key'>C</span>hange All");
     changeAllBtn.onclick = function(){
-      if(invalidWord && document.querySelector('input[name="suggestions"]:checked').value != null){
-        replaceAllBackground(invalidWord.word, document.querySelector('input[name="suggestions"]:checked').value, true);
+      var selectedReplacement = document.querySelector('input[name="suggestions"]:checked');
+      if(invalidWord && selectedReplacement != null){
+        replaceAllBackground(invalidWord.word, selectedReplacement.value, true);
         displayChapterByIndex(project.activeChapterIndex);
         ignoreBtn.click();
       }
@@ -104,5 +99,10 @@ function showSpellcheck(startingIndex = 0, wordsToIgnore = []){
     popup.appendChild(cancelBtn);
 
     document.body.appendChild(popup);
-    changeAllBtn.focus();
+    var selectedSuggestion = document.querySelector('input[name="suggestions"]:checked');
+    if(selectedSuggestion != null)
+      selectedSuggestion.focus();
+    else {
+      ignoreAllBtn.focus();
+    }
   }
