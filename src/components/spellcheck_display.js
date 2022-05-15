@@ -38,6 +38,25 @@ function showSpellcheck(startingIndex = 0, wordsToIgnore = []){
     }
     popup.appendChild(suggestions);
 
+    var customLabel = document.createElement("label");
+    customLabel.innerText = "Custom Replacement: ";
+    customLabel.for = "custom-input";
+    popup.appendChild(customLabel);
+
+    var customInput = document.createElement("input");
+    customInput.type = "text";
+    customInput.id = "custom-input";
+    customInput.onkeyup = function(){
+      if(customInput.value == "")
+        suggestions.style.opacity = 1;
+      else {
+        suggestions.style.opacity = 0.5;
+      }
+    };
+    popup.appendChild(customInput);
+
+    popup.appendChild(document.createElement('br'));
+
     var ignoreBtn = createButton("Ignore");
     ignoreBtn.onclick = function(){
       var nextIndex = invalidWord ? invalidWord.index + invalidWord.word.length : 0;
@@ -60,6 +79,9 @@ function showSpellcheck(startingIndex = 0, wordsToIgnore = []){
     var changeBtn = createButton("Change");
     changeBtn.onclick = function(){
       var selectedReplacement = document.querySelector('input[name="suggestions"]:checked');
+      if(customInput.value != "")
+        selectedReplacement = customInput;
+
       if(invalidWord && selectedReplacement != null){
         editorQuill.setSelection(invalidWord.index, invalidWord.word.length);
         replace(selectedReplacement.value);
@@ -71,6 +93,9 @@ function showSpellcheck(startingIndex = 0, wordsToIgnore = []){
     var changeAllBtn = createButton("<span class='access-key'>C</span>hange All");
     changeAllBtn.onclick = function(){
       var selectedReplacement = document.querySelector('input[name="suggestions"]:checked');
+      if(customInput.value != "")
+        selectedReplacement = customInput;
+
       if(invalidWord && selectedReplacement != null){
         replaceAllBackground(invalidWord.word, selectedReplacement.value, true);
         displayChapterByIndex(project.activeChapterIndex);
@@ -103,6 +128,6 @@ function showSpellcheck(startingIndex = 0, wordsToIgnore = []){
     if(selectedSuggestion != null)
       selectedSuggestion.focus();
     else {
-      ignoreAllBtn.focus();
+      customInput.focus();
     }
   }
