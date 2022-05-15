@@ -519,7 +519,7 @@ const quillToWord = require('quill-to-word');
   });
 
   ipcRenderer.on('spellcheck-clicked', function(e){
-    showSpellcheck();
+    showSpellcheck(editorQuill.getSelection(true).index);
   });
 
   ipcRenderer.on('convert-first-lines-clicked', function(e){
