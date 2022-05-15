@@ -465,6 +465,7 @@ const quillToWord = require('quill-to-word');
       }
       else if(e.key === "Escape"){
         removeElementsByClass('popup');
+        disableSearchView();
       }
   } );
 
@@ -609,7 +610,17 @@ function openAProject(docPath) {
   }
 }
 
+function enableSearchView(){
+  document.getElementById("chapter-list-sidebar").classList.add("sidebar-search-view");
+  document.getElementById("project-notes").classList.add("sidebar-search-view");
+  document.getElementById("writing-field").style.float = "right";
+}
 
+function disableSearchView(){
+  document.getElementById("chapter-list-sidebar").classList.remove("sidebar-search-view");
+  document.getElementById("project-notes").classList.remove("sidebar-search-view");
+  document.getElementById("writing-field").style.float = "left";
+}
 
 //**** utils ***/
 

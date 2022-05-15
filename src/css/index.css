@@ -75,6 +75,20 @@ ul {
   font-size: 14pt;
   text-align: center;
 }
+
+.popup-search-view {
+  top: 50%;
+  left: 0%;
+  transform: translate(2.5%, -50%);
+  width: 45%;
+}
+
+.sidebar-search-view {
+  display: none;
+}
+
+
+
 /*
 .popup input[type="button"]{
   background-color: gray;

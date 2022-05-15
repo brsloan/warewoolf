@@ -1,4 +1,6 @@
 function showSpellcheck(startingIndex = 0, wordsToIgnore = []){
+    enableSearchView();
+
     var invalidWord = runSpellcheck(startingIndex, wordsToIgnore);
     if(invalidWord)
       editorQuill.setSelection(invalidWord.index, invalidWord.word.length);
@@ -6,6 +8,7 @@ function showSpellcheck(startingIndex = 0, wordsToIgnore = []){
     removeElementsByClass('popup');
     var popup = document.createElement("div");
     popup.classList.add("popup");
+    popup.classList.add("popup-search-view");
 
     var wordDisplay = document.createElement("h2");
     wordDisplay.innerText = invalidWord ? invalidWord.word : "*spellcheck finished*";
@@ -33,7 +36,7 @@ function showSpellcheck(startingIndex = 0, wordsToIgnore = []){
     }
     else {
       var noSugsAlert = document.createElement("p");
-      noSugsAlert.innerText = "No suggestions available."
+      noSugsAlert.innerText = "No suggestions available.";
       suggestions.appendChild(noSugsAlert);
     }
     popup.appendChild(suggestions);
@@ -119,15 +122,17 @@ function showSpellcheck(startingIndex = 0, wordsToIgnore = []){
 
     var cancelBtn = createButton("Cancel");
     cancelBtn.onclick = function(){
+      disableSearchView();
       popup.remove();
     }
     popup.appendChild(cancelBtn);
 
     document.body.appendChild(popup);
+
     var selectedSuggestion = document.querySelector('input[name="suggestions"]:checked');
     if(selectedSuggestion != null)
       selectedSuggestion.focus();
     else {
-      customInput.focus();
+      ignoreBtn.focus();
     }
   }
