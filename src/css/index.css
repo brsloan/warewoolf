@@ -39,11 +39,15 @@ body {
   margin-top: 0px;
 }
 
-#writing-field {
+.writing-field-standard-view {
   width: 50%;
   display: block;
   float: left;
   background-color: #ffffff;
+}
+
+.writing-field-search-view{
+  float: right;
 }
 
 #editor-container {

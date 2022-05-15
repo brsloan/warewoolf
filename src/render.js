@@ -457,10 +457,14 @@ const quillToWord = require('quill-to-word');
       }
       else if(e.ctrlKey && e.key === "ArrowLeft"){
         stopDefaultPropagation(e);
+        removeElementsByClass('popup');
+        disableSearchView();
         editorQuill.focus();
       }
       else if(e.ctrlKey && e.key === "ArrowRight"){
         stopDefaultPropagation(e);
+        removeElementsByClass('popup');
+        disableSearchView();
         notesQuill.focus();
       }
       else if(e.key === "Escape"){
@@ -613,13 +617,13 @@ function openAProject(docPath) {
 function enableSearchView(){
   document.getElementById("chapter-list-sidebar").classList.add("sidebar-search-view");
   document.getElementById("project-notes").classList.add("sidebar-search-view");
-  document.getElementById("writing-field").style.float = "right";
+  document.getElementById("writing-field").classList.add("writing-field-search-view");
 }
 
 function disableSearchView(){
   document.getElementById("chapter-list-sidebar").classList.remove("sidebar-search-view");
   document.getElementById("project-notes").classList.remove("sidebar-search-view");
-  document.getElementById("writing-field").style.float = "left";
+  document.getElementById("writing-field").classList.remove("writing-field-search-view");
 }
 
 //**** utils ***/
