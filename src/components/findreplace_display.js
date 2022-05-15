@@ -1,7 +1,9 @@
 function showFindReplace(){
+    enableSearchView();
     removeElementsByClass('popup');
     var popup = document.createElement("div");
     popup.classList.add("popup");
+    popup.classList.add("popup-search-view");
 
     var findForm = document.createElement("form");
 
@@ -44,7 +46,10 @@ function showFindReplace(){
     var findBtn = createButton("<span class='access-key'>F</span>ind");
     findBtn.onclick = function(){
       replacementCount.innerText = "";
-      find(findIn.value, caseSensitive.checked, editorQuill.getSelection(true).index, inAllChapters.checked);
+      var found = find(findIn.value, caseSensitive.checked, editorQuill.getSelection(true).index, inAllChapters.checked);
+      if(found < 0)
+        replacementCount.innerText = "None Found.";
+      findBtn.focus();
     };
     findBtn.accessKey = "f";
     findForm.appendChild(findBtn);
@@ -54,6 +59,8 @@ function showFindReplace(){
     replaceBtn.onclick = function(){
       replacementCount.innerText = "";
       replace(replaceIn.value);
+      findBtn.click();
+      replaceBtn.focus();
     };
     replaceBtn.accessKey = "r";
     findForm.appendChild(replaceBtn);
@@ -74,7 +81,7 @@ function showFindReplace(){
 
     var cancel = createButton("Cancel");
     cancel.onclick = function(){
-      console.log("remove");
+      disableSearchView();
       popup.remove();
     };
     findForm.appendChild(cancel);
