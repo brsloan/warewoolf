@@ -7,31 +7,20 @@ const quillToWord = require('quill-to-word');
 
   var editorQuill = new Quill('#editor-container', {
     modules: {
-      toolbar: [
-        [{ header: [1, 2, false] }],
-        ['italic'],
-        [{ 'align': [] }]
-      ],
       history: {
         userOnly: true
       }
     },
-    placeholder: '',
-    theme: 'snow'  // or 'bubble'
+    placeholder: ''
   });
 
   var notesQuill = new Quill('#notes-editor', {
     modules: {
-      toolbar: [
-        [{ header: [1, 2, false] }],
-        ['bold', 'italic', 'underline']
-      ],
       history: {
         userOnly: true
       }
     },
-    placeholder: 'Notes...',
-    theme: 'bubble'  // or 'bubble'
+    placeholder: 'Notes...'
   });
 
  var project = newProject();
@@ -44,21 +33,78 @@ const quillToWord = require('quill-to-word');
   }
 
   function setUpQuills(){
-    var toolbarPickers = document.getElementsByClassName("ql-picker-label");
-    var toolbarItalics = document.getElementsByClassName("ql-italic");
-    var editors = document.getElementsByClassName("ql-editor");
-
-    for(let i=0; i < toolbarPickers.length; i++){
-      toolbarPickers[i].tabIndex = -1;
-    }
-    for(let i=0; i < toolbarItalics.length; i++){
-      toolbarItalics[i].tabIndex = -1;
-    }
-    for(let i=0; i < editors.length; i++){
-      editors[i].tabIndex = -1;
-    }
-
+    addBindingsToQuill(editorQuill);
+    addBindingsToQuill(notesQuill);
   }
+
+  function addBindingsToQuill(q){
+    q.keyboard.addBinding({
+      key: 'T',
+      shortKey: true,
+      handler: function(range, context) {
+        this.quill.format('align', 'center', 'user');
+        this.quill.format('header', 1, 'user');
+      }
+    });
+
+    for(let i = 1; i <= 4; i++){
+      q.keyboard.addBinding({
+        key: i.toString(),
+        shortKey: true,
+        handler: function(range, context) {
+          this.quill.format('header', i, 'user');
+        }
+      });
+    }
+
+    q.keyboard.addBinding({
+      key: 'L',
+      shortKey: true,
+      handler: function(range, context) {
+        this.quill.format('align', null, 'user');
+      }
+    });
+
+    q.keyboard.addBinding({
+      key: 'E',
+      shortKey: true,
+      handler: function(range, context) {
+        this.quill.format('align', 'center', 'user');
+      }
+    });
+
+    q.keyboard.addBinding({
+      key: 'R',
+      shortKey: true,
+      handler: function(range, context) {
+        this.quill.format('align', 'right', 'user');
+      }
+    });
+
+    q.keyboard.addBinding({
+      key: 'J',
+      shortKey: true,
+      handler: function(range, context) {
+        this.quill.format('align', 'justify', 'user');
+      }
+    });
+
+    q.keyboard.addBinding({
+      key: "-",
+      shortKey: true,
+      handler: function(range, context) {
+        console.log("strike");
+        this.quill.format('strike', 'true', 'user');
+      }
+    });
+
+    //Quill does not support minus key binding so do it directly
+    q.container.addEventListener("keydown", function(e){
+      if(e.ctrlKey && e.key === "-"){
+        q.format('strike', 'true', 'user');
+      }
+    });
+  };
 
   function setProject(filepath){
     if(filepath && filepath != null){
@@ -471,6 +517,10 @@ const quillToWord = require('quill-to-word');
         removeElementsByClass('popup');
         disableSearchView();
       }
+      /*else if(e.ctrlKey && e.key === "-"){
+        console.log("test");
+        editorQuill.format('strike', 'true', 'user');
+      }*/
   } );
 
   function stopDefaultPropagation(keyEvent){

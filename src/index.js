@@ -158,7 +158,7 @@ const createWindow = () => {
           click(item, focusWindow){
             mainWindow.webContents.send('restore-chapter-clicked');
           },
-          accelerator: 'CommandOrControl+R',
+          accelerator: 'CommandOrControl+Shift+R',
         },
         {
           label: 'Split Chapter',

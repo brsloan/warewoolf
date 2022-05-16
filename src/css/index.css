@@ -12,19 +12,6 @@ body {
   font-family: Helvetica, sans-serif;
 }
 
-#title-bar {
-  width: 100%;
-  margin: 0;
-  padding: 6px;
-  text-align: center;
-  overflow: hidden;
-}
-
-#title-bar h1{
-  margin: 0;
-  padding: 0;
-}
-
 .sidebar {
   width: 25%;
   display: block;
@@ -51,7 +38,7 @@ body {
 }
 
 #editor-container {
-  height: 93vh;
+  height: 97vh;
 }
 
 .ql-editor {
