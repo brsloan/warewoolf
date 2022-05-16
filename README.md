@@ -1,6 +1,6 @@
 # WareWoolf
 
-A simple novel writing system designed to (eventually) be usable without a mouse. Allows you to compose, sort, and reorder chapters, then compile them into one file (or export to separate files).
+A minimalist novel writing system designed to be usable without a mouse. Allows you to compose, sort, and reorder chapters, then compile them into one file (or export to separate files).
 
 It is designed especially to work well with plain-text-based workflows, such as with the Astrohaus Freewrite, since that is what I use for first drafts.
 
@@ -19,4 +19,3 @@ It is designed especially to work well with plain-text-based workflows, such as 
 Because I despise Markdown for the sole reason that it cannot record manual indentations. I do not want all paragraphs indented, and I often don't want all the indented ones indented the same amount. This is, in my view, Markdown's only major flaw, but a fatal one.
 
 WareWoolf is still in early stages of development.
-
