@@ -89,15 +89,6 @@ const quillToWord = require('quill-to-word');
       }
     });
 
-    q.keyboard.addBinding({
-      key: "-",
-      shortKey: true,
-      handler: function(range, context) {
-        console.log("strike");
-        this.quill.format('strike', 'true', 'user');
-      }
-    });
-
     //Quill does not support minus key binding so do it directly
     q.container.addEventListener("keydown", function(e){
       if(e.ctrlKey && e.key === "-"){
