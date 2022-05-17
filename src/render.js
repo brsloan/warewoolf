@@ -89,10 +89,22 @@ const quillParser = require('quilljs-parser');
       }
     });
 
+    q.keyboard.addBinding({
+      key: '0',
+      shortKey: true,
+      handler: function(range, context){
+        this.quill.format('header', null, 'user');
+      }
+    });
+
     //Quill does not support minus key binding so do it directly
     q.container.addEventListener("keydown", function(e){
       if(e.ctrlKey && e.key === "-"){
-        q.format('strike', 'true', 'user');
+        if(q.getFormat().strike)
+          q.format('strike', false, 'user');
+        else {
+          q.format('strike', true, 'user');
+        }
       }
     });
   };

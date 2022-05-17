@@ -17,6 +17,7 @@ function showShortcutsHelp(){
     "<h2>Formatting</h2>" +
     "<p>Title (Heading 1, Centered): Ctrl + T</p>" +
     "<p>Headings: Ctrl + (1-4)</p>" +
+    "<p>Clear Heading: Ctrl + 0</p>" +
     "<p>Left Align: Ctrl + L</p>" +
     "<p>Right Align: Ctrl + R</p>" +
     "<p>Center Align: Ctrl + E</p>" +
