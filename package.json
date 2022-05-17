@@ -42,10 +42,12 @@
     }
   },
   "dependencies": {
+    "docx": "^7.3.0",
     "electron-squirrel-startup": "^1.0.0",
     "nspell": "^2.1.5",
     "quill": "^1.3.7",
-    "quill-to-word": "^1.3.0"
+    "quill-to-word": "^1.3.0",
+    "quilljs-parser": "^1.0.12"
   },
   "devDependencies": {
     "@electron-forge/cli": "^6.0.0-beta.54",

@@ -3,7 +3,8 @@ const fs = require('fs');
 const { dialog } = require('electron').remote;
 const Quill = require('quill');
 const quillToWord = require('quill-to-word');
-
+const docx = require('docx');
+const quillParser = require('quilljs-parser');
 
   var editorQuill = new Quill('#editor-container', {
     modules: {
@@ -704,3 +705,5 @@ function createButton(text){
   btn.type = "button";
   return btn;
 }
+
+compileDocxNew();
