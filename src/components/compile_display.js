@@ -41,7 +41,6 @@ function showCompileOptions(docPath){
 
     var insertHeadCheck = document.createElement("input");
     insertHeadCheck.type = "checkbox";
-    //insertHeadCheck.value = "insert-head";
     insertHeadCheck.id = "insert-head-check";
     compileForm.appendChild(insertHeadCheck);
 
