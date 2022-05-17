@@ -2,7 +2,6 @@ const { ipcRenderer } = require('electron');
 const fs = require('fs');
 const { dialog } = require('electron').remote;
 const Quill = require('quill');
-const quillToWord = require('quill-to-word');
 const docx = require('docx');
 const quillParser = require('quilljs-parser');
 
