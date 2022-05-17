@@ -122,3 +122,14 @@ ul {
   text-decoration: underline;
   font-weight: bold;
 }
+
+.shortcuts-table {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+td {
+  text-align: left;
+  padding-right: 8px;
+  min-width: 234px;
+}
