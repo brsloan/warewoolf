@@ -42,23 +42,20 @@ function exportAsWord(dir){
 }
 
 function exportChapsAsWord(dir, num = 0){
-    if (num < project.chapters.length){
-        var chapFile = project.chapters[num].getFile();
-        var outName = generateChapterFilename(num);
+    for(let i=0; i<project.chapters.length;i++){
+      var chapFile = project.chapters[i].getFile();
+      var outName = generateChapterFilename(i);
 
-        quillToWord.generateWord(chapFile, {exportAs: 'buffer'}).then(doc => {
-            fs.writeFileSync(dir + outName + ".docx", doc);
-            exportChapsAsWord(dir, num + 1);
-        });
+      var doc = convertDeltaToDocx(chapFile);
+      saveDocx(dir + outName + ".docx", doc);
     }
 }
 
 function exportNotesAsWord(dir){
     var chapFile = project.notes;
 
-    quillToWord.generateWord(chapFile, {exportAs: 'buffer'}).then(doc => {
-        fs.writeFileSync(dir + "notes" + ".docx", doc);
-        });
+    var doc = convertDeltaToDocx(chapFile);
+    saveDocx(dir + "notes" + ".docx", doc);
 }
 
 function generateChapterFilename(num){
