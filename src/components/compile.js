@@ -48,6 +48,14 @@ function compileChapterDeltas(options){
 
 
 function compileDocx(filepath, delt) {
+  var doc = convertDeltaToDocx(delt);
+  docx.Packer.toBuffer(doc).then((buffer) => {
+    fs.writeFileSync(filepath, buffer)
+    console.log("Document created successfully");
+  });
+}
+
+function convertDeltaToDocx(delt){
   var parsedQuill = quillParser.parseQuillDelta(delt);
 
   var xParagraphs = [];
@@ -73,7 +81,7 @@ function compileDocx(filepath, delt) {
           page: {
             size: {
               width: 12240,
-          		height: 15840
+              height: 15840
             }
           }
         },
@@ -82,10 +90,7 @@ function compileDocx(filepath, delt) {
     ]
   });
 
-  docx.Packer.toBuffer(doc).then((buffer) => {
-    fs.writeFileSync(filepath, buffer)
-    console.log("Document created successfully");
-  });
+  return doc;
 }
 
 function convertParaAttributes(attr){
