@@ -65,21 +65,15 @@ var xParagraphs = [];
 parsedQuill.paragraphs.forEach(function(para){
   var xRuns = [];
   para.textRuns.forEach(function(run){
-    xRuns.push(new docx.TextRun(run.text));
+    var xRunAttributes = convertRunAtttributes(run.attributes);
+    xRunAttributes.text = run.text;
+    xRuns.push(new docx.TextRun(xRunAttributes));
   });
 
-  var xAttributes = convertAttributes(para.attributes);
+  var xParaAttributes = convertParaAttributes(para.attributes);
+  xParaAttributes.children = xRuns;
 
-  var paragraphObject = {
-    children: xRuns
-  };
-
-  if(xAttributes && xAttributes.heading)
-    paragraphObject.heading = xAttributes.heading;
-  if(xAttributes && xAttributes.alignment)
-    paragraphObject.alignment = xAttributes.alignment;
-
-  xParagraphs.push(new docx.Paragraph(paragraphObject));
+  xParagraphs.push(new docx.Paragraph(xParaAttributes));
 });
 
   const doc = new docx.Document({
@@ -88,7 +82,7 @@ parsedQuill.paragraphs.forEach(function(para){
         properties: {
           page: {
             size: {
-              width: 12240, // width and height transposed in LANDSCAPE
+              width: 12240,
           		height: 15840
             }
           }
@@ -99,12 +93,12 @@ parsedQuill.paragraphs.forEach(function(para){
   });
 
   docx.Packer.toBuffer(doc).then((buffer) => {
-    fs.writeFileSync("C:\\Users\\brslo\\Documents\\newtest3.docx", buffer)
+    fs.writeFileSync("C:\\Users\\sloanb\\Documents\\newtest3.docx", buffer)
     console.log("Document created successfully");
   });
 }
 
-function convertAttributes(attr){
+function convertParaAttributes(attr){
   var xAttr = {};
   if(attr){
     if(attr.header){
@@ -118,3 +112,15 @@ function convertAttributes(attr){
 
   return xAttr;
 };
+
+function convertRunAtttributes(attr){
+  var xAttr = {};
+  if(attr){
+    if(attr.italic)
+      xAttr.italics = attr.italic;
+    if(attr.bold)
+      xAttr.bold = attr.bold;
+  }
+
+  return xAttr;
+}
