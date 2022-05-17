@@ -25,6 +25,39 @@ function convertDeltaToDocx(delt){
   });
 
   const doc = new docx.Document({
+    creator: project.author,
+    title: project.title,
+    styles: {
+      default: {
+        heading1: {
+                run: {
+                    size: 32,
+                    bold: true,
+                    color: "000000",
+                },
+                paragraph: {
+                    spacing: {
+                        before: 1200,
+                        after: 1200,
+                    },
+                },
+            },
+      },
+      paragraphStyles: [
+        {
+          name: 'Normal',
+          quickFormat: true,
+          run: {
+            size: 24,
+          },
+          paragraph: {
+            spacing: {
+              line: 480,
+            }
+          }
+        }
+      ]
+    },
     sections: [
       {
         properties: {
