@@ -705,5 +705,3 @@ function createButton(text){
   btn.type = "button";
   return btn;
 }
-
-compileDocxNew();

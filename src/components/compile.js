@@ -16,12 +16,6 @@ function compileProject(options, filepath){
     }
 }
 
-function compileDocx(filepath, allChaps){
-    quillToWord.generateWord(allChaps, {exportAs: 'buffer'}).then(doc => {
-        fs.writeFileSync(filepath, doc);
-      });
-}
-
 function compilePlainText(dir, allChaps){
     var allText = convertToPlainText(allChaps);
     fs.writeFileSync(dir, allText);
@@ -53,28 +47,24 @@ function compileChapterDeltas(options){
 }
 
 
-function compileDocxNew() {
+function compileDocx(filepath, delt) {
+  var parsedQuill = quillParser.parseQuillDelta(delt);
 
-var testDelta = editorQuill.getContents();
+  var xParagraphs = [];
 
-var parsedQuill = quillParser.parseQuillDelta(testDelta);
-console.log(parsedQuill);
+  parsedQuill.paragraphs.forEach(function(para){
+    var xRuns = [];
+    para.textRuns.forEach(function(run){
+      var xRunAttributes = convertRunAtttributes(run.attributes);
+      xRunAttributes.text = run.text;
+      xRuns.push(new docx.TextRun(xRunAttributes));
+    });
 
-var xParagraphs = [];
+    var xParaAttributes = convertParaAttributes(para.attributes);
+    xParaAttributes.children = xRuns;
 
-parsedQuill.paragraphs.forEach(function(para){
-  var xRuns = [];
-  para.textRuns.forEach(function(run){
-    var xRunAttributes = convertRunAtttributes(run.attributes);
-    xRunAttributes.text = run.text;
-    xRuns.push(new docx.TextRun(xRunAttributes));
+    xParagraphs.push(new docx.Paragraph(xParaAttributes));
   });
-
-  var xParaAttributes = convertParaAttributes(para.attributes);
-  xParaAttributes.children = xRuns;
-
-  xParagraphs.push(new docx.Paragraph(xParaAttributes));
-});
 
   const doc = new docx.Document({
     sections: [
@@ -93,7 +83,7 @@ parsedQuill.paragraphs.forEach(function(para){
   });
 
   docx.Packer.toBuffer(doc).then((buffer) => {
-    fs.writeFileSync("C:\\Users\\sloanb\\Documents\\newtest3.docx", buffer)
+    fs.writeFileSync(filepath, buffer)
     console.log("Document created successfully");
   });
 }
@@ -120,6 +110,10 @@ function convertRunAtttributes(attr){
       xAttr.italics = attr.italic;
     if(attr.bold)
       xAttr.bold = attr.bold;
+    if(attr.strike)
+      xAttr.strike = attr.strike;
+    if(attr.underline)
+      xAttr.underline = {};
   }
 
   return xAttr;
