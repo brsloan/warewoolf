@@ -49,6 +49,10 @@ function compileChapterDeltas(options){
 
 function compileDocx(filepath, delt) {
   var doc = convertDeltaToDocx(delt);
+  saveDocx(filepath, doc);
+}
+
+function saveDocx(filepath, doc){
   docx.Packer.toBuffer(doc).then((buffer) => {
     fs.writeFileSync(filepath, buffer)
     console.log("Document created successfully");
