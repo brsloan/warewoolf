@@ -26,6 +26,12 @@ body {
   margin-top: 0px;
 }
 
+
+.sidebar ul {
+  overflow: hidden;
+}
+
+
 .writing-field-standard-view {
   width: 50%;
   display: block;
@@ -47,10 +53,6 @@ body {
 
 .activeChapter {
   font-weight: bold;
-}
-
-ul {
-  overflow: hidden;
 }
 
 .popup {
@@ -128,8 +130,12 @@ ul {
   margin-right: auto;
 }
 
-td {
+.shortcuts-table td {
   text-align: left;
   padding-right: 8px;
   min-width: 234px;
+}
+
+.shortcuts-table td:nth-child(even) {
+  min-width: 166px;
 }
