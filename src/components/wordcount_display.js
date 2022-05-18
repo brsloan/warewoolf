@@ -43,7 +43,7 @@ function showWordCount(){
     var total = getTotalWordCount();
     updateProgressBar();
 
-    goalInput.onchange = function(){
+    goalInput.onkeyup = function(){
       project.wordGoal = goalInput.value;
       updateProgressBar();
     };
