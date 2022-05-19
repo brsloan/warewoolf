@@ -492,27 +492,7 @@ const quillParser = require('quilljs-parser');
   });
 
   document.addEventListener ("keydown", function (e) {
-      if (e.ctrlKey  && e.shiftKey && e.key === "ArrowUp") {
-        stopDefaultPropagation(e);
-        moveChapUp(project.activeChapterIndex);
-      }
-      else if(e.ctrlKey && e.shiftKey && e.key === "ArrowDown"){
-        stopDefaultPropagation(e);
-        moveChapDown(project.activeChapterIndex);
-      }
-      else if(e.ctrlKey && e.shiftKey && e.key === "ArrowLeft"){
-        stopDefaultPropagation(e);
-        changeChapterTitle(project.activeChapterIndex);
-      }
-      else if(e.ctrlKey && e.key === "ArrowUp"){
-        stopDefaultPropagation(e);
-        displayPreviousChapter();
-      }
-      else if(e.ctrlKey && e.key === "ArrowDown"){
-        stopDefaultPropagation(e);
-        displayNextChapter();
-      }
-      else if(e.ctrlKey && e.key === "ArrowLeft"){
+      if(e.ctrlKey && e.key === "ArrowLeft"){
         stopDefaultPropagation(e);
         removeElementsByClass('popup');
         disableSearchView();
@@ -529,6 +509,29 @@ const quillParser = require('quilljs-parser');
         disableSearchView();
       }
   } );
+
+  document.getElementById('editor-container').addEventListener('keydown', function(e){
+    if (e.ctrlKey  && e.shiftKey && e.key === "ArrowUp") {
+      stopDefaultPropagation(e);
+      moveChapUp(project.activeChapterIndex);
+    }
+    else if(e.ctrlKey && e.shiftKey && e.key === "ArrowDown"){
+      stopDefaultPropagation(e);
+      moveChapDown(project.activeChapterIndex);
+    }
+    else if(e.ctrlKey && e.shiftKey && e.key === "ArrowLeft"){
+      stopDefaultPropagation(e);
+      changeChapterTitle(project.activeChapterIndex);
+    }
+    else if(e.ctrlKey && e.key === "ArrowUp"){
+      stopDefaultPropagation(e);
+      displayPreviousChapter();
+    }
+    else if(e.ctrlKey && e.key === "ArrowDown"){
+      stopDefaultPropagation(e);
+      displayNextChapter();
+    }
+  });
 
   function stopDefaultPropagation(keyEvent){
     keyEvent.preventDefault();
@@ -580,32 +583,40 @@ const quillParser = require('quilljs-parser');
   });
 
   ipcRenderer.on('convert-first-lines-clicked', function(e){
-    convertFirstLinesToTitles();
-    displayChapterByIndex(project.activeChapterIndex);
+    if(editorHasFocus()){
+      convertFirstLinesToTitles();
+      displayChapterByIndex(project.activeChapterIndex);
+    }
   });
 
   ipcRenderer.on('headings-to-chaps-clicked', function(e){
-    showBreakHeadingsOptions();
+    if(editorHasFocus())
+      showBreakHeadingsOptions();
   });
 
   ipcRenderer.on('convert-italics-clicked', function(e){
-    showItalicsOptions();
+    if(editorHasFocus())
+      showItalicsOptions();
   });
 
   ipcRenderer.on('split-chapter-clicked', function(e){
-    splitChapter();
+    if(editorHasFocus())
+      splitChapter();
   });
 
   ipcRenderer.on('add-chapter-clicked', function(e){
-    addNewChapter();
+    if(editorHasFocus())
+      addNewChapter();
   });
 
   ipcRenderer.on('delete-chapter-clicked', function(e){
-    moveToTrash(project.activeChapterIndex);
+    if(editorHasFocus())
+      moveToTrash(project.activeChapterIndex);
   });
 
   ipcRenderer.on('restore-chapter-clicked', function(e){
-    restoreFromTrash(project.activeChapterIndex);
+    if(editorHasFocus())
+      restoreFromTrash(project.activeChapterIndex);
   });
 
   ipcRenderer.on('shortcuts-clicked', function(e){
@@ -615,6 +626,10 @@ const quillParser = require('quilljs-parser');
   ipcRenderer.on('outliner-clicked', function(e){
     showOutliner();
   });
+
+function editorHasFocus(){
+  return document.querySelector(".ql-editor") === document.activeElement;
+}
 
 function splitChapter(){
   var selection = editorQuill.getSelection(true);
