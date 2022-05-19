@@ -49,6 +49,7 @@ body {
 
 .ql-editor {
   line-height: 200%;
+  font-size: 12pt;
 }
 
 .activeChapter {
@@ -138,4 +139,37 @@ body {
 
 .shortcuts-table td:nth-child(even) {
   min-width: 166px;
+}
+
+.popup-outliner {
+  width: 100%;
+  height: 100%;
+}
+
+.popup-outliner table, .popup-outliner td, .popup-outliner th{
+  border: 1px solid white;
+  border-collapse: collapse;
+  padding: 3px 8px 3px 8px;
+}
+
+.outliner-title {
+  text-align: left;
+  white-space: nowrap;
+}
+
+.outliner-word-count {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.outliner-summary {
+  width: 99%;
+  padding-left: 0px;
+  padding-right: 0px;
+}
+
+.outliner-summary input{
+  width: 100%;
+  height: 100%;
+  margin: 0px;
 }

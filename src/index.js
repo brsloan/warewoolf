@@ -195,6 +195,13 @@ const createWindow = () => {
         },
         { type: 'separator' },
         {
+          label: 'Outliner',
+          click(item, focusWindow){
+            mainWindow.webContents.send('outliner-clicked');
+          }
+        },
+        { type: 'separator' },
+        {
           label: 'Convert First Lines To Titles',
           click(item, focusWindow){
             mainWindow.webContents.send('convert-first-lines-clicked');

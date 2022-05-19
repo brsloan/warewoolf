@@ -4,6 +4,7 @@ function newChapter(){
       filename: null,
       filter: null,
       contents: null,
+      summary: null,
       hasUnsavedChanges: null,
       deleteFile: deleteChapterFile,
       parseChapter: parseChapter,
@@ -36,7 +37,7 @@ function newChapter(){
 
       if(chap.filename == undefined || chap.filename == null)
         chap.filename = getNewFilename();
-      
+
       fs.writeFileSync(project.directory + chap.filename, JSON.stringify(chap.contents), "utf8");
       chap.contents = null;
       chap.hasUnsavedChanges = false;
@@ -50,11 +51,9 @@ function newChapter(){
           if(nameNumber > largestFilename)
             largestFilename = nameNumber;
         });
-        
+
         return subDir + (largestFilename + 1).toString() + ".pup";
     }
   }
 
 }
-
-  

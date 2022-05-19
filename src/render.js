@@ -35,6 +35,7 @@ const quillParser = require('quilljs-parser');
   function setUpQuills(){
     addBindingsToQuill(editorQuill);
     addBindingsToQuill(notesQuill);
+    disableTabbingToEditors();
   }
 
   function addBindingsToQuill(q){
@@ -108,6 +109,13 @@ const quillParser = require('quilljs-parser');
       }
     });
   };
+
+  function disableTabbingToEditors(){
+    var editors = document.getElementsByClassName("ql-editor");
+    for(let i=0; i < editors.length; i++){
+      editors[i].tabIndex = -1;
+    }
+  }
 
   function setProject(filepath){
     if(filepath && filepath != null){
@@ -520,10 +528,6 @@ const quillParser = require('quilljs-parser');
         removeElementsByClass('popup');
         disableSearchView();
       }
-      /*else if(e.ctrlKey && e.key === "-"){
-        console.log("test");
-        editorQuill.format('strike', 'true', 'user');
-      }*/
   } );
 
   function stopDefaultPropagation(keyEvent){
@@ -606,6 +610,10 @@ const quillParser = require('quilljs-parser');
 
   ipcRenderer.on('shortcuts-clicked', function(e){
     showShortcutsHelp();
+  });
+
+  ipcRenderer.on('outliner-clicked', function(e){
+    showOutliner();
   });
 
 function splitChapter(){
