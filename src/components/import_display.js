@@ -48,7 +48,7 @@ function showImportOptions(docPath){
 
   var cancelBtn = createButton("Cancel");
   cancelBtn.onclick = function(){
-    popup.remove();
+    closePopups();
   };
   importForm.appendChild(cancelBtn);
 
@@ -59,7 +59,7 @@ function showImportOptions(docPath){
     if(convertItalicsCheck.checked)
       convertMarkedItalics(italicsStrInput.value);
     displayChapterByIndex(project.activeChapterIndex);
-    popup.remove();
+    closePopups();
   };
 
   popup.appendChild(importForm);

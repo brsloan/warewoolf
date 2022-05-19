@@ -53,7 +53,7 @@ function showCompileOptions(docPath){
 
     var cancelBtn = createButton("Cancel");
     cancelBtn.onclick = function(){
-      popup.remove();
+      closePopups();
     };
     compileForm.appendChild(cancelBtn);
 

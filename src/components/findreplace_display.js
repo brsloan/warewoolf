@@ -81,8 +81,7 @@ function showFindReplace(){
 
     var cancel = createButton("Cancel");
     cancel.onclick = function(){
-      disableSearchView();
-      popup.remove();
+      closePopups();
     };
     findForm.appendChild(cancel);
 

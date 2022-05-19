@@ -507,6 +507,7 @@ const quillParser = require('quilljs-parser');
       else if(e.key === "Escape"){
         removeElementsByClass('popup');
         disableSearchView();
+        editorQuill.focus();
       }
   } );
 
@@ -703,6 +704,12 @@ function disableSearchView(){
 }
 
 //**** utils ***/
+
+function closePopups(){
+  removeElementsByClass('popup');
+  disableSearchView();
+  editorQuill.focus();
+}
 
 function removeElementsByClass(className){
   var elements = document.getElementsByClassName(className);

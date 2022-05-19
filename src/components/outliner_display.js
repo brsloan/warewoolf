@@ -57,7 +57,7 @@ function showOutliner(){
 
   var closeBtn = createButton("Close");
   closeBtn.onclick = function(){
-    popup.remove();
+    closePopups();
   };
   popup.appendChild(closeBtn);
 

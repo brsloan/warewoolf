@@ -24,14 +24,14 @@ function showItalicsOptions(){
 
     var cancelBtn = createButton("Cancel");
     cancelBtn.onclick = function(){
-      popup.remove();
+      closePopups();
     };
     italicsForm.appendChild(cancelBtn);
 
     italicsForm.onsubmit = function(){
       convertMarkedItalics(italicsStrInput.value);
       displayChapterByIndex(project.activeChapterIndex);
-      popup.remove();
+      closePopups();
     };
 
     popup.appendChild(italicsForm);

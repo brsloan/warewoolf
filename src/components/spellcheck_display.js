@@ -122,8 +122,7 @@ function showSpellcheck(startingIndex = 0, wordsToIgnore = []){
 
     var cancelBtn = createButton("Cancel");
     cancelBtn.onclick = function(){
-      disableSearchView();
-      popup.remove();
+      closePopups();
     }
     popup.appendChild(cancelBtn);
 

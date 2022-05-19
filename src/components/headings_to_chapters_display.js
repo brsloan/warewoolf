@@ -28,13 +28,13 @@ function showBreakHeadingsOptions(){
 
   var cancelBtn = createButton("Cancel");
   cancelBtn.onclick = function(){
-    popup.remove();
+    closePopups();
   };
   breakHeadingsForm.appendChild(cancelBtn);
 
   breakHeadingsForm.onsubmit = function(){
-      breakHeadingsIntoChapters(headingSelect.value);
-    popup.remove();
+    breakHeadingsIntoChapters(headingSelect.value);
+    closePopups();
   };
 
   popup.appendChild(breakHeadingsForm);

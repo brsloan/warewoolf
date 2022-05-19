@@ -40,7 +40,7 @@ function showExportOptions(docPath){
 
     var cancelBtn = createButton("Cancel");
     cancelBtn.onclick = function(){
-      popup.remove();
+      closePopups();
     };
     exportForm.appendChild(cancelBtn);
 
@@ -50,7 +50,7 @@ function showExportOptions(docPath){
         //insertHead: insertHeadCheck.checked
       }
       getExportFilePath(options, docPath);
-      popup.remove();
+      closePopups();
     };
 
     popup.appendChild(exportForm);
