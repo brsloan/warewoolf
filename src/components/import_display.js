@@ -41,6 +41,30 @@ function showImportOptions(docPath){
 
   importForm.appendChild(document.createElement('br'));
 
+  var convertTabsLabel = document.createElement("label");
+  convertTabsLabel.innerText = "Convert marked tabs: ";
+  convertTabsLabel.for = "convert-tabs-check";
+  importForm.appendChild(convertTabsLabel);
+
+  var convertTabsCheck = document.createElement("input");
+  convertTabsCheck.type = "checkbox";
+  convertTabsCheck.id = "convert-tabs-check";
+  convertTabsCheck.checked = true;
+  importForm.appendChild(convertTabsCheck);
+
+  var tabsStrLabel = document.createElement("label");
+  tabsStrLabel.innerText = "Tab string (default 8 spaces): ";
+  tabsStrLabel.for = "tabs-str-input";
+  importForm.appendChild(tabsStrLabel);
+
+  var tabsStrInput = document.createElement("input");
+  tabsStrInput.type = "text";
+  tabsStrInput.value = "        ";
+  tabsStrInput.id = "tabs-str-input";
+  importForm.appendChild(tabsStrInput);
+
+  importForm.appendChild(document.createElement('br'));
+
   var importBtn = document.createElement("input");
   importBtn.type = "submit";
   importBtn.value = "Import";
@@ -58,6 +82,8 @@ function showImportOptions(docPath){
       convertFirstLinesToTitles();
     if(convertItalicsCheck.checked)
       convertMarkedItalics(italicsStrInput.value);
+    if(convertTabsCheck.checked)
+      replaceAllBackground(tabsStrInput.value, '\t', false);
     displayChapterByIndex(project.activeChapterIndex);
     closePopups();
   };
