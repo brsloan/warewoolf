@@ -36,6 +36,14 @@ function showShortcutsHelp(){
           ['Bold', 'Ctrl + B'],
           ['Underline', 'Ctrl + U']
         ]
+      },
+      {
+        title: "Tool/Menu Navigation",
+        shortcuts: [
+          ['Open/Navigate File Menu', 'Alt, then arrow keys'],
+          ['Close Tool Dialog', "Escape"],
+          ['Any Button With A Bold/\rUnderlined Letter', 'Alt + (that letter)']
+        ]
       }
     ];
 
