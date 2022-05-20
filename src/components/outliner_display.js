@@ -62,4 +62,5 @@ function showOutliner(){
   popup.appendChild(closeBtn);
 
   document.body.appendChild(popup);
+  document.querySelector('#outliner-table input').focus();
 }
