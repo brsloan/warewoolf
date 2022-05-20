@@ -44,7 +44,7 @@ const createWindow = () => {
         },
         {
           label: 'Open Project',
-          accelerator: 'CmdOrCtrl+O',
+          accelerator: 'CmdOrCtrl+Shift+O',
           click(item, focusWindow){
             mainWindow.webContents.send("open-clicked", app.getPath("documents"));
           }
@@ -198,7 +198,8 @@ const createWindow = () => {
           label: 'Outliner',
           click(item, focusWindow){
             mainWindow.webContents.send('outliner-clicked');
-          }
+          },
+          accelerator: 'CommandOrControl+O',
         },
         { type: 'separator' },
         {
@@ -229,7 +230,8 @@ const createWindow = () => {
           label: 'Shortcuts...',
           click(item, focusWindow){
             mainWindow.webContents.send('shortcuts-clicked');
-          }
+          },
+          accelerator: 'CommandOrControl+H'
         }
       ]
     }
