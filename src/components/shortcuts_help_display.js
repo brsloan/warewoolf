@@ -1,7 +1,7 @@
 function showShortcutsHelp(){
     removeElementsByClass('popup');
     var popup = document.createElement("div");
-    popup.classList.add("popup");
+    popup.classList.add("popup", "popup-shortcuts");
 
     popup.innerHTML =
     "<h1>Shortcuts</h1>" +

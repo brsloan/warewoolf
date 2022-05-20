@@ -126,6 +126,10 @@ body {
   font-weight: bold;
 }
 
+.popup-shortcuts {
+  overflow-y: scroll;
+}
+
 .shortcuts-table {
   margin-left: auto;
   margin-right: auto;
@@ -144,10 +148,13 @@ body {
 .popup-outliner {
   width: 100%;
   height: 100%;
+  background-color: white;
+  color: black;
+  overflow-y: scroll;
 }
 
 .popup-outliner table, .popup-outliner td, .popup-outliner th{
-  border: 1px solid white;
+  border: 1px solid black;
   border-collapse: collapse;
   padding: 3px 8px 3px 8px;
 }
