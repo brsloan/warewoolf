@@ -470,7 +470,128 @@ const quillParser = require('quilljs-parser');
     }
   };
 
-  //Event Handlers
+  function enableSearchView(){
+    document.getElementById("chapter-list-sidebar").classList.add("sidebar-search-view");
+    document.getElementById("project-notes").classList.add("sidebar-search-view");
+    document.getElementById("writing-field").classList.add("writing-field-search-view");
+  }
+
+  function disableSearchView(){
+    document.getElementById("chapter-list-sidebar").classList.remove("sidebar-search-view");
+    document.getElementById("project-notes").classList.remove("sidebar-search-view");
+    document.getElementById("writing-field").classList.remove("writing-field-search-view");
+  }
+
+  function scrollChapterListToActiveChapter(){
+    document.getElementById('chapter-list-sidebar')
+    .scrollTop = document.querySelector('.activeChapter')
+    .offsetTop;
+  }
+
+  function changeRootFontSize(rootProp, amount){
+    var currentSize = parseInt(
+      getComputedStyle(document.documentElement)
+      .getPropertyValue(rootProp).replace('pt','')
+    );
+    var newSize = currentSize + amount;
+    document.documentElement.style.setProperty(rootProp, newSize + 'pt');
+    return newSize;
+  }
+
+function typewriterScroll(){
+  if(editorQuill.hasFocus()){
+    var viewTop = editorQuill.getBounds(editorQuill.getSelection().index).top;
+    var toScroll = viewTop - editorQuill.getBounds(0).top;
+    var editorDiv = document.querySelector('.ql-editor');
+    var heightOffset = Math.floor(editorDiv.clientHeight * 0.75);
+    editorDiv.scrollTop = toScroll - heightOffset;
+  }
+}
+
+function enableTypewriterMode(){
+  editorQuill.on('editor-change', typewriterScroll);
+}
+
+function disableTypewriterMode(){
+  editorQuill.off('editor-change', typewriterScroll);
+}
+
+function increaseEditorWidthSetting(){
+  userSettings.editorWidth++;
+  updateEditorWidth();
+  userSettings.save();
+}
+
+function descreaseEditorWidthSetting(){
+  userSettings.editorWidth--;
+  updateEditorWidth();
+  userSettings.save();
+}
+
+
+function splitChapter(){
+  var selection = editorQuill.getSelection(true);
+  if(selection){
+      var newChap = editorQuill.getContents(selection.index);
+      console.log("deleting " + selection.index + " to " + editorQuill.getLength());
+      editorQuill.deleteText(selection.index, editorQuill.getLength(), 'user');
+      addImportedChapter(newChap, "untitled");
+      changeChapterTitle(project.activeChapterIndex);
+  }
+}
+
+
+function convertFirstLinesToTitles(){
+  var tempQuill = getTempQuill();
+
+  project.chapters.forEach(function(chap){
+    var chapContents = chap.contents ? chap.contents : chap.getFile();
+    tempQuill.setContents(chapContents);
+    tempQuill.formatLine(1, 1, 'header', 1);
+    tempQuill.formatLine(1, 1, 'align', 'center');
+    chap.contents = tempQuill.getContents();
+    chap.hasUnsavedChanges = true;
+  });
+
+}
+
+function saveProjectAs(docPath) {
+  const options = {
+    title: 'Save project as...',
+    defaultPath: docPath,
+    filters: [
+      { name: 'WareWoolf Projects', extensions: ['woolf'] }
+    ]
+  };
+  var filepath = dialog.showSaveDialogSync(options);
+  if (filepath)
+    project.saveAs(filepath);
+  updateFileList();
+  updateTitleBar();
+}
+
+function openAProject(docPath) {
+  //Temp override doc path for testing in examples folder
+  docPath = "./examples";
+
+  const options = {
+    title: 'Open project...',
+    defaultPath: docPath,
+    filters: [
+      { name: 'WareWoolf Projects', extensions: ['woolf'] }
+    ]
+  };
+  var filepath = dialog.showOpenDialogSync(options);
+  if (filepath) {
+    project.loadFile(filepath[0]);
+    displayProject();
+    userSettings.lastProject = filepath[0];
+    userSettings.save();
+  }
+}
+
+///////////////////////////////////////////////////////////////////
+  //Event Handlers ///////////////////////////////////////////////
 
   editorQuill.on('text-change', function(delta, oldDelta, source) {
     if(source == "user"){
@@ -529,40 +650,6 @@ const quillParser = require('quilljs-parser');
       }
   } );
 
-  function scrollChapterListToActiveChapter(){
-    document.getElementById('chapter-list-sidebar')
-    .scrollTop = document.querySelector('.activeChapter')
-    .offsetTop;
-  }
-
-  function changeRootFontSize(rootProp, amount){
-    var currentSize = parseInt(
-      getComputedStyle(document.documentElement)
-      .getPropertyValue(rootProp).replace('pt','')
-    );
-    var newSize = currentSize + amount;
-    document.documentElement.style.setProperty(rootProp, newSize + 'pt');
-    return newSize;
-  }
-
-function typewriterScroll(){
-  if(editorQuill.hasFocus()){
-    var viewTop = editorQuill.getBounds(editorQuill.getSelection().index).top;
-    var toScroll = viewTop - editorQuill.getBounds(0).top;
-    var editorDiv = document.querySelector('.ql-editor');
-    var heightOffset = Math.floor(editorDiv.clientHeight * 0.75);
-    editorDiv.scrollTop = toScroll - heightOffset;
-  }
-}
-
-function enableTypewriterMode(){
-  editorQuill.on('editor-change', typewriterScroll);
-}
-
-function disableTypewriterMode(){
-  editorQuill.off('editor-change', typewriterScroll);
-}
-
 
   document.getElementById('editor-container').addEventListener('keydown', function(e){
     if (e.ctrlKey  && e.shiftKey && e.key === "ArrowUp") {
@@ -592,18 +679,6 @@ function disableTypewriterMode(){
       increaseEditorWidthSetting();
     }
   });
-
-function increaseEditorWidthSetting(){
-  userSettings.editorWidth++;
-  updateEditorWidth();
-  userSettings.save();
-}
-
-function descreaseEditorWidthSetting(){
-  userSettings.editorWidth--;
-  updateEditorWidth();
-  userSettings.save();
-}
 
   function stopDefaultPropagation(keyEvent){
     keyEvent.preventDefault();
@@ -699,83 +774,6 @@ function descreaseEditorWidthSetting(){
     showOutliner();
   });
 
-function editorHasFocus(){
-  return document.querySelector(".ql-editor") === document.activeElement;
-}
-
-function splitChapter(){
-  var selection = editorQuill.getSelection(true);
-  if(selection){
-      var newChap = editorQuill.getContents(selection.index);
-      console.log("deleting " + selection.index + " to " + editorQuill.getLength());
-      editorQuill.deleteText(selection.index, editorQuill.getLength(), 'user');
-      addImportedChapter(newChap, "untitled");
-      changeChapterTitle(project.activeChapterIndex);
-  }
-}
-
-
-function convertFirstLinesToTitles(){
-  var tempQuill = getTempQuill();
-
-  project.chapters.forEach(function(chap){
-    var chapContents = chap.contents ? chap.contents : chap.getFile();
-    tempQuill.setContents(chapContents);
-    tempQuill.formatLine(1, 1, 'header', 1);
-    tempQuill.formatLine(1, 1, 'align', 'center');
-    chap.contents = tempQuill.getContents();
-    chap.hasUnsavedChanges = true;
-  });
-
-}
-
-function saveProjectAs(docPath) {
-  const options = {
-    title: 'Save project as...',
-    defaultPath: docPath,
-    filters: [
-      { name: 'WareWoolf Projects', extensions: ['woolf'] }
-    ]
-  };
-  var filepath = dialog.showSaveDialogSync(options);
-  if (filepath)
-    project.saveAs(filepath);
-  updateFileList();
-  updateTitleBar();
-}
-
-function openAProject(docPath) {
-  //Temp override doc path for testing in examples folder
-  docPath = "./examples";
-
-  const options = {
-    title: 'Open project...',
-    defaultPath: docPath,
-    filters: [
-      { name: 'WareWoolf Projects', extensions: ['woolf'] }
-    ]
-  };
-  var filepath = dialog.showOpenDialogSync(options);
-  if (filepath) {
-    project.loadFile(filepath[0]);
-    displayProject();
-    userSettings.lastProject = filepath[0];
-    userSettings.save();
-  }
-}
-
-function enableSearchView(){
-  document.getElementById("chapter-list-sidebar").classList.add("sidebar-search-view");
-  document.getElementById("project-notes").classList.add("sidebar-search-view");
-  document.getElementById("writing-field").classList.add("writing-field-search-view");
-}
-
-function disableSearchView(){
-  document.getElementById("chapter-list-sidebar").classList.remove("sidebar-search-view");
-  document.getElementById("project-notes").classList.remove("sidebar-search-view");
-  document.getElementById("writing-field").classList.remove("writing-field-search-view");
-}
-
 //**** utils ***/
 
 function closePopups(){
@@ -818,4 +816,8 @@ function createButton(text){
   btn.innerHTML = text;
   btn.type = "button";
   return btn;
+}
+
+function editorHasFocus(){
+  return document.querySelector(".ql-editor") === document.activeElement;
 }
