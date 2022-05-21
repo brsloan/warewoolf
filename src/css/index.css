@@ -1,3 +1,8 @@
+:root {
+  --main-font-size: 12pt;
+  --dialog-font-size: 14pt;
+}
+
 body {
 /*
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -18,6 +23,7 @@ body {
   float: left;
   /*color: #dddddd;*/
   height: 93vh;
+  font-size: var(--main-font-size);
 }
 
 .sidebar h1{
@@ -49,7 +55,7 @@ body {
 
 .ql-editor {
   line-height: 200%;
-  font-size: 12pt;
+  font-size: var(--main-font-size);
 }
 
 .activeChapter {
@@ -66,8 +72,10 @@ body {
   transform: translate(-50%, -50%);
   width: 50%;
   padding: 8px;
-  font-size: 14pt;
+  font-size: var(--dialog-font-size);
   text-align: center;
+  max-height: 100%;
+  overflow-x: hidden;
 }
 
 .popup-search-view {
@@ -81,7 +89,9 @@ body {
   display: none;
 }
 
-
+#chapter-list-sidebar {
+  overflow-x: hidden;
+}
 
 /*
 .popup input[type="button"]{
@@ -127,7 +137,7 @@ body {
 }
 
 .popup-shortcuts {
-  overflow-y: scroll;
+
 }
 
 .shortcuts-table {

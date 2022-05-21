@@ -75,7 +75,7 @@ function newProject(){
           if (k == "contents") return undefined;
           else if (k == "hasUnsavedChanges") return undefined;
           else return v;
-        });
+        }, '\t');
 
         fs.writeFileSync(proj.directory + proj.filename, fileString, 'utf8');
 
