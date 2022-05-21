@@ -26,7 +26,6 @@ const quillParser = require('quilljs-parser');
  var project = newProject();
  var userSettings = getUserSettings().load();
 
-
   initialize();
 
   function initialize(){
@@ -37,99 +36,25 @@ const quillParser = require('quilljs-parser');
     applyUserSettings();
   }
 
-  function applyUserSettings(){
-    document.documentElement.style.setProperty('--main-font-size', userSettings.fontSize + 'pt');
-    document.documentElement.style.setProperty('--dialog-font-size', (userSettings.fontSize + 2) + 'pt');
-    if(userSettings.typewriterMode)
-      enableTypewriterMode()
-    updateEditorWidth();
-  }
-
   function setUpQuills(){
     addBindingsToQuill(editorQuill);
     addBindingsToQuill(notesQuill);
     disableTabbingToEditors();
   }
 
-  function addBindingsToQuill(q){
-    q.keyboard.addBinding({
-      key: 'T',
-      shortKey: true,
-      handler: function(range, context) {
-        this.quill.format('align', 'center', 'user');
-        this.quill.format('header', 1, 'user');
-      }
-    });
-
-    for(let i = 1; i <= 4; i++){
-      q.keyboard.addBinding({
-        key: i.toString(),
-        shortKey: true,
-        handler: function(range, context) {
-          this.quill.format('header', i, 'user');
-        }
-      });
-    }
-
-    q.keyboard.addBinding({
-      key: 'L',
-      shortKey: true,
-      handler: function(range, context) {
-        this.quill.format('align', null, 'user');
-      }
-    });
-
-    q.keyboard.addBinding({
-      key: 'E',
-      shortKey: true,
-      handler: function(range, context) {
-        this.quill.format('align', 'center', 'user');
-      }
-    });
-
-    q.keyboard.addBinding({
-      key: 'R',
-      shortKey: true,
-      handler: function(range, context) {
-        this.quill.format('align', 'right', 'user');
-      }
-    });
-
-    q.keyboard.addBinding({
-      key: 'J',
-      shortKey: true,
-      handler: function(range, context) {
-        this.quill.format('align', 'justify', 'user');
-      }
-    });
-
-    q.keyboard.addBinding({
-      key: '0',
-      shortKey: true,
-      handler: function(range, context){
-        this.quill.format('header', null, 'user');
-      }
-    });
-
-    q.keyboard.addBinding({
-      key: 'k',
-      shortKey: true,
-      handler: function(range, context){
-        if(q.getFormat().strike)
-          q.format('strike', false, 'user');
-        else {
-          q.format('strike', true, 'user');
-        }
-      }
-    });
-
-  };
-
   function disableTabbingToEditors(){
     var editors = document.getElementsByClassName("ql-editor");
     for(let i=0; i < editors.length; i++){
       editors[i].tabIndex = -1;
     }
+  }
+
+  function applyUserSettings(){
+    document.documentElement.style.setProperty('--main-font-size', userSettings.fontSize + 'pt');
+    document.documentElement.style.setProperty('--dialog-font-size', (userSettings.fontSize + 2) + 'pt');
+    if(userSettings.typewriterMode)
+      enableTypewriterMode()
+    updateEditorWidth();
   }
 
   function updateEditorWidth(){
@@ -604,6 +529,81 @@ function openAProject(docPath) {
   notesQuill.on('text-change', function(delta, oldDelta, source){
     project.notes = notesQuill.getContents();
   });
+
+  function addBindingsToQuill(q){
+    q.keyboard.addBinding({
+      key: 'T',
+      shortKey: true,
+      handler: function(range, context) {
+        this.quill.format('align', 'center', 'user');
+        this.quill.format('header', 1, 'user');
+      }
+    });
+
+    for(let i = 1; i <= 4; i++){
+      q.keyboard.addBinding({
+        key: i.toString(),
+        shortKey: true,
+        handler: function(range, context) {
+          this.quill.format('header', i, 'user');
+        }
+      });
+    }
+
+    q.keyboard.addBinding({
+      key: 'L',
+      shortKey: true,
+      handler: function(range, context) {
+        this.quill.format('align', null, 'user');
+      }
+    });
+
+    q.keyboard.addBinding({
+      key: 'E',
+      shortKey: true,
+      handler: function(range, context) {
+        this.quill.format('align', 'center', 'user');
+      }
+    });
+
+    q.keyboard.addBinding({
+      key: 'R',
+      shortKey: true,
+      handler: function(range, context) {
+        this.quill.format('align', 'right', 'user');
+      }
+    });
+
+    q.keyboard.addBinding({
+      key: 'J',
+      shortKey: true,
+      handler: function(range, context) {
+        this.quill.format('align', 'justify', 'user');
+      }
+    });
+
+    q.keyboard.addBinding({
+      key: '0',
+      shortKey: true,
+      handler: function(range, context){
+        this.quill.format('header', null, 'user');
+      }
+    });
+
+    q.keyboard.addBinding({
+      key: 'k',
+      shortKey: true,
+      handler: function(range, context){
+        if(q.getFormat().strike)
+          q.format('strike', false, 'user');
+        else {
+          q.format('strike', true, 'user');
+        }
+      }
+    });
+
+  };
+
 
   document.addEventListener ("keydown", function (e) {
       if(e.ctrlKey && e.key === "ArrowLeft"){
