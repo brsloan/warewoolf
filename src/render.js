@@ -24,12 +24,16 @@ const quillParser = require('quilljs-parser');
   });
 
  var project = newProject();
+ var userSettings = getUserSettings().load();
 
   initialize();
 
   function initialize(){
     setUpQuills();
-    setProject(convertFilepath(__dirname) + "/examples/Frankenstein/Frankenstein.woolf");
+    //Load last project opened, or if none logged, load example project
+    var initialProject = userSettings.lastProject ? userSettings.lastProject : convertFilepath(__dirname) + "/examples/Frankenstein/Frankenstein.woolf";
+    setProject(initialProject);
+    applyUserSettings();
   }
 
   function setUpQuills(){
@@ -38,82 +42,26 @@ const quillParser = require('quilljs-parser');
     disableTabbingToEditors();
   }
 
-  function addBindingsToQuill(q){
-    q.keyboard.addBinding({
-      key: 'T',
-      shortKey: true,
-      handler: function(range, context) {
-        this.quill.format('align', 'center', 'user');
-        this.quill.format('header', 1, 'user');
-      }
-    });
-
-    for(let i = 1; i <= 4; i++){
-      q.keyboard.addBinding({
-        key: i.toString(),
-        shortKey: true,
-        handler: function(range, context) {
-          this.quill.format('header', i, 'user');
-        }
-      });
-    }
-
-    q.keyboard.addBinding({
-      key: 'L',
-      shortKey: true,
-      handler: function(range, context) {
-        this.quill.format('align', null, 'user');
-      }
-    });
-
-    q.keyboard.addBinding({
-      key: 'E',
-      shortKey: true,
-      handler: function(range, context) {
-        this.quill.format('align', 'center', 'user');
-      }
-    });
-
-    q.keyboard.addBinding({
-      key: 'R',
-      shortKey: true,
-      handler: function(range, context) {
-        this.quill.format('align', 'right', 'user');
-      }
-    });
-
-    q.keyboard.addBinding({
-      key: 'J',
-      shortKey: true,
-      handler: function(range, context) {
-        this.quill.format('align', 'justify', 'user');
-      }
-    });
-
-    q.keyboard.addBinding({
-      key: '0',
-      shortKey: true,
-      handler: function(range, context){
-        this.quill.format('header', null, 'user');
-      }
-    });
-
-    //Quill does not support minus key binding so do it directly
-    q.container.addEventListener("keydown", function(e){
-      if(e.ctrlKey && e.key === "-"){
-        if(q.getFormat().strike)
-          q.format('strike', false, 'user');
-        else {
-          q.format('strike', true, 'user');
-        }
-      }
-    });
-  };
-
   function disableTabbingToEditors(){
     var editors = document.getElementsByClassName("ql-editor");
     for(let i=0; i < editors.length; i++){
       editors[i].tabIndex = -1;
+    }
+  }
+
+  function applyUserSettings(){
+    document.documentElement.style.setProperty('--main-font-size', userSettings.fontSize + 'pt');
+    document.documentElement.style.setProperty('--dialog-font-size', (userSettings.fontSize + 2) + 'pt');
+    if(userSettings.typewriterMode)
+      enableTypewriterMode()
+    updateEditorWidth();
+  }
+
+  function updateEditorWidth(){
+    document.getElementById('writing-field').style.width = userSettings.editorWidth + "%";
+    var sidebars = document.getElementsByClassName('sidebar');
+    for(let i=0; i < sidebars.length; i++){
+      sidebars[i].style.width = ((100 - userSettings.editorWidth) / 2) + "%";
     }
   }
 
@@ -142,39 +90,6 @@ const quillParser = require('quilljs-parser');
     });
   }
 
-
-  function requestProjectTitle(callback){
-    var popup = document.createElement("div");
-    popup.classList.add("popup");
-    var titleForm = document.createElement("form");
-    var message = document.createElement("label");
-    message.innerText = "What is the title of this project?";
-    message.for = "title-input";
-    titleForm.appendChild(message);
-    var titleInput = document.createElement("input");
-    titleInput.type = "text";
-    titleInput.placeholder = "Mrs. Dalloway 2: Back In Action";
-    titleInput.id = "title-input";
-    titleForm.appendChild(titleInput);
-    var createButton = document.createElement("input");
-    createButton.type = "submit";
-    createButton.value = "Create"
-    titleForm.onsubmit = function(){
-      var title;
-      if(titleInput.value != "")
-        title = titleInput.value;
-      else
-        title = "New Project";
-      popup.remove();
-      callback(title);
-    }
-
-    titleForm.appendChild(createButton);
-    popup.appendChild(titleForm);
-    document.body.appendChild(popup);
-    titleInput.focus();
-  }
-
   function updateFileList(){
     var list = document.getElementById("chapter-list");
 
@@ -199,11 +114,14 @@ const quillParser = require('quilljs-parser');
         listChap.ondblclick = function () {
           changeChapterTitle(this.dataset.chapIndex);
         };
-        if (chapIndex == project.activeChapterIndex)
-          listChap.classList.add("activeChapter");
         if (chap.hasUnsavedChanges == true)
           listChap.innerHTML += "*";
         list.appendChild(listChap);
+        if(chapIndex == project.activeChapterIndex){
+          listChap.classList.add("activeChapter");
+          document.getElementById('chapter-list-sidebar').scrollTop = listChap.offsetTop;
+        }
+
       });
     }
 
@@ -477,7 +395,128 @@ const quillParser = require('quilljs-parser');
     }
   };
 
-  //Event Handlers
+  function enableSearchView(){
+    document.getElementById("chapter-list-sidebar").classList.add("sidebar-search-view");
+    document.getElementById("project-notes").classList.add("sidebar-search-view");
+    document.getElementById("writing-field").classList.add("writing-field-search-view");
+  }
+
+  function disableSearchView(){
+    document.getElementById("chapter-list-sidebar").classList.remove("sidebar-search-view");
+    document.getElementById("project-notes").classList.remove("sidebar-search-view");
+    document.getElementById("writing-field").classList.remove("writing-field-search-view");
+  }
+
+  function scrollChapterListToActiveChapter(){
+    document.getElementById('chapter-list-sidebar')
+    .scrollTop = document.querySelector('.activeChapter')
+    .offsetTop;
+  }
+
+  function changeRootFontSize(rootProp, amount){
+    var currentSize = parseInt(
+      getComputedStyle(document.documentElement)
+      .getPropertyValue(rootProp).replace('pt','')
+    );
+    var newSize = currentSize + amount;
+    document.documentElement.style.setProperty(rootProp, newSize + 'pt');
+    return newSize;
+  }
+
+function typewriterScroll(){
+  if(editorQuill.hasFocus()){
+    var viewTop = editorQuill.getBounds(editorQuill.getSelection().index).top;
+    var toScroll = viewTop - editorQuill.getBounds(0).top;
+    var editorDiv = document.querySelector('.ql-editor');
+    var heightOffset = Math.floor(editorDiv.clientHeight * 0.75);
+    editorDiv.scrollTop = toScroll - heightOffset;
+  }
+}
+
+function enableTypewriterMode(){
+  editorQuill.on('editor-change', typewriterScroll);
+}
+
+function disableTypewriterMode(){
+  editorQuill.off('editor-change', typewriterScroll);
+}
+
+function increaseEditorWidthSetting(){
+  userSettings.editorWidth++;
+  updateEditorWidth();
+  userSettings.save();
+}
+
+function descreaseEditorWidthSetting(){
+  userSettings.editorWidth--;
+  updateEditorWidth();
+  userSettings.save();
+}
+
+
+function splitChapter(){
+  var selection = editorQuill.getSelection(true);
+  if(selection){
+      var newChap = editorQuill.getContents(selection.index);
+      console.log("deleting " + selection.index + " to " + editorQuill.getLength());
+      editorQuill.deleteText(selection.index, editorQuill.getLength(), 'user');
+      addImportedChapter(newChap, "untitled");
+      changeChapterTitle(project.activeChapterIndex);
+  }
+}
+
+
+function convertFirstLinesToTitles(){
+  var tempQuill = getTempQuill();
+
+  project.chapters.forEach(function(chap){
+    var chapContents = chap.contents ? chap.contents : chap.getFile();
+    tempQuill.setContents(chapContents);
+    tempQuill.formatLine(1, 1, 'header', 1);
+    tempQuill.formatLine(1, 1, 'align', 'center');
+    chap.contents = tempQuill.getContents();
+    chap.hasUnsavedChanges = true;
+  });
+
+}
+
+function saveProjectAs(docPath) {
+  const options = {
+    title: 'Save project as...',
+    defaultPath: docPath,
+    filters: [
+      { name: 'WareWoolf Projects', extensions: ['woolf'] }
+    ]
+  };
+  var filepath = dialog.showSaveDialogSync(options);
+  if (filepath)
+    project.saveAs(filepath);
+  updateFileList();
+  updateTitleBar();
+}
+
+function openAProject(docPath) {
+  //Temp override doc path for testing in examples folder
+  docPath = "./examples";
+
+  const options = {
+    title: 'Open project...',
+    defaultPath: docPath,
+    filters: [
+      { name: 'WareWoolf Projects', extensions: ['woolf'] }
+    ]
+  };
+  var filepath = dialog.showOpenDialogSync(options);
+  if (filepath) {
+    project.loadFile(filepath[0]);
+    displayProject();
+    userSettings.lastProject = filepath[0];
+    userSettings.save();
+  }
+}
+
+///////////////////////////////////////////////////////////////////
+  //Event Handlers ///////////////////////////////////////////////
 
   editorQuill.on('text-change', function(delta, oldDelta, source) {
     if(source == "user"){
@@ -490,6 +529,81 @@ const quillParser = require('quilljs-parser');
   notesQuill.on('text-change', function(delta, oldDelta, source){
     project.notes = notesQuill.getContents();
   });
+
+  function addBindingsToQuill(q){
+    q.keyboard.addBinding({
+      key: 'T',
+      shortKey: true,
+      handler: function(range, context) {
+        this.quill.format('align', 'center', 'user');
+        this.quill.format('header', 1, 'user');
+      }
+    });
+
+    for(let i = 1; i <= 4; i++){
+      q.keyboard.addBinding({
+        key: i.toString(),
+        shortKey: true,
+        handler: function(range, context) {
+          this.quill.format('header', i, 'user');
+        }
+      });
+    }
+
+    q.keyboard.addBinding({
+      key: 'L',
+      shortKey: true,
+      handler: function(range, context) {
+        this.quill.format('align', null, 'user');
+      }
+    });
+
+    q.keyboard.addBinding({
+      key: 'E',
+      shortKey: true,
+      handler: function(range, context) {
+        this.quill.format('align', 'center', 'user');
+      }
+    });
+
+    q.keyboard.addBinding({
+      key: 'R',
+      shortKey: true,
+      handler: function(range, context) {
+        this.quill.format('align', 'right', 'user');
+      }
+    });
+
+    q.keyboard.addBinding({
+      key: 'J',
+      shortKey: true,
+      handler: function(range, context) {
+        this.quill.format('align', 'justify', 'user');
+      }
+    });
+
+    q.keyboard.addBinding({
+      key: '0',
+      shortKey: true,
+      handler: function(range, context){
+        this.quill.format('header', null, 'user');
+      }
+    });
+
+    q.keyboard.addBinding({
+      key: 'k',
+      shortKey: true,
+      handler: function(range, context){
+        if(q.getFormat().strike)
+          q.format('strike', false, 'user');
+        else {
+          q.format('strike', true, 'user');
+        }
+      }
+    });
+
+  };
+
 
   document.addEventListener ("keydown", function (e) {
       if(e.ctrlKey && e.key === "ArrowLeft"){
@@ -509,7 +623,33 @@ const quillParser = require('quilljs-parser');
         disableSearchView();
         editorQuill.focus();
       }
+      else if(e.ctrlKey && e.key === "="){
+        userSettings.fontSize = changeRootFontSize('--main-font-size', 1);
+        userSettings.save();
+        changeRootFontSize('--dialog-font-size', 1);
+        scrollChapterListToActiveChapter();
+      }
+      else if(e.ctrlKey && e.key === "-"){
+        userSettings.fontSize = changeRootFontSize('--main-font-size', -1);
+        userSettings.save();
+        changeRootFontSize('--dialog-font-size', -1);
+        scrollChapterListToActiveChapter();
+      }
+      else if(e.ctrlKey && e.altKey && e.key === "t"){
+        if(userSettings.typewriterMode){
+          disableTypewriterMode();
+          userSettings.typewriterMode = false;
+          userSettings.save();
+        }
+        else {
+          enableTypewriterMode();
+          userSettings.typewriterMode = true;
+          userSettings.save();
+        }
+
+      }
   } );
+
 
   document.getElementById('editor-container').addEventListener('keydown', function(e){
     if (e.ctrlKey  && e.shiftKey && e.key === "ArrowUp") {
@@ -531,6 +671,12 @@ const quillParser = require('quilljs-parser');
     else if(e.ctrlKey && e.key === "ArrowDown"){
       stopDefaultPropagation(e);
       displayNextChapter();
+    }
+    else if(e.ctrlKey && e.key === ","){
+      descreaseEditorWidthSetting();
+    }
+    else if(e.ctrlKey && e.key === "."){
+      increaseEditorWidthSetting();
     }
   });
 
@@ -628,81 +774,6 @@ const quillParser = require('quilljs-parser');
     showOutliner();
   });
 
-function editorHasFocus(){
-  return document.querySelector(".ql-editor") === document.activeElement;
-}
-
-function splitChapter(){
-  var selection = editorQuill.getSelection(true);
-  if(selection){
-      var newChap = editorQuill.getContents(selection.index);
-      console.log("deleting " + selection.index + " to " + editorQuill.getLength());
-      editorQuill.deleteText(selection.index, editorQuill.getLength(), 'user');
-      addImportedChapter(newChap, "untitled");
-      changeChapterTitle(project.activeChapterIndex);
-  }
-}
-
-
-function convertFirstLinesToTitles(){
-  var tempQuill = getTempQuill();
-
-  project.chapters.forEach(function(chap){
-    var chapContents = chap.contents ? chap.contents : chap.getFile();
-    tempQuill.setContents(chapContents);
-    tempQuill.formatLine(1, 1, 'header', 1);
-    tempQuill.formatLine(1, 1, 'align', 'center');
-    chap.contents = tempQuill.getContents();
-    chap.hasUnsavedChanges = true;
-  });
-
-}
-
-function saveProjectAs(docPath) {
-  const options = {
-    title: 'Save project as...',
-    defaultPath: docPath,
-    filters: [
-      { name: 'WareWoolf Projects', extensions: ['woolf'] }
-    ]
-  };
-  var filepath = dialog.showSaveDialogSync(options);
-  if (filepath)
-    project.saveAs(filepath);
-  updateFileList();
-  updateTitleBar();
-}
-
-function openAProject(docPath) {
-  //Temp override doc path for testing in examples folder
-  docPath = "./examples";
-
-  const options = {
-    title: 'Open project...',
-    defaultPath: docPath,
-    filters: [
-      { name: 'WareWoolf Projects', extensions: ['woolf'] }
-    ]
-  };
-  var filepath = dialog.showOpenDialogSync(options);
-  if (filepath) {
-    project.loadFile(filepath[0]);
-    displayProject();
-  }
-}
-
-function enableSearchView(){
-  document.getElementById("chapter-list-sidebar").classList.add("sidebar-search-view");
-  document.getElementById("project-notes").classList.add("sidebar-search-view");
-  document.getElementById("writing-field").classList.add("writing-field-search-view");
-}
-
-function disableSearchView(){
-  document.getElementById("chapter-list-sidebar").classList.remove("sidebar-search-view");
-  document.getElementById("project-notes").classList.remove("sidebar-search-view");
-  document.getElementById("writing-field").classList.remove("writing-field-search-view");
-}
-
 //**** utils ***/
 
 function closePopups(){
@@ -745,4 +816,8 @@ function createButton(text){
   btn.innerHTML = text;
   btn.type = "button";
   return btn;
+}
+
+function editorHasFocus(){
+  return document.querySelector(".ql-editor") === document.activeElement;
 }
