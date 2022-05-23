@@ -53,13 +53,13 @@ function showImportOptions(docPath){
   importForm.appendChild(convertTabsCheck);
 
   var tabsStrLabel = document.createElement("label");
-  tabsStrLabel.innerText = "Tab string (default 8 spaces): ";
+  tabsStrLabel.innerText = "Tab string (default 4 spaces): ";
   tabsStrLabel.for = "tabs-str-input";
   importForm.appendChild(tabsStrLabel);
 
   var tabsStrInput = document.createElement("input");
   tabsStrInput.type = "text";
-  tabsStrInput.value = "        ";
+  tabsStrInput.value = "    ";
   tabsStrInput.id = "tabs-str-input";
   importForm.appendChild(tabsStrInput);
 
