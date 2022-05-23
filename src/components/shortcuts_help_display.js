@@ -31,7 +31,7 @@ function showShortcutsHelp(){
           ['Right Align', 'Ctrl + R'],
           ['Center Align', 'Ctrl + E'],
           ['Justify Align', 'Ctrl + J'],
-          ['Strikethrough', 'Ctrl + -'],
+          ['Strikethrough', 'Ctrl + K'],
           ['Italics', 'Ctrl + I'],
           ['Bold', 'Ctrl + B'],
           ['Underline', 'Ctrl + U']
@@ -42,7 +42,16 @@ function showShortcutsHelp(){
         shortcuts: [
           ['Open/Navigate File Menu', 'Alt, then arrow keys'],
           ['Close Tool Dialog', "Escape"],
-          ['Any Button With A Bold/\rUnderlined Letter', 'Alt + (that letter)']
+          ['Any Button With A Bold/\rUnderlined Letter', 'Alt + (that letter)'],
+          ['Move Between Inputs', 'Tab']
+        ]
+      },
+      {
+        title: "Display",
+        shortcuts: [
+          ['Adjust Editor Width', 'Ctrl + < or >'],
+          ['Adjust Font Size', 'Ctrl + - or +'],
+          ['Typewriter Mode', 'Ctrl + Alt + T']
         ]
       }
     ];
@@ -80,4 +89,5 @@ function showShortcutsHelp(){
 
     document.body.appendChild(popup);
     closeBtn.focus();
+    popup.scrollTop = 0;
 }
