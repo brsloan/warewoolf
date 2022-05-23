@@ -83,7 +83,7 @@ function showImportOptions(docPath){
     if(convertItalicsCheck.checked)
       convertMarkedItalics(italicsStrInput.value);
     if(convertTabsCheck.checked)
-      replaceAllBackground(tabsStrInput.value, '\t', false);
+      convertMarkedTabs(tabsStrInput.value);
     displayChapterByIndex(project.activeChapterIndex);
     closePopups();
   };
@@ -91,8 +91,6 @@ function showImportOptions(docPath){
   popup.appendChild(importForm);
   document.body.appendChild(popup);
 }
-
-
 
 function getImportFilepaths(docPath){
     const options = {

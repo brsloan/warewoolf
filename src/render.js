@@ -515,6 +515,10 @@ function openAProject(docPath) {
   }
 }
 
+function convertMarkedTabs(marker){
+  replaceAllBackground(marker, '\t', false);
+}
+
 ///////////////////////////////////////////////////////////////////
   //Event Handlers ///////////////////////////////////////////////
 
@@ -772,6 +776,10 @@ function openAProject(docPath) {
 
   ipcRenderer.on('outliner-clicked', function(e){
     showOutliner();
+  });
+
+  ipcRenderer.on('convert-tabs-clicked', function(e){
+    showTabOptions();
   });
 
 //**** utils ***/

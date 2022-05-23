@@ -215,6 +215,12 @@ const createWindow = () => {
             mainWindow.webContents.send('convert-italics-clicked');
           }
         },
+        {
+          label: 'Convert Marked Tabs',
+          click(item, focusWindow){
+            mainWindow.webContents.send('convert-tabs-clicked');
+          }
+        },
         { type: 'separator' },
         {
           label: 'Break Headings Into Chapters',
