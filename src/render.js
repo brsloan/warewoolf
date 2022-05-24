@@ -198,6 +198,7 @@ function changeChapterTitle(ind){
     chap = project.chapters[ind];
 
   var listName = document.querySelector("[data-chap-index='" + ind + "']");
+  removeElementsByClass('name-box');
   var nameBox = document.createElement("input");
   nameBox.type = "text";
   nameBox.classList.add("name-box");
@@ -206,33 +207,21 @@ function changeChapterTitle(ind){
       stopDefaultPropagation(e);
       chap.title = nameBox.value;
       chap.hasUnsavedChanges = true;
-      nameBox.remove();
+      removeElementsByClass('name-box');
       updateFileList();
       editorQuill.focus();
     }
     else if (e.key === "Escape"){
-      nameBox.remove();
+      removeElementsByClass('name-box');
       updateFileList();
       editorQuill.focus();
     }
   });
 
-  //TODO: Cannot for the life of me figure out how to make the goddam thing
-  //disappaer on blur without introducing errors when the updateFileList
-  //clears the old nodes before creating the new ones so fuck it
-  /*
-  var blur = false;
   nameBox.onblur = function(){
-    if(!blur){
-      blur = true;
-      //nameBox.remove();
-      nameBox.style.display = "none";
+      removeElementsByClass('name-box');
       updateFileList();
-    }
-
-
-    //editorQuill.focus();
-  }; */
+  }
 
   listName.firstChild.remove();
   listName.appendChild(nameBox);
@@ -827,6 +816,7 @@ function closePopups(){
 function removeElementsByClass(className){
   var elements = document.getElementsByClassName(className);
   while(elements.length > 0){
+      elements[0].onblur = null;
       elements[0].parentNode.removeChild(elements[0]);
   }
 }
