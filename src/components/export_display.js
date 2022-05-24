@@ -55,7 +55,7 @@ function showExportOptions(docPath){
 
     popup.appendChild(exportForm);
     document.body.appendChild(popup);
-
+    exportBtn.focus();
   }
 
   function getExportFilePath(options, docPath){

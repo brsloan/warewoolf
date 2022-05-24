@@ -48,4 +48,5 @@ function showProperties(){
 
     popup.appendChild(propForm);
     document.body.appendChild(popup);
+    titleInput.focus();
   }

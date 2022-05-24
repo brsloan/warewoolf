@@ -103,4 +103,5 @@ function showImportOptions(docPath){
 
   popup.appendChild(importForm);
   document.body.appendChild(popup);
+  importBtn.focus();
 }

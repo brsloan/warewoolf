@@ -69,6 +69,7 @@ function showCompileOptions(docPath){
 
     popup.appendChild(compileForm);
     document.body.appendChild(popup);
+    typeSelect.focus();
 
   }
 

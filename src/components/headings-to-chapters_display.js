@@ -39,4 +39,5 @@ function showBreakHeadingsOptions(){
 
   popup.appendChild(breakHeadingsForm);
   document.body.appendChild(popup);
+  breakHeadingsBtn.focus();
 }
