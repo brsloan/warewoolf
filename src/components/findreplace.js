@@ -1,6 +1,6 @@
 function find(str, caseSensitive = true, startingIndex, searchAllChapters){
     var index = -1;
-    
+
     if(str){
         var totalText = editorQuill.getText();
 
@@ -38,66 +38,16 @@ function find(str, caseSensitive = true, startingIndex, searchAllChapters){
                             result = 1;
                         }
                     }
-                }   
+                }
             } else {
                 if(startingIndex != 0){
                     index =  find(str, caseSensitive, 0);
                 }
-                   
-            }   
+
+            }
         }
     }
     return index;
-}
-
-function replace(newStr){
-    var selectedRange = editorQuill.getSelection(true);
-    if(selectedRange.length > 0){
-        editorQuill.deleteText(selectedRange.index, selectedRange.length, 'user');
-        editorQuill.insertText(selectedRange.index, newStr, 'user');
-    }
-}
-
-function replaceAll(oldStr, newStr, caseSensitive, searchAllChapters){
-    var res = 1;
-    var counter = 0;
-    while(res > 0){
-        res = find(oldStr, caseSensitive, 0, searchAllChapters);
-        if(res > 0){
-            replace(newStr);
-            counter++;
-        }       
-    }
-    return counter;
-}
-
-function replaceAllBackground(oldStr, newStr, caseSensitive){
-    var tempQuill = getTempQuill();
-    var counter = 0;
-
-    project.chapters.forEach(function(chap){
-        var chapContents = chap.contents ? chap.contents : chap.getFile();
-        tempQuill.setContents(chapContents);
-        var text = tempQuill.getText();
-
-        var foundIndex = 0;
-        var startingIndex = 0;
-
-        while(foundIndex > -1){
-            foundIndex = findInText(oldStr, text, caseSensitive, startingIndex);
-            if(foundIndex > -1){
-                counter++;
-                tempQuill.deleteText(foundIndex, oldStr.length);
-                tempQuill.insertText(foundIndex, newStr);
-                chap.contents = tempQuill.getContents();
-                chap.hasUnsavedChanges = true;
-                startingIndex = foundIndex + newStr.length;
-                text = tempQuill.getText();
-            }
-        }
-    });
-
-    return counter;
 }
 
 function findInText(str, text, caseSensitive, startingIndex){
@@ -111,4 +61,61 @@ function findInText(str, text, caseSensitive, startingIndex){
     index = text.indexOf(str, startingIndex);
 
     return index;
+}
+
+function replace(newStr){
+    var selectedRange = editorQuill.getSelection(true);
+    if(selectedRange.length > 0){
+        editorQuill.deleteText(selectedRange.index, selectedRange.length, 'user');
+        editorQuill.insertText(selectedRange.index, newStr, 'user');
+    }
+}
+
+function replaceAllInAllChapters(oldStr, newStr, caseSensitive){
+  var numReplaced = 0;
+
+  project.chapters.forEach(function(chap){
+    var changed = replaceAllInChapter(oldStr, newStr, caseSensitive, chap);
+    numReplaced += changed;
+  });
+
+  return numReplaced;
+}
+
+function replaceAllInChapter(oldStr, newStr, caseSensitive, chap){
+  var result = replaceAllInDelta(oldStr, newStr, caseSensitive, chap.contents ? chap.contents : chap.getFile());
+  if(result.changed > 0){
+    chap.contents = result.delta;
+    chap.hasUnsavedChanges = true;
+  }
+  return result.changed;
+}
+
+function replaceAllInDelta(oldStr, newStr, caseSensitive, delt){
+    var tempQuill = getTempQuill();
+    var counter = 0;
+
+    tempQuill.setContents(delt);
+    var text = tempQuill.getText();
+
+    var foundIndex = 0;
+    var startingIndex = 0;
+
+    while(foundIndex > -1){
+        foundIndex = findInText(oldStr, text, caseSensitive, startingIndex);
+        if(foundIndex > -1){
+            counter++;
+            tempQuill.deleteText(foundIndex, oldStr.length);
+            tempQuill.insertText(foundIndex, newStr);
+            startingIndex = foundIndex + newStr.length;
+            text = tempQuill.getText();
+        }
+    }
+
+    delt = tempQuill.getContents();
+
+    return {
+      changed: counter,
+      delta: delt
+    };
 }

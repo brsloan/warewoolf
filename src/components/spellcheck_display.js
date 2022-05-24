@@ -100,7 +100,7 @@ function showSpellcheck(startingIndex = 0, wordsToIgnore = []){
         selectedReplacement = customInput;
 
       if(invalidWord && selectedReplacement != null){
-        replaceAllBackground(invalidWord.word, selectedReplacement.value, true);
+        replaceAllInAllChapters(invalidWord.word, selectedReplacement.value, true, project.chapters);
         displayChapterByIndex(project.activeChapterIndex);
         ignoreBtn.click();
       }

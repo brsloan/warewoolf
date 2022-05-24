@@ -77,13 +77,26 @@ function showImportOptions(docPath){
   importForm.appendChild(cancelBtn);
 
   importForm.onsubmit = function(){
-    getImportFilepaths(docPath);
-    if(convertFirstLinesCheck.checked)
-      convertFirstLinesToTitles();
-    if(convertItalicsCheck.checked)
-      convertMarkedItalics(italicsStrInput.value);
-    if(convertTabsCheck.checked)
-      convertMarkedTabs(tabsStrInput.value);
+    var filepaths = getImportFilepaths(docPath);
+    //importPlainText(filepaths);
+    console.log(filepaths);
+    try{
+      importFiles(filepaths, {
+        convertFirstLines: convertFirstLinesCheck.checked,
+        convertItalics: {
+          convert: convertItalicsCheck.checked,
+          marker: italicsStrInput.value
+        },
+        convertTabs: {
+          convert: convertTabsCheck.checked,
+          marker: tabsStrInput.value
+        }
+      });
+    }
+    catch(err){
+      console.log(err);
+    }
+
     displayChapterByIndex(project.activeChapterIndex);
     closePopups();
   };
@@ -91,17 +104,3 @@ function showImportOptions(docPath){
   popup.appendChild(importForm);
   document.body.appendChild(popup);
 }
-
-function getImportFilepaths(docPath){
-    const options = {
-      title: 'Import files...',
-      defaultPath: docPath,
-      properties: ['openFile', 'multiSelections'],
-      filters: [
-        { name: 'Text Files', extensions: ['txt'] }
-      ]
-    };
-    var filepaths = dialog.showOpenDialogSync(options);
-    if(filepaths)
-      importFiles(filepaths);
-  }

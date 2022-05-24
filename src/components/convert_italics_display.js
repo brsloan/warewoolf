@@ -29,7 +29,7 @@ function showItalicsOptions(){
     italicsForm.appendChild(cancelBtn);
 
     italicsForm.onsubmit = function(){
-      convertMarkedItalics(italicsStrInput.value);
+      convertMarkedItalicsForAllChapters(italicsStrInput.value);
       displayChapterByIndex(project.activeChapterIndex);
       closePopups();
     };

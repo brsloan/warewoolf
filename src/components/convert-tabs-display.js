@@ -29,7 +29,7 @@ function showTabOptions(){
     tabForm.appendChild(cancelBtn);
 
     tabForm.onsubmit = function(){
-      convertMarkedTabs(tabStrInput.value);
+      convertMarkedTabsForAllChapters(tabStrInput.value);
       displayChapterByIndex(project.activeChapterIndex);
       closePopups();
     };

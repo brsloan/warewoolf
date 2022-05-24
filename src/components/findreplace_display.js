@@ -71,7 +71,14 @@ function showFindReplace(){
     replaceAllBtn.id = "replace-all-btn";
     replaceAllBtn.onclick = function(){
       replacementCount.innerText = "";
-      var numReplaced = replaceAll(findIn.value, replaceIn.value, caseSensitive.checked, inAllChapters.checked);
+      var numReplaced = 0;
+
+      if(inAllChapters.checked)
+        numReplaced = replaceAllInAllChapters(findIn.value, replaceIn.value, caseSensitive.checked);
+      else {
+        numReplaced = replaceAllInChapter(findIn.value, replaceIn.value, caseSensitive.checked, project.getActiveChapter());
+      }
+      displayChapterByIndex(project.activeChapterIndex);
       replacementCount.innerText = numReplaced + " instances replaced!";
     };
     replaceAllBtn.accessKey = "a";
