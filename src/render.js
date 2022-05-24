@@ -81,15 +81,6 @@ function displayProject(){
   editorQuill.focus();
 }
 
-function createNewProject(){
-  project = newProject();
-  requestProjectTitle(function(title){
-    project.title = title;
-    addNewChapter();
-    displayProject();
-  });
-}
-
 function updateFileList(){
   var list = document.getElementById("chapter-list");
 
@@ -190,45 +181,6 @@ function displayInitialChapter(){
 
 //User Actions
 
-function changeChapterTitle(ind){
-  var chap;
-  if(indexIsTrash(ind))
-    chap = project.trash[ind - project.chapters.length];
-  else
-    chap = project.chapters[ind];
-
-  var listName = document.querySelector("[data-chap-index='" + ind + "']");
-  removeElementsByClass('name-box');
-  var nameBox = document.createElement("input");
-  nameBox.type = "text";
-  nameBox.classList.add("name-box");
-  nameBox.addEventListener("keydown", function(e){
-    if(e.key === "Enter" || e.key === "Tab"){
-      stopDefaultPropagation(e);
-      chap.title = nameBox.value;
-      chap.hasUnsavedChanges = true;
-      removeElementsByClass('name-box');
-      updateFileList();
-      editorQuill.focus();
-    }
-    else if (e.key === "Escape"){
-      removeElementsByClass('name-box');
-      updateFileList();
-      editorQuill.focus();
-    }
-  });
-
-  nameBox.onblur = function(){
-      removeElementsByClass('name-box');
-      updateFileList();
-  }
-
-  listName.firstChild.remove();
-  listName.appendChild(nameBox);
-  nameBox.focus();
-
-}
-
 function displayPreviousChapter(){
   if(project.activeChapterIndex > 0)
     displayChapterByIndex(project.activeChapterIndex - 1);
@@ -238,6 +190,108 @@ function displayNextChapter(){
   if(project.activeChapterIndex < project.chapters.length - 1 + project.trash.length)
     displayChapterByIndex(project.activeChapterIndex + 1);
 }
+
+function moveChapUp(chapInd){
+  if(chapInd > 0 && chapInd < project.chapters.length){
+    var chap = project.chapters.splice(chapInd, 1)[0];
+    project.chapters.splice(chapInd - 1, 0, chap);
+    project.activeChapterIndex--;
+  }
+  else if(chapInd > project.chapters.length){
+    var trashChap = project.trash.splice(chapInd - project.chapters.length, 1)[0];
+    project.trash.splice(chapInd - project.chapters.length - 1, 0, trashChap);
+    project.activeChapterIndex--;
+  }
+  updateFileList();
+}
+
+function moveChapDown(chapInd){
+  if(chapInd < project.chapters.length - 1){
+    var chap = project.chapters.splice(chapInd, 1)[0];
+    project.chapters.splice(chapInd + 1, 0, chap);
+    project.activeChapterIndex++;
+  }
+  else if(chapInd > project.chapters.length - 1 && chapInd < project.chapters.length + project.trash.length - 1){
+    var trashChap = project.trash.splice(chapInd - project.chapters.length, 1)[0];
+    project.trash.splice(chapInd - project.chapters.length + 1, 0, trashChap);
+    project.activeChapterIndex++;
+  }
+  updateFileList();
+}
+
+
+function createNewProject(){
+  project = newProject();
+  requestProjectTitle(function(title){
+    project.title = title;
+    addNewChapter();
+    displayProject();
+  });
+}
+
+function addNewChapter(){
+  var newChap = newChapter();
+  newChap.hasUnsavedChanges = true;
+  newChap.contents = {"ops":[{"insert":"\n"}]};
+  project.chapters.splice(project.activeChapterIndex + 1, 0, newChap);
+  updateFileList();
+  var thisIndex = project.chapters.indexOf(newChap);
+  displayChapterByIndex(thisIndex);
+  editorQuill.enable();
+  changeChapterTitle(thisIndex);
+}
+
+function saveProject(docPath){
+  if(project.filename != ""){
+    clearCurrentChapterIfUnchanged();
+    project.saveFile();
+    updateFileList();
+  }
+  else
+    saveProjectAs(docPath);
+}
+
+function saveProjectAs(docPath) {
+  const options = {
+    title: 'Save project as...',
+    defaultPath: docPath,
+    filters: [
+      { name: 'WareWoolf Projects', extensions: ['woolf'] }
+    ]
+  };
+  var filepath = dialog.showSaveDialogSync(options);
+  if (filepath)
+    project.saveAs(filepath);
+  updateFileList();
+  updateTitleBar();
+}
+
+function openAProject(docPath) {
+  //Temp override doc path for testing in examples folder
+  docPath = "./examples";
+
+  const options = {
+    title: 'Open project...',
+    defaultPath: docPath,
+    filters: [
+      { name: 'WareWoolf Projects', extensions: ['woolf'] }
+    ]
+  };
+  var filepath = dialog.showOpenDialogSync(options);
+  if (filepath) {
+    project.loadFile(filepath[0]);
+    displayProject();
+    userSettings.lastProject = filepath[0];
+    userSettings.save();
+  }
+}
+
+function clearCurrentChapterIfUnchanged(){
+  var ch = project.getActiveChapter();
+  if(ch && (ch.hasUnsavedChanges == undefined || ch.hasUnsavedChanges == false)){
+    ch.contents = null;
+  }
+};
 
 function moveToTrash(ind){
   if(indexIsTrash(ind) == false){
@@ -327,62 +381,57 @@ function restoreFromTrash(ind){
   }
 }
 
-function addNewChapter(){
-  var newChap = newChapter();
-  newChap.hasUnsavedChanges = true;
-  newChap.contents = {"ops":[{"insert":"\n"}]};
-  project.chapters.splice(project.activeChapterIndex + 1, 0, newChap);
-  updateFileList();
-  var thisIndex = project.chapters.indexOf(newChap);
-  displayChapterByIndex(thisIndex);
-  editorQuill.enable();
-  changeChapterTitle(thisIndex);
-}
 
-function saveProject(docPath){
-  if(project.filename != ""){
-    clearCurrentChapterIfUnchanged();
-    project.saveFile();
-    updateFileList();
-  }
+function changeChapterTitle(ind){
+  var chap;
+  if(indexIsTrash(ind))
+    chap = project.trash[ind - project.chapters.length];
   else
-    saveProjectAs(docPath);
+    chap = project.chapters[ind];
+
+  var listName = document.querySelector("[data-chap-index='" + ind + "']");
+  removeElementsByClass('name-box');
+  var nameBox = document.createElement("input");
+  nameBox.type = "text";
+  nameBox.classList.add("name-box");
+  nameBox.addEventListener("keydown", function(e){
+    if(e.key === "Enter" || e.key === "Tab"){
+      stopDefaultPropagation(e);
+      chap.title = nameBox.value;
+      chap.hasUnsavedChanges = true;
+      removeElementsByClass('name-box');
+      updateFileList();
+      editorQuill.focus();
+    }
+    else if (e.key === "Escape"){
+      removeElementsByClass('name-box');
+      updateFileList();
+      editorQuill.focus();
+    }
+  });
+
+  nameBox.onblur = function(){
+      removeElementsByClass('name-box');
+      updateFileList();
+  }
+
+  listName.firstChild.remove();
+  listName.appendChild(nameBox);
+  nameBox.focus();
+
 }
 
-function moveChapUp(chapInd){
-  if(chapInd > 0 && chapInd < project.chapters.length){
-    var chap = project.chapters.splice(chapInd, 1)[0];
-    project.chapters.splice(chapInd - 1, 0, chap);
-    project.activeChapterIndex--;
+function splitChapter(){
+  var selection = editorQuill.getSelection(true);
+  if(selection){
+      var newChap = editorQuill.getContents(selection.index);
+      console.log("deleting " + selection.index + " to " + editorQuill.getLength());
+      editorQuill.deleteText(selection.index, editorQuill.getLength(), 'user');
+      addImportedChapter(newChap, "untitled");
+      changeChapterTitle(project.activeChapterIndex);
   }
-  else if(chapInd > project.chapters.length){
-    var trashChap = project.trash.splice(chapInd - project.chapters.length, 1)[0];
-    project.trash.splice(chapInd - project.chapters.length - 1, 0, trashChap);
-    project.activeChapterIndex--;
-  }
-  updateFileList();
 }
 
-function moveChapDown(chapInd){
-  if(chapInd < project.chapters.length - 1){
-    var chap = project.chapters.splice(chapInd, 1)[0];
-    project.chapters.splice(chapInd + 1, 0, chap);
-    project.activeChapterIndex++;
-  }
-  else if(chapInd > project.chapters.length - 1 && chapInd < project.chapters.length + project.trash.length - 1){
-    var trashChap = project.trash.splice(chapInd - project.chapters.length, 1)[0];
-    project.trash.splice(chapInd - project.chapters.length + 1, 0, trashChap);
-    project.activeChapterIndex++;
-  }
-  updateFileList();
-}
-
-function clearCurrentChapterIfUnchanged(){
-  var ch = project.getActiveChapter();
-  if(ch && (ch.hasUnsavedChanges == undefined || ch.hasUnsavedChanges == false)){
-    ch.contents = null;
-  }
-};
 
 function enableSearchView(){
   document.getElementById("chapter-list-sidebar").classList.add("sidebar-search-view");
@@ -396,12 +445,6 @@ function disableSearchView(){
   document.getElementById("writing-field").classList.remove("writing-field-search-view");
 }
 
-function scrollChapterListToActiveChapter(){
-  document.getElementById('chapter-list-sidebar')
-  .scrollTop = document.querySelector('.activeChapter')
-  .offsetTop;
-}
-
 function changeRootFontSize(rootProp, amount){
   var currentSize = parseInt(
     getComputedStyle(document.documentElement)
@@ -410,24 +453,6 @@ function changeRootFontSize(rootProp, amount){
   var newSize = currentSize + amount;
   document.documentElement.style.setProperty(rootProp, newSize + 'pt');
   return newSize;
-}
-
-function typewriterScroll(){
-  if(editorQuill.hasFocus()){
-    var viewTop = editorQuill.getBounds(editorQuill.getSelection().index).top;
-    var toScroll = viewTop - editorQuill.getBounds(0).top;
-    var editorDiv = document.querySelector('.ql-editor');
-    var heightOffset = Math.floor(editorDiv.clientHeight * 0.75);
-    editorDiv.scrollTop = toScroll - heightOffset;
-  }
-}
-
-function enableTypewriterMode(){
-  editorQuill.on('editor-change', typewriterScroll);
-}
-
-function disableTypewriterMode(){
-  editorQuill.off('editor-change', typewriterScroll);
 }
 
 function increaseEditorWidthSetting(){
@@ -443,103 +468,11 @@ function descreaseEditorWidthSetting(){
 }
 
 
-function splitChapter(){
-  var selection = editorQuill.getSelection(true);
-  if(selection){
-      var newChap = editorQuill.getContents(selection.index);
-      console.log("deleting " + selection.index + " to " + editorQuill.getLength());
-      editorQuill.deleteText(selection.index, editorQuill.getLength(), 'user');
-      addImportedChapter(newChap, "untitled");
-      changeChapterTitle(project.activeChapterIndex);
-  }
-}
 
-
-function convertFirstLinesToTitles(){
-  var tempQuill = getTempQuill();
-
-  project.chapters.forEach(function(chap){
-    var result = convertFirstLineToTitle(chap.contents ? chap.contents : chap.getFile());
-
-    if(result.changed > 0){
-      chap.contents = result.delta;
-      chap.hasUnsavedChanges = true;
-    }
-  });
-
-}
-
-function convertFirstLineToTitle(delt){
-  var tempQuill = getTempQuill();
-
-  var changes = 0;
-
-  tempQuill.setContents(delt);
-  var firstLineFormat = tempQuill.getFormat(1, 1);
-
-  if(!firstLineFormat.header || firstLineFormat.header != 1){
-    tempQuill.formatLine(1, 1, 'header', 1);
-    changes++;
-  }
-  if(!firstLineFormat.align || firstLineFormat.align != 'center'){
-    tempQuill.formatLine(1, 1, 'align', 'center');
-    changes++;
-  }
-
-  return {
-    changed: changes,
-    delta: tempQuill.getContents()
-  }
-
-}
-
-function saveProjectAs(docPath) {
-  const options = {
-    title: 'Save project as...',
-    defaultPath: docPath,
-    filters: [
-      { name: 'WareWoolf Projects', extensions: ['woolf'] }
-    ]
-  };
-  var filepath = dialog.showSaveDialogSync(options);
-  if (filepath)
-    project.saveAs(filepath);
-  updateFileList();
-  updateTitleBar();
-}
-
-function openAProject(docPath) {
-  //Temp override doc path for testing in examples folder
-  docPath = "./examples";
-
-  const options = {
-    title: 'Open project...',
-    defaultPath: docPath,
-    filters: [
-      { name: 'WareWoolf Projects', extensions: ['woolf'] }
-    ]
-  };
-  var filepath = dialog.showOpenDialogSync(options);
-  if (filepath) {
-    project.loadFile(filepath[0]);
-    displayProject();
-    userSettings.lastProject = filepath[0];
-    userSettings.save();
-  }
-}
-
-function convertMarkedTabs(chap, marker){
-  return replaceAllInDelta(marker, '\t', false, chap);
-}
-
-function convertMarkedTabsForAllChapters(marker){
-  project.chapters.forEach(function(chap){
-    var result = convertMarkedTabs(chap.contents ? chap.contents : chap.getFile(), marker);
-    if(result.changed > 0){
-      chap.contents = result.delta;
-      chap.hasUnsavedChanges = true;
-    }
-  });
+function scrollChapterListToActiveChapter(){
+  document.getElementById('chapter-list-sidebar')
+  .scrollTop = document.querySelector('.activeChapter')
+  .offsetTop;
 }
 
 ///////////////////////////////////////////////////////////////////
