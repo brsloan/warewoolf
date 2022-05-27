@@ -1,3 +1,4 @@
 node_modules/
 out/
 user-settings.json
+dist/
