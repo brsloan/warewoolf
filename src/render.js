@@ -786,3 +786,5 @@ function createButton(text){
 function editorHasFocus(){
   return document.querySelector(".ql-editor") === document.activeElement;
 }
+
+testMDF();
