@@ -1,7 +1,13 @@
 function testMDF(){
   var inText = fs.readFileSync(convertFilepath(__dirname) + "/examples/markdownfic.txt", 'utf8');
   var testDelta = parseMDF(inText);
-  editorQuill.setContents(testDelta);
+  //editorQuill.setContents(testDelta);
+
+  var outText = convertDeltaToMDF(testDelta);
+
+  editorQuill.setText(outText);
+
+  fs.writeFileSync(convertFilepath(__dirname) + "/examples/generatedMDF.txt", outText, 'utf8');
 }
 
 function parseMDF(str){
@@ -164,3 +170,63 @@ function formatMarkedSegments(delt, marker, style){
     delta: tempQuill.getContents()
   }
 }
+
+function convertDeltaToMDF(delt){
+  var mdf = '';
+
+  var parsedQuill = quillParser.parseQuillDelta(delt);
+
+
+  parsedQuill.paragraphs.forEach((para, i) => {
+    mdf += getLineMarker(para.attributes);
+
+    para.textRuns.forEach((run, i) => {
+      mdf += getMarkedTextFromRun(run);
+    });
+
+    mdf += '\r\n';
+  });
+
+  return mdf;
+}
+
+function getMarkedTextFromRun(run){
+  if(run.attributes){
+    var marker = '';
+    if(run.attributes.italic)
+      marker += '*';
+    if(run.attributes.bold)
+      marker += '**';
+    if(run.attributes.strike)
+      marker += '~~';
+
+    run.text = marker + run.text + marker.split('').reverse().join('');
+  }
+
+  return run.text;
+}
+
+function getLineMarker(attr){
+  var marker = '';
+
+  if(attr){
+    if(attr.header){
+      for(let i=0; i < attr.header; i++){
+        marker+= '#';
+      }
+      marker += ' ';
+    }
+    if(attr.align){
+      if(attr.align == 'center')
+        marker = '[>c] ';
+      else if(attr.align == 'right')
+        marker = '[>r] ';
+      else if(attr.align == 'justify')
+        marker = '[>j] '
+    }
+    if(attr.blockquote)
+      marker = '> ';
+  }
+
+  return marker;
+};
