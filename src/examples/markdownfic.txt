@@ -7,9 +7,7 @@ This third paragraph is not indented.
 
 There should be a line of white space above this.
 
-*This line is italic.*
-**This line is bold.**
-~~This line is struck through.~~
+	*This sentence is italic.* **This sentence is bold.** ~~This sentence is struck through.~~ ~This should not be struck through.~
 >This is a one-line block quote. This is a one-line block quote. This is a one-line block quote. This is a one-line block quote. This is a one-line block quote. This is a one-line block quote. This is a one-line block quote. This is a one-line block quote. This is a one-line block quote. This is a one-line block quote. This is a one-line block quote. This is a one-line block quote. This is a one-line block quote. This is a one-line block quote. This is a one-line block quote. This is a one-line block quote. This is a one-line block quote. This is a one-line block quote. This is a one-line block quote. This is a one-line block quote. This is a one-line block quote.
 
 [>c] This line is centered.
