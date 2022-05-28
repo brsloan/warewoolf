@@ -1,17 +1,17 @@
 function testMDF(){
   var inText = fs.readFileSync(convertFilepath(__dirname) + "/examples/markdownfic.txt", 'utf8');
   var testDelta = parseMDF(inText);
-  //editorQuill.setContents(testDelta);
+
+  editorQuill.setContents(testDelta);
 
   var outText = convertDeltaToMDF(testDelta);
-
-  editorQuill.setText(outText);
+  //editorQuill.setText(outText);
 
   fs.writeFileSync(convertFilepath(__dirname) + "/examples/generatedMDF.txt", outText, 'utf8');
 }
 
 function parseMDF(str){
-  var lines = str.split("\r\n");
+  var lines = str.split(/\r\n|\r|\n/);
 
   var tempQuill = getTempQuill();
 
@@ -21,8 +21,6 @@ function parseMDF(str){
     if(parsedLine.format.name != 'footnote')
       tempQuill.insertText(tempQuill.getLength() - 1, parsedLine.line, parsedLine.format.name, parsedLine.format.value);
   });
-
-
 
   return formatAllInline(tempQuill.getContents());
 }
