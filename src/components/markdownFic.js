@@ -18,8 +18,18 @@ function parseMDF(str){
   lines.forEach((line, i) => {
     var parsedLine = parseLine(line);
 
-    if(parsedLine.format.name != 'footnote')
-      tempQuill.insertText(tempQuill.getLength() - 1, parsedLine.line, parsedLine.format.name, parsedLine.format.value);
+    if(parsedLine.formats.length == 0 || parsedLine.formats[0].name != 'footnote'){
+      var formats = {};
+      parsedLine.formats.forEach((format, i) => {
+        formats[format.name] = format.value;
+      });
+
+      tempQuill.insertText(tempQuill.getLength() - 1, parsedLine.line, formats);
+    }
+    /*
+      tempQuill.insertText(tempQuill.getLength() - 1,
+        parsedLine.line,
+        parsedLine.format.name, parsedLine.format.value);*/
   });
 
   return formatAllInline(tempQuill.getContents());
@@ -30,74 +40,108 @@ function parseLine(line){
 
   if(line.startsWith('#')){
     //headings
-    let marker = /^\#+ {0,1}/.exec(line);
-    parsedLine = {
-      line: line.substr(marker[0].length).concat('\r'),
-      format: {
-        name: 'header',
-        value: marker[0].trim().length
-      }
-    }
+    parsedLine = parseHeader(line);
   }
   else if(line.startsWith('>')){
     //blockquote
-    let marker = /^>+ {0,1}/.exec(line);
-    parsedLine = {
-      line: line.substr(marker[0].length).concat('\r'),
-      format: {
-        name: 'blockquote',
-        value: true
-      }
-    }
+    parsedLine = parseBlockquote(line);
   }
   else if(line.startsWith('[^')){
     //footnote
-    let marker = /^\[\^(\d+)]: {0,1}/.exec(line);
-    if(marker != null)
-    	var fnNum = parseInt(marker[1]);
-
-    parsedLine = {
-      line: line.substr(marker[0].length).concat('\r'),
-      format: {
-        name: 'footnote',
-        value: fnNum
-      }
-    };
+    parsedLine = parseFootnote(line);
   }
   else if(line.startsWith('[>')){
     //alignment
-    let marker = /^\[>(l|r|c|j)] {0,1}/.exec(line);
-    var alignValue;
-    if(marker != null){
-      switch(marker[1]){
-        case 'l':
-        alignValue = null;
-        break;
-        case 'r':
-        alignValue = 'right';
-        break;
-        case 'c':
-        alignValue = 'center';
-        break;
-        case 'j':
-        alignValue = 'justify';
-      }
-    }
-
-    parsedLine = {
-      line: line.substr(marker[0].length).concat('\r'),
-      format: alignValue ? {
-        name: 'align',
-        value: alignValue
-      } : {}
-    }
+    parsedLine = parseAlignment(line);
   }
   else {
     //normal
     parsedLine = {
       line: line.concat('\r'),
-      format: {}
+      formats: []
     }
+  }
+
+  return parsedLine;
+}
+
+function parseHeader(line){
+  let marker = /^\#+ {0,1}/.exec(line);
+  let parsedLine = {
+    line: line.substr(marker[0].length).concat('\r'),
+    formats: [
+      {
+        name: 'header',
+        value: marker[0].trim().length
+      }
+    ]
+  }
+  return parsedLine;
+}
+
+function parseBlockquote(line){
+  let marker = /^>+ {0,1}/.exec(line);
+  let parsedLine = {
+    line: line.substr(marker[0].length).concat('\r'),
+    formats: [{
+      name: 'blockquote',
+      value: true
+    }]
+  }
+  return parsedLine;
+}
+
+function parseFootnote(line){
+  let marker = /^\[\^(\d+)]: {0,1}/.exec(line);
+  if(marker != null)
+    var fnNum = parseInt(marker[1]);
+
+  let parsedLine = {
+    line: line.substr(marker[0].length).concat('\r'),
+    formats: [{
+      name: 'footnote',
+      value: fnNum
+    }]
+  };
+  return parsedLine;
+}
+
+function parseAlignment(line){
+  let marker = /^\[>(l|r|c|j)] {0,1}/.exec(line);
+  var alignValue;
+  if(marker != null){
+    switch(marker[1]){
+      case 'l':
+      alignValue = null;
+      break;
+      case 'r':
+      alignValue = 'right';
+      break;
+      case 'c':
+      alignValue = 'center';
+      break;
+      case 'j':
+      alignValue = 'justify';
+    }
+  }
+
+  var newLine = line.substr(marker[0].length);
+
+  let parsedLine = {
+    line: newLine,
+    formats: alignValue ? [{
+      name: 'align',
+      value: alignValue
+    }] : []
+  }
+
+  if(newLine.startsWith('#')){
+    let secondParse = parseHeader(newLine);
+    secondParse.formats = secondParse.formats.concat(parsedLine.formats);
+    parsedLine = secondParse;
+  }
+  else {
+    parsedLine.line = parsedLine.line.concat('\r');
   }
 
   return parsedLine;
@@ -135,7 +179,6 @@ function formatAllInline(delt){
 function formatMarkedSegments(delt, marker, style){
   marker = marker.replace(/[|\\{}()[\]^$+*?.]/g, '\\$&');
   var markerRegx = new RegExp(marker + '([^' + marker + ']+)' + marker);
-  console.log(markerRegx);
 
   var tempQuill = getTempQuill();
   tempQuill.setContents(delt);
@@ -169,11 +212,11 @@ function formatMarkedSegments(delt, marker, style){
   }
 }
 
+
 function convertDeltaToMDF(delt){
   var mdf = '';
 
   var parsedQuill = quillParser.parseQuillDelta(delt);
-
 
   parsedQuill.paragraphs.forEach((para, i) => {
     mdf += getLineMarker(para.attributes);
@@ -189,6 +232,7 @@ function convertDeltaToMDF(delt){
 }
 
 function getMarkedTextFromRun(run){
+
   if(run.attributes){
     var marker = '';
     if(run.attributes.italic)
@@ -208,12 +252,6 @@ function getLineMarker(attr){
   var marker = '';
 
   if(attr){
-    if(attr.header){
-      for(let i=0; i < attr.header; i++){
-        marker+= '#';
-      }
-      marker += ' ';
-    }
     if(attr.align){
       if(attr.align == 'center')
         marker = '[>c] ';
@@ -221,6 +259,12 @@ function getLineMarker(attr){
         marker = '[>r] ';
       else if(attr.align == 'justify')
         marker = '[>j] '
+    }
+    if(attr.header){
+      for(let i=0; i < attr.header; i++){
+        marker+= '#';
+      }
+      marker += ' ';
     }
     if(attr.blockquote)
       marker = '> ';
