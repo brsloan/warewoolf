@@ -26,11 +26,14 @@ function parseMDF(str){
 
       tempQuill.insertText(tempQuill.getLength() - 1, parsedLine.line, formats);
     }
-    /*
-      tempQuill.insertText(tempQuill.getLength() - 1,
-        parsedLine.line,
-        parsedLine.format.name, parsedLine.format.value);*/
+    else {
+      tempQuill.insertText(tempQuill.getLength() - 1, parsedLine.line);
+    }
+
   });
+
+  //Delete extra white space added after last line
+  tempQuill.deleteText(tempQuill.getLength() - 1, 2);
 
   return formatAllInline(tempQuill.getContents());
 }
@@ -97,7 +100,7 @@ function parseFootnote(line){
     var fnNum = parseInt(marker[1]);
 
   let parsedLine = {
-    line: line.substr(marker[0].length).concat('\r'),
+    line: line.concat('\r'),
     formats: [{
       name: 'footnote',
       value: fnNum
@@ -236,6 +239,9 @@ function convertDeltaToMDF(delt){
 
     mdf += '\r\n';
   });
+
+  //remove extra white lines added after last line
+  mdf = mdf.slice(0, mdf.length - 4);
 
   return mdf;
 }
