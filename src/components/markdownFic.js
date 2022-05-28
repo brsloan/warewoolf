@@ -198,25 +198,16 @@ function formatMarkedSegments(delt, marker, style){
 
       matchResult = text.match(markerRegx);
       foundIndex = matchResult ? matchResult.index : -1;
-      console.log(matchResult);
 
       if(foundIndex > -1){
           counter++;
 
-          //tempQuill.deleteText(foundIndex, matchResult[0].length);
-          //tempQuill.insertText(foundIndex, matchResult[1]);
-          console.log('marker: ' + marker);
-          console.log('formatting: ' + tempQuill.getText(foundIndex, matchResult[0].length));
           tempQuill.formatText(foundIndex, matchResult[0].length, style, true);
 
-//**blah**
           //delete second marker first
-          console.log('deleting 2nd marker: ' + tempQuill.getText(matchResult.index + marker.length + matchResult[1].length,
-            marker.length));
           tempQuill.deleteText(matchResult.index + marker.length + matchResult[1].length,
             marker.length);
           //delete first marker
-          console.log('deleting 1st marker: ' + tempQuill.getText(matchResult.index, marker.length));
           tempQuill.deleteText(matchResult.index, marker.length);
 
           startingIndex = foundIndex + matchResult[1].length;
