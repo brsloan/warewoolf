@@ -1,6 +1,7 @@
 const { ipcRenderer } = require('electron');
 const fs = require('fs');
-const { dialog } = require('electron').remote;
+const remote = require('@electron/remote');
+const { dialog } = remote;
 const Quill = require('quill');
 const docx = require('docx');
 const quillParser = require('quilljs-parser');

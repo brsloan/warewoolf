@@ -1,7 +1,8 @@
 const { app, BrowserWindow, Menu, dialog } = require('electron');
 const path = require('path');
 const { ipcMain } = require('electron')
-
+const remoteMain = require('@electron/remote/main');
+remoteMain.initialize();
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) { // eslint-disable-line global-require
@@ -16,6 +17,7 @@ const createWindow = () => {
     autoHideMenuBar: true,
     webPreferences: {
       nodeIntegration: true,
+      contextIsolation: false,
       enableRemoteModule: true,
       spellcheck: false,
       devTools: true
@@ -23,6 +25,8 @@ const createWindow = () => {
     kiosk: false,
     icon: path.join(__dirname, 'assets/icon.png')
   });
+
+  remoteMain.enable(mainWindow.webContents);
 
   mainWindow.maximize();
 

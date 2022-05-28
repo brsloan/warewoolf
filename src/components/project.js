@@ -1,6 +1,3 @@
-const { TouchBarOtherItemsProxy } = require("electron");
-
-
 function newProject(){
     return {
         filename: "",

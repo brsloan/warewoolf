@@ -42,6 +42,7 @@
     }
   },
   "dependencies": {
+    "@electron/remote": "^2.0.8",
     "docx": "^7.3.0",
     "electron-squirrel-startup": "^1.0.0",
     "nspell": "^2.1.5",
@@ -54,6 +55,6 @@
     "@electron-forge/maker-rpm": "^6.0.0-beta.54",
     "@electron-forge/maker-squirrel": "^6.0.0-beta.54",
     "@electron-forge/maker-zip": "^6.0.0-beta.54",
-    "electron": "11.1.0"
+    "electron": "^18.2.3"
   }
 }
