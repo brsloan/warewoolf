@@ -160,6 +160,10 @@ function formatAllInline(delt){
     {
       marker: '~~',
       style: 'strike'
+    },
+    {
+      marker: '__',
+      style: 'underline'
     }
   ];
 
@@ -177,8 +181,8 @@ function formatAllInline(delt){
 }
 
 function formatMarkedSegments(delt, marker, style){
-  marker = marker.replace(/[|\\{}()[\]^$+*?.]/g, '\\$&');
-  var markerRegx = new RegExp(marker + '([^' + marker + ']+)' + marker);
+  var escapedMarker = marker.replace(/[|\\{}()[\]^$+*?.]/g, '\\$&');
+  var markerRegx = new RegExp(escapedMarker + '([^' + escapedMarker + ']+)' + escapedMarker);
 
   var tempQuill = getTempQuill();
   tempQuill.setContents(delt);
@@ -194,13 +198,27 @@ function formatMarkedSegments(delt, marker, style){
 
       matchResult = text.match(markerRegx);
       foundIndex = matchResult ? matchResult.index : -1;
+      console.log(matchResult);
 
       if(foundIndex > -1){
           counter++;
 
-          tempQuill.deleteText(foundIndex, matchResult[0].length);
-          tempQuill.insertText(foundIndex, matchResult[1]);
-          tempQuill.formatText(matchResult.index, matchResult[1].length, style, true);
+          //tempQuill.deleteText(foundIndex, matchResult[0].length);
+          //tempQuill.insertText(foundIndex, matchResult[1]);
+          console.log('marker: ' + marker);
+          console.log('formatting: ' + tempQuill.getText(foundIndex, matchResult[0].length));
+          tempQuill.formatText(foundIndex, matchResult[0].length, style, true);
+
+//**blah**
+          //delete second marker first
+          console.log('deleting 2nd marker: ' + tempQuill.getText(matchResult.index + marker.length + matchResult[1].length,
+            marker.length));
+          tempQuill.deleteText(matchResult.index + marker.length + matchResult[1].length,
+            marker.length);
+          //delete first marker
+          console.log('deleting 1st marker: ' + tempQuill.getText(matchResult.index, marker.length));
+          tempQuill.deleteText(matchResult.index, marker.length);
+
           startingIndex = foundIndex + matchResult[1].length;
           text = tempQuill.getText();
       }
@@ -241,6 +259,8 @@ function getMarkedTextFromRun(run){
       marker += '**';
     if(run.attributes.strike)
       marker += '~~';
+    if(run.attributes.underline)
+      marker += '__';
 
     run.text = marker + run.text + marker.split('').reverse().join('');
   }
