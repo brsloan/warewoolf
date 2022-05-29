@@ -10,7 +10,7 @@ function showExportOptions(docPath){
     exportForm.appendChild(typeLabel);
 
     var typeSelect = document.createElement("select");
-    const typeOptions = [".docx", ".txt"];
+    const typeOptions = [".docx", ".txt", ".mdfc"];
     typeOptions.forEach(function(op){
       var txtOp = document.createElement("option");
       txtOp.value = op;

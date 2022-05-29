@@ -12,9 +12,23 @@ function exportProject(options, filepath){
         case ".docx":
             exportAsWord(newDir);
             break;
+        case ".mdfc":
+            exportAsMDF(newDir);
+            break;
         default:
             console.log("No valid filetype selected for export.");
     }
+}
+
+function exportAsMDF(dir){
+  for(let i=0; i < project.chapters.length; i++){
+    var chapFile = project.chapters[i].getFile();
+    var outName = generateChapterFilename(i);
+
+    fs.writeFileSync(dir + outName + '.mdfc', markdownFic().convertDeltaToMDF(chapFile));
+  }
+
+  fs.writeFileSync(dir + "notes" + ".mdfc", markdownFic().convertDeltaToMDF(project.notes));
 }
 
 function exportAsText(dir){
