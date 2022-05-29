@@ -6,7 +6,7 @@ function showImportOptions(docPath){
 
   var filetypes = [
     { name: 'Plain Text', id: 'txtSelect', extensions: ['txt'] },
-    { name: 'MarkdownFic', id: 'mdfcSelect', extensions: ['mdfc', 'txt'] }
+    { name: 'MarkdownFic', id: 'mdfcSelect', extensions: ['mdfc', 'txt', "md"] }
   ];
 
   filetypes.forEach((type, i) => {
