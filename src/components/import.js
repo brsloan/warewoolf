@@ -1,12 +1,9 @@
 function initiateImport(docPath, options){
-  console.log(options);
-
   var filepaths = getImportFilepaths(docPath, {
     name: options.fileType.name,
     extensions: options.fileType.extensions
   });
-  //importPlainText(filepaths);
-  console.log(filepaths);
+
   try{
     importFiles(filepaths, options);
   }
@@ -29,8 +26,6 @@ function importFiles(filepaths, options){
 }
 
 function getImportFilepaths(docPath, filter){
-  console.log('filter: ');
-  console.log(filter);
     const options = {
       title: 'Import files...',
       defaultPath: docPath,
