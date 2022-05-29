@@ -10,7 +10,7 @@ function showCompileOptions(docPath){
     compileForm.appendChild(typeLabel);
 
     var typeSelect = document.createElement("select");
-    const typeOptions = [".docx", ".txt"];
+    const typeOptions = [".docx", ".txt", ".mdfc"];
     typeOptions.forEach(function(op){
       var txtOp = document.createElement("option");
       txtOp.value = op;

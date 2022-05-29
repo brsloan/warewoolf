@@ -11,9 +11,17 @@ function compileProject(options, filepath){
         case ".docx":
             compileDocx(filepath, allChaps);
             break;
+        case ".mdfc":
+            compileMDF(filepath, allChaps);
+            break;
         default:
             console.log("No valid filetype selected for compile.");
     }
+}
+
+function compileMDF(dir, allChaps){
+  var allText = markdownFic().convertDeltaToMDF(allChaps);
+  fs.writeFileSync(dir, allText);
 }
 
 function compilePlainText(dir, allChaps){
