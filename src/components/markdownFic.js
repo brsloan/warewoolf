@@ -1,14 +1,9 @@
-function testMDF(){
-  var inText = fs.readFileSync(convertFilepath(__dirname) + "/examples/markdownfic.txt", 'utf8');
-  var testDelta = parseMDF(inText);
+function markdownFic(){
+  return {
+    parseMDF: parseMDF,
+    convertDeltaToMDF: convertDeltaToMDF
+  }
 
-  editorQuill.setContents(testDelta);
-
-  var outText = convertDeltaToMDF(testDelta);
-  //editorQuill.setText(outText);
-
-  fs.writeFileSync(convertFilepath(__dirname) + "/examples/generatedMDF.txt", outText, 'utf8');
-}
 
 function parseMDF(str){
   var lines = str.split(/\r\n|\r|\n/);
@@ -289,3 +284,5 @@ function getLineMarker(attr){
 
   return marker;
 };
+
+}
