@@ -2,7 +2,7 @@
 
 A minimalist novel-writing system designed to be usable without a mouse. Allows you to compose, sort, and reorder chapters, then compile them into one file (or export to separate files).
 
-It is designed especially to work well for those who write first drafts in plain text-based workflows, as is common with distraction-free writing devices such as the Astrohaus Freewrite, Alphasmart Neo, or various stripped-down applications.
+It is designed especially to work well for those who write first drafts in plain-text-based workflows, as is common with distraction-free writing devices such as the Astrohaus Freewrite, Alphasmart Neo, or various stripped-down applications.
 
 ## Two Ways To Write In Plain Text For Import Into WareWoolf
 
