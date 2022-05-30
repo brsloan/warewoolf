@@ -25,11 +25,6 @@ Write whatever you want however you want and then edit/format it in WareWoolf. Y
   - Bold: '\*\*bold text\*\*'
   - Blockquote: '> blockquoted text'
   - Footnotes (will be supported but not yet)
-- And the following is specific to MarkdownFic:
-  - Center Align: '[>c] Centered text.'
-  - Right Align: '[>r] Right-aligned text.'
-  - Justify Align: '[>j] Justified text.'
-  - (Defaults to left-align.)
 
 ## Compile/Export options
 
