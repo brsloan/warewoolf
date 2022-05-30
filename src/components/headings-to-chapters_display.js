@@ -32,7 +32,8 @@ function showBreakHeadingsOptions(){
   };
   breakHeadingsForm.appendChild(cancelBtn);
 
-  breakHeadingsForm.onsubmit = function(){
+  breakHeadingsForm.onsubmit = function(e){
+    e.preventDefault();
     breakHeadingsIntoChapters(headingSelect.value);
     closePopups();
   };

@@ -1,9 +1,19 @@
 function breakHeadingsIntoChapters(headingLevel = 1){
-  var totalText = editorQuill.getText();
-  var onHeader = false;
+  var headerIndices = getHeaderIndices(editorQuill.getText(), headingLevel);
+
+  if(headerIndices.length > 0){
+    var generatedChaps = splitDeltaAtIndices(editorQuill.getContents(), headerIndices);
+
+    editorQuill.setContents(generatedChaps.shift(), "user");
+    generatedChaps.forEach(function(chap){
+      addImportedChapter(chap, generateChapTitleFromFirstLine(chap));
+    });
+  }
+}
+
+function getHeaderIndices(totalText, headingLevel){
   var headerIndices = [];
-
-
+  var onHeader = false;
   for(let i = 0 ; i < totalText.length; i++){
     var frmt = editorQuill.getFormat(i, 1);
 
@@ -17,29 +27,31 @@ function breakHeadingsIntoChapters(headingLevel = 1){
       onHeader = false;
     }
   }
+  return headerIndices;
+}
 
-  console.log(headerIndices);
+function splitDeltaAtIndices(delt, splitPoints){
+  var generatedChaps = [];
+  if (splitPoints.length > 0) {
+    var tempQuill = getTempQuill();
+    tempQuill.setContents(delt);
 
-
-  if(headerIndices.length > 0){
-    var generatedChaps = [];
-
-    //Add beginning fragment if it does not begin with a heading
-    if(headerIndices[0] != 0)
-      generatedChaps.push(editorQuill.getContents(0, headerIndices[0]));
-    //Add middle chapters
-    for(let i = 0; i < headerIndices.length - 1; i++){
-      var chapLength = headerIndices[i + 1] - headerIndices[i];
-      generatedChaps.push(editorQuill.getContents(headerIndices[i], chapLength));
-    }
-    //Add last chapter from index to end of delta
-    generatedChaps.push(editorQuill.getContents(headerIndices[headerIndices.length - 1]))
-
-    editorQuill.setContents(generatedChaps.shift(), "user");
-    generatedChaps.forEach(function(chap){
-      const titleCharacterLimit = 100;
-      addImportedChapter(chap, chap.ops[0].insert.slice(0,titleCharacterLimit));
-    });
+    //Add beginning fragment before first splitPoint
+    if(splitPoints[0] != 0)
+      generatedChaps.push(tempQuill.getContents(0, splitPoints[0]));
+      //Add middle chapters
+      for(let i = 0; i < splitPoints.length - 1; i++){
+        var chapLength = splitPoints[i + 1] - splitPoints[i];
+        generatedChaps.push(tempQuill.getContents(splitPoints[i], chapLength));
+      }
+      //Add last chapter from index to end of delta
+      generatedChaps.push(tempQuill.getContents(splitPoints[splitPoints.length - 1]));
   }
 
+  return generatedChaps;
+}
+
+function generateChapTitleFromFirstLine(delt){
+    const titleCharacterLimit = 100;
+    return delt.ops[0].insert.slice(0,titleCharacterLimit);
 }
