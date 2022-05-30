@@ -14,7 +14,7 @@ Write whatever you want however you want and then edit/format it in WareWoolf. Y
 
 - Convert text you've marked as italics. The default marker is \*asterisks\*, but you can use any character.
 - Convert the first line of every file to a Chapter Heading (Heading 1, centered)--convenient if you write each chapter as a separate text file.
-- Split text into separate chapters at indicated string (## is the default)--helpful if you write all chapters in one file.
+- Split text into separate chapters at headings--helpful if you write all chapters in one file.
 
 ### 2. Use MarkdownFic, A Revised/Simplified Version of Markdown Designed For Fiction
 
