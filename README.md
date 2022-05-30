@@ -1,21 +1,36 @@
 # WareWoolf
 
-A minimalist novel writing system designed to be usable without a mouse. Allows you to compose, sort, and reorder chapters, then compile them into one file (or export to separate files).
+A minimalist novel-writing system designed to be usable without a mouse. Allows you to compose, sort, and reorder chapters, then compile them into one file (or export to separate files).
 
-It is designed especially to work well with plain-text-based workflows, such as with the Astrohaus Freewrite, since that is what I use for first drafts.
+It is designed especially to work well for those who write first drafts in plain text-based workflows, as is common with distraction-free writing devices such as the Astrohaus Freewrite, Alphasmart Neo, or various stripped-down applications.
 
-## Workflow:
+## Two Ways To Write In Plain Text For Import Into WareWoolf
 
-1. Draft each chapter as a separate document on the Freewrite (or whatever) saved as a .txt file. Each chapter begins with the chapter title as the first line. Italics are marked as in Markdown, with either asterics or underscores.
-2. Use the Import tool in Warewoolf to import these text files as chapters. Leave options checked to automatically convert the first line of every chapter into a Heading 1, styled bold and centered, and to convert marked italics.
-3. Edit in WareWoolf, which has spellcheck, find/replace, easy chapter reordering, note taking features, etc.
-4. Use the Compile function to export draft as one .docx file.
-5. Either treat this as the final file and do any tweaks in Libre Office/Word/whatever, or with my method...
-6. Print draft from LibreOffice, mark up by hand, type up revisions in LibreOffice.
-7. If desired, you can import the .docx back into WareWoolf. (The reason for exporting to a .docx and then importing again is because WareWoolf is not a "What You See Is What You Get" editor. If you're going to print the draft for hand revision, it is much easier to do so with a WYSIWYG editor like LibreOffice/Word, since the location of the edits on your printed page will match the text on the screen.) Right now, the way to import a .docx into WareWoolf is to copy all the text, paste it into the WareWoolf editor, and use the "Break Headings Into Chapters" tool to automatically break the pasted document into individual chapters. (This will only work if you've styled the chapter headings in your .docx as Heading 1.) Eventually this will be a one-click import.
+Of course, you can just start writing directly in WareWoolf, but if you *do* use plain text for your first drafts, there are two ways to approach it...
 
-## Why doesn't it just use Markdown?
+###1. Just Write
 
-Because I despise Markdown for the sole reason that it cannot record manual indentations. I do not want all paragraphs indented, and I often don't want all the indented ones indented the same amount. This is, in my view, Markdown's only major flaw, but a fatal one.
+Write whatever you want however you want and then edit/format it in WareWoolf. You will not lose manual tabs or white space on import, but you will have a few options for automatic styling of chapter headings and italics:
 
-WareWoolf is still in early stages of development.
+- Convert text you've marked as italics. The default marker is \*asterisks\*, but you can use any character.
+- Convert the first line of every file to a Chapter Heading (Heading 1, centered)--convenient if you write each chapter as a separate text file.
+- Split text into separate chapters at indicated string (## is the default)--helpful if you write all chapters in one file.
+
+###2. Use MarkdownFic, A Revised/Simplified Version of Markdown Designed For Fiction
+
+- Unlike Markdown, MarkdownFic allows you to use regular indented paragraphs without space between them. It will keep your manual tabs and your white space. You are freed from writing fiction like it's a blog!
+- The following syntax is all the same as Markdown:
+  - Headings: '# My Heading 1', '## My Heading 2'
+  - Italics: '\*italicized text\*'
+  - Bold: '\**bold text\**'
+  - Blockquote: '> blockquoted text'
+  - Footnotes (will be supported but not yet)
+- And the following is specific to MarkdownFic:
+  - Center Align: '[>c] Centered text.'
+  - Right Align: '[>r] Right-aligned text.'
+  - Justify Align: '[>j] Justified text.'
+  - (Defaults to left-align.)
+
+## Compile/Export options
+
+Currently you can compile/export your work in plain text, MardownFic, or .docx, with some helpful options regarding headings and chapter breaks.
