@@ -767,16 +767,6 @@ function convertFilepath(fpath){
   return converted;
 }
 
-function getTempQuill(){
-  return new Quill(document.createElement('div'), {
-      modules: {
-          history: {
-              userOnly: true
-          }
-      }
-      });
-}
-
 function createButton(text){
   var btn = document.createElement("button");
   btn.innerHTML = text;
