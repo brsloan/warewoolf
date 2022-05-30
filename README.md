@@ -8,7 +8,7 @@ It is designed especially to work well for those who write first drafts in plain
 
 Of course, you can just start writing directly in WareWoolf, but if you *do* use plain text for your first drafts, there are two ways to approach it...
 
-###1. Just Write
+### 1. Just Write
 
 Write whatever you want however you want and then edit/format it in WareWoolf. You will not lose manual tabs or white space on import, but you will have a few options for automatic styling of chapter headings and italics:
 
@@ -16,7 +16,7 @@ Write whatever you want however you want and then edit/format it in WareWoolf. Y
 - Convert the first line of every file to a Chapter Heading (Heading 1, centered)--convenient if you write each chapter as a separate text file.
 - Split text into separate chapters at indicated string (## is the default)--helpful if you write all chapters in one file.
 
-###2. Use MarkdownFic, A Revised/Simplified Version of Markdown Designed For Fiction
+### 2. Use MarkdownFic, A Revised/Simplified Version of Markdown Designed For Fiction
 
 - Unlike Markdown, MarkdownFic allows you to use regular indented paragraphs without space between them. It will keep your manual tabs and your white space. You are freed from writing fiction like it's a blog!
 - The following syntax is all the same as Markdown:
