@@ -44,7 +44,9 @@ function showExportOptions(docPath){
     };
     exportForm.appendChild(cancelBtn);
 
-    exportForm.onsubmit = function(){
+    exportForm.onsubmit = function(e){
+      e.preventDefault();
+
       var options = {
         type: typeSelect.value
         //insertHead: insertHeadCheck.checked

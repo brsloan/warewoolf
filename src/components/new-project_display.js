@@ -18,7 +18,9 @@ function requestProjectTitle(callback){
   var createButton = document.createElement("input");
   createButton.type = "submit";
   createButton.value = "Create"
-  titleForm.onsubmit = function(){
+  titleForm.onsubmit = function(e){
+    e.preventDefault();
+
     var title;
     if(titleInput.value != "")
       title = titleInput.value;

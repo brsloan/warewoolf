@@ -28,7 +28,8 @@ function showItalicsOptions(){
     };
     italicsForm.appendChild(cancelBtn);
 
-    italicsForm.onsubmit = function(){
+    italicsForm.onsubmit = function(e){
+      e.preventDefault();
       convertMarkedItalicsForAllChapters(italicsStrInput.value);
       displayChapterByIndex(project.activeChapterIndex);
       closePopups();

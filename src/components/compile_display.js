@@ -57,7 +57,8 @@ function showCompileOptions(docPath){
     };
     compileForm.appendChild(cancelBtn);
 
-    compileForm.onsubmit = function(){
+    compileForm.onsubmit = function(e){
+      e.preventDefault();
       var options = {
         type: typeSelect.value,
         insertStrng: insertStrInput.value,

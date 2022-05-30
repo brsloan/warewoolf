@@ -34,7 +34,8 @@ function showProperties(){
     var apply = document.createElement("input");
     apply.type = "submit";
     apply.value = "Apply";
-    propForm.onsubmit = function(){
+    propForm.onsubmit = function(e){
+      e.preventDefault();
       project.title = titleInput.value;
       project.author = authorInput.value;
       closePopups();

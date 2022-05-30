@@ -28,7 +28,9 @@ function showTabOptions(){
     };
     tabForm.appendChild(cancelBtn);
 
-    tabForm.onsubmit = function(){
+    tabForm.onsubmit = function(e){
+      e.preventDefault();
+      
       convertMarkedTabsForAllChapters(tabStrInput.value);
       displayChapterByIndex(project.activeChapterIndex);
       closePopups();
