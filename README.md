@@ -22,7 +22,7 @@ Write whatever you want however you want and then edit/format it in WareWoolf. Y
 - The following syntax is all the same as Markdown:
   - Headings: '# My Heading 1', '## My Heading 2'
   - Italics: '\*italicized text\*'
-  - Bold: '\**bold text\**'
+  - Bold: '\*\*bold text\*\*'
   - Blockquote: '> blockquoted text'
   - Footnotes (will be supported but not yet)
 - And the following is specific to MarkdownFic:
