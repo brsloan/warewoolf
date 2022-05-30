@@ -18,13 +18,18 @@ Write whatever you want however you want and then edit/format it in WareWoolf. Y
 
 ### 2. Use MarkdownFic, A Revised/Simplified Version of Markdown Designed For Fiction
 
-- Unlike Markdown, MarkdownFic allows you to use regular indented paragraphs without space between them. It will keep your manual tabs and your white space. You are freed from writing fiction like it's a blog!
-- The following syntax is all the same as Markdown:
+Unlike Markdown, MarkdownFic allows you to use regular indented paragraphs without space between them. It will keep your manual tabs and your white space. You are freed from writing fiction like it's a blog!
+
+- The supported syntax is all the same as Markdown:
   - Headings: '# My Heading 1', '## My Heading 2'
   - Italics: '\*italicized text\*'
   - Bold: '\*\*bold text\*\*'
   - Blockquote: '> blockquoted text'
-  - Footnotes (will be supported but not yet)
+  - Footnotes (will be supported but not yet):
+    - 'Text with a footnote. [^1]'
+    - '[^1]: The footnote.'
+
+That's it! You don't need much formatting to write fiction. And since it is all the same as Markdown, anything exported as MarkdownFic should be usable in any Markdown editor, with the proviso that you may need to find/replace your tabs to newlines.
 
 ## Compile/Export options
 
