@@ -14,14 +14,16 @@ function initiateImport(docPath, options){
 
 function importFiles(filepaths, options){
   filepaths.forEach(function(path){
-    var importedFile;
+    var importedDeltas;
 
     if(options.fileType.id == 'txtSelect')
-      importedFile = importPlainText(path, options.txtOptions);
+      importedDeltas = importPlainText(path, options.txtOptions);
     else if(options.fileType.id == 'mdfcSelect')
-      importedFile = importMDF(path);
+      importedDeltas = importMDF(path);
 
-    addImportedChapter(importedFile.delta, importedFile.filename);
+    importedDeltas.forEach((delt, i) => {
+      addImportedChapter(delt.delta, delt.filename);
+    });
   });
 }
 
@@ -37,6 +39,8 @@ function getImportFilepaths(docPath, filter){
 }
 
 function importPlainText(filepath, options){
+  console.log(options);
+  var packagedDeltas = [];
   var inText = fs.readFileSync(filepath, 'utf8');
 
   var tempQuill = getTempQuill();
@@ -45,18 +49,46 @@ function importPlainText(filepath, options){
 
   var filename = getFilenameFromFilepath(filepath);
 
+
+  //Need to re-order so converting first lines happens after splitting.
   if(options.convertFirstLines)
     newChapContents = convertFirstLineToTitle(newChapContents).delta;
   if(options.convertItalics.convert)
     newChapContents = convertMarkedItalics(newChapContents, options.convertItalics.marker).delta;
   if(options.convertTabs.convert)
     newChapContents = convertMarkedTabs(newChapContents, options.convertTabs.marker).delta;
+  if(options.splitChapters.split){
+    let splitIndices = [];
+    let foundIndex = 0;
+    let startingIndex = 0;
+    while(foundIndex > -1){
+      foundIndex = inText.indexOf(options.splitChapters.marker, startingIndex);
+      if(foundIndex > -1)
+        splitIndices.push(foundIndex);
+      startingIndex = foundIndex + options.splitChapters.marker.length;
+    }
 
-  return {
-    filename: filename,
-    delta: newChapContents
-  };
+    var splitDeltas = splitDeltaAtIndices(newChapContents, splitIndices);
+    splitDeltas.forEach((delt, i) => {
+      //remove split marker
+      if(i != 0)
+        delt = removeFirstLine(delt);
 
+      packagedDeltas.push({
+        filename: generateChapTitleFromFirstLine(delt),
+        delta: delt
+      });
+    });
+  }
+  else {
+    packagedDeltas.push({
+      filename: filename,
+      delta: newChapContents
+    });
+  }
+
+
+  return packagedDeltas;
 }
 
 function importMDF(filepath){
@@ -64,10 +96,10 @@ function importMDF(filepath){
   var delta = markdownFic().parseMDF(inText);
   var filename = getFilenameFromFilepath(filepath);
 
-  return {
+  return [{
     filename: filename,
     delta: delta
-  }
+  }];
 }
 
 function addImportedChapter(chapDelta, title){
