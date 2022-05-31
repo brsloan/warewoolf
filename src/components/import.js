@@ -40,39 +40,38 @@ function getImportFilepaths(docPath, filter){
 
 function importPlainText(filepath, options){
   console.log(options);
-  var packagedDeltas = [];
   var inText = fs.readFileSync(filepath, 'utf8');
 
   var tempQuill = getTempQuill();
   tempQuill.setText(inText);
   var newChapContents = tempQuill.getContents();
-
   var filename = getFilenameFromFilepath(filepath);
 
+  var packagedDeltas = [{
+    filename: filename,
+    delta: newChapContents
+  }];
 
-  //Need to re-order so converting first lines happens after splitting.
-  if(options.convertFirstLines)
-    newChapContents = convertFirstLineToTitle(newChapContents).delta;
-  if(options.convertItalics.convert)
-    newChapContents = convertMarkedItalics(newChapContents, options.convertItalics.marker).delta;
-  if(options.convertTabs.convert)
-    newChapContents = convertMarkedTabs(newChapContents, options.convertTabs.marker).delta;
+  console.log(tempQuill.getContents());
+
   if(options.splitChapters.split){
+    packagedDeltas = [];
     let splitIndices = [];
     let foundIndex = 0;
     let startingIndex = 0;
     while(foundIndex > -1){
-      foundIndex = inText.indexOf(options.splitChapters.marker, startingIndex);
+      foundIndex = tempQuill.getText().indexOf('\n' + options.splitChapters.marker + '\n', startingIndex);
       if(foundIndex > -1)
         splitIndices.push(foundIndex);
-      startingIndex = foundIndex + options.splitChapters.marker.length;
+      startingIndex = foundIndex + options.splitChapters.marker.length + 2;
     }
 
     var splitDeltas = splitDeltaAtIndices(newChapContents, splitIndices);
+
     splitDeltas.forEach((delt, i) => {
       //remove split marker
       if(i != 0)
-        delt = removeFirstLine(delt);
+        delt = removeChapterMarker(delt);
 
       packagedDeltas.push({
         filename: generateChapTitleFromFirstLine(delt),
@@ -80,13 +79,15 @@ function importPlainText(filepath, options){
       });
     });
   }
-  else {
-    packagedDeltas.push({
-      filename: filename,
-      delta: newChapContents
-    });
-  }
 
+  packagedDeltas.forEach((deltPack, i) => {
+    if(options.convertFirstLines)
+      deltPack.delta = convertFirstLineToTitle(deltPack.delta).delta;
+    if(options.convertItalics.convert)
+      deltPack.delta = convertMarkedItalics(deltPack.delta, options.convertItalics.marker).delta;
+    if(options.convertTabs.convert)
+      deltPack.delta = convertMarkedTabs(deltPack.delta, options.convertTabs.marker).delta;
+  });
 
   return packagedDeltas;
 }
