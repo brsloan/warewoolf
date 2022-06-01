@@ -33,27 +33,3 @@ function generateChapTitleFromFirstLine(delt){
     const titleCharacterLimit = 100;
     return delt.ops[0].insert.split(/\r\n|\r|\n/)[0].slice(0,titleCharacterLimit).replaceAll(/<|>/g,'');
 }
-
-function removeFirstLine(delt){
-  var tempQuill = getTempQuill();
-  tempQuill.setContents(delt);
-  var txt = tempQuill.getText();
-  var firstLinebreak = txt.indexOf("\n");
-  tempQuill.setText(txt.slice(firstLinebreak + 1));
-
-  delt = tempQuill.getContents();
-
-  return delt;
-}
-
-function removeChapterMarker(delt){
-  var tempQuill = getTempQuill();
-  tempQuill.setContents(delt);
-  var txt = tempQuill.getText();
-  //var firstLinebreak = txt.indexOf("\n");
-  tempQuill.setText(txt.replace('\n<ch>\n\n', ''));
-
-  delt = tempQuill.getContents();
-
-  return delt;
-}

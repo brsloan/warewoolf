@@ -53,14 +53,19 @@ function importPlainText(filepath, options){
   }];
 
   console.log(tempQuill.getContents());
+  var splitMarkerRegx = new RegExp('\n{0,2}' + options.splitChapters.marker + '\n{1,2}');
 
-  if(options.splitChapters.split){
+  if(options.splitChapters.split && splitMarkerRegx.test(tempQuill.getText())){
     packagedDeltas = [];
     let splitIndices = [];
     let foundIndex = 0;
     let startingIndex = 0;
+
+
+
     while(foundIndex > -1){
-      foundIndex = tempQuill.getText().indexOf('\n' + options.splitChapters.marker + '\n', startingIndex);
+      var searchResult = splitMarkerRegx.exec(tempQuill.getText());
+      foundIndex = searchResult ? tempQuill.getText().indexOf(searchResult[0], startingIndex) : -1;
       if(foundIndex > -1)
         splitIndices.push(foundIndex);
       startingIndex = foundIndex + options.splitChapters.marker.length + 2;
@@ -71,7 +76,7 @@ function importPlainText(filepath, options){
     splitDeltas.forEach((delt, i) => {
       //remove split marker
       if(i != 0)
-        delt = removeChapterMarker(delt);
+        delt = removeChapterMarker(delt, splitMarkerRegx);
 
       packagedDeltas.push({
         filename: generateChapTitleFromFirstLine(delt),
@@ -91,6 +96,18 @@ function importPlainText(filepath, options){
 
   return packagedDeltas;
 }
+
+function removeChapterMarker(delt, markerRegx){
+  var tempQuill = getTempQuill();
+  tempQuill.setContents(delt);
+  var txt = tempQuill.getText();
+  tempQuill.setText(txt.replace(markerRegx, ''));
+
+  delt = tempQuill.getContents();
+
+  return delt;
+}
+
 
 function importMDF(filepath){
   var inText = fs.readFileSync(filepath, 'utf8');
