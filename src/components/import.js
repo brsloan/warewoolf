@@ -39,7 +39,6 @@ function getImportFilepaths(docPath, filter){
 }
 
 function importPlainText(filepath, options){
-  console.log(options);
   var inText = fs.readFileSync(filepath, 'utf8');
 
   var tempQuill = getTempQuill();
@@ -53,35 +52,15 @@ function importPlainText(filepath, options){
   }];
 
   if(options.splitChapters.split){
-    var splitMarkerRegx = new RegExp('\n{0,2}' + options.splitChapters.marker + '\n{1,2}');
+    packagedDeltas = [];
+    var splitDeltas = splitDeltAtMarker(newChapContents, options.splitChapters.marker);
 
-    if(splitMarkerRegx.test(tempQuill.getText())){
-      packagedDeltas = [];
-      let splitIndices = [];
-      let foundIndex = 0;
-      let startingIndex = 0;
-
-      while(foundIndex > -1){
-        var searchResult = splitMarkerRegx.exec(tempQuill.getText());
-        foundIndex = searchResult ? tempQuill.getText().indexOf(searchResult[0], startingIndex) : -1;
-        if(foundIndex > -1)
-          splitIndices.push(foundIndex);
-        startingIndex = foundIndex + options.splitChapters.marker.length + 2;
-      }
-
-      var splitDeltas = splitDeltaAtIndices(newChapContents, splitIndices);
-
-      splitDeltas.forEach((delt, i) => {
-        //remove split marker
-        if(i != 0)
-          delt = removeChapterMarker(delt, splitMarkerRegx);
-
-        packagedDeltas.push({
-          filename: generateChapTitleFromFirstLine(delt),
-          delta: delt
-        });
+    splitDeltas.forEach((delt, i) => {
+      packagedDeltas.push({
+        filename: generateChapTitleFromFirstLine(delt),
+        delta: delt
       });
-    }
+    });
   }
 
   packagedDeltas.forEach((deltPack, i) => {
@@ -97,10 +76,45 @@ function importPlainText(filepath, options){
 }
 
 function splitDeltAtMarker(delt, marker){
+  var tempQuill = getTempQuill();
+  tempQuill.setContents(delt);
 
+  var splitMarkerRegx = new RegExp('\n{0,2}' + marker + '\n{0,2}');
+  var splitDeltas = [];
 
+  if(splitMarkerRegx.test(tempQuill.getText())){
+    var splitIndices = getRegxIndices(tempQuill.getText(), splitMarkerRegx);
 
+    splitDeltas = splitDeltaAtIndices(delt, splitIndices);
 
+    splitDeltas.forEach((delt, i) => {
+      //remove split marker
+      if(i != 0)
+        splitDeltas[i] = removeChapterMarker(delt, splitMarkerRegx);
+    });
+  }
+  else {
+    splitDeltas.push(delt);
+  }
+
+  return splitDeltas;
+}
+
+function getRegxIndices(txt, regx){
+    let regxIndices = [];
+    let foundIndex = 0;
+    let startingIndex = 0;
+
+    while(foundIndex > -1){
+      var searchResult = regx.exec(txt);
+      foundIndex = searchResult ? txt.indexOf(searchResult[0], startingIndex) : -1;
+      if(foundIndex > -1){
+        regxIndices.push(foundIndex);
+        startingIndex = foundIndex + searchResult.length;
+      }
+    }
+
+    return regxIndices;
 }
 
 function removeChapterMarker(delt, markerRegx){
