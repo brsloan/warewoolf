@@ -52,37 +52,36 @@ function importPlainText(filepath, options){
     delta: newChapContents
   }];
 
-  console.log(tempQuill.getContents());
-  var splitMarkerRegx = new RegExp('\n{0,2}' + options.splitChapters.marker + '\n{1,2}');
+  if(options.splitChapters.split){
+    var splitMarkerRegx = new RegExp('\n{0,2}' + options.splitChapters.marker + '\n{1,2}');
 
-  if(options.splitChapters.split && splitMarkerRegx.test(tempQuill.getText())){
-    packagedDeltas = [];
-    let splitIndices = [];
-    let foundIndex = 0;
-    let startingIndex = 0;
+    if(splitMarkerRegx.test(tempQuill.getText())){
+      packagedDeltas = [];
+      let splitIndices = [];
+      let foundIndex = 0;
+      let startingIndex = 0;
 
+      while(foundIndex > -1){
+        var searchResult = splitMarkerRegx.exec(tempQuill.getText());
+        foundIndex = searchResult ? tempQuill.getText().indexOf(searchResult[0], startingIndex) : -1;
+        if(foundIndex > -1)
+          splitIndices.push(foundIndex);
+        startingIndex = foundIndex + options.splitChapters.marker.length + 2;
+      }
 
+      var splitDeltas = splitDeltaAtIndices(newChapContents, splitIndices);
 
-    while(foundIndex > -1){
-      var searchResult = splitMarkerRegx.exec(tempQuill.getText());
-      foundIndex = searchResult ? tempQuill.getText().indexOf(searchResult[0], startingIndex) : -1;
-      if(foundIndex > -1)
-        splitIndices.push(foundIndex);
-      startingIndex = foundIndex + options.splitChapters.marker.length + 2;
-    }
+      splitDeltas.forEach((delt, i) => {
+        //remove split marker
+        if(i != 0)
+          delt = removeChapterMarker(delt, splitMarkerRegx);
 
-    var splitDeltas = splitDeltaAtIndices(newChapContents, splitIndices);
-
-    splitDeltas.forEach((delt, i) => {
-      //remove split marker
-      if(i != 0)
-        delt = removeChapterMarker(delt, splitMarkerRegx);
-
-      packagedDeltas.push({
-        filename: generateChapTitleFromFirstLine(delt),
-        delta: delt
+        packagedDeltas.push({
+          filename: generateChapTitleFromFirstLine(delt),
+          delta: delt
+        });
       });
-    });
+    }
   }
 
   packagedDeltas.forEach((deltPack, i) => {
@@ -95,6 +94,13 @@ function importPlainText(filepath, options){
   });
 
   return packagedDeltas;
+}
+
+function splitDeltAtMarker(delt, marker){
+
+
+
+
 }
 
 function removeChapterMarker(delt, markerRegx){
