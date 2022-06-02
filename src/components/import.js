@@ -14,14 +14,16 @@ function initiateImport(docPath, options){
 
 function importFiles(filepaths, options){
   filepaths.forEach(function(path){
-    var importedFile;
+    var importedDeltas;
 
     if(options.fileType.id == 'txtSelect')
-      importedFile = importPlainText(path, options.txtOptions);
+      importedDeltas = importPlainText(path, options.txtOptions);
     else if(options.fileType.id == 'mdfcSelect')
-      importedFile = importMDF(path);
+      importedDeltas = importMDF(path);
 
-    addImportedChapter(importedFile.delta, importedFile.filename);
+    importedDeltas.forEach((delt, i) => {
+      addImportedChapter(delt.delta, delt.filename);
+    });
   });
 }
 
@@ -42,32 +44,100 @@ function importPlainText(filepath, options){
   var tempQuill = getTempQuill();
   tempQuill.setText(inText);
   var newChapContents = tempQuill.getContents();
-
   var filename = getFilenameFromFilepath(filepath);
 
-  if(options.convertFirstLines)
-    newChapContents = convertFirstLineToTitle(newChapContents).delta;
-  if(options.convertItalics.convert)
-    newChapContents = convertMarkedItalics(newChapContents, options.convertItalics.marker).delta;
-  if(options.convertTabs.convert)
-    newChapContents = convertMarkedTabs(newChapContents, options.convertTabs.marker).delta;
-
-  return {
+  var packagedDeltas = [{
     filename: filename,
     delta: newChapContents
-  };
+  }];
 
+  if(options.splitChapters.split){
+    packagedDeltas = [];
+    var splitDeltas = splitDeltAtMarker(newChapContents, options.splitChapters.marker);
+
+    splitDeltas.forEach((delt, i) => {
+      packagedDeltas.push({
+        filename: generateChapTitleFromFirstLine(delt),
+        delta: delt
+      });
+    });
+  }
+
+  packagedDeltas.forEach((deltPack, i) => {
+    if(options.convertFirstLines)
+      deltPack.delta = convertFirstLineToTitle(deltPack.delta).delta;
+    if(options.convertItalics.convert)
+      deltPack.delta = convertMarkedItalics(deltPack.delta, options.convertItalics.marker).delta;
+    if(options.convertTabs.convert)
+      deltPack.delta = convertMarkedTabs(deltPack.delta, options.convertTabs.marker).delta;
+  });
+
+  return packagedDeltas;
 }
+
+function splitDeltAtMarker(delt, marker){
+  var tempQuill = getTempQuill();
+  tempQuill.setContents(delt);
+
+  var splitMarkerRegx = new RegExp('\n{0,2}' + marker + '\n{0,2}');
+  var splitDeltas = [];
+
+  if(splitMarkerRegx.test(tempQuill.getText())){
+    var splitIndices = getRegxIndices(tempQuill.getText(), splitMarkerRegx);
+
+    splitDeltas = splitDeltaAtIndices(delt, splitIndices);
+
+    splitDeltas.forEach((delt, i) => {
+      //remove split marker
+      if(i != 0)
+        splitDeltas[i] = removeChapterMarker(delt, splitMarkerRegx);
+    });
+  }
+  else {
+    splitDeltas.push(delt);
+  }
+
+  return splitDeltas;
+}
+
+function getRegxIndices(txt, regx){
+    let regxIndices = [];
+    let foundIndex = 0;
+    let startingIndex = 0;
+
+    while(foundIndex > -1){
+      var searchResult = regx.exec(txt);
+      foundIndex = searchResult ? txt.indexOf(searchResult[0], startingIndex) : -1;
+      if(foundIndex > -1){
+        regxIndices.push(foundIndex);
+        startingIndex = foundIndex + searchResult.length;
+      }
+    }
+
+    return regxIndices;
+}
+
+function removeChapterMarker(delt, markerRegx){
+  var tempQuill = getTempQuill();
+  tempQuill.setContents(delt);
+  var txt = tempQuill.getText();
+  tempQuill.setText(txt.replace(markerRegx, ''));
+
+  delt = tempQuill.getContents();
+
+  return delt;
+}
+
 
 function importMDF(filepath){
   var inText = fs.readFileSync(filepath, 'utf8');
   var delta = markdownFic().parseMDF(inText);
   var filename = getFilenameFromFilepath(filepath);
 
-  return {
+  return [{
     filename: filename,
     delta: delta
-  }
+  }];
 }
 
 function addImportedChapter(chapDelta, title){

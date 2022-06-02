@@ -29,19 +29,6 @@ function showImportOptions(docPath){
   plainTextOptionsLabel.innerText = 'Plaintext Options';
   plainTextOptionsSet.appendChild(plainTextOptionsLabel);
 
-  var convertFirstLinesLabel = document.createElement("label");
-  convertFirstLinesLabel.innerText = "Convert First Lines To Titles: ";
-  convertFirstLinesLabel.for = "convert-first-lines-check";
-  plainTextOptionsSet.appendChild(convertFirstLinesLabel);
-
-  var convertFirstLinesCheck = document.createElement("input");
-  convertFirstLinesCheck.type = "checkbox";
-  convertFirstLinesCheck.id = "convert-first-lines-check";
-  convertFirstLinesCheck.checked = true;
-  plainTextOptionsSet.appendChild(convertFirstLinesCheck);
-
-  plainTextOptionsSet.appendChild(document.createElement('br'));
-
   var convertItalicsLabel = document.createElement("label");
   convertItalicsLabel.innerText = "Convert marked italics: ";
   convertItalicsLabel.for = "convert-italics-check";
@@ -52,6 +39,8 @@ function showImportOptions(docPath){
   convertItalicsCheck.id = "convert-italics-check";
   convertItalicsCheck.checked = true;
   plainTextOptionsSet.appendChild(convertItalicsCheck);
+
+  plainTextOptionsSet.appendChild(document.createElement('br'));
 
   var italicsStrLabel = document.createElement("label");
   italicsStrLabel.innerText = "Marker character: ";
@@ -77,6 +66,8 @@ function showImportOptions(docPath){
   convertTabsCheck.checked = true;
   plainTextOptionsSet.appendChild(convertTabsCheck);
 
+  plainTextOptionsSet.appendChild(document.createElement('br'));
+
   var tabsStrLabel = document.createElement("label");
   tabsStrLabel.innerText = "Tab string (default 4 spaces): ";
   tabsStrLabel.for = "tabs-str-input";
@@ -87,6 +78,45 @@ function showImportOptions(docPath){
   tabsStrInput.value = "    ";
   tabsStrInput.id = "tabs-str-input";
   plainTextOptionsSet.appendChild(tabsStrInput);
+
+  plainTextOptionsSet.appendChild(document.createElement('br'));
+
+  var splitChapsLabel = document.createElement("label");
+  splitChapsLabel.innerText = "Split Into Chapters: ";
+  splitChapsLabel.for = "split-chaps-check";
+  plainTextOptionsSet.appendChild(splitChapsLabel);
+
+  var splitChapsCheck = document.createElement("input");
+  splitChapsCheck.type = "checkbox";
+  splitChapsCheck.id = "split-chaps-check";
+  splitChapsCheck.checked = true;
+  plainTextOptionsSet.appendChild(splitChapsCheck);
+
+  plainTextOptionsSet.appendChild(document.createElement('br'));
+
+  var chapsStrLabel = document.createElement("label");
+  chapsStrLabel.innerText = "Chapter Split Marker: ";
+  chapsStrLabel.for = "chaps-str-input";
+  plainTextOptionsSet.appendChild(chapsStrLabel);
+
+  var chapsStrInput = document.createElement("input");
+  chapsStrInput.type = "text";
+  chapsStrInput.value = "<ch>";
+  chapsStrInput.id = "chaps-str-input";
+  plainTextOptionsSet.appendChild(chapsStrInput);
+
+  plainTextOptionsSet.appendChild(document.createElement('br'));
+
+  var convertFirstLinesLabel = document.createElement("label");
+  convertFirstLinesLabel.innerText = "Convert First Lines To Titles: ";
+  convertFirstLinesLabel.for = "convert-first-lines-check";
+  plainTextOptionsSet.appendChild(convertFirstLinesLabel);
+
+  var convertFirstLinesCheck = document.createElement("input");
+  convertFirstLinesCheck.type = "checkbox";
+  convertFirstLinesCheck.id = "convert-first-lines-check";
+  convertFirstLinesCheck.checked = true;
+  plainTextOptionsSet.appendChild(convertFirstLinesCheck);
 
   importForm.appendChild(plainTextOptionsSet);
 
@@ -118,6 +148,10 @@ function showImportOptions(docPath){
       convertTabs: {
         convert: convertTabsCheck.checked,
         marker: tabsStrInput.value
+      },
+      splitChapters: {
+        split: splitChapsCheck.checked,
+        marker: chapsStrInput.value
       }
     };
 
