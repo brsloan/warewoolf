@@ -4,14 +4,7 @@
 }
 
 body {
-/*
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  margin: auto;
-  max-width: 38rem;
-  padding: 2rem;
-*/
   background-color: #F0F8FF;
-  /*background-color: #222222;*/
   margin: 0;
   padding-top: 12px;
   font-family: Helvetica, sans-serif;
@@ -21,7 +14,6 @@ body {
   width: 25%;
   display: block;
   float: left;
-  /*color: #dddddd;*/
   height: 93vh;
   font-size: var(--main-font-size);
 }
@@ -56,6 +48,7 @@ body {
 .ql-editor {
   line-height: 200%;
   font-size: var(--main-font-size);
+  font-family: serif;
 }
 
 .activeChapter {
