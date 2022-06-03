@@ -51,11 +51,15 @@ function disableTabbingToEditors(){
 }
 
 function applyUserSettings(){
-  document.documentElement.style.setProperty('--main-font-size', userSettings.fontSize + 'pt');
-  document.documentElement.style.setProperty('--dialog-font-size', (userSettings.fontSize + 2) + 'pt');
+  updateFontSize();
   if(userSettings.typewriterMode)
     enableTypewriterMode()
   updateEditorWidth();
+}
+
+function updateFontSize(){
+  document.documentElement.style.setProperty('--main-font-size', userSettings.fontSize + 'pt');
+  document.documentElement.style.setProperty('--dialog-font-size', (userSettings.fontSize + 2) + 'pt');
 }
 
 function updateEditorWidth(){
@@ -449,16 +453,6 @@ function disableSearchView(){
   document.getElementById("writing-field").classList.remove("writing-field-search-view");
 }
 
-function changeRootFontSize(rootProp, amount){
-  var currentSize = parseInt(
-    getComputedStyle(document.documentElement)
-    .getPropertyValue(rootProp).replace('pt','')
-  );
-  var newSize = currentSize + amount;
-  document.documentElement.style.setProperty(rootProp, newSize + 'pt');
-  return newSize;
-}
-
 function increaseEditorWidthSetting(){
   userSettings.editorWidth++;
   updateEditorWidth();
@@ -469,6 +463,20 @@ function descreaseEditorWidthSetting(){
   userSettings.editorWidth--;
   updateEditorWidth();
   userSettings.save();
+}
+
+function increaseFontSizeSetting(){
+  userSettings.fontSize++;
+  updateFontSize();
+  userSettings.save();
+  scrollChapterListToActiveChapter();
+}
+
+function decreaseFontSizeSetting(){
+  userSettings.fontSize--;
+  updateFontSize();
+  userSettings.save();
+  scrollChapterListToActiveChapter();
 }
 
 function toggleDistractionFree(){
@@ -595,16 +603,10 @@ document.addEventListener ("keydown", function (e) {
       editorQuill.focus();
     }
     else if(e.ctrlKey && e.key === "="){
-      userSettings.fontSize = changeRootFontSize('--main-font-size', 1);
-      userSettings.save();
-      changeRootFontSize('--dialog-font-size', 1);
-      scrollChapterListToActiveChapter();
+      increaseFontSizeSetting();
     }
     else if(e.ctrlKey && e.key === "-"){
-      userSettings.fontSize = changeRootFontSize('--main-font-size', -1);
-      userSettings.save();
-      changeRootFontSize('--dialog-font-size', -1);
-      scrollChapterListToActiveChapter();
+      decreaseFontSizeSetting();
     }
     else if(e.ctrlKey && e.altKey && e.key === "t"){
       if(userSettings.typewriterMode){
