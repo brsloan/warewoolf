@@ -3,6 +3,7 @@ function getUserSettings(){
     editorWidth: 50,
     fontSize: 12,
     typewriterMode: false,
+    distractionFreeMode: false,
     lastProject: null,
     defaultAuthor: '',
     save: save,

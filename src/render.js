@@ -55,6 +55,7 @@ function applyUserSettings(){
   if(userSettings.typewriterMode)
     enableTypewriterMode()
   updateEditorWidth();
+  updateDistractionFree();
 }
 
 function updateFontSize(){
@@ -480,13 +481,34 @@ function decreaseFontSizeSetting(){
 }
 
 function toggleDistractionFree(){
-  var sidebars = document.getElementsByClassName('sidebar');
-  for(let i = 0;i < sidebars.length; i++){
-    sidebars[i].classList.toggle('sidebar-distraction-free');
-  }
-  document.getElementById('writing-field').classList.toggle('writing-field-distraction-free');
+  userSettings.distractionFreeMode = !userSettings.distractionFreeMode;
+  updateDistractionFree();
+  userSettings.save();
 }
 
+function updateDistractionFree(){
+  if(userSettings.distractionFreeMode)
+    enableDistractionFree();
+  else {
+    disableDistractionFree();
+  }
+}
+
+function enableDistractionFree(){
+  var sidebars = document.getElementsByClassName('sidebar');
+  for(let i = 0;i < sidebars.length; i++){
+    sidebars[i].classList.add('sidebar-distraction-free');
+  }
+  document.getElementById('writing-field').classList.add('writing-field-distraction-free');
+}
+
+function disableDistractionFree(){
+  var sidebars = document.getElementsByClassName('sidebar');
+  for(let i = 0;i < sidebars.length; i++){
+    sidebars[i].classList.remove('sidebar-distraction-free');
+  }
+  document.getElementById('writing-field').classList.remove('writing-field-distraction-free');
+}
 
 function scrollChapterListToActiveChapter(){
   document.getElementById('chapter-list-sidebar')
