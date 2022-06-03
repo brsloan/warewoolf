@@ -1,6 +1,8 @@
 :root {
   --main-font-size: 12pt;
   --dialog-font-size: 14pt;
+  --editor-width: 50%;
+  --sidebar-width: 25%;
 }
 
 body {
@@ -10,7 +12,7 @@ body {
 }
 
 .sidebar {
-  width: 25%;
+  width: var(--sidebar-width);
   display: block;
   float: left;
   height: 93vh;
@@ -37,7 +39,7 @@ body {
 }
 
 .writing-field-standard-view {
-  width: 50%;
+  width: var(--editor-width);
   display: block;
   float: left;
 }
@@ -50,6 +52,7 @@ body {
 
 .writing-field-search-view{
   float: right;
+  width: 50%;
 }
 
 

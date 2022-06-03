@@ -59,11 +59,8 @@ function applyUserSettings(){
 }
 
 function updateEditorWidth(){
-  document.getElementById('writing-field').style.width = userSettings.editorWidth + "%";
-  var sidebars = document.getElementsByClassName('sidebar');
-  for(let i=0; i < sidebars.length; i++){
-    sidebars[i].style.width = ((100 - userSettings.editorWidth) / 2) + "%";
-  }
+  document.documentElement.style.setProperty('--editor-width', userSettings.editorWidth + '%');
+  document.documentElement.style.setProperty('--sidebar-width', ((100 - userSettings.editorWidth) / 2) + "%");
 }
 
 function setProject(filepath){
@@ -474,6 +471,13 @@ function descreaseEditorWidthSetting(){
   userSettings.save();
 }
 
+function toggleDistractionFree(){
+  var sidebars = document.getElementsByClassName('sidebar');
+  for(let i = 0;i < sidebars.length; i++){
+    sidebars[i].classList.toggle('sidebar-distraction-free');
+  }
+  document.getElementById('writing-field').classList.toggle('writing-field-distraction-free');
+}
 
 
 function scrollChapterListToActiveChapter(){
@@ -619,14 +623,6 @@ document.addEventListener ("keydown", function (e) {
       toggleDistractionFree();
     }
 } );
-
-function toggleDistractionFree(){
-  var sidebars = document.getElementsByClassName('sidebar');
-  for(let i = 0;i < sidebars.length; i++){
-    sidebars[i].classList.toggle('sidebar-distraction-free');
-  }
-  document.getElementById('writing-field').classList.toggle('writing-field-distraction-free');
-}
 
 document.getElementById('editor-container').addEventListener('keydown', function(e){
   if (e.ctrlKey  && e.shiftKey && e.key === "ArrowUp") {
