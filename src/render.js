@@ -615,8 +615,18 @@ document.addEventListener ("keydown", function (e) {
       }
 
     }
+    else if(e.key === 'F11'){
+      toggleDistractionFree();
+    }
 } );
 
+function toggleDistractionFree(){
+  var sidebars = document.getElementsByClassName('sidebar');
+  for(let i = 0;i < sidebars.length; i++){
+    sidebars[i].classList.toggle('sidebar-distraction-free');
+  }
+  document.getElementById('writing-field').classList.toggle('writing-field-distraction-free');
+}
 
 document.getElementById('editor-container').addEventListener('keydown', function(e){
   if (e.ctrlKey  && e.shiftKey && e.key === "ArrowUp") {
