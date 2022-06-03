@@ -1,0 +1,15 @@
+body {
+  background-color: #F0F8FF;
+}
+
+#writing-field {
+  background-color: #ffffff;
+}
+
+::-webkit-scrollbar {
+  background-color: none;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #aaa;
+}

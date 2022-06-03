@@ -1,0 +1,20 @@
+body {
+  background-color: #21252b;
+}
+
+#writing-field {
+  background-color: #282c34;
+  color: #eeeeee;
+}
+
+.sidebar {
+  color: #abb2bf;
+}
+
+::-webkit-scrollbar {
+  background-color: none;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #4b5362;
+}
