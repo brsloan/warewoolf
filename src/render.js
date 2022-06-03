@@ -138,6 +138,12 @@ function updateFileList(){
         listChap.innerHTML += "*";
       trashList.appendChild(listChap);
     });
+
+    var trashHeader = document.getElementById('trash-header');
+    if(project.trash.length > 0 )
+      trashHeader.classList.remove('trash-header-empty');
+    else
+      trashHeader.classList.add('trash-header-empty');
   }
 
 }
