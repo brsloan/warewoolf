@@ -1,0 +1,18 @@
+.sidebar {
+  width: var(--editor-width);
+  display: none;
+  float: none;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.writing-field-standard-view {
+  display: none;
+  float: none;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.focused {
+  display: block;
+}

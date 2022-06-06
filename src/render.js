@@ -35,6 +35,7 @@ function initialize(){
   var initialProject = userSettings.lastProject ? userSettings.lastProject : convertFilepath(__dirname) + "/examples/Frankenstein/Frankenstein.woolf";
   setProject(initialProject);
   applyUserSettings();
+  setFocus('writingField');
 }
 
 function setUpQuills(){
@@ -187,6 +188,31 @@ function displayInitialChapter(){
   displayChapterByIndex(project.activeChapterIndex);
 }
 
+function setFocus(area){
+  var chapList = document.getElementById('chapter-list-sidebar');
+  var writingField = document.getElementById('writing-field');
+  var notes = document.getElementById('project-notes');
+
+  switch (area) {
+    case 'chapList':
+      chapList.classList.add('focused');
+      writingField.classList.remove('focused');
+      notes.classList.remove('focused');
+      break;
+    case 'writingField':
+      chapList.classList.remove('focused');
+      writingField.classList.add('focused');
+      notes.classList.remove('focused');
+      editorQuill.focus();
+      break;
+    case 'notes':
+      chapList.classList.remove('focused');
+      writingField.classList.remove('focused');
+      notes.classList.add('focused');
+      notesQuill.focus();
+      break;
+  }
+}
 
 //User Actions
 
@@ -611,12 +637,14 @@ document.addEventListener ("keydown", function (e) {
       stopDefaultPropagation(e);
       removeElementsByClass('popup');
       disableSearchView();
+      setFocus('writingField');
       editorQuill.focus();
     }
     else if(e.ctrlKey && e.key === "ArrowRight"){
       stopDefaultPropagation(e);
       removeElementsByClass('popup');
       disableSearchView();
+      setFocus('notes');
       notesQuill.focus();
     }
     else if(e.key === "Escape"){
@@ -646,6 +674,18 @@ document.addEventListener ("keydown", function (e) {
     else if(e.key === 'F11'){
       stopDefaultPropagation(e);
       toggleDistractionFree();
+    }
+    else if(e.key === 'F1'){
+      stopDefaultPropagation(e);
+      setFocus('chapList');
+    }
+    else if(e.key === "F2"){
+      stopDefaultPropagation(e);
+      setFocus('writingField');
+    }
+    else if(e.key ==="F3"){
+      stopDefaultPropagation(e);
+      setFocus('notes');
     }
 } );
 
