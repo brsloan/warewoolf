@@ -644,6 +644,7 @@ document.addEventListener ("keydown", function (e) {
 
     }
     else if(e.key === 'F11'){
+      stopDefaultPropagation(e);
       toggleDistractionFree();
     }
 } );
