@@ -1,8 +1,9 @@
 :root {
-  --main-font-size: 12pt;
-  --dialog-font-size: 14pt;
-  --editor-width: 50%;
-  --sidebar-width: 25%;
+  --main-font-size: 12pt; /*overwritten by user settings.*/
+  --dialog-font-size: 14pt; /*overwritten by user settings.*/
+  --editor-width: 50%; /*overwritten by user settings.*/
+  --sidebar-width: 25%;  /*overwritten by user settings.*/
+  --sidebar-width-double-view: 50%;  /*overwritten by user settings.*/
 }
 
 body {
@@ -34,17 +35,35 @@ body {
   display: none;
 }
 
+.sidebar-single-view {
+  width: var(--editor-width);
+  display: none;
+  float: none;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.sidebar-double-view {
+  width: var(--sidebar-width-double-view);
+}
+
 .writing-field-standard-view {
   width: var(--editor-width);
   display: none;
   float: left;
 }
 
+.writing-field-single-view {
+  float: none;
+  margin-left: auto;
+  margin-right: auto;
+}
+
 .writing-field-search-view{
   float: right;
   width: 50%;
+  margin-right: none;
 }
-
 
 #editor-container {
   height: 97vh;
@@ -176,4 +195,8 @@ body {
 
 .trash-header-empty {
   display: none;
+}
+
+.visible {
+  display: block;
 }
