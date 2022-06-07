@@ -148,6 +148,7 @@ function newProject(){
         });
 
         fs.writeFileSync(proj.directory + proj.filename, fileString, 'utf8');
+        return proj.directory + proj.filename;
       }
       catch(err){
         logError(err);

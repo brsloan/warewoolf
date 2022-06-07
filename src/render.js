@@ -35,7 +35,7 @@ function initialize(){
   var initialProject = convertFilepath(__dirname) + "/examples/Frankenstein/Frankenstein.woolf";
   if(userSettings.lastProject != null && fs.existsSync(userSettings.lastProject))
     initialProject = userSettings.lastProject;
-    
+
   setProject(initialProject);
   applyUserSettings();
 }
@@ -328,8 +328,12 @@ function saveProjectAs(docPath) {
     ]
   };
   var filepath = dialog.showSaveDialogSync(options);
-  if (filepath)
-    project.saveAs(filepath);
+  if (filepath){
+    filepath = project.saveAs(filepath);
+    userSettings.lastProject = filepath;
+    userSettings.save();
+  }
+
   updateFileList();
   updateTitleBar();
 }
