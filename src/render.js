@@ -31,13 +31,22 @@ initialize();
 
 function initialize(){
   setUpQuills();
-  //Load last project opened, or if none logged, load example project
-  var initialProject = convertFilepath(__dirname) + "/examples/Frankenstein/Frankenstein.woolf";
-  if(userSettings.lastProject != null && fs.existsSync(userSettings.lastProject))
-    initialProject = userSettings.lastProject;
-
-  setProject(initialProject);
   applyUserSettings();
+  loadInitialProject();
+}
+
+function loadInitialProject(){
+  //Load last project opened, or if none logged, load example project, and if example gone, create new project
+  var defaultProject = convertFilepath(__dirname) + "/examples/Frankenstein/Frankenstein.woolf";
+
+  if(userSettings.lastProject != null && fs.existsSync(userSettings.lastProject))
+    setProject(userSettings.lastProject);
+  else if(fs.existsSync(defaultProject))
+    setProject(defaultProject);
+  else {
+    //Start new project
+    createNewProject();
+  }
 }
 
 function setUpQuills(){
