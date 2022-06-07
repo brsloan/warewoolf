@@ -12,6 +12,11 @@ body {
   font-family: Helvetica, sans-serif;
 }
 
+input, textarea, select, button {
+  box-sizing: border-box;
+}
+
+
 .sidebar {
   width: var(--sidebar-width);
   display: none;
@@ -81,8 +86,6 @@ body {
 
 .popup {
   display: block;
-  background-color: black;
-  color: white;
   position: fixed;
   top: 50%;
   left: 50%;
@@ -108,10 +111,6 @@ body {
 
 .name-box {
   width: 95%;
-}
-
-.highlighted {
-  background-color: #f8ff00;
 }
 
 #prog-bar-container {
@@ -155,8 +154,6 @@ body {
 .popup-outliner {
   width: 100%;
   height: 100%;
-  background-color: white;
-  color: black;
   overflow-y: scroll;
 }
 
@@ -177,15 +174,20 @@ body {
 }
 
 .outliner-summary {
+  position: relative;
   width: 99%;
-  padding-left: 0px;
-  padding-right: 0px;
+  padding: 0px;
+  margin: 0px;
 }
 
 .outliner-summary input{
-  width: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
   height: 100%;
+  width: 100%;
   margin: 0px;
+  padding: 3px;
 }
 
 ::-webkit-scrollbar {

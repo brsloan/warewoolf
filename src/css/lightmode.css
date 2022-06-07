@@ -13,3 +13,13 @@ body {
 ::-webkit-scrollbar-thumb {
   background: #aaa;
 }
+
+.popup {
+  background-color: black;
+  color: white;
+}
+
+.popup-outliner {
+  background-color: white;
+  color: black;
+}
