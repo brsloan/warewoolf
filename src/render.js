@@ -367,6 +367,25 @@ function openAProject(docPath) {
   }
 }
 
+function changeChapsDirectory(){
+  const options = {
+    title: 'Select one of the missing pups...',
+    defaultPath: project.directory,
+    filters: [
+      { name: '.pup files', extensions: ['pup'] }
+    ]
+  };
+  var filepath = dialog.showOpenDialogSync(options);
+  if (filepath) {
+    console.log(filepath);
+    var parts = filepath[0].split('/');
+    var subdir = parts[parts.length - 2].concat('/');
+    console.log('new subdir: ' + subdir);
+    project.chapsDirectory = subdir;
+    displayProject();
+  }
+}
+
 function clearCurrentChapterIfUnchanged(){
   var ch = project.getActiveChapter();
   if(ch && (ch.hasUnsavedChanges == undefined || ch.hasUnsavedChanges == false)){

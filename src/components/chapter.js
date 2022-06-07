@@ -26,7 +26,7 @@ function newChapter(){
       try{
         var chap = this;
 
-        var chapterObj = JSON.parse(fs.readFileSync(project.directory + chap.filename, "utf8"));
+        var chapterObj = JSON.parse(fs.readFileSync(project.directory + project.chapsDirectory + chap.filename, "utf8"));
 
         return chapterObj;
       }
@@ -39,12 +39,12 @@ function newChapter(){
     function saveFile(){
       try{
         var chap = this;
-        var subDir = project.filename.split(".")[0].concat("_pups/");
+        //var subDir = project.chapsDirectory;
 
         if(chap.filename == undefined || chap.filename == null)
           chap.filename = getNewFilename();
 
-        fs.writeFileSync(project.directory + chap.filename, JSON.stringify(chap.contents), "utf8");
+        fs.writeFileSync(project.directory + project.chapsDirectory + chap.filename, JSON.stringify(chap.contents), "utf8");
         chap.contents = null;
         chap.hasUnsavedChanges = false;
 
@@ -52,13 +52,13 @@ function newChapter(){
         function getNewFilename(){
           var largestFilename = 0;
 
-          fs.readdirSync(project.directory + subDir).forEach(file => {
+          fs.readdirSync(project.directory + project.chapsDirectory).forEach(file => {
             var nameNumber = parseInt(file.split(".")[0]);
             if(nameNumber > largestFilename)
               largestFilename = nameNumber;
           });
 
-          return subDir + (largestFilename + 1).toString() + ".pup";
+          return (largestFilename + 1).toString() + ".pup";
         }
       }
       catch(err){

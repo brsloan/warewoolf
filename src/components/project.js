@@ -52,6 +52,8 @@ function newProject(){
           trashChaps.push(newChapter().parseChapter(tr));
         });
         this.trash = trashChaps;
+
+        testChapsDirectory();
       }
       catch(err){
         logError(err);
@@ -90,7 +92,7 @@ function newProject(){
       return JSON.stringify(proj, function(k,v){
         if (k == "contents") return undefined;
         else if (k == "hasUnsavedChanges") return undefined;
-        else if (k == "filename") return undefined;
+        //else if (k == "filename") return undefined;
         else if (k == "directory") return undefined;
         else return v;
       }, '\t');
@@ -116,15 +118,16 @@ function newProject(){
         //Copy any existing chapters over to new location and change name accordingly
         proj.chapters.forEach(function(chap){
           if(chap.filename != null){
-            var newChapFilename = newSubDir + chap.filename.split("/").pop();
-            fs.copyFileSync(proj.directory + chap.filename, newDirectory + newChapFilename);
+            var newChapFilename =  chap.filename.split("/").pop();
+            fs.copyFileSync(proj.directory + proj.chapsDirectory + chap.filename,
+              newDirectory + newSubDir + newChapFilename);
             chap.filename = newChapFilename;
           }
         });
         proj.trash.forEach(function(chap){
           if(chap.filename != null){
-            var newChapFilename = newSubDir + chap.filename.split("/").pop();
-            fs.copyFileSync(proj.directory + chap.filename, newDirectory + newChapFilename);
+            var newChapFilename = chap.filename.split("/").pop();
+            fs.copyFileSync(proj.directory + proj.chapsDirectory + chap.filename, newDirectory + newSubDir + newChapFilename);
             chap.filename = newChapFilename;
           }
         });
@@ -157,4 +160,45 @@ function newProject(){
         logError(err);
       }
     }
+
+    function testChapsDirectory(){
+      var firstChapExists = fs.existsSync(project.directory + project.chapsDirectory + '1.pup');
+
+      if(!firstChapExists){
+          promptForMissingPups();
+      }
+    }
+}
+
+function promptForMissingPups(){
+  removeElementsByClass('popup');
+  var popup = document.createElement("div");
+  popup.classList.add("popup");
+
+  var warningTitle = document.createElement("h1");
+  warningTitle.innerText = "Oops! This Woolf's Pups Are Missing!";
+  popup.appendChild(warningTitle);
+
+  var warning = document.createElement("p");
+  warning.innerText = "They are not in their expected directory: " + project.chapsDirectory +
+    ". Can you hear them howling? Find the first pup and we'll round up the rest. This project should have " +
+    project.chapters.length + " .pup files.";
+  popup.appendChild(warning);
+
+  var find = createButton("Awooo! I'll Find Them");
+  find.onclick = function(){
+    changeChapsDirectory();
+    closePopups();
+  };
+  popup.appendChild(find);
+
+  popup.appendChild(document.createElement('br'));
+
+  var cancel = createButton("Let them starve and start a new project.");
+  cancel.onclick = function(){
+    closePopups();
+  };
+  popup.appendChild(cancel);
+
+  document.body.appendChild(popup);
 }
