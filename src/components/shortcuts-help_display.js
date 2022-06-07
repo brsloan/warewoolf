@@ -51,7 +51,6 @@ function showShortcutsHelp(){
         shortcuts: [
           ['Adjust Editor Width', 'Ctrl + < or >'],
           ['Adjust Font Size', 'Ctrl + - or +'],
-          ['Distraction Free Mode', 'F11'],
           ['Typewriter Mode', 'Ctrl + Alt + T']
         ]
       }

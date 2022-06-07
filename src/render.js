@@ -55,7 +55,6 @@ function applyUserSettings(){
   if(userSettings.typewriterMode)
     enableTypewriterMode()
   updateEditorWidth();
-  updateDistractionFree();
   setDisplayMode(userSettings.displayMode);
 }
 
@@ -537,36 +536,6 @@ function decreaseFontSizeSetting(){
   scrollChapterListToActiveChapter();
 }
 
-function toggleDistractionFree(){
-  userSettings.distractionFreeMode = !userSettings.distractionFreeMode;
-  updateDistractionFree();
-  userSettings.save();
-}
-
-function updateDistractionFree(){
-  if(userSettings.distractionFreeMode)
-    enableDistractionFree();
-  else {
-    disableDistractionFree();
-  }
-}
-
-function enableDistractionFree(){
-  var sidebars = document.getElementsByClassName('sidebar');
-  for(let i = 0;i < sidebars.length; i++){
-    sidebars[i].classList.add('sidebar-distraction-free');
-  }
-  document.getElementById('writing-field').classList.add('writing-field-distraction-free');
-}
-
-function disableDistractionFree(){
-  var sidebars = document.getElementsByClassName('sidebar');
-  for(let i = 0;i < sidebars.length; i++){
-    sidebars[i].classList.remove('sidebar-distraction-free');
-  }
-  document.getElementById('writing-field').classList.remove('writing-field-distraction-free');
-}
-
 function scrollChapterListToActiveChapter(){
   document.getElementById('chapter-list-sidebar')
   .scrollTop = document.querySelector('.activeChapter')
@@ -699,10 +668,6 @@ document.addEventListener ("keydown", function (e) {
         userSettings.save();
       }
 
-    }
-    else if(e.key === 'F11'){
-      stopDefaultPropagation(e);
-      toggleDistractionFree();
     }
     else if(e.key === 'F1'){
       stopDefaultPropagation(e);
