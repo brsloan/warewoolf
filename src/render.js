@@ -206,28 +206,34 @@ function setDisplayMode(m){
       chapList.classList.add('visible');
       writingField.classList.add('visible');
       notes.classList.add('visible');
+      editorQuill.focus();
       break;
     case 2:
       chapList.classList.add('visible');
       chapList.classList.add('sidebar-double-view');
       writingField.classList.add('visible');
+      editorQuill.focus();
       break;
     case 3:
       writingField.classList.add('visible');
       notes.classList.add('visible');
       notes.classList.add('sidebar-double-view');
+      editorQuill.focus();
       break;
     case 4:
       chapList.classList.add('visible');
       chapList.classList.add('sidebar-single-view');
+      chapList.focus();
       break;
     case 5:
       writingField.classList.add('visible');
       writingField.classList.add('writing-field-single-view');
+      editorQuill.focus();
       break;
     case 6:
       notes.classList.add('visible');
       notes.classList.add('sidebar-single-view');
+      notesQuill.focus();
       break;
   }
 }
@@ -724,7 +730,10 @@ document.addEventListener ("keydown", function (e) {
     }
 } );
 
-document.getElementById('editor-container').addEventListener('keydown', function(e){
+document.getElementById('editor-container').addEventListener('keydown', editorControlEvents);
+document.getElementById('chapter-list-sidebar').addEventListener('keydown', editorControlEvents);
+
+function editorControlEvents(e){
   if (e.ctrlKey  && e.shiftKey && e.key === "ArrowUp") {
     stopDefaultPropagation(e);
     moveChapUp(project.activeChapterIndex);
@@ -735,7 +744,8 @@ document.getElementById('editor-container').addEventListener('keydown', function
   }
   else if(e.ctrlKey && e.shiftKey && e.key === "ArrowLeft"){
     stopDefaultPropagation(e);
-    changeChapterTitle(project.activeChapterIndex);
+    if(document.getElementById('chapter-list-sidebar').classList.contains('visible'))
+      changeChapterTitle(project.activeChapterIndex);
   }
   else if(e.ctrlKey && e.key === "ArrowUp"){
     stopDefaultPropagation(e);
@@ -751,7 +761,7 @@ document.getElementById('editor-container').addEventListener('keydown', function
   else if(e.ctrlKey && e.key === "."){
     increaseEditorWidthSetting();
   }
-});
+}
 
 function stopDefaultPropagation(keyEvent){
   keyEvent.preventDefault();
