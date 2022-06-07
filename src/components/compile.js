@@ -20,13 +20,23 @@ function compileProject(options, filepath){
 }
 
 function compileMDF(dir, allChaps){
-  var allText = markdownFic().convertDeltaToMDF(allChaps);
-  fs.writeFileSync(dir, allText);
+  try{
+    var allText = markdownFic().convertDeltaToMDF(allChaps);
+    fs.writeFileSync(dir, allText);
+  }
+  catch(err){
+    logError(err);
+  }
 }
 
 function compilePlainText(dir, allChaps){
+  try{
     var allText = convertToPlainText(allChaps);
     fs.writeFileSync(dir, allText);
+  }
+  catch(err){
+    logError(err);
+  }
 }
 
 function compileChapterDeltas(options){

@@ -8,7 +8,7 @@ function initiateImport(docPath, options){
     importFiles(filepaths, options);
   }
   catch(err){
-    console.log(err);
+    logError(err);
   }
 }
 
@@ -39,40 +39,45 @@ function getImportFilepaths(docPath, filter){
 }
 
 function importPlainText(filepath, options){
-  var inText = fs.readFileSync(filepath, 'utf8');
+  try{
+    var inText = fs.readFileSync(filepath, 'utf8');
 
-  var tempQuill = getTempQuill();
-  tempQuill.setText(inText);
-  var newChapContents = tempQuill.getContents();
-  var filename = getFilenameFromFilepath(filepath);
+    var tempQuill = getTempQuill();
+    tempQuill.setText(inText);
+    var newChapContents = tempQuill.getContents();
+    var filename = getFilenameFromFilepath(filepath);
 
-  var packagedDeltas = [{
-    filename: filename,
-    delta: newChapContents
-  }];
+    var packagedDeltas = [{
+      filename: filename,
+      delta: newChapContents
+    }];
 
-  if(options.splitChapters.split){
-    packagedDeltas = [];
-    var splitDeltas = splitDeltAtMarker(newChapContents, options.splitChapters.marker);
+    if(options.splitChapters.split){
+      packagedDeltas = [];
+      var splitDeltas = splitDeltAtMarker(newChapContents, options.splitChapters.marker);
 
-    splitDeltas.forEach((delt, i) => {
-      packagedDeltas.push({
-        filename: generateChapTitleFromFirstLine(delt),
-        delta: delt
+      splitDeltas.forEach((delt, i) => {
+        packagedDeltas.push({
+          filename: generateChapTitleFromFirstLine(delt),
+          delta: delt
+        });
       });
+    }
+
+    packagedDeltas.forEach((deltPack, i) => {
+      if(options.convertFirstLines)
+        deltPack.delta = convertFirstLineToTitle(deltPack.delta).delta;
+      if(options.convertItalics.convert)
+        deltPack.delta = convertMarkedItalics(deltPack.delta, options.convertItalics.marker).delta;
+      if(options.convertTabs.convert)
+        deltPack.delta = convertMarkedTabs(deltPack.delta, options.convertTabs.marker).delta;
     });
+
+    return packagedDeltas;
   }
-
-  packagedDeltas.forEach((deltPack, i) => {
-    if(options.convertFirstLines)
-      deltPack.delta = convertFirstLineToTitle(deltPack.delta).delta;
-    if(options.convertItalics.convert)
-      deltPack.delta = convertMarkedItalics(deltPack.delta, options.convertItalics.marker).delta;
-    if(options.convertTabs.convert)
-      deltPack.delta = convertMarkedTabs(deltPack.delta, options.convertTabs.marker).delta;
-  });
-
-  return packagedDeltas;
+  catch(err){
+    logError(err);
+  }
 }
 
 function splitDeltAtMarker(delt, marker){
@@ -130,14 +135,19 @@ function removeChapterMarker(delt, markerRegx){
 
 
 function importMDF(filepath){
-  var inText = fs.readFileSync(filepath, 'utf8');
-  var delta = markdownFic().parseMDF(inText);
-  var filename = getFilenameFromFilepath(filepath);
+  try{
+    var inText = fs.readFileSync(filepath, 'utf8');
+    var delta = markdownFic().parseMDF(inText);
+    var filename = getFilenameFromFilepath(filepath);
 
-  return [{
-    filename: filename,
-    delta: delta
-  }];
+    return [{
+      filename: filename,
+      delta: delta
+    }];
+  }
+  catch(err){
+    logError(err);
+  }
 }
 
 function addImportedChapter(chapDelta, title){

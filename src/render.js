@@ -837,10 +837,15 @@ function closePopups(){
 }
 
 function removeElementsByClass(className){
-  var elements = document.getElementsByClassName(className);
-  while(elements.length > 0){
-      elements[0].onblur = null;
-      elements[0].parentNode.removeChild(elements[0]);
+  try{
+    var elements = document.getElementsByClassName(className);
+    while(elements.length > 0){
+        elements[0].onblur = null;
+        elements[0].parentNode.removeChild(elements[0]);
+    }
+  }
+  catch(err){
+    logError(err);
   }
 }
 
@@ -850,7 +855,7 @@ function convertFilepath(fpath){
     var converted = fpath.replaceAll('\\', '/');
   }
   catch(err){
-    console.log(err);
+    logError(err);
   }
 
   return converted;
@@ -869,4 +874,8 @@ function editorHasFocus(){
 
 function editorIsVisible(){
   return document.getElementById('writing-field').classList.contains('visible');
+}
+
+function logError(e){
+  console.log(e);
 }

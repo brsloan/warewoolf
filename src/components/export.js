@@ -21,17 +21,23 @@ function exportProject(options, filepath){
 }
 
 function exportAsMDF(dir){
-  for(let i=0; i < project.chapters.length; i++){
-    var chapFile = project.chapters[i].getFile();
-    var outName = generateChapterFilename(i);
+  try{
+    for(let i=0; i < project.chapters.length; i++){
+      var chapFile = project.chapters[i].getFile();
+      var outName = generateChapterFilename(i);
 
-    fs.writeFileSync(dir + outName + '.mdfc', markdownFic().convertDeltaToMDF(chapFile));
+      fs.writeFileSync(dir + outName + '.mdfc', markdownFic().convertDeltaToMDF(chapFile));
+    }
+
+    fs.writeFileSync(dir + "notes" + ".mdfc", markdownFic().convertDeltaToMDF(project.notes));
   }
-
-  fs.writeFileSync(dir + "notes" + ".mdfc", markdownFic().convertDeltaToMDF(project.notes));
+  catch(err){
+    logError(err);
+  }
 }
 
 function exportAsText(dir){
+  try{
     for(i=0; i<project.chapters.length; i++){
         var chapFile = project.chapters[i].getFile();
         var outName = generateChapterFilename(i);
@@ -40,6 +46,10 @@ function exportAsText(dir){
     }
 
     fs.writeFileSync(dir + "notes" + ".txt", convertToPlainText(project.notes));
+  }
+  catch(err){
+    logError(err);
+  }
 }
 
 function convertToPlainText(chapFile){

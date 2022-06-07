@@ -6,6 +6,7 @@ function runSpellcheck(startingIndex = 0, wordsToIgnore){
 }
 
 function loadDictionaries(){
+  try{
     var baseFilepath = convertFilepath(__dirname);
     var aff = fs.readFileSync(baseFilepath + '/dictionaries/en_US-large.aff', 'utf8');
     var dic = fs.readFileSync(baseFilepath + '/dictionaries/en_US-large.dic', 'utf8');
@@ -14,6 +15,11 @@ function loadDictionaries(){
     var spellchecker = nspell({ aff: aff, dic: dic });
     spellchecker.personal(personal);
     return spellchecker;
+  }
+  catch(err){
+    logError(err);
+  }
+
 }
 
 function findInvalidWord(spellchecker, startingIndex = 0, wordsToIgnore = []) {
@@ -55,13 +61,23 @@ function findInvalidWord(spellchecker, startingIndex = 0, wordsToIgnore = []) {
 }
 
 function getPersonalDict(){
-    return fs.readFileSync(convertFilepath(__dirname) + '/dictionaries/personal.dic', 'utf8').split("\n");;
+  try{
+    return fs.readFileSync(convertFilepath(__dirname) + '/dictionaries/personal.dic', 'utf8').split("\n");
+  }
+  catch(err){
+    logError(err);
+  }
 }
 
 function addWordToPersonalDictFile(word){
+  try{
     var personal = getPersonalDict();
     if(personal.indexOf(word) == -1){
         personal.push(word);
         fs.writeFileSync(convertFilepath(__dirname) + '/dictionaries/personal.dic', personal.join("\n"), 'utf8');
     }
+  }
+  catch(err){
+    logError(err);
+  }  
 }

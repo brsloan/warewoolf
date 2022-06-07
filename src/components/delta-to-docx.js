@@ -1,7 +1,12 @@
 function saveDocx(filepath, doc){
   docx.Packer.toBuffer(doc).then((buffer) => {
-    fs.writeFileSync(filepath, buffer)
-    console.log("Document created successfully");
+    try{
+      fs.writeFileSync(filepath, buffer)
+      console.log("Document created successfully");
+    }
+    catch(err){
+      logError(err);
+    }
   });
 }
 

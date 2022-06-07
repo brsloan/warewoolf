@@ -19,7 +19,7 @@ function getUserSettings(){
       fs.writeFileSync("user-settings.json", fileString, 'utf8');
     }
     catch(err){
-      console.log(err);
+      logError(err);
     }
   }
 
@@ -29,7 +29,7 @@ function getUserSettings(){
       Object.assign(this, settingsFile);
     }
     catch(err){
-      console.log(err);
+      logError(err);
     }
     return this;
   }
