@@ -1,4 +1,8 @@
-.sidebar {
+:root {
+  --sidebar-width-double-view: 50%; /*Always overwritten to 100 minus editor width.*/
+}
+
+.sidebar-single-view {
   width: var(--editor-width);
   display: none;
   float: none;
@@ -6,13 +10,16 @@
   margin-right: auto;
 }
 
-.writing-field-standard-view {
-  display: none;
+.sidebar-double-view {
+  width: var(--sidebar-width-double-view);
+}
+
+.writing-field-single-view {
   float: none;
   margin-left: auto;
   margin-right: auto;
 }
 
-.focused {
+.visible {
   display: block;
 }

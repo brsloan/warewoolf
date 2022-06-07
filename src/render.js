@@ -35,7 +35,6 @@ function initialize(){
   var initialProject = userSettings.lastProject ? userSettings.lastProject : convertFilepath(__dirname) + "/examples/Frankenstein/Frankenstein.woolf";
   setProject(initialProject);
   applyUserSettings();
-  setFocus('writingField');
 }
 
 function setUpQuills(){
@@ -57,6 +56,7 @@ function applyUserSettings(){
     enableTypewriterMode()
   updateEditorWidth();
   updateDistractionFree();
+  setDisplayMode(userSettings.displayMode);
 }
 
 function updateFontSize(){
@@ -67,6 +67,7 @@ function updateFontSize(){
 function updateEditorWidth(){
   document.documentElement.style.setProperty('--editor-width', userSettings.editorWidth + '%');
   document.documentElement.style.setProperty('--sidebar-width', ((100 - userSettings.editorWidth) / 2) + "%");
+  document.documentElement.style.setProperty('--sidebar-width-double-view', (100 - userSettings.editorWidth) + "%");
 }
 
 function setProject(filepath){
@@ -188,30 +189,54 @@ function displayInitialChapter(){
   displayChapterByIndex(project.activeChapterIndex);
 }
 
-function setFocus(area){
+function setDisplayMode(m){
+  userSettings.displayMode = m;
+  userSettings.save();
+
   var chapList = document.getElementById('chapter-list-sidebar');
   var writingField = document.getElementById('writing-field');
   var notes = document.getElementById('project-notes');
 
-  switch (area) {
-    case 'chapList':
-      chapList.classList.add('focused');
-      writingField.classList.remove('focused');
-      notes.classList.remove('focused');
+  removeSpecialDisplayClasses(chapList);
+  removeSpecialDisplayClasses(writingField);
+  removeSpecialDisplayClasses(notes);
+
+  switch (m) {
+    case 1:
+      chapList.classList.add('visible');
+      writingField.classList.add('visible');
+      notes.classList.add('visible');
       break;
-    case 'writingField':
-      chapList.classList.remove('focused');
-      writingField.classList.add('focused');
-      notes.classList.remove('focused');
-      editorQuill.focus();
+    case 2:
+      chapList.classList.add('visible');
+      chapList.classList.add('sidebar-double-view');
+      writingField.classList.add('visible');
       break;
-    case 'notes':
-      chapList.classList.remove('focused');
-      writingField.classList.remove('focused');
-      notes.classList.add('focused');
-      notesQuill.focus();
+    case 3:
+      writingField.classList.add('visible');
+      notes.classList.add('visible');
+      notes.classList.add('sidebar-double-view');
+      break;
+    case 4:
+      chapList.classList.add('visible');
+      chapList.classList.add('sidebar-single-view');
+      break;
+    case 5:
+      writingField.classList.add('visible');
+      writingField.classList.add('writing-field-single-view');
+      break;
+    case 6:
+      notes.classList.add('visible');
+      notes.classList.add('sidebar-single-view');
       break;
   }
+}
+
+function removeSpecialDisplayClasses(el){
+  el.classList.remove('sidebar-single-view');
+  el.classList.remove('sidebar-double-view');
+  el.classList.remove('writing-field-single-view');
+  el.classList.remove('visible');
 }
 
 //User Actions
@@ -637,14 +662,12 @@ document.addEventListener ("keydown", function (e) {
       stopDefaultPropagation(e);
       removeElementsByClass('popup');
       disableSearchView();
-      setFocus('writingField');
       editorQuill.focus();
     }
     else if(e.ctrlKey && e.key === "ArrowRight"){
       stopDefaultPropagation(e);
       removeElementsByClass('popup');
       disableSearchView();
-      setFocus('notes');
       notesQuill.focus();
     }
     else if(e.key === "Escape"){
@@ -677,15 +700,27 @@ document.addEventListener ("keydown", function (e) {
     }
     else if(e.key === 'F1'){
       stopDefaultPropagation(e);
-      setFocus('chapList');
+      setDisplayMode(1);
     }
     else if(e.key === "F2"){
       stopDefaultPropagation(e);
-      setFocus('writingField');
+      setDisplayMode(2);
     }
     else if(e.key ==="F3"){
       stopDefaultPropagation(e);
-      setFocus('notes');
+      setDisplayMode(3);
+    }
+    else if(e.key ==="F4"){
+      stopDefaultPropagation(e);
+      setDisplayMode(4);
+    }
+    else if(e.key ==="F5"){
+      stopDefaultPropagation(e);
+      setDisplayMode(5);
+    }
+    else if(e.key ==="F6"){
+      stopDefaultPropagation(e);
+      setDisplayMode(6);
     }
 } );
 

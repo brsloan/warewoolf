@@ -13,7 +13,7 @@ body {
 
 .sidebar {
   width: var(--sidebar-width);
-  display: block;
+  display: none;
   float: left;
   height: 93vh;
   font-size: var(--main-font-size);
@@ -40,7 +40,7 @@ body {
 
 .writing-field-standard-view {
   width: var(--editor-width);
-  display: block;
+  display: none;
   float: left;
 }
 

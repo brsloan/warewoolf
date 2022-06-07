@@ -4,6 +4,7 @@ function getUserSettings(){
     fontSize: 12,
     typewriterMode: false,
     distractionFreeMode: false,
+    displayMode: 1, //|A|B|C|:1=ABC,2=AB,3=BC,4=A,5=B,6=C
     lastProject: null,
     defaultAuthor: '',
     save: save,
