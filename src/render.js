@@ -770,11 +770,13 @@ ipcRenderer.on('word-count-clicked', function(e){
 });
 
 ipcRenderer.on('find-replace-clicked', function(e){
-  showFindReplace();
+  if(editorHasFocus())
+    showFindReplace();
 });
 
 ipcRenderer.on('spellcheck-clicked', function(e){
-  showSpellcheck(editorQuill.getSelection(true).index);
+  if(editorHasFocus())
+    showSpellcheck(editorQuill.getSelection(true).index);
 });
 
 ipcRenderer.on('convert-first-lines-clicked', function(e){
@@ -862,5 +864,9 @@ function createButton(text){
 }
 
 function editorHasFocus(){
-  return document.querySelector(".ql-editor") === document.activeElement;
+  return editorIsVisible() && document.querySelector(".ql-editor") === document.activeElement;
+}
+
+function editorIsVisible(){
+  return document.getElementById('writing-field').classList.contains('visible');
 }
