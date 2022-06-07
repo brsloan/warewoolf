@@ -3,6 +3,18 @@ function showProperties(){
     var popup = document.createElement("div");
     popup.classList.add("popup");
 
+    var filename = document.createElement('p');
+    filename.innerText = "Filename: " + project.filename;
+    popup.appendChild(filename);
+
+    var directory = document.createElement('p');
+    directory.innerText = "Directory: " + project.directory;
+    popup.appendChild(directory);
+
+    var pupDir = document.createElement('p');
+    pupDir.innerText = "Chapters Directory: " + project.directory + project.filename.split(".")[0].concat("_pups/");
+    popup.appendChild(pupDir);
+
     var propForm = document.createElement("form");
 
     var titleLabel = document.createElement("label");
