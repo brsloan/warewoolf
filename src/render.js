@@ -37,7 +37,7 @@ function initialize(){
 
 function loadInitialProject(){
   //Load last project opened, or if none logged, load example project, and if example gone, create new project
-  var defaultProject = convertFilepath(__dirname) + "/examples/Frankenstein/Frankenstein.woolf";
+  const defaultProject = convertFilepath(__dirname) + "/examples/Frankenstein/Frankenstein.woolf";
 
   if(userSettings.lastProject != null && fs.existsSync(userSettings.lastProject))
     setProject(userSettings.lastProject);
