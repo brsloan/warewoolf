@@ -30,10 +30,6 @@ body {
   overflow: hidden;
 }
 
-.sidebar-distraction-free {
-  display: none;
-}
-
 .sidebar-search-view {
   display: none;
 }
@@ -42,12 +38,6 @@ body {
   width: var(--editor-width);
   display: none;
   float: left;
-}
-
-.writing-field-distraction-free{
-  float: none;
-  margin-left: auto;
-  margin-right: auto;
 }
 
 .writing-field-search-view{
