@@ -97,7 +97,7 @@ function newProject(){
         var proj = this;
         var filepathParts = filepath.split('/');
         var newFilename = filepathParts.pop();
-        var newDirectory = filepathParts.join('/').concat("/").concat(newFilename.split('.')[0]).concat("/");
+        var newDirectory = filepathParts.join('/').concat("/");
         var newSubDir = newFilename.split(".")[0].concat("_pups/");
 
         //Create new directories
