@@ -2,6 +2,7 @@ function newProject(){
     return {
         filename: "",
         directory: "",
+        chapsDirectory: "",
         title: "",
         author: "",
         notes: {},
@@ -72,11 +73,7 @@ function newProject(){
           });
 
 
-          var fileString = JSON.stringify(proj, function(k,v){
-            if (k == "contents") return undefined;
-            else if (k == "hasUnsavedChanges") return undefined;
-            else return v;
-          }, '\t');
+          var fileString = stringifyProject(proj);
 
           fs.writeFileSync(proj.directory + proj.filename, fileString, 'utf8');
 
@@ -87,6 +84,16 @@ function newProject(){
       catch(err){
         logError(err);
       }
+    }
+
+    function stringifyProject(proj){
+      return JSON.stringify(proj, function(k,v){
+        if (k == "contents") return undefined;
+        else if (k == "hasUnsavedChanges") return undefined;
+        else if (k == "filename") return undefined;
+        else if (k == "directory") return undefined;
+        else return v;
+      }, '\t');
     }
 
     function saveAs(filepath){
@@ -127,7 +134,7 @@ function newProject(){
         if(proj.filename.substr(proj.filename.length - 6, 6) != ".woolf")
           proj.filename += ".woolf";
         proj.directory = newDirectory;
-
+        proj.chapsDirectory = newSubDir;
 
         //Save any new or altered chapters
         proj.chapters.forEach(function(chap){
@@ -141,11 +148,7 @@ function newProject(){
 
 
         //Save new project file
-        var fileString = JSON.stringify(proj, function(k,v){
-          if (k == "contents") return undefined;
-          else if (k == "hasUnsavedChanges") return undefined;
-          else return v;
-        });
+        var fileString = stringifyProject(proj);
 
         fs.writeFileSync(proj.directory + proj.filename, fileString, 'utf8');
         return proj.directory + proj.filename;
