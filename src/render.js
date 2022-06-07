@@ -32,7 +32,10 @@ initialize();
 function initialize(){
   setUpQuills();
   //Load last project opened, or if none logged, load example project
-  var initialProject = userSettings.lastProject ? userSettings.lastProject : convertFilepath(__dirname) + "/examples/Frankenstein/Frankenstein.woolf";
+  var initialProject = convertFilepath(__dirname) + "/examples/Frankenstein/Frankenstein.woolf";
+  if(userSettings.lastProject != null && fs.existsSync(userSettings.lastProject))
+    initialProject = userSettings.lastProject;
+    
   setProject(initialProject);
   applyUserSettings();
 }
