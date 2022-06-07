@@ -98,11 +98,19 @@ input, textarea, select, button {
   overflow-x: hidden;
 }
 
+.popup td{
+  text-align: left;
+}
+
 .popup-search-view {
   top: 50%;
   left: 0%;
   transform: translate(2.5%, -50%);
   width: 45%;
+}
+
+.sublabel {
+  padding-left: 12px;
 }
 
 #chapter-list-sidebar {

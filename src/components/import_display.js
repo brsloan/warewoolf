@@ -29,23 +29,23 @@ function showImportOptions(docPath){
   plainTextOptionsLabel.innerText = 'Plaintext Options';
   plainTextOptionsSet.appendChild(plainTextOptionsLabel);
 
+  var opsTable = document.createElement('table');
+
   var convertItalicsLabel = document.createElement("label");
   convertItalicsLabel.innerText = "Convert marked italics: ";
   convertItalicsLabel.for = "convert-italics-check";
-  plainTextOptionsSet.appendChild(convertItalicsLabel);
 
   var convertItalicsCheck = document.createElement("input");
   convertItalicsCheck.type = "checkbox";
   convertItalicsCheck.id = "convert-italics-check";
   convertItalicsCheck.checked = true;
-  plainTextOptionsSet.appendChild(convertItalicsCheck);
 
-  plainTextOptionsSet.appendChild(document.createElement('br'));
+  opsTable.appendChild(generateRow(convertItalicsLabel, convertItalicsCheck));
 
   var italicsStrLabel = document.createElement("label");
   italicsStrLabel.innerText = "Marker character: ";
   italicsStrLabel.for = "italics-str-input";
-  plainTextOptionsSet.appendChild(italicsStrLabel);
+  italicsStrLabel.classList.add('sublabel');
 
   var italicsStrInput = document.createElement("input");
   italicsStrInput.type = "text";
@@ -53,71 +53,65 @@ function showImportOptions(docPath){
   italicsStrInput.id = "italics-str-input";
   plainTextOptionsSet.appendChild(italicsStrInput);
 
-  plainTextOptionsSet.appendChild(document.createElement('br'));
+  opsTable.appendChild(generateRow(italicsStrLabel, italicsStrInput));
 
   var convertTabsLabel = document.createElement("label");
   convertTabsLabel.innerText = "Convert marked tabs: ";
   convertTabsLabel.for = "convert-tabs-check";
-  plainTextOptionsSet.appendChild(convertTabsLabel);
 
   var convertTabsCheck = document.createElement("input");
   convertTabsCheck.type = "checkbox";
   convertTabsCheck.id = "convert-tabs-check";
   convertTabsCheck.checked = true;
-  plainTextOptionsSet.appendChild(convertTabsCheck);
 
-  plainTextOptionsSet.appendChild(document.createElement('br'));
+  opsTable.appendChild(generateRow(convertTabsLabel, convertTabsCheck));
 
   var tabsStrLabel = document.createElement("label");
   tabsStrLabel.innerText = "Tab string (default 4 spaces): ";
   tabsStrLabel.for = "tabs-str-input";
-  plainTextOptionsSet.appendChild(tabsStrLabel);
+  tabsStrLabel.classList.add('sublabel');
 
   var tabsStrInput = document.createElement("input");
   tabsStrInput.type = "text";
   tabsStrInput.value = "    ";
   tabsStrInput.id = "tabs-str-input";
-  plainTextOptionsSet.appendChild(tabsStrInput);
 
-  plainTextOptionsSet.appendChild(document.createElement('br'));
+  opsTable.appendChild(generateRow(tabsStrLabel, tabsStrInput));
 
   var splitChapsLabel = document.createElement("label");
   splitChapsLabel.innerText = "Split Into Chapters: ";
   splitChapsLabel.for = "split-chaps-check";
-  plainTextOptionsSet.appendChild(splitChapsLabel);
 
   var splitChapsCheck = document.createElement("input");
   splitChapsCheck.type = "checkbox";
   splitChapsCheck.id = "split-chaps-check";
   splitChapsCheck.checked = true;
-  plainTextOptionsSet.appendChild(splitChapsCheck);
 
-  plainTextOptionsSet.appendChild(document.createElement('br'));
+  opsTable.appendChild(generateRow(splitChapsLabel, splitChapsCheck));
 
   var chapsStrLabel = document.createElement("label");
   chapsStrLabel.innerText = "Chapter Split Marker: ";
   chapsStrLabel.for = "chaps-str-input";
-  plainTextOptionsSet.appendChild(chapsStrLabel);
+  chapsStrLabel.classList.add('sublabel');
 
   var chapsStrInput = document.createElement("input");
   chapsStrInput.type = "text";
   chapsStrInput.value = "<ch>";
   chapsStrInput.id = "chaps-str-input";
-  plainTextOptionsSet.appendChild(chapsStrInput);
 
-  plainTextOptionsSet.appendChild(document.createElement('br'));
+  opsTable.appendChild(generateRow(chapsStrLabel, chapsStrInput));
 
   var convertFirstLinesLabel = document.createElement("label");
   convertFirstLinesLabel.innerText = "Convert First Lines To Titles: ";
   convertFirstLinesLabel.for = "convert-first-lines-check";
-  plainTextOptionsSet.appendChild(convertFirstLinesLabel);
 
   var convertFirstLinesCheck = document.createElement("input");
   convertFirstLinesCheck.type = "checkbox";
   convertFirstLinesCheck.id = "convert-first-lines-check";
   convertFirstLinesCheck.checked = true;
-  plainTextOptionsSet.appendChild(convertFirstLinesCheck);
 
+  opsTable.appendChild(generateRow(convertFirstLinesLabel, convertFirstLinesCheck));
+  plainTextOptionsSet.appendChild(opsTable);
   importForm.appendChild(plainTextOptionsSet);
 
   importForm.appendChild(document.createElement('br'));
@@ -171,4 +165,15 @@ function showImportOptions(docPath){
   };
 
   importBtn.focus();
+}
+
+function generateRow(elOne, elTwo){
+  var row = document.createElement('tr');
+  var cellOne = document.createElement('td');
+  cellOne.appendChild(elOne);
+  row.appendChild(cellOne);
+  var cellTwo = document.createElement('td');
+  cellTwo.appendChild(elTwo);
+  row.appendChild(cellTwo);
+  return row;
 }
