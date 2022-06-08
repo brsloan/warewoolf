@@ -704,7 +704,7 @@ document.addEventListener ("keydown", function (e) {
     else if(e.key === "Escape"){
       removeElementsByClass('popup');
       disableSearchView();
-      editorQuill.focus();
+      updatePanelDisplays();
     }
     else if(e.ctrlKey && e.key === "="){
       increaseFontSizeSetting();
