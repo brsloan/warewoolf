@@ -67,7 +67,8 @@ function applyUserSettings(){
   if(userSettings.typewriterMode)
     enableTypewriterMode()
   updateEditorWidth();
-  setDisplayMode(userSettings.displayMode);
+  //setDisplayMode(userSettings.displayMode);
+  updatePanelDisplays();
 }
 
 function updateFontSize(){
@@ -200,6 +201,71 @@ function displayInitialChapter(){
   displayChapterByIndex(project.activeChapterIndex);
 }
 
+function togglePanelDisplay(p){
+  if(p == 1)
+    userSettings.displayChapList = !userSettings.displayChapList;
+  else if(p == 2)
+    userSettings.displayEditor = !userSettings.displayEditor;
+  else if(p == 3)
+    userSettings.displayNotes = !userSettings.displayNotes;
+
+  userSettings.save();
+
+  updatePanelDisplays();
+}
+
+function updatePanelDisplays(){
+  var chapList = document.getElementById('chapter-list-sidebar');
+  var writingField = document.getElementById('writing-field');
+  var notes = document.getElementById('project-notes');
+
+  removeSpecialDisplayClasses(chapList);
+  removeSpecialDisplayClasses(writingField);
+  removeSpecialDisplayClasses(notes);
+
+  var a = userSettings.displayChapList;
+  var b = userSettings.displayEditor;
+  var c = userSettings.displayNotes;
+
+  if(a)
+    chapList.classList.add('visible');
+  if(b)
+    writingField.classList.add('visible');
+  if(c)
+    notes.classList.add('visible');
+
+  if(a && b && c){
+    editorQuill.focus();
+  }
+  else if(a && b && !c){
+    chapList.classList.add('sidebar-double-view');
+    editorQuill.focus();
+  }
+  else if(a && !b && c){
+    //Not sure here
+    chapList.classList.add('sidebar-double-view');
+    notes.classList.add('sidebar-notes-paired-with-chaps-view');
+    notesQuill.focus();
+  }
+  else if(!a && b && c){
+    notes.classList.add('sidebar-double-view');
+    editorQuill.focus();
+  }
+  else if(a && !b && !c){
+    chapList.classList.add('sidebar-single-view');
+    chapList.focus();
+  }
+  else if(!a && b && !c){
+    writingField.classList.add('writing-field-single-view');
+    editorQuill.focus();
+  }
+  else if(!a && !b && c){
+    notes.classList.add('sidebar-single-view');
+    notesQuill.focus();
+  }
+
+}
+/*
 function setDisplayMode(m){
   userSettings.displayMode = m;
   userSettings.save();
@@ -248,11 +314,12 @@ function setDisplayMode(m){
       break;
   }
 }
-
+*/
 function removeSpecialDisplayClasses(el){
   el.classList.remove('sidebar-single-view');
   el.classList.remove('sidebar-double-view');
   el.classList.remove('writing-field-single-view');
+  el.classList.remove('sidebar-notes-paired-with-chaps-view');
   el.classList.remove('visible');
 }
 
@@ -706,27 +773,15 @@ document.addEventListener ("keydown", function (e) {
     }
     else if(e.key === 'F1'){
       stopDefaultPropagation(e);
-      setDisplayMode(1);
+      togglePanelDisplay(1);
     }
     else if(e.key === "F2"){
       stopDefaultPropagation(e);
-      setDisplayMode(2);
+      togglePanelDisplay(2);
     }
     else if(e.key ==="F3"){
       stopDefaultPropagation(e);
-      setDisplayMode(3);
-    }
-    else if(e.key ==="F4"){
-      stopDefaultPropagation(e);
-      setDisplayMode(4);
-    }
-    else if(e.key ==="F5"){
-      stopDefaultPropagation(e);
-      setDisplayMode(5);
-    }
-    else if(e.key ==="F6"){
-      stopDefaultPropagation(e);
-      setDisplayMode(6);
+      togglePanelDisplay(3);
     }
 } );
 

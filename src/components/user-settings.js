@@ -3,7 +3,9 @@ function getUserSettings(){
     editorWidth: 50,
     fontSize: 12,
     typewriterMode: false,
-    displayMode: 1, //|A|B|C|:1=ABC,2=AB,3=BC,4=A,5=B,6=C
+    displayChapList: true,
+    displayEditor: true,
+    displayNotes: true,
     lastProject: null,
     defaultAuthor: '',
     save: save,

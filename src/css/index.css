@@ -52,6 +52,10 @@ input, textarea, select, button {
   width: var(--sidebar-width-double-view);
 }
 
+.sidebar-notes-paired-with-chaps-view {
+  width: var(--editor-width);
+}
+
 .writing-field-standard-view {
   width: var(--editor-width);
   display: none;
