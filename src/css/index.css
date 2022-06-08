@@ -14,6 +14,7 @@ body {
 
 input, textarea, select, button {
   box-sizing: border-box;
+  border-radius: 0px;
 }
 
 .sidebar {

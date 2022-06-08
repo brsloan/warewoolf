@@ -59,6 +59,7 @@ function showSpellcheck(startingIndex = 0, wordsToIgnore = []){
     popup.appendChild(customInput);
 
     popup.appendChild(document.createElement('br'));
+    popup.appendChild(document.createElement('br'));
 
     var ignoreBtn = createButton("Ignore");
     ignoreBtn.onclick = function(){

@@ -40,3 +40,11 @@ button, input[type=submit] {
   background-color: #EDF2F4;
   color: black;
 }
+
+:focus {
+  outline-color: #EF233C;
+}
+
+#chapter-list-sidebar:focus {
+  outline: none;
+}
