@@ -31,3 +31,12 @@ body {
 .popup-outliner td{
   background-color: #EDF2F4;
 }
+
+.popup a{
+  color: white;
+}
+
+button, input[type=submit] {
+  background-color: #EDF2F4;
+  color: black;
+}

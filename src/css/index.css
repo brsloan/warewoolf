@@ -231,6 +231,28 @@ input, textarea, select, button {
   display: none;
 }
 
+.logo {
+  display: block;
+  max-width: 75%;
+  margin-left: auto;
+  margin-right: auto;
+  margin-bottom: 0px;
+}
+
+.popup a{
+  display: block;
+  margin: 8px;
+}
+
+button, input[type=submit] {
+  border: none;
+  margin: 3px;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  font-size: var(--main-font-size);
+}
+
 .visible {
   display: block;
 }

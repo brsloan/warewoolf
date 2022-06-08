@@ -243,6 +243,13 @@ const createWindow = () => {
             mainWindow.webContents.send('shortcuts-clicked');
           },
           accelerator: 'CommandOrControl+H'
+        },
+        { type: 'separator' },
+        {
+          label: 'About',
+          click(item, focusWindow){
+            mainWindow.webContents.send('about-clicked');
+          }
         }
       ]
     }

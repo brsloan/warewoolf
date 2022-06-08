@@ -868,6 +868,10 @@ ipcRenderer.on('convert-tabs-clicked', function(e){
   showTabOptions();
 });
 
+ipcRenderer.on('about-clicked', function(e){
+  showAbout();
+});
+
 //**** utils ***/
 
 function closePopups(){
