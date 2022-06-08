@@ -919,3 +919,14 @@ function editorIsVisible(){
 function logError(e){
   console.log(e);
 }
+
+function generateRow(elOne, elTwo){
+  var row = document.createElement('tr');
+  var cellOne = document.createElement('td');
+  cellOne.appendChild(elOne);
+  row.appendChild(cellOne);
+  var cellTwo = document.createElement('td');
+  cellTwo.appendChild(elTwo);
+  row.appendChild(cellTwo);
+  return row;
+}

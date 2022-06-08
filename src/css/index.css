@@ -16,7 +16,6 @@ input, textarea, select, button {
   box-sizing: border-box;
 }
 
-
 .sidebar {
   width: var(--sidebar-width);
   display: none;
@@ -100,10 +99,22 @@ input, textarea, select, button {
   text-align: center;
   max-height: 100%;
   overflow-x: hidden;
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+
+.popup table{
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .popup td{
   text-align: left;
+}
+
+.popup p {
+  margin: 4px;
+  padding: 0;
 }
 
 .popup-search-view {
@@ -113,8 +124,12 @@ input, textarea, select, button {
   width: 45%;
 }
 
+.popup-text-small {
+  font-size: var(--main-font-size);
+}
+
 .sublabel {
-  padding-left: 12px;
+  margin-left: 22px;
 }
 
 #chapter-list-sidebar {
@@ -173,6 +188,11 @@ input, textarea, select, button {
   border: 1px solid black;
   border-collapse: collapse;
   padding: 3px 8px 3px 8px;
+}
+
+.popup-outliner table{
+  margin-left: 8px;
+  margin-top: 8px;
 }
 
 .outliner-title {

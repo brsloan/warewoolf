@@ -1,5 +1,5 @@
 body {
-  background-color: #F0F8FF;
+  background-color: #EDF2F4;
 }
 
 #writing-field {
@@ -15,11 +15,19 @@ body {
 }
 
 .popup {
-  background-color: black;
+  background-color: #2B2D42;
   color: white;
 }
 
 .popup-outliner {
-  background-color: white;
+  background-color: #2B2D42;
   color: black;
+}
+
+.popup-outliner th{
+  background-color: #EDF2F4;
+}
+
+.popup-outliner td{
+  background-color: #EDF2F4;
 }

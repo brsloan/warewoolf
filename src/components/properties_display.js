@@ -3,45 +3,60 @@ function showProperties(){
     var popup = document.createElement("div");
     popup.classList.add("popup");
 
+    var filenameLabel = document.createElement('p');
+    filenameLabel.innerText = "Filename:";
+    popup.appendChild(filenameLabel);
+
     var filename = document.createElement('p');
-    filename.innerText = "Filename: " + project.filename;
+    filename.innerText = project.filename;
+    filename.classList.add('popup-text-small');
     popup.appendChild(filename);
 
+    var directoryLabel = document.createElement('p');
+    directoryLabel.innerText = "Directory:";
+    popup.appendChild(directoryLabel);
+
     var directory = document.createElement('p');
-    directory.innerText = "Directory: " + project.directory;
+    directory.innerText = project.directory;
+    directory.classList.add('popup-text-small');
     popup.appendChild(directory);
 
+    var pupDirLabel = document.createElement('p');
+    pupDirLabel.innerText = "Chapters Directory:";
+    popup.appendChild(pupDirLabel);
+
     var pupDir = document.createElement('p');
-    pupDir.innerText = "Chapters Directory: " + project.directory + project.filename.split(".")[0].concat("_pups/");
+    pupDir.innerText = project.directory + project.filename.split(".")[0].concat("_pups/");
+    pupDir.classList.add('popup-text-small');
     popup.appendChild(pupDir);
 
     var propForm = document.createElement("form");
 
+    var propTable = document.createElement("table");
+
     var titleLabel = document.createElement("label");
     titleLabel.innerText = "Project Title: ";
     titleLabel.for = "title-input";
-    propForm.appendChild(titleLabel);
 
     var titleInput = document.createElement("input");
     titleInput.type = "text";
     titleInput.value = project.title;
     titleInput.id = "title-input";
-    propForm.appendChild(titleInput);
 
-    propForm.appendChild(document.createElement('br'));
+    propTable.appendChild(generateRow(titleLabel, titleInput));
 
     var authorLabel = document.createElement("label");
     authorLabel.innerText = "Author: ";
     authorLabel.for = "author-input";
-    propForm.appendChild(authorLabel);
 
     var authorInput = document.createElement("input");
     authorInput.type = "text";
     authorInput.value = project.author;
     authorInput.id = "author-input";
-    propForm.appendChild(authorInput);
 
-    propForm.appendChild(document.createElement('br'));
+    propTable.appendChild(generateRow(authorLabel, authorInput));
+
+    propForm.appendChild(propTable);
 
     var apply = document.createElement("input");
     apply.type = "submit";

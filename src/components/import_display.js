@@ -51,6 +51,7 @@ function showImportOptions(docPath){
   italicsStrInput.type = "text";
   italicsStrInput.value = "*";
   italicsStrInput.id = "italics-str-input";
+  italicsStrInput.classList.add('sublabel');
   plainTextOptionsSet.appendChild(italicsStrInput);
 
   opsTable.appendChild(generateRow(italicsStrLabel, italicsStrInput));
@@ -75,6 +76,7 @@ function showImportOptions(docPath){
   tabsStrInput.type = "text";
   tabsStrInput.value = "    ";
   tabsStrInput.id = "tabs-str-input";
+  tabsStrInput.classList.add('sublabel');
 
   opsTable.appendChild(generateRow(tabsStrLabel, tabsStrInput));
 
@@ -98,6 +100,7 @@ function showImportOptions(docPath){
   chapsStrInput.type = "text";
   chapsStrInput.value = "<ch>";
   chapsStrInput.id = "chaps-str-input";
+  chapsStrInput.classList.add('sublabel');
 
   opsTable.appendChild(generateRow(chapsStrLabel, chapsStrInput));
 
@@ -165,15 +168,4 @@ function showImportOptions(docPath){
   };
 
   importBtn.focus();
-}
-
-function generateRow(elOne, elTwo){
-  var row = document.createElement('tr');
-  var cellOne = document.createElement('td');
-  cellOne.appendChild(elOne);
-  row.appendChild(cellOne);
-  var cellTwo = document.createElement('td');
-  cellTwo.appendChild(elTwo);
-  row.appendChild(cellTwo);
-  return row;
 }
