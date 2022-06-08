@@ -67,7 +67,6 @@ function applyUserSettings(){
   if(userSettings.typewriterMode)
     enableTypewriterMode()
   updateEditorWidth();
-  //setDisplayMode(userSettings.displayMode);
   updatePanelDisplays();
 }
 
@@ -265,56 +264,7 @@ function updatePanelDisplays(){
   }
 
 }
-/*
-function setDisplayMode(m){
-  userSettings.displayMode = m;
-  userSettings.save();
 
-  var chapList = document.getElementById('chapter-list-sidebar');
-  var writingField = document.getElementById('writing-field');
-  var notes = document.getElementById('project-notes');
-
-  removeSpecialDisplayClasses(chapList);
-  removeSpecialDisplayClasses(writingField);
-  removeSpecialDisplayClasses(notes);
-
-  switch (m) {
-    case 1:
-      chapList.classList.add('visible');
-      writingField.classList.add('visible');
-      notes.classList.add('visible');
-      editorQuill.focus();
-      break;
-    case 2:
-      chapList.classList.add('visible');
-      chapList.classList.add('sidebar-double-view');
-      writingField.classList.add('visible');
-      editorQuill.focus();
-      break;
-    case 3:
-      writingField.classList.add('visible');
-      notes.classList.add('visible');
-      notes.classList.add('sidebar-double-view');
-      editorQuill.focus();
-      break;
-    case 4:
-      chapList.classList.add('visible');
-      chapList.classList.add('sidebar-single-view');
-      chapList.focus();
-      break;
-    case 5:
-      writingField.classList.add('visible');
-      writingField.classList.add('writing-field-single-view');
-      editorQuill.focus();
-      break;
-    case 6:
-      notes.classList.add('visible');
-      notes.classList.add('sidebar-single-view');
-      notesQuill.focus();
-      break;
-  }
-}
-*/
 function removeSpecialDisplayClasses(el){
   el.classList.remove('sidebar-single-view');
   el.classList.remove('sidebar-double-view');
