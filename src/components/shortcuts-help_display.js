@@ -51,18 +51,10 @@ function showShortcutsHelp(){
         shortcuts: [
           ['Adjust Editor Width', 'Ctrl + < or >'],
           ['Adjust Font Size', 'Ctrl + - or +'],
+          ['Toggle Chapter List Display', 'F1'],
+          ['Toggle Editor Display', 'F2'],
+          ['Toggle Notes Display', 'F3'],
           ['Typewriter Mode', 'Ctrl + Alt + T']
-        ]
-      },
-      {
-        title: "Show Panels...",
-        shortcuts: [
-          ['Chapters, Editor, Notes', 'F1'],
-          ['Chapters, Editor', 'F2'],
-          ['Editor, Notes', 'F3'],
-          ['Chapters', 'F4'],
-          ['Editor', 'F5'],
-          ['Notes', 'F6']
         ]
       }
     ];
