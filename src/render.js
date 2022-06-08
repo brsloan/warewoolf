@@ -375,10 +375,11 @@ function changeChapsDirectory(){
       { name: '.pup files', extensions: ['pup'] }
     ]
   };
-  var filepath = dialog.showOpenDialogSync(options);
-  if (filepath) {
+  var filepaths = dialog.showOpenDialogSync(options);
+  if (filepaths) {
+    filepath = filepaths[0].replaceAll('\\', '/');
     console.log(filepath);
-    var parts = filepath[0].split('/');
+    var parts = filepath.split('/');
     var subdir = parts[parts.length - 2].concat('/');
     console.log('new subdir: ' + subdir);
     project.chapsDirectory = subdir;
