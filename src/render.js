@@ -378,11 +378,10 @@ function changeChapsDirectory(){
   var filepaths = dialog.showOpenDialogSync(options);
   if (filepaths) {
     filepath = filepaths[0].replaceAll('\\', '/');
-    console.log(filepath);
     var parts = filepath.split('/');
-    var subdir = parts[parts.length - 2].concat('/');
-    console.log('new subdir: ' + subdir);
-    project.chapsDirectory = subdir;
+    var subDir = parts.slice(0,parts.length - 1).join('/').concat('/').replace(project.directory, '');
+
+    project.chapsDirectory = subDir;
     displayProject();
   }
 }
