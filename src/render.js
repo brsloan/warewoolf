@@ -687,15 +687,19 @@ function addBindingsToQuill(q){
 document.addEventListener ("keydown", function (e) {
     if(e.ctrlKey && e.key === "ArrowLeft"){
       stopDefaultPropagation(e);
-      removeElementsByClass('popup');
-      disableSearchView();
-      editorQuill.focus();
+      if(document.getElementById('writing-field').classList.contains('visible')){
+        removeElementsByClass('popup');
+        disableSearchView();
+        editorQuill.focus();
+      }
     }
     else if(e.ctrlKey && e.key === "ArrowRight"){
       stopDefaultPropagation(e);
-      removeElementsByClass('popup');
-      disableSearchView();
-      notesQuill.focus();
+      if(document.getElementById('project-notes').classList.contains('visible')){
+        removeElementsByClass('popup');
+        disableSearchView();
+        notesQuill.focus();
+      }
     }
     else if(e.key === "Escape"){
       removeElementsByClass('popup');
