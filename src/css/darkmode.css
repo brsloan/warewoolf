@@ -1,10 +1,10 @@
 body {
-  background-color: #21252b;
+  background-color: #191a26;
 }
 
 #writing-field {
-  background-color: #282c34;
-  color: #eeeeee;
+  background-color: #191a26;
+  color: #ffffff;
 }
 
 .sidebar {
@@ -17,4 +17,14 @@ body {
 
 ::-webkit-scrollbar-thumb {
   background: #4b5362;
+}
+
+.popup {
+  background-color: #2B2D42;
+  color: white;
+}
+
+.popup-outliner {
+  background-color: #191a26;
+  color: white;
 }
