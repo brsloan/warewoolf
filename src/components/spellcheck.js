@@ -79,5 +79,21 @@ function addWordToPersonalDictFile(word){
   }
   catch(err){
     logError(err);
-  }  
+  }
+}
+
+function getBeginningOfCurrentWord(text, position){
+  var firstLetter = false;
+  var wordBorders = /\s|\.|-/;
+
+  while(firstLetter == false){
+    if(text[position - 1] == null || wordBorders.test(text[position - 1]) ){
+      firstLetter = true;
+    }
+    else {
+      position--;
+    }
+  }
+
+  return position;
 }

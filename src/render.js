@@ -819,8 +819,11 @@ ipcRenderer.on('find-replace-clicked', function(e){
 });
 
 ipcRenderer.on('spellcheck-clicked', function(e){
-  if(editorHasFocus())
-    showSpellcheck(editorQuill.getSelection(true).index);
+  if(editorHasFocus()){
+    var currentIndex = editorQuill.getSelection(true).index;
+    var beginningOfWord = getBeginningOfCurrentWord(editorQuill.getText(), currentIndex);
+    showSpellcheck(beginningOfWord);
+  }
 });
 
 ipcRenderer.on('convert-first-lines-clicked', function(e){
