@@ -371,6 +371,27 @@ function saveProjectAs(docPath) {
   updateTitleBar();
 }
 
+function saveProjectCopy(docPath) {
+  const options = {
+    title: 'Save a copy of project as...',
+    defaultPath: docPath,
+    filters: [
+      { name: 'WareWoolf Projects', extensions: ['woolf'] }
+    ]
+  };
+  var filepath = dialog.showSaveDialogSync(options);
+  if (filepath){
+    //project.saveCopy(filepath);
+    var newProj = newProject();
+    Object.assign(newProj, project);
+
+    newProj.saveAs(filepath);
+  }
+
+  updateFileList();
+  updateTitleBar();
+}
+
 function openAProject(docPath) {
   //Temp override doc path for testing in examples folder
   docPath = "./examples";
@@ -900,6 +921,10 @@ ipcRenderer.on('exit-app-clicked', function(e, docPath){
   else{
     exitApp();
   }
+});
+
+ipcRenderer.on('save-copy-clicked', function(e, docPath){
+  saveProjectCopy(docPath);
 });
 
 function exitApp(){

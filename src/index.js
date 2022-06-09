@@ -69,6 +69,12 @@ const createWindow = () => {
               mainWindow.webContents.send('save-as-clicked', app.getPath("documents"));
           }
         },
+        {
+          label: 'Save Copy',
+          click(item, focusWindow){
+            mainWindow.webContents.send('save-copy-clicked', app.getPath("documents"));
+          }
+        },
         {type: 'separator'},
         {
           label: 'Import',

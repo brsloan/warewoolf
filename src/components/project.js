@@ -15,7 +15,8 @@ function newProject(){
         getActiveChapter: getActiveChapter,
         loadFile: loadFile,
         saveFile: saveFile,
-        saveAs: saveAs
+        saveAs: saveAs,
+        saveCopy: saveCopy
     };
 
     function getActiveChapter(){
@@ -97,6 +98,10 @@ function newProject(){
         else if (k == "directory") return undefined;
         else return v;
       }, '\t');
+    }
+
+    function saveCopy(filepath){
+
     }
 
     function saveAs(filepath){
