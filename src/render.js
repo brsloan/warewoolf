@@ -287,11 +287,13 @@ function displayNextChapter(){
 
 function moveChapUp(chapInd){
   if(chapInd > 0 && chapInd < project.chapters.length){
+    project.hasUnsavedChanges = true;
     var chap = project.chapters.splice(chapInd, 1)[0];
     project.chapters.splice(chapInd - 1, 0, chap);
     project.activeChapterIndex--;
   }
   else if(chapInd > project.chapters.length){
+    project.hasUnsavedChanges = true;
     var trashChap = project.trash.splice(chapInd - project.chapters.length, 1)[0];
     project.trash.splice(chapInd - project.chapters.length - 1, 0, trashChap);
     project.activeChapterIndex--;
@@ -301,11 +303,13 @@ function moveChapUp(chapInd){
 
 function moveChapDown(chapInd){
   if(chapInd < project.chapters.length - 1){
+    project.hasUnsavedChanges = true;
     var chap = project.chapters.splice(chapInd, 1)[0];
     project.chapters.splice(chapInd + 1, 0, chap);
     project.activeChapterIndex++;
   }
   else if(chapInd > project.chapters.length - 1 && chapInd < project.chapters.length + project.trash.length - 1){
+    project.hasUnsavedChanges = true;
     var trashChap = project.trash.splice(chapInd - project.chapters.length, 1)[0];
     project.trash.splice(chapInd - project.chapters.length + 1, 0, trashChap);
     project.activeChapterIndex++;
@@ -328,6 +332,7 @@ function addNewChapter(){
   newChap.hasUnsavedChanges = true;
   newChap.contents = {"ops":[{"insert":"\n"}]};
   project.chapters.splice(project.activeChapterIndex + 1, 0, newChap);
+  project.hasUnsavedChanges = true;
   updateFileList();
   var thisIndex = project.chapters.indexOf(newChap);
   displayChapterByIndex(thisIndex);
@@ -339,6 +344,7 @@ function saveProject(docPath){
   if(project.filename != ""){
     clearCurrentChapterIfUnchanged();
     project.saveFile();
+    project.hasUnsavedChanges = false;
     updateFileList();
   }
   else
@@ -360,6 +366,7 @@ function saveProjectAs(docPath) {
     userSettings.save();
   }
 
+  project.hasUnsavedChanges = false;
   updateFileList();
   updateTitleBar();
 }
@@ -399,6 +406,7 @@ function changeChapsDirectory(){
     var subDir = parts.slice(0,parts.length - 1).join('/').concat('/').replace(project.directory, '');
 
     project.chapsDirectory = subDir;
+    project.hasUnsavedChanges = true;
     displayProject();
   }
 }
@@ -412,6 +420,7 @@ function clearCurrentChapterIfUnchanged(){
 
 function moveToTrash(ind){
   if(indexIsTrash(ind) == false){
+    project.hasUnsavedChanges = true;
     var toTrash = project.chapters.splice(ind, 1)[0];
     project.trash.push(toTrash);
 
@@ -516,6 +525,7 @@ function changeChapterTitle(ind){
       stopDefaultPropagation(e);
       chap.title = nameBox.value;
       chap.hasUnsavedChanges = true;
+      project.hasUnsavedChanges = true;
       removeElementsByClass('name-box');
       updateFileList();
       editorQuill.focus();
@@ -602,11 +612,13 @@ editorQuill.on('text-change', function(delta, oldDelta, source) {
     var chap = project.getActiveChapter();
     chap.contents = editorQuill.getContents();
     chap.hasUnsavedChanges = true;
+    project.hasUnsavedChanges = true;
   }
 });
 
 notesQuill.on('text-change', function(delta, oldDelta, source){
   project.notes = notesQuill.getContents();
+  project.hasUnsavedChanges = true;
 });
 
 function addBindingsToQuill(q){
@@ -878,6 +890,21 @@ ipcRenderer.on('convert-tabs-clicked', function(e){
 ipcRenderer.on('about-clicked', function(e){
   showAbout();
 });
+
+ipcRenderer.on('exit-app-clicked', function(e, docPath){
+  console.log(project.hasUnsavedChanges)
+  if(project.hasUnsavedChanges){
+    updateFileList();
+    displayExitConfirmation(docPath);
+  }
+  else{
+    exitApp();
+  }
+});
+
+function exitApp(){
+  ipcRenderer.send('exit-app-confirmed');
+}
 
 //**** utils ***/
 

@@ -11,6 +11,7 @@ function newProject(){
         trash: [],
         activeChapterIndex: 0,
         wordGoal: 0,
+        hasUnsavedChanges: false,
         getActiveChapter: getActiveChapter,
         loadFile: loadFile,
         saveFile: saveFile,
