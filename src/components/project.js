@@ -100,10 +100,6 @@ function newProject(){
       }, '\t');
     }
 
-    function saveCopy(filepath){
-      return saveAs(filepath, true);
-    }
-
     function saveAs(filepath, useSaveCopy = false){
       try{
         //Convert Windows filepaths to maintain linux/windows compatibility
