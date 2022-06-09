@@ -381,11 +381,7 @@ function saveProjectCopy(docPath) {
   };
   var filepath = dialog.showSaveDialogSync(options);
   if (filepath){
-    //project.saveCopy(filepath);
-    var newProj = newProject();
-    Object.assign(newProj, project);
-
-    newProj.saveAs(filepath);
+    project.saveAs(filepath, true);
   }
 
   updateFileList();

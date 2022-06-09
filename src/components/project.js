@@ -101,10 +101,10 @@ function newProject(){
     }
 
     function saveCopy(filepath){
-
+      return saveAs(filepath, true);
     }
 
-    function saveAs(filepath){
+    function saveAs(filepath, useSaveCopy = false){
       try{
         //Convert Windows filepaths to maintain linux/windows compatibility
         filepath = filepath.replaceAll('\\', '/');
@@ -127,16 +127,23 @@ function newProject(){
             var newChapFilename =  chap.filename.split("/").pop();
             fs.copyFileSync(proj.directory + proj.chapsDirectory + chap.filename,
               newDirectory + newSubDir + newChapFilename);
-            chap.filename = newChapFilename;
+            if(useSaveCopy == false)
+              chap.filename = newChapFilename;
           }
         });
         proj.trash.forEach(function(chap){
           if(chap.filename != null){
             var newChapFilename = chap.filename.split("/").pop();
             fs.copyFileSync(proj.directory + proj.chapsDirectory + chap.filename, newDirectory + newSubDir + newChapFilename);
-            chap.filename = newChapFilename;
+            if(useSaveCopy == false)
+              chap.filename = newChapFilename;
           }
         });
+
+        //Save old values for re-assignment with SaveCopy
+        var oldFn = proj.filename;
+        var oldDir = proj.directory;
+        var oldChapsDir = proj.chapsDirectory;
 
         //Update project info for new locations
         proj.filename = newFilename;
@@ -147,12 +154,20 @@ function newProject(){
 
         //Save any new or altered chapters
         proj.chapters.forEach(function(chap){
-          if(chap.hasUnsavedChanges)
-            chap.saveFile();
+          if(chap.hasUnsavedChanges){
+            if(useSaveCopy)
+              chap.saveCopy();
+            else
+              chap.saveFile();
+          }
         });
         proj.trash.forEach(function(tr){
-          if(tr.hasUnsavedChanges)
-            tr.saveFile();
+          if(tr.hasUnsavedChanges){
+            if(useSaveCopy)
+              tr.saveCopy();
+            else
+              tr.saveFile();
+          }
         });
 
 
@@ -160,6 +175,14 @@ function newProject(){
         var fileString = stringifyProject(proj);
 
         fs.writeFileSync(proj.directory + proj.filename, fileString, 'utf8');
+
+        //reset porject details if using saveCopy
+        if(useSaveCopy){
+          proj.filename = oldFn;
+          proj.directory = oldDir;
+          proj.chapsDirectory = oldChapsDir;
+        }
+
         return proj.directory + proj.filename;
       }
       catch(err){
