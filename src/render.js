@@ -630,6 +630,12 @@ function scrollChapterListToActiveChapter(){
   .offsetTop;
 }
 
+function openHelpDoc(){
+  const helpDocPath = convertFilepath(__dirname) + "/examples/HelpDoc/HelpDoc.woolf";
+  project.loadFile(helpDocPath);
+  displayProject();
+}
+
 ///////////////////////////////////////////////////////////////////
   //Event Handlers ///////////////////////////////////////////////
 
@@ -935,6 +941,11 @@ ipcRenderer.on('save-copy-clicked', function(e, docPath){
 function exitApp(){
   ipcRenderer.send('exit-app-confirmed');
 }
+
+ipcRenderer.on('help-doc-clicked', function(e){
+  openHelpDoc();
+});
+
 
 //**** utils ***/
 

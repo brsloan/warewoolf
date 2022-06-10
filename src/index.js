@@ -251,6 +251,12 @@ const createWindow = () => {
           },
           accelerator: 'CommandOrControl+H'
         },
+        {
+          label: 'Open Help Document',
+          click(item, focusWindow){
+            mainWindow.webContents.send('help-doc-clicked');
+          }
+        },
         { type: 'separator' },
         {
           label: 'About',
