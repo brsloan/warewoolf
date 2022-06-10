@@ -112,7 +112,7 @@ function updateFileList(){
         list.removeChild(list.firstChild);
       }
       catch(err){
-        logError(err);
+        console.log(err);
       }
     }
   }
