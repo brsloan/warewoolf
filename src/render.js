@@ -832,7 +832,12 @@ ipcRenderer.on("save-as-clicked", function(e, docPath){
 });
 
 ipcRenderer.on("open-clicked", function(e, docPath){
-  openAProject(docPath);
+  if(project.hasUnsavedChanges){
+    displayExitConfirmation(docPath, openAProject);
+  }
+  else{
+    openAProject(docPath);
+  }
 });
 
 ipcRenderer.on('new-project-clicked', function(e){
@@ -926,10 +931,9 @@ ipcRenderer.on('about-clicked', function(e){
 });
 
 ipcRenderer.on('exit-app-clicked', function(e, docPath){
-  console.log(project.hasUnsavedChanges)
   if(project.hasUnsavedChanges){
     updateFileList();
-    displayExitConfirmation(docPath);
+    displayExitConfirmation(docPath, exitApp);
   }
   else{
     exitApp();
