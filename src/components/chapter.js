@@ -9,7 +9,8 @@ function newChapter(){
       deleteFile: deleteChapterFile,
       parseChapter: parseChapter,
       getFile: getFile,
-      saveFile: saveFile
+      saveFile: saveFile,
+      saveCopy: saveCopy
     };
 
     function deleteChapterFile(){
@@ -36,10 +37,36 @@ function newChapter(){
     }
 
 
+    function saveCopy(){
+      try{
+        var chap = this;
+
+        var filename = chap.filename == undefined || chap.filename == null ? getNewFilename() : chap.filename;
+
+
+        fs.writeFileSync(project.directory + project.chapsDirectory + filename, JSON.stringify(chap.contents), "utf8");
+
+
+        function getNewFilename(){
+          var largestFilename = 0;
+
+          fs.readdirSync(project.directory + project.chapsDirectory).forEach(file => {
+            var nameNumber = parseInt(file.split(".")[0]);
+            if(nameNumber > largestFilename)
+              largestFilename = nameNumber;
+          });
+
+          return (largestFilename + 1).toString() + ".pup";
+        }
+      }
+      catch(err){
+        logError(err);
+      }
+    }
+
     function saveFile(){
       try{
         var chap = this;
-        //var subDir = project.chapsDirectory;
 
         if(chap.filename == undefined || chap.filename == null)
           chap.filename = getNewFilename();
