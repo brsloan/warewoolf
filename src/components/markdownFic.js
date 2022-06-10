@@ -179,7 +179,8 @@ function markdownFic(){
 
   function formatMarkedSegments(delt, marker, style){
     var escapedMarker = marker.replace(/[|\\{}()[\]^$+*?.]/g, '\\$&');
-    var markerRegx = new RegExp(escapedMarker + '([^' + escapedMarker + ']+)' + escapedMarker);
+    //var markerRegx = new RegExp(escapedMarker + '([^' + escapedMarker + ']+)' + escapedMarker);
+    var markerRegx = new RegExp('(?<!\\\\|\\\\' + escapedMarker + ')' + escapedMarker + '([^' + escapedMarker + ']+[^\\\\])' + escapedMarker);
 
     var tempQuill = getTempQuill();
     tempQuill.setContents(delt);
@@ -192,13 +193,13 @@ function markdownFic(){
     var counter = 0;
 
     while(foundIndex > -1){
-
+        console.log(markerRegx);
         matchResult = text.match(markerRegx);
         foundIndex = matchResult ? matchResult.index : -1;
 
         if(foundIndex > -1){
             counter++;
-
+            console.log(matchResult);
             tempQuill.formatText(foundIndex, matchResult[0].length, style, true);
 
             //delete second marker first
