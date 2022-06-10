@@ -15,8 +15,7 @@ function newProject(){
         getActiveChapter: getActiveChapter,
         loadFile: loadFile,
         saveFile: saveFile,
-        saveAs: saveAs,
-        saveCopy: saveCopy
+        saveAs: saveAs
     };
 
     function getActiveChapter(){
