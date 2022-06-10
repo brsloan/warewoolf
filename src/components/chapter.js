@@ -40,7 +40,6 @@ function newChapter(){
     function saveCopy(){
       try{
         var chap = this;
-        //var subDir = project.chapsDirectory;
 
         var filename = chap.filename == undefined || chap.filename == null ? getNewFilename() : chap.filename;
 
@@ -68,7 +67,6 @@ function newChapter(){
     function saveFile(){
       try{
         var chap = this;
-        //var subDir = project.chapsDirectory;
 
         if(chap.filename == undefined || chap.filename == null)
           chap.filename = getNewFilename();
