@@ -156,6 +156,8 @@ function showImportOptions(docPath){
 
     closePopups();
     displayChapterByIndex(project.activeChapterIndex);
+    if(project.chapters.length > 0)
+      editorQuill.enable();
   };
 
   popup.appendChild(importForm);

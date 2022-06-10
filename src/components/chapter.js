@@ -15,8 +15,13 @@ function newChapter(){
 
     function deleteChapterFile(){
       var chap = this;
-
-      fs.unlinkSync(project.directory + chap.filename);
+      try{
+        if(fs.existsSync(project.directory + chap.filename))
+          fs.unlinkSync(project.directory + chap.filename);
+      }
+      catch(err){
+        logError(err);
+      }
     }
 
     function parseChapter(chap){

@@ -82,7 +82,7 @@ function newProject(){
 
         }
         else
-          alert("Cannot save without filepath. Use Save As.");
+          throw("Cannot save without filepath. Use Save As.");
       }
       catch(err){
         logError(err);

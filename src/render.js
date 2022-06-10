@@ -108,7 +108,12 @@ function updateFileList(){
 
   function clearList() {
     while (list.hasChildNodes()) {
-      list.removeChild(list.firstChild);
+      try{
+        list.removeChild(list.firstChild);
+      }
+      catch(err){
+        logError(err);
+      }
     }
   }
 
@@ -485,8 +490,10 @@ function deleteChapter(ind){
   }
 
   //But save it *after* reassigning the activeChapterIndex
-  //in case it is the last chapter that was deleted
-  project.saveFile();
+  //in case it is the last chapter that was deleted.
+  //And only if it is not a new project that has not yet been saved.
+  if(project.directory != '')
+    project.saveFile();
   updateFileList();
   console.log("deleted " + ind);
 }
