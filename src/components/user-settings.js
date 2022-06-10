@@ -1,4 +1,4 @@
-function getUserSettings(){
+function getUserSettings(userSettingsFilepath){
   return {
     editorWidth: 50,
     fontSize: 12,
@@ -12,13 +12,15 @@ function getUserSettings(){
     load: load
   };
 
+//  const userSettingsFilepath = "user-settings.json";
+
   function save(){
     var settings = this;
 
     var fileString = JSON.stringify(settings, null, '\t');
 
     try{
-      fs.writeFileSync("user-settings.json", fileString, 'utf8');
+      fs.writeFileSync(userSettingsFilepath, fileString, 'utf8');
     }
     catch(err){
       logError(err);
@@ -26,9 +28,12 @@ function getUserSettings(){
   }
 
   function load(){
+
     try{
-      var settingsFile = JSON.parse(fs.readFileSync("user-settings.json", "utf8"));
-      Object.assign(this, settingsFile);
+      if(fs.existsSync(userSettingsFilepath)){
+        var settingsFile = JSON.parse(fs.readFileSync(userSettingsFilepath, "utf8"));
+        Object.assign(this, settingsFile);
+      }
     }
     catch(err){
       logError(err);

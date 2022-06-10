@@ -25,7 +25,7 @@ var notesQuill = new Quill('#notes-editor', {
 });
 
 var project = newProject();
-var userSettings = getUserSettings().load();
+var userSettings = getUserSettings("user-settings.json").load();
 
 initialize();
 
@@ -41,8 +41,10 @@ function loadInitialProject(){
 
   if(userSettings.lastProject != null && fs.existsSync(userSettings.lastProject))
     setProject(userSettings.lastProject);
-  else if(fs.existsSync(defaultProject))
+  else if(fs.existsSync(defaultProject)){
     setProject(defaultProject);
+    userSettings.lastProject = defaultProject;
+  }
   else {
     //Start new project
     createNewProject();
