@@ -191,7 +191,7 @@ function displayChapterByIndex(ind){
      contents = chap.getFile();
   }
 
-  editorQuill.setContents(contents);
+  editorQuill.setContents(contents, 'api');
   updateFileList();
 }
 
@@ -200,7 +200,7 @@ function updateTitleBar(){
 }
 
 function displayNotes(){
-  notesQuill.setContents(project.notes);
+  notesQuill.setContents(project.notes, 'api');
 }
 
 function displayInitialChapter(){
@@ -649,8 +649,10 @@ editorQuill.on('text-change', function(delta, oldDelta, source) {
 });
 
 notesQuill.on('text-change', function(delta, oldDelta, source){
-  project.notes = notesQuill.getContents();
-  project.hasUnsavedChanges = true;
+  if(source == 'user'){
+    project.notes = notesQuill.getContents();
+    project.hasUnsavedChanges = true;
+  }
 });
 
 function addBindingsToQuill(q){

@@ -54,6 +54,7 @@ function newProject(){
         });
         this.trash = trashChaps;
 
+        this.hasUnsavedChanges = false;
         testChapsDirectory();
       }
       catch(err){
