@@ -1005,6 +1005,16 @@ function editorIsVisible(){
 
 function logError(e){
   console.log(e);
+  let time = new Date().toLocaleString();
+  try{
+    fs.appendFile('error_log.txt', time + '\n' + e.stack + '\n', function(err){
+      if(err)
+        console.log('error logging: ' + err);
+    });
+  }
+  catch(er){
+    console.log('error logging: ' + er);
+  }
 }
 
 function generateRow(elOne, elTwo){
