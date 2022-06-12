@@ -12,7 +12,8 @@ var editorQuill = new Quill('#editor-container', {
       userOnly: true
     }
   },
-  placeholder: ''
+  placeholder: '',
+  formats: ['bold', 'italic', 'strike', 'underline', 'blockquote', 'header', 'align']
 });
 
 var notesQuill = new Quill('#notes-editor', {
@@ -21,7 +22,8 @@ var notesQuill = new Quill('#notes-editor', {
       userOnly: true
     }
   },
-  placeholder: 'Notes...'
+  placeholder: 'Notes...',
+  formats: ['bold', 'italic', 'strike', 'underline', 'blockquote', 'header', 'align']
 });
 
 var project = newProject();
