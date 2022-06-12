@@ -177,35 +177,6 @@ function markdownFic(){
     return clearEscapedMarkers(packagedDelta.delta);
   }
 
-  function clearEscapedMarkers(delt){
-    var markers = ['**', '*', '~~', '__', '#', '>', '[^', '[>'];
-    var escapedMarkersRegx = /\\(\*\*|\*|~~|__|#|\[>|>|\[\^)/;
-
-    var tempQuill = getTempQuill();
-    tempQuill.setContents(delt);
-    var text = tempQuill.getText();
-
-    var foundIndex = 0;
-    var startingIndex = 0;
-    var matchResult;
-    var markedText = "";
-
-    while(foundIndex > -1){
-      matchResult = text.match(escapedMarkersRegx);
-      foundIndex = matchResult ? matchResult.index : -1;
-
-      if(foundIndex > -1){
-        tempQuill.deleteText(foundIndex, 1);
-
-        startingIndex = foundIndex + matchResult[1].length;
-        text = tempQuill.getText();
-      }
-    }
-
-
-    return tempQuill.getContents();
-  }
-
   function formatMarkedSegments(delt, marker, style){
     var escapedMarker = marker.replace(/[|\\{}()[\]^$+*?.]/g, '\\$&');
     //var markerRegx = new RegExp(escapedMarker + '([^' + escapedMarker + ']+)' + escapedMarker);
@@ -245,6 +216,36 @@ function markdownFic(){
       changed: counter,
       delta: tempQuill.getContents()
     }
+  }
+
+  function clearEscapedMarkers(delt){
+    //Removes the backslash from markers that have been skipped for being escaped
+    var markers = ['**', '*', '~~', '__', '#', '>', '[^', '[>'];
+    var escapedMarkersRegx = /\\(\*\*|\*|~~|__|#|\[>|>|\[\^)/;
+
+    var tempQuill = getTempQuill();
+    tempQuill.setContents(delt);
+    var text = tempQuill.getText();
+
+    var foundIndex = 0;
+    var startingIndex = 0;
+    var matchResult;
+    var markedText = "";
+
+    while(foundIndex > -1){
+      matchResult = text.match(escapedMarkersRegx);
+      foundIndex = matchResult ? matchResult.index : -1;
+
+      if(foundIndex > -1){
+        tempQuill.deleteText(foundIndex, 1);
+
+        startingIndex = foundIndex + matchResult[1].length;
+        text = tempQuill.getText();
+      }
+    }
+
+
+    return tempQuill.getContents();
   }
 
 
