@@ -954,6 +954,10 @@ ipcRenderer.on('help-doc-clicked', function(e){
   openHelpDoc();
 });
 
+ipcRenderer.on('renumber-chapters-clicked', function(e){
+  showRenumberChapters();
+});
+
 
 //**** utils ***/
 

@@ -215,6 +215,12 @@ const createWindow = () => {
         },
         { type: 'separator' },
         {
+          label: 'Renumber Chapters',
+          click(item, focusWindow){
+            mainWindow.webContents.send('renumber-chapters-clicked');
+          }
+        },
+        {
           label: 'Convert First Lines To Titles',
           click(item, focusWindow){
             mainWindow.webContents.send('convert-first-lines-clicked');
