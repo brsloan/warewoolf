@@ -19,7 +19,7 @@ function displayExitConfirmation(docPath, continueFunc){
   };
   popup.appendChild(save);
 
-  var quit = createButton("Continue");
+  var quit = createButton("Continue Without Saving");
   quit.onclick = function(){
     closePopups();
     continueFunc(docPath);
