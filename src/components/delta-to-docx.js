@@ -45,6 +45,7 @@ function convertDeltaToDocx(delt){
                         before: 1200,
                         after: 1200,
                     },
+                    pageBreakBefore: true,
                 },
             },
       },
