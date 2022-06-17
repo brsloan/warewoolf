@@ -70,6 +70,7 @@ function showRenumberChapters(){
   submit.onclick = function(){
     renumberChaps(startChapDrop.value, endChapDrop.value, insertReplaceCheck.checked, useNumeralsCheck.checked, formatInput.value);
     updateFileList();
+    displayChapterByIndex(project.activeChapterIndex);
     closePopups();
   };
   renumberForm.appendChild(submit);
@@ -81,8 +82,6 @@ function showRenumberChapters(){
   renumberForm.appendChild(close);
 
   popup.appendChild(renumberForm);
-
-
 
   document.body.appendChild(popup);
   close.focus();

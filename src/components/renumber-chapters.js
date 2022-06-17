@@ -8,11 +8,40 @@ function renumberChaps(startIndex, endIndex, withinChaps, useNumerals, template)
     chap.title = template.replaceAll('[num]', numText);
     newNum++;
 
+    if(withinChaps)
+      insertChapTitle(chap);
+
     chap.hasUnsavedChanges = true;
   }
 
     project.hasUnsavedChanges = true;
 }
+
+function insertChapTitle(chap){
+  var delt = chap.contents ? chap.contents : chap.getFile();
+
+  var tempQuill = getTempQuill();
+  tempQuill.setContents(delt);
+
+  var firstLineFormat = tempQuill.getFormat(1, 1);
+
+  if(firstLineFormat.header){
+      //If already a header, delete it first
+      var firstLine = tempQuill.getText().split('\n')[0];
+      tempQuill.deleteText(0, firstLine.length, 'api');
+      tempQuill.insertText(0, chap.title, 'api');
+  }
+  else {
+    //If no header, insert one
+    tempQuill.insertText(0, chap.title + '\n\n', 'api');
+  }
+
+  tempQuill.formatLine(1, 1, 'header', 1);
+  tempQuill.formatLine(1, 1, 'align', 'center');
+
+  chap.contents = tempQuill.getContents();
+}
+
 
 function integerToWord(i){
   var words = [
