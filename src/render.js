@@ -5,6 +5,7 @@ const { dialog } = remote;
 const Quill = require('quill');
 const docx = require('docx');
 const quillParser = require('quilljs-parser');
+const nodemailer = require('nodemailer');
 
 var editorQuill = new Quill('#editor-container', {
   modules: {
@@ -784,6 +785,9 @@ document.addEventListener ("keydown", function (e) {
     else if(e.key ==="F3"){
       stopDefaultPropagation(e);
       togglePanelDisplay(3);
+    }
+    else if(e.ctrlKey && e.altKey && e.key === "e"){
+      showEmailOptions();
     }
 } );
 

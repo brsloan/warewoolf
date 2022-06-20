@@ -8,6 +8,9 @@ function getUserSettings(userSettingsFilepath){
     displayNotes: true,
     lastProject: null,
     defaultAuthor: '',
+    senderEmail: null,
+    senderPass: null,
+    receiverEmail: null,
     save: save,
     load: load
   };
