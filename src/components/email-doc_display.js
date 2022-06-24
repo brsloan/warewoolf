@@ -71,6 +71,84 @@ function showEmailOptions(){
     responseText.innerText = "";
     emailForm.appendChild(responseText);
 
+
+    var chapRadioLabel = document.createElement('label');
+    chapRadioLabel.innerText = "Send Chapter";
+    chapRadioLabel.for = 'email-radio-chap';
+    emailForm.appendChild(chapRadioLabel);
+
+    var chapRadio = document.createElement('input');
+    chapRadio.type = 'radio';
+    chapRadio.name = 'email-radio';
+    chapRadio.id = 'email-radio-chap';
+    chapRadio.value = 'chap';
+    chapRadio.checked = true;
+    emailForm.appendChild(chapRadio);
+
+    var compiledRadioLabel = document.createElement('label');
+    compiledRadioLabel.innerText = "Send Compiled";
+    compiledRadioLabel.for = 'email-radio-compiled';
+    emailForm.appendChild(compiledRadioLabel);
+
+    var compiledRadio = document.createElement('input');
+    compiledRadio.type = 'radio';
+    compiledRadio.name = 'email-radio';
+    compiledRadio.id = 'email-radio-compiled';
+    compiledRadio.value = 'compiled';
+    emailForm.appendChild(compiledRadio);
+
+
+    var compileOptionsSet = document.createElement('fieldset');
+
+    var compileOptionsLabel = document.createElement('legend');
+    compileOptionsLabel.innerText = 'Compile Options';
+    compileOptionsSet.appendChild(compileOptionsLabel);
+
+    var typeLabel = document.createElement("label");
+    typeLabel.innerText = "File Type: ";
+    typeLabel.for = "filetype-select";
+    compileOptionsSet.appendChild(typeLabel);
+
+    var typeSelect = document.createElement("select");
+    const typeOptions = [".docx", ".txt", ".mdfc"];
+    typeOptions.forEach(function(op){
+      var txtOp = document.createElement("option");
+      txtOp.value = op;
+      txtOp.innerText = op;
+      typeSelect.appendChild(txtOp);
+    });
+    compileOptionsSet.appendChild(typeSelect);
+
+    compileOptionsSet.appendChild(document.createElement('br'));
+
+    var insertStrLabel = document.createElement("label");
+    insertStrLabel.innerText = "Insert string to mark chapter breaks: ";
+    insertStrLabel.for = "insert-str-input";
+    compileOptionsSet.appendChild(insertStrLabel);
+
+    var insertStrInput = document.createElement("input");
+    insertStrInput.type = "text";
+    insertStrInput.value = "";
+    insertStrInput.id = "insert-str-input";
+    compileOptionsSet.appendChild(insertStrInput);
+
+    compileOptionsSet.appendChild(document.createElement('br'));
+
+    var insertHeadLabel = document.createElement("label");
+    insertHeadLabel.innerText = "Insert chapter titles as headings: ";
+    insertHeadLabel.for = "insert-head-check";
+    compileOptionsSet.appendChild(insertHeadLabel);
+
+    var insertHeadCheck = document.createElement("input");
+    insertHeadCheck.type = "checkbox";
+    insertHeadCheck.id = "insert-head-check";
+    compileOptionsSet.appendChild(insertHeadCheck);
+
+    compileOptionsSet.style.display = 'none';
+    emailForm.appendChild(compileOptionsSet);
+
+    emailForm.appendChild(document.createElement('br'));
+
     var sendButton = createButton('Send');
     sendButton.onclick = function(){
       sendButton.disabled = true;
@@ -96,6 +174,15 @@ function showEmailOptions(){
       closePopups();
     };
     popup.appendChild(closeBtn);
+
+    chapRadio.onclick = function(){
+      compileOptionsSet.style.display = 'none';
+    }
+    compiledRadio.onclick = function(){
+      compileOptionsSet.style.display = 'block';
+    }
+
+
 
     document.body.appendChild(popup);
 

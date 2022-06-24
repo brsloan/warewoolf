@@ -11,6 +11,10 @@ function getUserSettings(userSettingsFilepath){
     senderEmail: null,
     senderPass: null,
     receiverEmail: null,
+    emailCompiled: false,
+    compileType: null,
+    compileChapMark: '',
+    compileInsert: false,
     save: save,
     load: load
   };
