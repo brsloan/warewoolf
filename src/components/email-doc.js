@@ -1,4 +1,4 @@
-function emailDoc(sender, pass, receiver, callback){
+function emailDoc(sender, pass, receiver, filetype, compileOptions, callback){
   var transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
@@ -7,17 +7,14 @@ function emailDoc(sender, pass, receiver, callback){
     }
   });
 
+  var attachments = generateAttachments(filetype, compileOptions);
+
   var mailOptions = {
     from: sender,
     to: receiver,
     subject: 'WareWoolf backup',
     text: 'Document will be attached.',
-    attachments: [
-      {
-        filename: project.chapters[project.activeChapterIndex].title + '.txt',
-        content: markdownFic().convertDeltaToMDF(editorQuill.getContents())
-      }
-    ]
+    attachments: attachments
   };
 
   transporter.sendMail(mailOptions, function(error, info){
@@ -29,4 +26,38 @@ function emailDoc(sender, pass, receiver, callback){
       callback('Email sent successfully.');
     }
   });
+}
+
+function generateAttachments(filetype, compileOptions){
+  let attachments = [];
+
+  if(compileOptions == null){
+    attachments.push(generateChapterAttachment(filetype));
+  }
+
+  return attachments;
+}
+
+function generateChapterAttachment(filetype){
+  let filename;
+  let content;
+
+  if(filetype == ".docx"){
+    //convert to docx
+  }
+  else if(filetype == ".mdfc"){
+    //convert to mdfc
+    filename = project.chapters[project.activeChapterIndex].title + '.mdfc';
+    content = markdownFic().convertDeltaToMDF(editorQuill.getContents());
+  }
+  else {
+    //default to txt
+    filename = project.chapters[project.activeChapterIndex].title + '.txt';
+    content = editorQuill.getText();
+  }
+
+  return {
+    filename: filename,
+    content: content
+  }
 }

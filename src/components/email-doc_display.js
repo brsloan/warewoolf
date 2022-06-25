@@ -97,17 +97,12 @@ function showEmailOptions(){
     compiledRadio.value = 'compiled';
     emailForm.appendChild(compiledRadio);
 
-
-    var compileOptionsSet = document.createElement('fieldset');
-
-    var compileOptionsLabel = document.createElement('legend');
-    compileOptionsLabel.innerText = 'Compile Options';
-    compileOptionsSet.appendChild(compileOptionsLabel);
+    emailForm.appendChild(document.createElement('br'));
 
     var typeLabel = document.createElement("label");
     typeLabel.innerText = "File Type: ";
     typeLabel.for = "filetype-select";
-    compileOptionsSet.appendChild(typeLabel);
+    emailForm.appendChild(typeLabel);
 
     var typeSelect = document.createElement("select");
     const typeOptions = [".docx", ".txt", ".mdfc"];
@@ -117,9 +112,15 @@ function showEmailOptions(){
       txtOp.innerText = op;
       typeSelect.appendChild(txtOp);
     });
-    compileOptionsSet.appendChild(typeSelect);
+    emailForm.appendChild(typeSelect);
 
-    compileOptionsSet.appendChild(document.createElement('br'));
+    emailForm.appendChild(document.createElement('br'));
+
+    var compileOptionsSet = document.createElement('fieldset');
+
+    var compileOptionsLabel = document.createElement('legend');
+    compileOptionsLabel.innerText = 'Compile Options';
+    compileOptionsSet.appendChild(compileOptionsLabel);
 
     var insertStrLabel = document.createElement("label");
     insertStrLabel.innerText = "Insert string to mark chapter breaks: ";
@@ -160,10 +161,25 @@ function showEmailOptions(){
         userSettings.senderPass = senderPassInput.value;
       }
       userSettings.save();
-      emailDoc(senderEmailInput.value, senderPassInput.value, receiverEmailInput.value, function(resp){
-        responseText.innerText = resp;
-        sendButton.disabled = false;
-      });
+
+      let compileOptions = null;
+      if(compiledRadio.checked){
+        compileOptions = {
+          type: typeSelect.value,
+          insertStrng: insertStrInput.value,
+          insertHead: insertHeadCheck.checked
+        }
+      }
+
+      emailDoc(senderEmailInput.value,
+        senderPassInput.value,
+        receiverEmailInput.value,
+        typeSelect.value,
+        compileOptions,
+        function(resp){
+          responseText.innerText = resp;
+          sendButton.disabled = false;
+        });
     };
     emailForm.appendChild(sendButton);
 
