@@ -786,9 +786,6 @@ document.addEventListener ("keydown", function (e) {
       stopDefaultPropagation(e);
       togglePanelDisplay(3);
     }
-    else if(e.ctrlKey && e.altKey && e.key === "e"){
-      showEmailOptions();
-    }
 } );
 
 document.getElementById('editor-container').addEventListener('keydown', editorControlEvents);
@@ -962,6 +959,9 @@ ipcRenderer.on('renumber-chapters-clicked', function(e){
   showRenumberChapters();
 });
 
+ipcRenderer.on('send-via-email-clicked', function(e){
+  showEmailOptions();
+});
 
 //**** utils ***/
 
