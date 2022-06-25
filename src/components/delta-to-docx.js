@@ -10,6 +10,12 @@ function saveDocx(filepath, doc){
   });
 }
 
+function packageDocxBase64(doc, callback){
+  docx.Packer.toBase64String(doc).then((docString) => {
+    callback(docString);
+  });
+}
+
 function convertDeltaToDocx(delt){
   var parsedQuill = quillParser.parseQuillDelta(delt);
 

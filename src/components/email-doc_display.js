@@ -171,7 +171,7 @@ function showEmailOptions(){
         }
       }
 
-      emailDoc(senderEmailInput.value,
+      prepareAndEmail(senderEmailInput.value,
         senderPassInput.value,
         receiverEmailInput.value,
         typeSelect.value,
