@@ -99,7 +99,12 @@ function displayProject(){
   updateTitleBar();
   displayNotes();
   displayInitialChapter();
+  setWordCountOnLoad();
   editorQuill.focus();
+}
+
+function setWordCountOnLoad(){
+  project.wordCountOnLoad = getTotalWordCount();
 }
 
 function updateFileList(){

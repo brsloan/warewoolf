@@ -11,6 +11,10 @@ function showWordCount(){
     totalDisplay.innerText = "Total Word Count: Calculating...";
     popup.appendChild(totalDisplay);
 
+    var sessionTotalDisplay = document.createElement('p');
+    sessionTotalDisplay.innerText = "Session Word Count: Calculating...";
+    popup.appendChild(sessionTotalDisplay);
+
     var goalLabel = document.createElement('label');
     goalLabel.innerText = "Goal: ";
     goalLabel.for = "word-goal-input";
@@ -50,6 +54,7 @@ function showWordCount(){
 
     chapTotalDisplay.innerText = "Chapter Word Count: " + activeTotal;
     totalDisplay.innerText = "Total Word Count: " + total;
+    sessionTotalDisplay.innerText = "Session Word Count: " + (total - project.wordCountOnLoad);
     closeBtn.focus();
 
     function updateProgressBar(){

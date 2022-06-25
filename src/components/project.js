@@ -96,6 +96,7 @@ function newProject(){
         else if (k == "hasUnsavedChanges") return undefined;
         //else if (k == "filename") return undefined;
         else if (k == "directory") return undefined;
+        else if (k == "wordCountOnLoad") return undefined;
         else return v;
       }, '\t');
     }
