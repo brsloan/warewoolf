@@ -91,37 +91,3 @@ function emailFile(sender, pass, receiver, attachments, callback){
     }
   });
 }
-
-function generateAttachments(filetype, compileOptions){
-  let attachments = [];
-
-  if(compileOptions == null){
-    attachments.push(generateChapterAttachment(filetype));
-  }
-
-  return attachments;
-}
-
-function generateChapterAttachment(filetype){
-  let filename;
-  let content;
-
-  if(filetype == ".docx"){
-    //convert to docx
-  }
-  else if(filetype == ".mdfc"){
-    //convert to mdfc
-    filename = project.chapters[project.activeChapterIndex].title + '.mdfc';
-    content = markdownFic().convertDeltaToMDF(editorQuill.getContents());
-  }
-  else {
-    //default to txt
-    filename = project.chapters[project.activeChapterIndex].title + '.txt';
-    content = editorQuill.getText();
-  }
-
-  return {
-    filename: filename,
-    content: content
-  }
-}
