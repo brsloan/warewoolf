@@ -7,10 +7,13 @@ function runSpellcheck(startingIndex = 0, wordsToIgnore){
 
 function loadDictionaries(){
   try{
+    createPersonalDicIfNeeded();
+
     var baseFilepath = convertFilepath(__dirname);
     var aff = fs.readFileSync(baseFilepath + '/dictionaries/en_US-large.aff', 'utf8');
     var dic = fs.readFileSync(baseFilepath + '/dictionaries/en_US-large.dic', 'utf8');
-    var personal = fs.readFileSync(baseFilepath + '/dictionaries/personal.dic', 'utf8');
+
+    var personal = fs.readFileSync(convertFilepath(remote.app.getPath('userData')) + '/dictionaries/personal.dic', 'utf8');
 
     var spellchecker = nspell({ aff: aff, dic: dic });
     spellchecker.personal(personal);
@@ -20,6 +23,20 @@ function loadDictionaries(){
     logError(err);
   }
 
+}
+
+function createPersonalDicIfNeeded(){
+  try{
+    let personalPath = convertFilepath(remote.app.getPath('userData')) + '/dictionaries/personal.dic';
+    if(!fs.existsSync(personalPath)){
+      fs.mkdirSync(convertFilepath(remote.app.getPath('userData')) + '/dictionaries');
+      fs.writeFileSync(personalPath, "WareWoolf\n", 'utf8');
+    }
+
+  }
+  catch(err){
+    logError(err);
+  }
 }
 
 function findInvalidWord(spellchecker, startingIndex = 0, wordsToIgnore = []) {
@@ -62,7 +79,7 @@ function findInvalidWord(spellchecker, startingIndex = 0, wordsToIgnore = []) {
 
 function getPersonalDict(){
   try{
-    return fs.readFileSync(convertFilepath(__dirname) + '/dictionaries/personal.dic', 'utf8').split("\n");
+    return fs.readFileSync(convertFilepath(remote.app.getPath('userData')) + '/dictionaries/personal.dic', 'utf8').split("\n");
   }
   catch(err){
     logError(err);
@@ -74,7 +91,7 @@ function addWordToPersonalDictFile(word){
     var personal = getPersonalDict();
     if(personal.indexOf(word) == -1){
         personal.push(word);
-        fs.writeFileSync(convertFilepath(__dirname) + '/dictionaries/personal.dic', personal.join("\n"), 'utf8');
+        fs.writeFileSync(convertFilepath(remote.app.getPath('userData')) + '/dictionaries/personal.dic', personal.join("\n"), 'utf8');
     }
   }
   catch(err){
