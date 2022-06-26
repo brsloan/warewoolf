@@ -101,6 +101,7 @@ function displayProject(){
   displayInitialChapter();
   setWordCountOnLoad();
   editorQuill.focus();
+  editorQuill.setSelection(project.textCursorPosition);
 }
 
 function setWordCountOnLoad(){
@@ -291,13 +292,20 @@ function removeSpecialDisplayClasses(el){
 //User Actions
 
 function displayPreviousChapter(){
-  if(project.activeChapterIndex > 0)
+  if(project.activeChapterIndex > 0){
     displayChapterByIndex(project.activeChapterIndex - 1);
+    editorQuill.setSelection(0);
+    project.textCursorPosition = 0;
+  }
 }
 
 function displayNextChapter(){
-  if(project.activeChapterIndex < project.chapters.length - 1 + project.trash.length)
+  if(project.activeChapterIndex < project.chapters.length - 1 + project.trash.length){
     displayChapterByIndex(project.activeChapterIndex + 1);
+    editorQuill.setSelection(0);
+    project.textCursorPosition = 0;
+  }
+
 }
 
 function moveChapUp(chapInd){
@@ -655,6 +663,12 @@ editorQuill.on('text-change', function(delta, oldDelta, source) {
     project.hasUnsavedChanges = true;
   }
 });
+
+editorQuill.on('selection-change', function(range, oldRange, source){
+  if(range){
+    project.textCursorPosition = range.index;
+  }
+})
 
 notesQuill.on('text-change', function(delta, oldDelta, source){
   if(source == 'user'){

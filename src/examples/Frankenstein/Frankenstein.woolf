@@ -183,5 +183,6 @@
 	"filters": [],
 	"trash": [],
 	"activeChapterIndex": 0,
-	"wordGoal": 0
+	"wordGoal": 0,
+	"textCursorPosition": 0
 }

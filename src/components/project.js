@@ -12,6 +12,7 @@ function newProject(){
         activeChapterIndex: 0,
         wordGoal: 0,
         hasUnsavedChanges: false,
+        textCursorPosition: 0,
         getActiveChapter: getActiveChapter,
         loadFile: loadFile,
         saveFile: saveFile,
