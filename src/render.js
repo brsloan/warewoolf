@@ -28,7 +28,8 @@ var notesQuill = new Quill('#notes-editor', {
 });
 
 var project = newProject();
-var userSettings = getUserSettings("user-settings.json").load();
+
+var userSettings = getUserSettings(remote.app.getPath('userData') + "/user-settings.json").load();
 
 initialize();
 
