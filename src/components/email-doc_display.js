@@ -3,6 +3,8 @@ function showEmailOptions(){
     var popup = document.createElement("div");
     popup.classList.add("popup");
 
+    var crypt = getCrypto();
+
     var header = document.createElement('h1');
     header.innerText = "Send Via Email";
     popup.appendChild(header);
@@ -33,13 +35,13 @@ function showEmailOptions(){
     senderPassInput.type = 'password';
     senderPassInput.id = 'sender-email-pass';
     if(userSettings.senderPass != null)
-      senderPassInput.value = userSettings.senderPass;
+      senderPassInput.value = crypt.decrypt(userSettings.senderPass);
     emailForm.appendChild(senderPassInput);
 
     emailForm.appendChild(document.createElement('br'));
 
     var rememberPassLabel = document.createElement('label');
-    rememberPassLabel.innerText = "Remember Password? (Will be saved on local machine as plain text.)";
+    rememberPassLabel.innerText = "Remember Password?";
     rememberPassLabel.for = 'remember-pass-check';
     emailForm.appendChild(rememberPassLabel);
 
@@ -158,7 +160,7 @@ function showEmailOptions(){
       userSettings.senderEmail = senderEmailInput.value;
       userSettings.receiverEmail = receiverEmailInput.value;
       if(rememberPassCheck.checked){
-        userSettings.senderPass = senderPassInput.value;
+        userSettings.senderPass = crypt.encrypt(senderPassInput.value);
       }
       userSettings.save();
 
