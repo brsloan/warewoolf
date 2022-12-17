@@ -567,7 +567,6 @@ function changeChapterTitle(ind){
     if(e.key === "Enter" || e.key === "Tab"){
       stopDefaultPropagation(e);
       chap.title = nameBox.value;
-      chap.hasUnsavedChanges = true;
       project.hasUnsavedChanges = true;
       removeElementsByClass('name-box');
       updateFileList();
