@@ -6,6 +6,8 @@ It is composed of three simple text-based panels with no icons: Chapters, Editor
 
 That's it. There is no toolbar with twenty buttons cluttering the screen. There isn't even a file menu unless you summon it. All formatting is done with shortcuts. (But don't worry, there aren't many to memorize, and you can always press **CTRL** + **H** to show them all in the Shortcut Helper. And it's not like you do a lot of formatting when writing fiction anyway.)
  
+ ![screenshot of program described](src/assets/screenshot.png?raw=true "WareWoolf")
+ 
 ## Display Controls
 
 On the left is the list of chapters, which you can re-order and rename. In the middle, the main editor. On the right, notes. These three panels can each be toggled on/off with **F1**, **F2**, and **F3**, so you can clear everything but the editor for a fully distraction-free experience, or make room for using a narrow vertical screen.
