@@ -27,9 +27,13 @@ function loadDictionaries(){
 
 function createPersonalDicIfNeeded(){
   try{
+    let personalDicDir = convertFilepath(remote.app.getPath('userData')) + '/dictionaries';
+    if(!fs.existsSync(personalDicDir)){
+      fs.mkdirSync(personalDicDir);
+    }
+
     let personalPath = convertFilepath(remote.app.getPath('userData')) + '/dictionaries/personal.dic';
     if(!fs.existsSync(personalPath)){
-      fs.mkdirSync(convertFilepath(remote.app.getPath('userData')) + '/dictionaries');
       fs.writeFileSync(personalPath, "WareWoolf\n", 'utf8');
     }
 
@@ -58,6 +62,7 @@ function findInvalidWord(spellchecker, startingIndex = 0, wordsToIgnore = []) {
             masterIndex += nextStart;
             text = text.slice(nextStart);
 
+            console.log(nextWord[0]);
             wordIsValid = spellchecker.correct(nextWord[0]);
             if(!wordIsValid){
                 invalidWord = {
