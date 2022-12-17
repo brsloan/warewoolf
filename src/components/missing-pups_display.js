@@ -29,4 +29,5 @@ function promptForMissingPups(){
   popup.appendChild(cancel);
 
   document.body.appendChild(popup);
+  find.focus();
 }
