@@ -97,6 +97,14 @@ const createWindow = () => {
               mainWindow.webContents.send('compile-clicked', app.getPath("documents"));
           }
         },
+        { type: 'separator' },
+        {
+          label: 'Send via Email',
+          click(item, focusWindow){
+            mainWindow.webContents.send('send-via-email-clicked');
+          },
+          accelerator: 'CommandOrControl+Alt+E'
+        },
         {type: 'separator'},
         {
           label: 'Properties',
@@ -244,14 +252,6 @@ const createWindow = () => {
           click(item, focusWindow){
             mainWindow.webContents.send('headings-to-chaps-clicked');
           }
-        },
-        { type: 'separator' },
-        {
-          label: 'Send via Email',
-          click(item, focusWindow){
-            mainWindow.webContents.send('send-via-email-clicked');
-          },
-          accelerator: 'CommandOrControl+Alt+E'
         }
       ]
     },
