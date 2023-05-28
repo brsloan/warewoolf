@@ -118,6 +118,11 @@ input, textarea, select, button {
   padding: 0;
 }
 
+.popup pre{
+  height: 250px;
+  overflow-y: scroll;
+}
+
 .popup-search-view {
   top: 50%;
   left: 0%;

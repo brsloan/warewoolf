@@ -982,6 +982,10 @@ ipcRenderer.on('send-via-email-clicked', function(e){
   showEmailOptions();
 });
 
+ipcRenderer.on('view-error-log-clicked', function(e){
+  showErrorLog();
+});
+
 //**** utils ***/
 
 function closePopups(){

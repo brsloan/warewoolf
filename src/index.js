@@ -271,6 +271,12 @@ const createWindow = () => {
             mainWindow.webContents.send('help-doc-clicked');
           }
         },
+        {
+          label: 'View Error Log',
+          click(item, focusWindow){
+            mainWindow.webContents.send('view-error-log-clicked');
+          }
+        },
         { type: 'separator' },
         {
           label: 'About',
