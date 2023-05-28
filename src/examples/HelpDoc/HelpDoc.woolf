@@ -12,8 +12,26 @@
 	},
 	"chapters": [
 		{
-			"title": "WareWoolf",
+			"title": "WareWoolf Basics",
 			"filename": "1.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Email Function",
+			"filename": "2.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Writing In Plain Text For Import Into WareWoolf",
+			"filename": "3.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Using WareWoolf For a WriterDeck",
+			"filename": "4.pup",
 			"filter": null,
 			"summary": null
 		}
@@ -21,5 +39,6 @@
 	"filters": [],
 	"trash": [],
 	"activeChapterIndex": 0,
-	"wordGoal": "0"
+	"wordGoal": "0",
+	"textCursorPosition": 0
 }
