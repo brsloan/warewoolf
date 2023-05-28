@@ -9,20 +9,30 @@ function getCrypto() {
   };
 
   function encrypt(text){
-    const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipheriv(algorithm, sKey, iv);
-    const encrypted = Buffer.concat([cipher.update(text), cipher.final()]);
+    try{
+      const iv = crypto.randomBytes(16);
+      const cipher = crypto.createCipheriv(algorithm, sKey, iv);
+      const encrypted = Buffer.concat([cipher.update(text), cipher.final()]);
 
-    return {
-        iv: iv.toString('hex'),
-        content: encrypted.toString('hex')
-    };
+      return {
+          iv: iv.toString('hex'),
+          content: encrypted.toString('hex')
+      };
+    }
+    catch(err){
+      logError(err);
+    }
   }
 
   function decrypt(hash){
-    const decipher = crypto.createDecipheriv(algorithm, sKey, Buffer.from(hash.iv, 'hex'));
-    const decrypted = Buffer.concat([decipher.update(Buffer.from(hash.content, 'hex')), decipher.final()]);
+    try{
+      const decipher = crypto.createDecipheriv(algorithm, sKey, Buffer.from(hash.iv, 'hex'));
+      const decrypted = Buffer.concat([decipher.update(Buffer.from(hash.content, 'hex')), decipher.final()]);
 
-    return decrypted.toString();
+      return decrypted.toString();
+    }
+    catch(err){
+      logError(err);
+    }
   }
 }
