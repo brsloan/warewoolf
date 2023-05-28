@@ -16,7 +16,8 @@ function getUserSettings(userSettingsFilepath){
     compileChapMark: '',
     compileInsert: false,
     save: save,
-    load: load
+    load: load,
+    getSettingsFilepath: getSettingsFilepath
   };
 
 //  const userSettingsFilepath = "user-settings.json";
@@ -46,6 +47,10 @@ function getUserSettings(userSettingsFilepath){
       logError(err);
     }
     return this;
+  }
+
+  function getSettingsFilepath(){
+    return userSettingsFilepath;
   }
 
 }

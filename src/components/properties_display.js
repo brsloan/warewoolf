@@ -30,6 +30,15 @@ function showProperties(){
     pupDir.classList.add('popup-text-small');
     popup.appendChild(pupDir);
 
+    var settingsFilepathLabel = document.createElement('p');
+    settingsFilepathLabel.innerText = "User Settings Filepath:";
+    popup.appendChild(settingsFilepathLabel);
+
+    var settingsFilepathText = document.createElement('p');
+    settingsFilepathText.innerText = userSettings.getSettingsFilepath();
+    settingsFilepathText.classList.add('popup-text-small');
+    popup.appendChild(settingsFilepathText);
+
     var propForm = document.createElement("form");
 
     var propTable = document.createElement("table");
