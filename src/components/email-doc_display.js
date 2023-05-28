@@ -34,8 +34,12 @@ function showEmailOptions(){
     var senderPassInput = document.createElement('input');
     senderPassInput.type = 'password';
     senderPassInput.id = 'sender-email-pass';
-    if(userSettings.senderPass != null)
-      senderPassInput.value = crypt.decrypt(userSettings.senderPass);
+    if(userSettings.senderPass != null){
+      var decrypedPass = crypt.decrypt(userSettings.senderPass);
+      if(decrypedPass != null)
+        senderPassInput.value = decrypedPass;
+    }
+
     emailForm.appendChild(senderPassInput);
 
     emailForm.appendChild(document.createElement('br'));
