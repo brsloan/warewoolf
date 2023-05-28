@@ -121,6 +121,9 @@ input, textarea, select, button {
 .popup pre{
   height: 250px;
   overflow-y: scroll;
+  text-align: left;
+  background-color: white;
+  color: black;
 }
 
 .popup-search-view {
