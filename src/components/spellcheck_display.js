@@ -94,7 +94,7 @@ function showSpellcheck(startingIndex = 0, wordsToIgnore = []){
     }
     popup.appendChild(changeBtn);
 
-    var changeAllBtn = createButton("<span class='access-key'>C</span>hange All");
+    var changeAllBtn = createButton("C<span class='access-key'>h</span>ange All");
     changeAllBtn.onclick = function(){
       var selectedReplacement = document.querySelector('input[name="suggestions"]:checked');
       if(customInput.value != "")
@@ -106,7 +106,7 @@ function showSpellcheck(startingIndex = 0, wordsToIgnore = []){
         ignoreBtn.click();
       }
     };
-    changeAllBtn.accessKey = "c";
+    changeAllBtn.accessKey = "h";
     popup.appendChild(changeAllBtn);
 
     popup.appendChild(document.createElement('br'));
