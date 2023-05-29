@@ -171,7 +171,7 @@ const createWindow = () => {
           click(item, focusWindow){
             mainWindow.webContents.send('delete-chapter-clicked');
           },
-          accelerator: 'CommandOrControl+D',
+          accelerator: 'CommandOrControl+Shift+D',
         },
         {
           label: 'Restore Deleted Chapter',
