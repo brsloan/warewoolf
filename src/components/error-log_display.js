@@ -109,8 +109,9 @@ function showErrorLog(){
   };
   popup.appendChild(closeBtn);
 
-  errorLogTextBox.focus();
+  
   document.body.appendChild(popup);
+  errorLogTextBox.focus();
 }
 
 function loadErrorLog(){
