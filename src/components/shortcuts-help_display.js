@@ -40,7 +40,7 @@ function showShortcutsHelp(){
       {
         title: "Tool/Menu Navigation",
         shortcuts: [
-          ['Open/Navigate File Menu', 'Alt, then arrow keys'],
+          ['Open/Navigate File Menu', 'Alt, then arrow keys and Escape'],
           ['Close Tool Dialog', "Escape"],
           ['Any Button With A Bold/\rUnderlined Letter', 'Alt + (that letter)'],
           ['Move Between Inputs', 'Tab']
