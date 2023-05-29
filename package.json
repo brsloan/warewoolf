@@ -25,14 +25,13 @@
           }
         },
         {
-          "name": "@electron-forge/maker-zip",
-          "platforms": [
-            "darwin"
-          ]
-        },
-        {
           "name": "@electron-forge/maker-deb",
-          "config": {}
+          "config": {
+            "options": {
+              "icon": "src/assets/icon.png",
+              "setupIcon": "src/assets/icon.png"
+            }
+          }
         },
         {
           "name": "@electron-forge/maker-rpm",
