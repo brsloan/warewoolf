@@ -12,6 +12,12 @@
 	},
 	"chapters": [
 		{
+			"title": "Welcome To WareWoolf",
+			"filename": "29.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
 			"title": "Letter 1",
 			"filename": "1.pup",
 			"filter": null,
