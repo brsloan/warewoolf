@@ -2,12 +2,12 @@
 
 WareWoolf is designed for one thing: writing fiction. It is intentionally simplified: you cannot change the font, line spacing, or color. But it has everything you need to organize, edit, and revise a novel--and you don't even need a mouse.
 
-It is composed of three simple text-based panels with no icons: Chapters, Editor, and Notes. 
+It is composed of three simple text-based panels with no icons: Chapters, Editor, and Notes.
 
 That's it. There is no toolbar with twenty buttons cluttering the screen. There isn't even a file menu unless you summon it. All formatting is done with shortcuts. (But don't worry, there aren't many to memorize, and you can always press **CTRL** + **H** to show them all in the Shortcut Helper. And it's not like you do a lot of formatting when writing fiction anyway.)
- 
+
  ![screenshot of program described](src/assets/screenshot.png?raw=true "WareWoolf")
- 
+
 ## Display Controls
 
 On the left is the list of chapters, which you can re-order and rename. In the middle, the main editor. On the right, notes. These three panels can each be toggled on/off with **F1**, **F2**, and **F3**, so you can clear everything but the editor for a fully distraction-free experience, or make room for using a narrow vertical screen.
@@ -26,7 +26,7 @@ Pressing **ALT** will reveal the file menu. Here you can import, export, compile
 
 ## Import/Export Tools
 
-WareWoolf makes it easy to combine multiple files, edit and style them, and export them as a document in standard manuscript format. 
+WareWoolf makes it easy to combine multiple files, edit and style them, and export them as a document in standard manuscript format.
 
 It is designed especially to work well for those who write first drafts in plain-text-based workflows, as is common with distraction-free writing devices such as the Astrohaus Freewrite, Alphasmart Neo, or various stripped-down applications.
 
@@ -72,10 +72,12 @@ WareWoolf saves its projects as plain text JSON files so they are both human rea
 	- 2.pup
 	- 3.pup
 
-The reason for doing this rather than one (more convenient) file is speed. This way, WareWoolf does not hold your entire (perhaps very long) novel in memory, but only one chapter at a time--the chapter you are viewing. 
+The reason for doing this rather than one (more convenient) file is speed. This way, WareWoolf does not hold your entire (perhaps very long) novel in memory, but only one chapter at a time--the chapter you are viewing.
 
 Please note that the pup files must be kept either in a subdirectory or the same directory as the project file. If you move them, WareWoolf will prompt you to show the new location at load.
 
 ## Status
+
+2023-05-28: After testing and improving the alpha version for almost a year and writing 30,000 words on a new novel with WareWoolf, I have finally decided it is ready for a beta release. I am numbering it v0.9.0. Now I just have to figure out how to go about "releasing" it...
 
 2022-07-09: WareWoolf is currently in the alpha stage, which is to say I'm using it myself and ironing out the bugs I come across. I hope to do a beta release soon.
