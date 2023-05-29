@@ -76,6 +76,12 @@ The reason for doing this rather than one (more convenient) file is speed. This 
 
 Please note that the pup files must be kept either in a subdirectory or the same directory as the project file. If you move them, WareWoolf will prompt you to show the new location at load.
 
+## How To Compile WareWoolf from the source code
+
+Binaries of the current release for Windows, Debian AMD64, and Debian ARM64 (Raspberry Pi) are available in the [releases page](https://github.com/brsloan/warewoolf/releases), but to compile it yourself... 
+
+This app was built using Electron Forge. To run it from source, you can simply use command "npm start". To make a binary, "npm run make". See the Electron Forge documentation for instructions on how to alter the package.json file for making binaries for different systems, but basically in the "makers" property of the "forge" object in the package.json file, there is an array of different makers for producing different binaries. The "@electron-forge/maker-squirrel" is for producing a Windows binary, the maker-deb for Debian, and the maker-rpm for Redhat. To produce one, delete the other two from the file before running "npm run make". You will find the binary in the "out" folder. 
+
 ## Status
 
 2023-05-28: After testing and improving the alpha version for almost a year and writing 30,000 words on a new novel with WareWoolf, I have finally decided it is ready for a beta release. I am numbering it v0.9.0. Now I just have to figure out how to go about "releasing" it...
