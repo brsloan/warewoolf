@@ -8,6 +8,8 @@ That's it. There is no toolbar with twenty buttons cluttering the screen. There 
 
  ![screenshot of program described](src/assets/screenshot.png?raw=true "WareWoolf")
 
+NOTE: For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.com/brsloan/warewoolf/wiki).
+
 ## Display Controls
 
 On the left is the list of chapters, which you can re-order and rename. In the middle, the main editor. On the right, notes. These three panels can each be toggled on/off with **F1**, **F2**, and **F3**, so you can clear everything but the editor for a fully distraction-free experience, or make room for using a narrow vertical screen.
