@@ -9,7 +9,7 @@ function showAbout(){
   popup.appendChild(logo);
 
   var version = document.createElement('h1');
-  version.innerText = "0.0.0";
+  version.innerText = "0.9.0";
   popup.appendChild(version);
 
   var descr = document.createElement('p');
