@@ -1,4 +1,6 @@
-# WareWoolf
+<p align="center">
+	<img src="./src/assets/logo.png" style="width: 280px"/>
+</p>
 
 WareWoolf is designed for one thing: writing fiction. It is intentionally simplified: you cannot change the font, line spacing, or color. But it has everything you need to organize, edit, and revise a novel--and you don't even need a mouse.
 
