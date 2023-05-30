@@ -6,85 +6,40 @@ WareWoolf is designed for one thing: writing fiction. It is intentionally simpli
 
 It is composed of three simple text-based panels with no icons: Chapters, Editor, and Notes.
 
-That's it. There is no toolbar with twenty buttons cluttering the screen. There isn't even a file menu unless you summon it. All formatting is done with shortcuts. (But don't worry, there aren't many to memorize, and you can always press **CTRL** + **H** to show them all in the Shortcut Helper. And it's not like you do a lot of formatting when writing fiction anyway.)
+That's it. There is no toolbar with twenty buttons cluttering the screen. There isn't even a file menu unless you summon it. All formatting is done with shortcuts. (But don't worry, there aren't many to memorize, and you can always press **CTRL** + **H** to show them all in the Shortcut Helper. It's not like you do a lot of formatting when writing fiction anyway.)
+
+What it does have is an array of tools for importing plaintext files and converting them into proper manuscript format, as well as features such as self-emailing drafts at the press of a button for easy use in standalone writing devices ("writerDecks") without access to any other software.
 
  ![screenshot of program described](src/assets/screenshot.png?raw=true "WareWoolf")
 
-NOTE: For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.com/brsloan/warewoolf/wiki).
+For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.com/brsloan/warewoolf/wiki).
 
-## Display Controls
+## Features
 
-On the left is the list of chapters, which you can re-order and rename. In the middle, the main editor. On the right, notes. These three panels can each be toggled on/off with **F1**, **F2**, and **F3**, so you can clear everything but the editor for a fully distraction-free experience, or make room for using a narrow vertical screen.
+* All-keyboard navigation designed for pleasant use without a mouse
+* Distraction-free writing: Each of the three panels can be toggled on/off at the press of a button. Write with only your manuscript visible.
+* Plain text import/conversion tools
+   * Options to parse a simplified version of Markdown (MarkdownFic) or interpret custom markers for detecting italics, headings, etc.
+   * Detect custom strings marking chapter breaks or break text into chapters at each heading, etc.
+* Easily re-order chapters and automatically re-number them in headings after doing so ("Chapter One," "Chapter Two," etc.)
+* Compile chapters into single manuscript or export into individual files for each chapter
+* Send Via Email: Email drafts of individual chapters or the entire manuscript to yourself at the press of a button.
+* Word Counts / Goal: See total count, chapter count, session count, and set a goal to see a progress bar showing how close you are to completion.
+* Each chapter is saved as an individual file only loaded when you are working on that chapter. This keeps very long novels from slowing the application at all, even with low-memory computers such as a Raspberry Pi.
+* Outliner (very simple as is, but plan to improve drastically)
+* Spellcheck, but it must be run after writing (no form of auto-correct or red squiggles or godawful grammar advice).
 
-Speaking of room--the editor panel can be contracted or expanded using **CTRL** + **<** or **>** so you can see your paragraphs as they will look in a narrow paperback or a wide manuscript page. Similarly, you can adjust the font display size with **CTRL** + **-** or **+**.
+## Installation
 
-## Navigating Chapters
+Binaries of the current release for Windows, Debian AMD64, and Debian ARM64 (Raspberry Pi) are available in the [releases page](https://github.com/brsloan/warewoolf/releases).
 
-To cycle through chapters, press **CTRL** + **Up** or **Down**. **CTRL** + **Right** and **Left** will jump between the notes and main editor. These are the *Navigation Keys*.
-
-To move a chapter up or down in the list, press **CTRL** + **SHIFT** + **Up** or **Down**. To rename a chapter, **CTRL** + **SHIFT** + **Left**. These are the *Alteration Keys*.
-
-## File Menu
-
-Pressing **ALT** will reveal the file menu. Here you can import, export, compile, or use many other tools, all easily accessible without a mouse by navigating the menus with the **Arrow Keys** and **Escape**. In addition to the usual find/replace, spellcheck, etc., there is a simple Outliner with word count breakdowns for each chapter and a fields for writing summaries.
-
-## Import/Export Tools
-
-WareWoolf makes it easy to combine multiple files, edit and style them, and export them as a document in standard manuscript format.
-
-It is designed especially to work well for those who write first drafts in plain-text-based workflows, as is common with distraction-free writing devices such as the Astrohaus Freewrite, Alphasmart Neo, or various stripped-down applications.
-
-## Two Ways To Write In Plain Text For Import Into WareWoolf
-
-Of course, you can just start writing directly in WareWoolf, but if you *do* use plain text for your first drafts, there are two ways to approach it...
-
-### 1. Just Write
-
-Write whatever you want however you want and then edit/format it in WareWoolf. You will not lose manual tabs or white space on import, but you will have a few options for automatic styling of chapter headings and italics:
-
-- Convert text you've marked as italics. The default marker is \*asterisks\*, but you can use any character.
-- Convert the first line of every file to a Chapter Heading (Heading 1, centered)--convenient if you write each chapter as a separate text file.
-- Split text into separate chapters at custom marker (default "\<ch\>")--helpful if you write all chapters in one file.
-
-### 2. Use MarkdownFic, A Revised/Simplified Version of Markdown Designed For Fiction
-
-Unlike Markdown, MarkdownFic allows you to use regular indented paragraphs without space between them. It will keep your manual tabs and your white space. You are freed from writing fiction like it's a blog!
-
-- The supported syntax is all the same as Markdown:
-  - Headings: '# My Heading 1', '## My Heading 2'
-  - Italics: '\*italicized text\*'
-  - Bold: '\*\*bold text\*\*'
-  - Blockquote: '> blockquoted text'
-  - Strikethrough: '\~\~struck through text\~\~'
-  - Footnotes (will be supported but not yet):
-    - 'Text with a footnote. [^1]'
-    - '[^1]: The footnote.'
-
-That's it! You don't need much formatting to write fiction. And since it is all the same as Markdown, anything exported as MarkdownFic should be usable in any Markdown editor, with the proviso that you may need to find/replace your tabs to newlines.
-
-## Compile/Export options
-
-Currently you can compile/export your work in plain text, MardownFic, or .docx, with some helpful options regarding headings and chapter breaks.
-
-## WareWoolf's File Format
-
-WareWoolf saves its projects as plain text JSON files so they are both human readable and quickly parsed by Javascript. There is a primary .woolf project file, and individual .pup files for each chapter in a subdirectory.
-
-- Frankenstein.woolf
-- Frankenstein_Pups
-	- 1.pup
-	- 2.pup
-	- 3.pup
-
-The reason for doing this rather than one (more convenient) file is speed. This way, WareWoolf does not hold your entire (perhaps very long) novel in memory, but only one chapter at a time--the chapter you are viewing.
-
-Please note that the pup files must be kept either in a subdirectory or the same directory as the project file. If you move them, WareWoolf will prompt you to show the new location at load.
-
-## How To Compile WareWoolf from the source code
-
-Binaries of the current release for Windows, Debian AMD64, and Debian ARM64 (Raspberry Pi) are available in the [releases page](https://github.com/brsloan/warewoolf/releases), but to compile it yourself... 
+## Run or Make From Source
 
 This app was built using Electron Forge. To run it from source, you can simply use command "npm start". To make a binary, "npm run make". See the Electron Forge documentation for instructions on how to alter the package.json file for making binaries for different systems, but basically in the "makers" property of the "forge" object in the package.json file, there is an array of different makers for producing different binaries. The "@electron-forge/maker-squirrel" is for producing a Windows binary, the maker-deb for Debian, and the maker-rpm for Redhat. To produce one, delete the other two from the file before running "npm run make". You will find the binary in the "out" folder. 
+
+## Documentation
+
+For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.com/brsloan/warewoolf/wiki).
 
 ## Status
 
