@@ -27,6 +27,7 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 * Word Counts / Goal: See total count, chapter count, session count, and set a goal to see a progress bar showing how close you are to completion.
 * Each chapter is saved as an individual file only loaded when you are working on that chapter. This keeps very long novels from slowing the application at all, even with low-memory computers such as a Raspberry Pi.
 * Outliner (very simple as is, but plan to improve drastically)
+* Adjust width of text editor and how large text is displayed.
 * Spellcheck, but it must be run after writing (no form of auto-correct or red squiggles or godawful grammar advice).
 
 ## Installation
