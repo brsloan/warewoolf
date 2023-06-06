@@ -20,7 +20,7 @@ const createWindow = () => {
       contextIsolation: false,
       enableRemoteModule: true,
       spellcheck: false,
-      devTools: false
+      devTools: true
     },
     kiosk: true,
     icon: path.join(__dirname, 'assets/icon.png')
@@ -111,6 +111,13 @@ const createWindow = () => {
           accelerator: 'CmdOrCtrl+P',
           click(item, focusWindow){
             mainWindow.webContents.send('properties-clicked');
+          }
+        },
+        {type: 'separator'},
+        {
+          label: 'File Manager',
+          click(item, focusWindow){
+              mainWindow.webContents.send('file-manager-clicked', app.getPath("documents"));
           }
         },
         {type: 'separator'},
