@@ -272,3 +272,20 @@ button, input[type=submit] {
   margin-top: 1em;
   margin-bottom: 1em;
 }
+
+.file-select-container {
+  width: 100%;
+  height: 200px;
+}
+
+.file-manager-list {
+  width: 80%;
+  height: 100%;
+  float: left;
+}
+
+.file-dir-shortcuts {
+  width: 20%;
+  height: 100%;
+  float: left;
+}
