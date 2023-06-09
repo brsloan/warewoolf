@@ -986,8 +986,8 @@ ipcRenderer.on('view-error-log-clicked', function(e){
   showErrorLog();
 });
 
-ipcRenderer.on('file-manager-clicked', function(e, docPath){
-  showFileManager(docPath);
+ipcRenderer.on('file-manager-clicked', function(e, dirPaths){
+  showFileManager(dirPaths);
 });
 
 //**** utils ***/

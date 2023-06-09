@@ -1,22 +1,28 @@
-function showFileManager(docPath){
-    docPath = convertFilepath(docPath);
+function showFileManager(dirPaths){
+    dirPaths.docsDir = convertFilepath(dirPaths.docsDir);
+    dirPaths.homeDir = convertFilepath(dirPaths.homeDir);
     
     removeElementsByClass('popup');
     var popup = document.createElement("div");
     popup.classList.add("popup");
 
     var currentDirDisplay = document.createElement("p");
-    currentDirDisplay.innerText = docPath;
+    currentDirDisplay.innerText = dirPaths.docsDir;
     popup.appendChild(currentDirDisplay);
 
     var selectFieldsContainer = document.createElement("div");
     selectFieldsContainer.classList.add("file-select-container");
     popup.appendChild(selectFieldsContainer);
 
-    var dirShortcutList = document.createElement("select");
-    dirShortcutList.classList.add("file-dir-shortcuts");
-    dirShortcutList.size = 20;
-    selectFieldsContainer.appendChild(dirShortcutList);
+    var dirShortcutSelect = document.createElement("select");
+    dirShortcutSelect.classList.add("file-dir-shortcuts");
+    dirShortcutSelect.size = 20;
+    selectFieldsContainer.appendChild(dirShortcutSelect);
+    dirShortcutSelect.addEventListener('keydown', function(e){
+        if(e.key === "Enter"){
+            populateFileList(dirShortcutSelect.value, fileListSelect, currentDirDisplay);
+        }
+    });
 
     var fileListSelect = document.createElement("select");
     fileListSelect.multiple = true;
@@ -51,8 +57,8 @@ function showFileManager(docPath){
     };
     popup.appendChild(close);
 
-    populateShortcutsList(dirShortcutList);
-    populateFileList(docPath, fileListSelect, currentDirDisplay);
+    populateShortcutsList(dirPaths, dirShortcutSelect);
+    populateFileList(dirPaths.docsDir, fileListSelect, currentDirDisplay);
 
     document.body.appendChild(popup);
     fileListSelect.focus();
@@ -63,23 +69,27 @@ function getParentDirectory(filepath){
     return cutIndex > -1 ? filepath.slice(0,cutIndex) : filepath;
 }
 
-function populateShortcutsList(listElement){
-    var shortcuts = getShortcutsFake();
+function populateShortcutsList(dirPaths, listElement){
+    var shortcuts = [];
+    if (dirPaths.docsDir != null && dirPaths.docsDir != "")
+        shortcuts.push(dirPaths.docsDir);
+
+    if(dirPaths.homeDir != dirPaths.docsDir)
+        shortcuts.push(dirPaths.homeDir);
+
+    var cleanedProjDir = project.directory;
+    if(project.directory.endsWith("/"))
+        cleanedProjDir = project.directory.slice(0,-1);
+
+    if(cleanedProjDir != "" && shortcuts.includes(cleanedProjDir) == false)
+        shortcuts.push(cleanedProjDir);
+
     for(i=0;i<shortcuts.length;i++){
         var shortcut = document.createElement("option");
         shortcut.value = shortcuts[i];
         shortcut.innerText = "> " + shortcuts[i].split("/").pop();
         listElement.appendChild(shortcut);
     }
-}
-
-function getShortcutsFake(){
-    return [
-        "/usr/name",
-        "/usr/name/documents",
-        "usr/media/thumbdrive1",
-        "usr/media/thumbdrive2"
-    ]
 }
 
 function populateFileList(directoryPath, listElement, currentDirDisplay){

@@ -117,7 +117,10 @@ const createWindow = () => {
         {
           label: 'File Manager',
           click(item, focusWindow){
-              mainWindow.webContents.send('file-manager-clicked', app.getPath("documents"));
+              mainWindow.webContents.send('file-manager-clicked', {
+                homeDir: app.getPath("home"),
+                docsDir: app.getPath("documents")
+              });
           }
         },
         {type: 'separator'},
