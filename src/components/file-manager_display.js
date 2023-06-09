@@ -22,6 +22,9 @@ function showFileManager(dirPaths){
         if(e.key === "Enter"){
             populateFileList(dirShortcutSelect.value, fileListSelect, currentDirDisplay);
         }
+        else if(e.key === "ArrowRight"){
+            fileListSelect.focus();
+        }
     });
 
     var fileListSelect = document.createElement("select");
@@ -37,6 +40,9 @@ function showFileManager(dirPaths){
             else if(fileListSelect.value == "uplevel"){
                 populateFileList(getParentDirectory(currentDirDisplay.innerText), fileListSelect, currentDirDisplay);
             }
+        }
+        else if(e.key === "ArrowLeft"){
+            dirShortcutSelect.focus();
         }
     });
 
