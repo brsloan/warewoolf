@@ -121,7 +121,8 @@ const createWindow = () => {
                 homeDir: app.getPath("home"),
                 docsDir: app.getPath("documents")
               });
-          }
+          },
+          accelerator: 'CmdOrCtrl+Shift+F'
         },
         {type: 'separator'},
         {
