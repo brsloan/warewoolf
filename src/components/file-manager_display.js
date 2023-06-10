@@ -31,20 +31,6 @@ function showFileManager(dirPaths){
     fileListSelect.multiple = true;
     fileListSelect.classList.add("file-manager-list");
     selectFieldsContainer.appendChild(fileListSelect);
-    fileListSelect.addEventListener('keydown', function(e){
-        if(e.key === "Enter"){
-            var selectedFiletype = fileListSelect.options[fileListSelect.selectedIndex].dataset.filetype;
-            if (selectedFiletype == "dir"){
-                populateFileList(currentDirDisplay.innerText + "/" + fileListSelect.value, fileListSelect, currentDirDisplay);
-            }
-            else if(fileListSelect.value == "uplevel"){
-                populateFileList(getParentDirectory(currentDirDisplay.innerText), fileListSelect, currentDirDisplay);
-            }
-        }
-        else if(e.key === "ArrowLeft"){
-            dirShortcutSelect.focus();
-        }
-    });
 
     popup.appendChild(document.createElement('br'));
 
@@ -94,7 +80,6 @@ function showFileManager(dirPaths){
     verifyDeleteBtn.onclick = function(){
       var selectedFiles = Array.from(fileListSelect.selectedOptions).map(({ value }) => value);
       selectedFiles.forEach((item, i) => {
-        console.log("deleting " + currentDirDisplay.innerText + "/" + item);
         deleteFile(currentDirDisplay.innerText + "/" + item);
       });
 
@@ -103,6 +88,13 @@ function showFileManager(dirPaths){
       fileListSelect.focus();
     };
     deleteVerifyPanel.appendChild(verifyDeleteBtn);
+
+    var cancelDeleteBtn = createButton("Cancel");
+    cancelDeleteBtn.onclick = function(){
+      deleteVerifyPanel.style.display = "none";
+      fileListSelect.focus();
+    };
+    deleteVerifyPanel.appendChild(cancelDeleteBtn);
 
     popup.appendChild(deleteVerifyPanel);
 
@@ -117,7 +109,8 @@ function showFileManager(dirPaths){
     var rename = createButton("Rename");
     popup.appendChild(rename);
 
-    var deleteBtn = createButton("Delete");
+    var deleteBtn = createButton("<span class='access-key'>D</span>elete");
+    deleteBtn.accessKey = "d";
     deleteBtn.onclick = function(){
       verifyDeleteList.innerHTML = "";
       var selectedFiles = Array.from(fileListSelect.selectedOptions).map(({ value }) => value);
@@ -137,11 +130,66 @@ function showFileManager(dirPaths){
     };
     popup.appendChild(close);
 
+    var filesToBeCut = [];
+
+    fileListSelect.addEventListener('keydown', function(e){
+        if(e.key === "Enter"){
+            var selectedFiletype = fileListSelect.options[fileListSelect.selectedIndex].dataset.filetype;
+            if (selectedFiletype == "dir"){
+                populateFileList(currentDirDisplay.innerText + "/" + fileListSelect.value, fileListSelect, currentDirDisplay);
+            }
+            else if(fileListSelect.value == "uplevel"){
+                populateFileList(getParentDirectory(currentDirDisplay.innerText), fileListSelect, currentDirDisplay);
+            }
+        }
+        else if(e.key === "ArrowLeft"){
+            dirShortcutSelect.focus();
+        }
+        else if(e.key === "Delete"){
+          deleteBtn.click();
+        }
+        else if(e.ctrlKey && e.key === "x"){
+          stopDefaultPropagation(e);
+          filesToBeCut = [];
+
+          var selectedOps = fileListSelect.selectedOptions;
+          for(i=0;i<selectedOps.length;i++){
+            selectedOps[i].classList.add('to-be-cut');
+            filesToBeCut.push(currentDirDisplay.innerText + "/" + selectedOps[i].value)
+          }
+
+        }
+        else if(e.ctrlKey && e.key === "v"){
+          if(filesToBeCut.length > 0){
+            moveFiles(filesToBeCut, currentDirDisplay.innerText);
+            filesToBeCut = [];
+
+            populateFileList(currentDirDisplay.innerText, fileListSelect, currentDirDisplay);
+          }
+        }
+    });
+
     populateShortcutsList(dirPaths, dirShortcutSelect);
     populateFileList(dirPaths.docsDir, fileListSelect, currentDirDisplay);
 
     document.body.appendChild(popup);
     fileListSelect.focus();
+}
+
+function moveFiles(filesToMove, newLocation){
+  console.log(filesToMove);
+
+  try{
+    filesToMove.forEach((ftm, i) => {
+      var newFileLoc = newLocation + "/" + ftm.split('/').pop();
+      console.log("move from " + ftm + " to " + newFileLoc);
+
+      fs.renameSync(ftm, newFileLoc);
+    });
+  }
+  catch(err){
+    logError(err);
+  }
 }
 
 function createNewDirectory(dirName, dirLoc){

@@ -289,3 +289,8 @@ button, input[type=submit] {
   height: 100%;
   float: left;
 }
+
+.to-be-cut {
+  font-style: italic;
+  opacity: 0.5;
+}
