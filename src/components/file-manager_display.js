@@ -1,7 +1,7 @@
 function showFileManager(dirPaths){
     dirPaths.docsDir = convertFilepath(dirPaths.docsDir);
     dirPaths.homeDir = convertFilepath(dirPaths.homeDir);
-    
+
     removeElementsByClass('popup');
     var popup = document.createElement("div");
     popup.classList.add("popup");
@@ -48,8 +48,45 @@ function showFileManager(dirPaths){
 
     popup.appendChild(document.createElement('br'));
 
-    var newFolder = createButton("New Folder");
-    popup.appendChild(newFolder);
+    var inputPanel = document.createElement('div');
+    inputPanel.style.display = "none";
+
+    var nameInLabel = document.createElement('label');
+    nameInLabel.innerText = "Name:";
+    inputPanel.appendChild(nameInLabel);
+
+    var nameInput = document.createElement('input');
+    nameInput.type = "text";
+    nameInput.addEventListener("keydown", function(e){
+      if(e.key === 'Enter'){
+        stopDefaultPropagation(e);
+        console.log("entered: " + nameInput.value);
+
+        createNewDirectory(nameInput.value, currentDirDisplay.innerText);
+        populateFileList(currentDirDisplay.innerText, fileListSelect, currentDirDisplay);
+
+        nameInput.value = "";
+        inputPanel.style.display = "none";
+        fileListSelect.focus();
+      }
+      else if(e.key === "Escape"){
+        stopDefaultPropagation(e);
+        nameInput.value = "";
+        inputPanel.style.display = "none";
+        fileListSelect.focus();
+      }
+    });
+    inputPanel.appendChild(nameInput);
+
+    popup.appendChild(inputPanel);
+
+    var newFolderBtn = createButton("New <span class='access-key'>F</span>older");
+    newFolderBtn.accessKey = "f";
+    newFolderBtn.onclick = function(){
+      inputPanel.style.display = "block";
+      nameInput.focus();
+    }
+    popup.appendChild(newFolderBtn);
 
     var rename = createButton("Rename");
     popup.appendChild(rename);
@@ -68,6 +105,16 @@ function showFileManager(dirPaths){
 
     document.body.appendChild(popup);
     fileListSelect.focus();
+}
+
+function createNewDirectory(dirName, dirLoc){
+  try{
+    if(fs.existsSync(dirLoc + "/" + dirName) == false)
+      fs.mkdirSync(dirLoc + "/" + dirName);
+  }
+  catch(err){
+    logError(err);
+  }
 }
 
 function getParentDirectory(filepath){
@@ -100,7 +147,7 @@ function populateShortcutsList(dirPaths, listElement){
 
 function populateFileList(directoryPath, listElement, currentDirDisplay){
     currentDirDisplay.innerText = directoryPath;
-    
+
     listElement.innerHTML = "";
 
     var files = getFileList(directoryPath);
