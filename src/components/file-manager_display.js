@@ -80,7 +80,8 @@ function showFileManager(dirPaths){
     verifyDeleteBtn.onclick = function(){
       var selectedFiles = Array.from(fileListSelect.selectedOptions).map(({ value }) => value);
       selectedFiles.forEach((item, i) => {
-        deleteFile(currentDirDisplay.innerText + "/" + item);
+        if(item != "uplevel")
+          deleteFile(currentDirDisplay.innerText + "/" + item);
       });
 
       populateFileList(currentDirDisplay.innerText, fileListSelect, currentDirDisplay);
@@ -114,13 +115,21 @@ function showFileManager(dirPaths){
     deleteBtn.onclick = function(){
       verifyDeleteList.innerHTML = "";
       var selectedFiles = Array.from(fileListSelect.selectedOptions).map(({ value }) => value);
-      selectedFiles.forEach((item, i) => {
-        var listItem = document.createElement('li');
-        listItem.innerText = item;
-        verifyDeleteList.appendChild(listItem);
-      });
-      deleteVerifyPanel.style.display = "block";
-      verifyDeleteBtn.focus();
+      if(selectedFiles.includes('uplevel')){
+        selectedFiles.splice(selectedFiles.indexOf('uplevel'), 1);
+      }
+
+      if(selectedFiles.length > 0){
+        selectedFiles.forEach((item, i) => {
+          if(item != "uplevel"){
+            var listItem = document.createElement('li');
+            listItem.innerText = item;
+            verifyDeleteList.appendChild(listItem);
+          }
+        });
+        deleteVerifyPanel.style.display = "block";
+        verifyDeleteBtn.focus();
+      }
     };
     popup.appendChild(deleteBtn);
 
@@ -159,8 +168,10 @@ function showFileManager(dirPaths){
 
           var selectedOps = fileListSelect.selectedOptions;
           for(i=0;i<selectedOps.length;i++){
-            selectedOps[i].classList.add('to-be-cut');
-            filesToBeCut.push(currentDirDisplay.innerText + "/" + selectedOps[i].value)
+            if(selectedOps[i].value != "uplevel"){
+              selectedOps[i].classList.add('to-be-cut');
+              filesToBeCut.push(currentDirDisplay.innerText + "/" + selectedOps[i].value);
+            }
           }
 
         }
