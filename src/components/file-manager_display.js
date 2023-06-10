@@ -48,43 +48,43 @@ function showFileManager(dirPaths){
 
     popup.appendChild(document.createElement('br'));
 
-    var inputPanel = document.createElement('div');
-    inputPanel.style.display = "none";
+    var newDirInputPanel = document.createElement('div');
+    newDirInputPanel.style.display = "none";
 
-    var nameInLabel = document.createElement('label');
-    nameInLabel.innerText = "Name:";
-    inputPanel.appendChild(nameInLabel);
+    var newDirNameInLabel = document.createElement('label');
+    newDirNameInLabel.innerText = "Name:";
+    newDirInputPanel.appendChild(newDirNameInLabel);
 
-    var nameInput = document.createElement('input');
-    nameInput.type = "text";
-    nameInput.addEventListener("keydown", function(e){
+    var newDirNameInput = document.createElement('input');
+    newDirNameInput.type = "text";
+    newDirNameInput.addEventListener("keydown", function(e){
       if(e.key === 'Enter'){
         stopDefaultPropagation(e);
-        console.log("entered: " + nameInput.value);
+        console.log("entered: " + newDirNameInput.value);
 
-        createNewDirectory(nameInput.value, currentDirDisplay.innerText);
+        createNewDirectory(newDirNameInput.value, currentDirDisplay.innerText);
         populateFileList(currentDirDisplay.innerText, fileListSelect, currentDirDisplay);
 
-        nameInput.value = "";
-        inputPanel.style.display = "none";
+        newDirNameInput.value = "";
+        newDirInputPanel.style.display = "none";
         fileListSelect.focus();
       }
       else if(e.key === "Escape"){
         stopDefaultPropagation(e);
-        nameInput.value = "";
-        inputPanel.style.display = "none";
+        newDirNameInput.value = "";
+        newDirInputPanel.style.display = "none";
         fileListSelect.focus();
       }
     });
-    inputPanel.appendChild(nameInput);
+    newDirInputPanel.appendChild(newDirNameInput);
 
-    popup.appendChild(inputPanel);
+    popup.appendChild(newDirInputPanel);
 
     var newFolderBtn = createButton("New <span class='access-key'>F</span>older");
     newFolderBtn.accessKey = "f";
     newFolderBtn.onclick = function(){
-      inputPanel.style.display = "block";
-      nameInput.focus();
+      newDirInputPanel.style.display = "block";
+      newDirNameInput.focus();
     }
     popup.appendChild(newFolderBtn);
 
