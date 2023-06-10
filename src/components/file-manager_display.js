@@ -146,6 +146,11 @@ function showFileManager(dirPaths){
             dirShortcutSelect.focus();
         }
         else if(e.key === "Delete"){
+          stopDefaultPropagation(e);
+          deleteBtn.click();
+        }
+        else if(e.ctrlKey && e.key === "d"){
+          stopDefaultPropagation(e);
           deleteBtn.click();
         }
         else if(e.ctrlKey && e.key === "x"){
