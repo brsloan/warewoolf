@@ -80,6 +80,32 @@ function showFileManager(dirPaths){
 
     popup.appendChild(newDirInputPanel);
 
+    var deleteVerifyPanel = document.createElement('div');
+    deleteVerifyPanel.style.display = "none";
+
+    var verifyMessage = document.createElement('p');
+    verifyMessage.innerText = "Are you sure you want to permanently delete these files? This cannot be undone.";
+    deleteVerifyPanel.appendChild(verifyMessage);
+
+    var verifyDeleteList = document.createElement('ul');
+    deleteVerifyPanel.appendChild(verifyDeleteList);
+
+    var verifyDeleteBtn = createButton("Permanently Delete");
+    verifyDeleteBtn.onclick = function(){
+      var selectedFiles = Array.from(fileListSelect.selectedOptions).map(({ value }) => value);
+      selectedFiles.forEach((item, i) => {
+        console.log("deleting " + currentDirDisplay.innerText + "/" + item);
+        deleteFile(currentDirDisplay.innerText + "/" + item);
+      });
+
+      populateFileList(currentDirDisplay.innerText, fileListSelect, currentDirDisplay);
+      deleteVerifyPanel.style.display = "none";
+      fileListSelect.focus();
+    };
+    deleteVerifyPanel.appendChild(verifyDeleteBtn);
+
+    popup.appendChild(deleteVerifyPanel);
+
     var newFolderBtn = createButton("New <span class='access-key'>F</span>older");
     newFolderBtn.accessKey = "f";
     newFolderBtn.onclick = function(){
@@ -92,6 +118,17 @@ function showFileManager(dirPaths){
     popup.appendChild(rename);
 
     var deleteBtn = createButton("Delete");
+    deleteBtn.onclick = function(){
+      verifyDeleteList.innerHTML = "";
+      var selectedFiles = Array.from(fileListSelect.selectedOptions).map(({ value }) => value);
+      selectedFiles.forEach((item, i) => {
+        var listItem = document.createElement('li');
+        listItem.innerText = item;
+        verifyDeleteList.appendChild(listItem);
+      });
+      deleteVerifyPanel.style.display = "block";
+      verifyDeleteBtn.focus();
+    };
     popup.appendChild(deleteBtn);
 
     var close = createButton("Close");
@@ -111,6 +148,16 @@ function createNewDirectory(dirName, dirLoc){
   try{
     if(fs.existsSync(dirLoc + "/" + dirName) == false)
       fs.mkdirSync(dirLoc + "/" + dirName);
+  }
+  catch(err){
+    logError(err);
+  }
+}
+
+function deleteFile(fpth){
+  try {
+    if(fs.existsSync(fpth))
+      fs.rmSync(fpth, { recursive: true, force: true });
   }
   catch(err){
     logError(err);
