@@ -140,6 +140,7 @@ function showFileManager(dirPaths){
     popup.appendChild(close);
 
     var filesToBeCut = [];
+    var filesToBeCopied = [];
 
     fileListSelect.addEventListener('keydown', function(e){
         if(e.key === "Enter"){
@@ -165,6 +166,7 @@ function showFileManager(dirPaths){
         else if(e.ctrlKey && e.key === "x"){
           stopDefaultPropagation(e);
           filesToBeCut = [];
+          filesToBeCopied = [];
 
           var selectedOps = fileListSelect.selectedOptions;
           for(i=0;i<selectedOps.length;i++){
@@ -175,10 +177,36 @@ function showFileManager(dirPaths){
           }
 
         }
+        else if(e.ctrlKey && e.key ==="c"){
+          stopDefaultPropagation(e);
+          if(filesToBeCut.length > 0){
+            filesToBeCut = [];
+            var allOps = fileListSelect.options;
+            for(i=0;i<allOps.length;i++){
+              allOps[i].classList.remove('to-be-cut');
+            }
+          }
+
+          filesToBeCopied = [];
+
+          var selectedOps = fileListSelect.selectedOptions;
+          for(i=0;i<selectedOps.length;i++){
+            if(selectedOps[i].value != "uplevel"){
+              filesToBeCopied.push(currentDirDisplay.innerText + "/" + selectedOps[i].value);
+            }
+          }
+        }
         else if(e.ctrlKey && e.key === "v"){
+          stopDefaultPropagation(e);
           if(filesToBeCut.length > 0){
             moveFiles(filesToBeCut, currentDirDisplay.innerText);
             filesToBeCut = [];
+
+            populateFileList(currentDirDisplay.innerText, fileListSelect, currentDirDisplay);
+          }
+          else if(filesToBeCopied.length > 0){
+            copyFiles(filesToBeCopied, currentDirDisplay.innerText);
+            filesToBeCopied = [];
 
             populateFileList(currentDirDisplay.innerText, fileListSelect, currentDirDisplay);
           }
@@ -192,9 +220,20 @@ function showFileManager(dirPaths){
     fileListSelect.focus();
 }
 
-function moveFiles(filesToMove, newLocation){
-  console.log(filesToMove);
+function copyFiles(filesToCopy, newLocation){
+  try {
+    filesToCopy.forEach((ftc, i) => {
+      var newFileLoc = newLocation + "/" + ftc.split('/').pop();
 
+      fs.cpSync(ftc, newFileLoc, { recursive: true });
+    });
+  }
+  catch(err){
+    logError(err);
+  }
+}
+
+function moveFiles(filesToMove, newLocation){
   try{
     filesToMove.forEach((ftm, i) => {
       var newFileLoc = newLocation + "/" + ftm.split('/').pop();
