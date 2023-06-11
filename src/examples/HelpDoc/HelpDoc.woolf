@@ -54,6 +54,12 @@
 			"summary": null
 		},
 		{
+			"title": "Properties",
+			"filename": "19.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
 			"title": "Renumber Chapters",
 			"filename": "13.pup",
 			"filter": null,
@@ -72,21 +78,21 @@
 			"summary": null
 		},
 		{
-			"title": "Word Counts",
-			"filename": "18.pup",
+			"title": "Using WareWoolf For a WriterDeck",
+			"filename": "4.pup",
 			"filter": null,
 			"summary": null
 		},
 		{
-			"title": "Using WareWoolf For a WriterDeck",
-			"filename": "4.pup",
+			"title": "Word Counts",
+			"filename": "18.pup",
 			"filter": null,
 			"summary": null
 		}
 	],
 	"filters": [],
 	"trash": [],
-	"activeChapterIndex": 0,
+	"activeChapterIndex": 4,
 	"wordGoal": "0",
 	"textCursorPosition": 0
 }
