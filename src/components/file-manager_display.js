@@ -99,6 +99,32 @@ function showFileManager(dirPaths){
 
     popup.appendChild(deleteVerifyPanel);
 
+    var renamePanel = document.createElement('div');
+    renamePanel.style.display = "none";
+
+    var renameLabel = document.createElement('label');
+    renameLabel.innerText = "New Name:";
+    renamePanel.appendChild(renameLabel);
+
+    var renameInput = document.createElement('input');
+    renameInput.type = "text";
+    renameInput.addEventListener("keydown", function(e){
+      if(e.key === "Enter"){
+        var selectedFiles = Array.from(fileListSelect.selectedOptions).map(({ value }) => value);
+
+        renameFiles(selectedFiles, renameInput.value, currentDirDisplay.innerText);
+
+        populateFileList(currentDirDisplay.innerText, fileListSelect, currentDirDisplay);
+
+        renamePanel.style.display = "none";
+        fileListSelect.focus();
+      }
+    });
+
+    renamePanel.appendChild(renameInput);
+
+    popup.appendChild(renamePanel);
+
     var newFolderBtn = createButton("New <span class='access-key'>F</span>older");
     newFolderBtn.accessKey = "f";
     newFolderBtn.onclick = function(){
@@ -107,8 +133,14 @@ function showFileManager(dirPaths){
     }
     popup.appendChild(newFolderBtn);
 
-    var rename = createButton("Rename");
-    popup.appendChild(rename);
+    var renameBtn = createButton("<span class='access-key'>R</span>ename");
+    renameBtn.accessKey = "r";
+    renameBtn.onclick = function(){
+      renamePanel.style.display = "block";
+      renameInput.value = fileListSelect.selectedOptions[0].value;
+      renameInput.focus();
+    };
+    popup.appendChild(renameBtn);
 
     var deleteBtn = createButton("<span class='access-key'>D</span>elete");
     deleteBtn.accessKey = "d";
@@ -233,11 +265,42 @@ function copyFiles(filesToCopy, newLocation){
   }
 }
 
+function renameFiles(filesToRename, newName, location){
+  try{
+    if(filesToRename.length < 2){
+        fs.renameSync(location + '/' + filesToRename[0], location + '/' + newName);
+    }
+    else {
+      for(i=0;i<filesToRename.length;i++){
+        var numberedName = '';
+        var fileExt = '';
+
+        if(filesToRename[i].includes('.')){
+          var oldNameSegs = filesToRename[i].split('.');
+          fileExt = "." + oldNameSegs[oldNameSegs.length - 1];
+        }
+
+        if (newName.includes('.')){
+          var newNameSegs = newName.split('.');
+          numberedName = newNameSegs[0] + "_" + i + fileExt;
+        }
+        else {
+          numberedName = newName + "_" + i + fileExt;
+        }
+
+        fs.renameSync(location + '/' + filesToRename[i], location + '/' + numberedName);
+      }
+    }
+  }
+  catch(err){
+    logError(err);
+  }
+}
+
 function moveFiles(filesToMove, newLocation){
   try{
     filesToMove.forEach((ftm, i) => {
       var newFileLoc = newLocation + "/" + ftm.split('/').pop();
-      console.log("move from " + ftm + " to " + newFileLoc);
 
       fs.renameSync(ftm, newFileLoc);
     });
