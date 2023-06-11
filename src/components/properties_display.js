@@ -3,42 +3,6 @@ function showProperties(){
     var popup = document.createElement("div");
     popup.classList.add("popup");
 
-    var filenameLabel = document.createElement('p');
-    filenameLabel.innerText = "Filename:";
-    popup.appendChild(filenameLabel);
-
-    var filename = document.createElement('p');
-    filename.innerText = project.filename;
-    filename.classList.add('popup-text-small');
-    popup.appendChild(filename);
-
-    var directoryLabel = document.createElement('p');
-    directoryLabel.innerText = "Directory:";
-    popup.appendChild(directoryLabel);
-
-    var directory = document.createElement('p');
-    directory.innerText = project.directory;
-    directory.classList.add('popup-text-small');
-    popup.appendChild(directory);
-
-    var pupDirLabel = document.createElement('p');
-    pupDirLabel.innerText = "Chapters Directory:";
-    popup.appendChild(pupDirLabel);
-
-    var pupDir = document.createElement('p');
-    pupDir.innerText = project.directory + project.filename.split(".")[0].concat("_pups/");
-    pupDir.classList.add('popup-text-small');
-    popup.appendChild(pupDir);
-
-    var settingsFilepathLabel = document.createElement('p');
-    settingsFilepathLabel.innerText = "User Settings Filepath:";
-    popup.appendChild(settingsFilepathLabel);
-
-    var settingsFilepathText = document.createElement('p');
-    settingsFilepathText.innerText = userSettings.getSettingsFilepath();
-    settingsFilepathText.classList.add('popup-text-small');
-    popup.appendChild(settingsFilepathText);
-
     var propForm = document.createElement("form");
 
     var propTable = document.createElement("table");
@@ -84,6 +48,69 @@ function showProperties(){
     propForm.appendChild(cancel);
 
     popup.appendChild(propForm);
+
+    var filenameLabel = document.createElement('p');
+    filenameLabel.innerText = "Filename:";
+    popup.appendChild(filenameLabel);
+
+    var filename = document.createElement('p');
+    filename.innerText = project.filename;
+    filename.classList.add('popup-text-small');
+    popup.appendChild(filename);
+
+    var directoryLabel = document.createElement('p');
+    directoryLabel.innerText = "Directory:";
+    popup.appendChild(directoryLabel);
+
+    var directory = document.createElement('p');
+    directory.innerText = project.directory;
+    directory.classList.add('popup-text-small');
+    popup.appendChild(directory);
+
+    var advancedBtn = createButton("-- Reveal Advanced --");
+    popup.appendChild(advancedBtn);
+
+    var advancedArea = document.createElement('div');
+    advancedArea.style.display = "none";
+
+    advancedBtn.onclick = function(){
+      advancedArea.style.display = "block";
+    };
+
+    var pupDirLabel = document.createElement('p');
+    pupDirLabel.innerText = "Chapters Directory:";
+    advancedArea.appendChild(pupDirLabel);
+
+    var pupDirWarning = document.createElement('p');
+    pupDirWarning.innerText = "(DO NOT CHANGE THIS UNLESS YOU KNOW WHAT YOU ARE DOING. This is the relative filepath that tells your project file where to find the individual .pup files that are its chapters.)";
+    pupDirWarning.classList.add('popup-text-small');
+    advancedArea.appendChild(pupDirWarning);
+
+    var pupDirInput = document.createElement('input');
+    pupDirInput.type = "text";
+    pupDirInput.value = project.chapsDirectory;
+    advancedArea.appendChild(pupDirInput);
+
+    var pupDirSubmit = createButton("Save Changes To Chaps Directory");
+    pupDirSubmit.onclick = function(){
+      if(!pupDirInput.value.endsWith('/')){
+        pupDirInput.value += "/";
+      }
+      project.chapsDirectory = pupDirInput.value;
+      project.saveFile();
+    };
+    advancedArea.appendChild(pupDirSubmit);
+
+    var settingsFilepathLabel = document.createElement('p');
+    settingsFilepathLabel.innerText = "User Settings Filepath:";
+    advancedArea.appendChild(settingsFilepathLabel);
+
+    var settingsFilepathText = document.createElement('p');
+    settingsFilepathText.innerText = userSettings.getSettingsFilepath();
+    settingsFilepathText.classList.add('popup-text-small');
+    advancedArea.appendChild(settingsFilepathText);
+
+    popup.appendChild(advancedArea);
     document.body.appendChild(popup);
     titleInput.focus();
   }
