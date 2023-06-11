@@ -945,8 +945,9 @@ ipcRenderer.on('convert-tabs-clicked', function(e){
   showTabOptions();
 });
 
-ipcRenderer.on('about-clicked', function(e){
-  showAbout();
+ipcRenderer.on('about-clicked', function(e, licensesPath){
+  console.log(licensesPath);
+  showAbout(licensesPath);
 });
 
 ipcRenderer.on('exit-app-clicked', function(e, docPath){

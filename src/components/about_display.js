@@ -1,4 +1,4 @@
-function showAbout(){
+function showAbout(licensesPath){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup");
@@ -31,7 +31,7 @@ function showAbout(){
   licensePanel.style.display = "none";
 
   var licenseText = document.createElement('pre');
-  licenseText.innerText = loadLicenseText();
+  licenseText.innerText = loadLicenseText(licensesPath);
   licenseText.tabIndex = 0;
 
   licensePanel.appendChild(licenseText);
@@ -53,13 +53,13 @@ function showAbout(){
   close.focus();
 }
 
-function loadLicenseText(){
-  var licenseLocation = 'LICENSE';
+function loadLicenseText(licensesPath){
+  //var licenseLocation = 'licenses.txt';
   var licenseText = '';
 
   try {
-    if(fs.existsSync(licenseLocation)){
-      licenseText = fs.readFileSync(licenseLocation, "utf8");
+    if(fs.existsSync(licensesPath)){
+      licenseText = fs.readFileSync(licensesPath, "utf8");
     }
   }
   catch(err){
