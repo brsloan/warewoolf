@@ -413,9 +413,6 @@ function saveProjectCopy(docPath) {
 }
 
 function openAProject(docPath) {
-  //Temp override doc path for testing in examples folder
-  docPath = "./examples";
-
   const options = {
     title: 'Open project...',
     defaultPath: docPath,
@@ -984,6 +981,10 @@ ipcRenderer.on('send-via-email-clicked', function(e){
 
 ipcRenderer.on('view-error-log-clicked', function(e){
   showErrorLog();
+});
+
+ipcRenderer.on('file-manager-clicked', function(e, dirPaths){
+  showFileManager(dirPaths);
 });
 
 //**** utils ***/
