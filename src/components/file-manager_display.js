@@ -128,6 +128,8 @@ function showFileManager(dirPaths){
     var newFolderBtn = createButton("New <span class='access-key'>F</span>older");
     newFolderBtn.accessKey = "f";
     newFolderBtn.onclick = function(){
+      deleteVerifyPanel.style.display = "none";
+      renamePanel.style.display = "none";
       newDirInputPanel.style.display = "block";
       newDirNameInput.focus();
     }
@@ -136,6 +138,8 @@ function showFileManager(dirPaths){
     var renameBtn = createButton("<span class='access-key'>R</span>ename");
     renameBtn.accessKey = "r";
     renameBtn.onclick = function(){
+      newDirInputPanel.style.display = "none";
+      deleteVerifyPanel.style.display = "none";
       renamePanel.style.display = "block";
       renameInput.value = fileListSelect.selectedOptions[0].value;
       renameInput.focus();
@@ -145,6 +149,9 @@ function showFileManager(dirPaths){
     var deleteBtn = createButton("<span class='access-key'>D</span>elete");
     deleteBtn.accessKey = "d";
     deleteBtn.onclick = function(){
+      newDirInputPanel.style.display = "none";
+      renamePanel.style.display = "none";
+
       verifyDeleteList.innerHTML = "";
       var selectedFiles = Array.from(fileListSelect.selectedOptions).map(({ value }) => value);
       if(selectedFiles.includes('uplevel')){
