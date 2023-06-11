@@ -413,9 +413,6 @@ function saveProjectCopy(docPath) {
 }
 
 function openAProject(docPath) {
-  //Temp override doc path for testing in examples folder
-  docPath = "./examples";
-
   const options = {
     title: 'Open project...',
     defaultPath: docPath,
