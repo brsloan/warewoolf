@@ -16,12 +16,15 @@
   "license": "MIT",
   "config": {
     "forge": {
-      "packagerConfig": {},
+      "packagerConfig": {
+        "icon": "src/assets/icon"
+      },
       "makers": [
         {
           "name": "@electron-forge/maker-squirrel",
           "config": {
-            "name": "warewoolf"
+            "name": "warewoolf",
+            "setupIcon": "src/assets/icon.ico"
           }
         },
         {
