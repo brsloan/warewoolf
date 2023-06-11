@@ -20,7 +20,7 @@ const createWindow = () => {
       contextIsolation: false,
       enableRemoteModule: true,
       spellcheck: false,
-      devTools: true
+      devTools: false
     },
     kiosk: true,
     icon: path.join(__dirname, 'assets/icon.png')
