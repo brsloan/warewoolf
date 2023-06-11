@@ -22,7 +22,7 @@ function promptForMissingPups(){
 
   popup.appendChild(document.createElement('br'));
 
-  var cancel = createButton("Let them starve and start a new project.");
+  var cancel = createButton("Let them starve for now.");
   cancel.onclick = function(){
     closePopups();
   };
