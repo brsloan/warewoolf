@@ -109,21 +109,25 @@ function showErrorLog(){
   };
   popup.appendChild(closeBtn);
 
-  
+
   document.body.appendChild(popup);
   errorLogTextBox.focus();
 }
 
 function loadErrorLog(){
   var logLocation = 'error_log.txt';
+  var logText = '';
+
   try {
     if(fs.existsSync(logLocation)){
-      return fs.readFileSync(logLocation, "utf8");
+      logText = fs.readFileSync(logLocation, "utf8");
     }
   }
   catch(err){
     logError(err);
   }
+
+  return logText;
 }
 
 function clearErrorLog(){
