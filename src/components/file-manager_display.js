@@ -256,9 +256,32 @@ function copyFiles(filesToCopy, newLocation){
   try {
     filesToCopy.forEach((ftc, i) => {
       var newFileLoc = newLocation + "/" + ftc.split('/').pop();
+      newFileLoc = makeFilenameUniqueIfExists(newFileLoc);
 
       fs.cpSync(ftc, newFileLoc, { recursive: true });
     });
+  }
+  catch(err){
+    logError(err);
+  }
+}
+
+function makeFilenameUniqueIfExists(fullpath){
+  console.log('make this unique: ' + fullpath);
+  try{
+    var uniqueName = fullpath;
+
+    if(fs.existsSync(fullpath)){
+      if(fullpath.includes(".")){
+        var fullpathSegs = fullpath.split('.');
+        uniqueName = makeFilenameUniqueIfExists(fullpathSegs[0] + "_copy" + "." + fullpathSegs[fullpathSegs.length - 1]);
+      }
+      else {
+        uniqueName = makeFilenameUniqueIfExists(fullpath + "_copy");
+      }
+    }
+
+    return uniqueName;
   }
   catch(err){
     logError(err);
