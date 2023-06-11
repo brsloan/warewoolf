@@ -1,7 +1,7 @@
 <p align="center">
 	<img src="./src/assets/logo.png" style="width: 280px"/>
 </p>
-<p align="center">v0.9.0 (beta)</p>
+<p align="center">v0.10.0 (beta)</p>
 <p align="center">"The only writing software I use." -Virginia Woolf</p>
 
 WareWoolf is designed for one thing: writing fiction. It is intentionally simplified: you cannot change the font, line spacing, or color. But it has everything you need to organize, edit, and revise a novel--and you don't even need a mouse.
@@ -10,7 +10,7 @@ It is composed of three simple text-based panels with no icons: Chapters, Editor
 
 That's it. There is no toolbar with twenty buttons cluttering the screen. There isn't even a file menu unless you summon it. All formatting is done with shortcuts. (But don't worry, there aren't many to memorize, and you can always press **CTRL** + **H** to show them all in the Shortcut Helper. It's not like you do a lot of formatting when writing fiction anyway.)
 
-What it does have is an array of tools for importing plaintext files and converting them into proper manuscript format, as well as features such as self-emailing drafts at the press of a button for easy use in standalone writing devices ("writerDecks") without access to any other software.
+What it does have is an array of tools for importing plaintext files and converting them into proper manuscript format, as well as features such as self-emailing drafts at the press of a button and a built-in file manager for easy use in standalone writing devices ("writerDecks") without access to any other software.
 
  ![screenshot of program described](src/assets/screenshot.png?raw=true "WareWoolf")
 
@@ -26,6 +26,7 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 * Easily re-order chapters and automatically re-number them in headings after doing so ("Chapter One," "Chapter Two," etc.)
 * Compile chapters into single manuscript or export into individual files for each chapter
 * Send Via Email: Email drafts of individual chapters or the entire manuscript to yourself at the press of a button.
+* Built In File Manager: Rename, delete, copy, move, and organize files within WareWoolf (for use in a writerDeck).
 * Word Counts / Goal: See total count, chapter count, session count, and set a goal to see a progress bar showing how close you are to completion.
 * Each chapter is saved as an individual file only loaded when you are working on that chapter. This keeps very long novels from slowing the application at all, even with low-memory computers such as a Raspberry Pi.
 * Outliner (very simple as is, but plan to improve drastically)
@@ -50,6 +51,8 @@ This app was built using Electron Forge. To run it from source...
 For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.com/brsloan/warewoolf/wiki).
 
 ## Status
+
+2023-06-11: Releasing v0.10.0-beta. Improvements: built-in file manager, Properties tool now allows altering project's chapters directory location. About now shows license. Minor fixes.
 
 2023-05-28: After testing and improving the alpha version for almost a year and writing 30,000 words on a new novel with WareWoolf, I have finally decided it is ready for a beta release. I am numbering it v0.9.0. Now I just have to figure out how to go about "releasing" it...
 
