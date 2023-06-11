@@ -18,14 +18,62 @@
 			"summary": null
 		},
 		{
-			"title": "Email Function",
-			"filename": "2.pup",
+			"title": "Break Headings Into Chapters",
+			"filename": "5.pup",
 			"filter": null,
 			"summary": null
 		},
 		{
-			"title": "Writing In Plain Text For Import Into WareWoolf",
-			"filename": "3.pup",
+			"title": "Exporting and Compiling",
+			"filename": "6.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "File Manager",
+			"filename": "7.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "File Structure",
+			"filename": "8.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Importing Plaintext Files",
+			"filename": "11.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Outliner",
+			"filename": "12.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Renumber Chapters",
+			"filename": "13.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Send Via Email Function",
+			"filename": "14.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Shortcut Helper",
+			"filename": "15.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Word Counts",
+			"filename": "18.pup",
 			"filter": null,
 			"summary": null
 		},
