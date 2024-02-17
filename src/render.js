@@ -988,6 +988,10 @@ ipcRenderer.on('file-manager-clicked', function(e, dirPaths){
   showFileManager(dirPaths);
 });
 
+ipcRenderer.on('network-manager-clicked', function(e){
+  showNetworkManager();
+});
+
 //**** utils ***/
 
 function closePopups(){
@@ -1059,4 +1063,11 @@ function generateRow(elOne, elTwo){
   cellTwo.appendChild(elTwo);
   row.appendChild(cellTwo);
   return row;
+}
+
+function removeOptions(selectElement) {
+   var i, L = selectElement.options.length - 1;
+   for(i = L; i >= 0; i--) {
+      selectElement.remove(i);
+   }
 }

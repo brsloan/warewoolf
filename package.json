@@ -11,7 +11,18 @@
     "publish": "electron-forge publish",
     "lint": "echo \"No linting configured\""
   },
-  "keywords": ["writing","novel","word processor", "writerDeck", "minimalist", "text", "editor", "fiction", "story", "cyberDeck"],
+  "keywords": [
+    "writing",
+    "novel",
+    "word processor",
+    "writerDeck",
+    "minimalist",
+    "text",
+    "editor",
+    "fiction",
+    "story",
+    "cyberDeck"
+  ],
   "author": "Benjamin Sloan",
   "license": "MIT",
   "config": {
@@ -47,6 +58,7 @@
     "@electron/remote": "^2.0.8",
     "docx": "^7.3.0",
     "electron-squirrel-startup": "^1.0.0",
+    "node-network-manager": "^1.0.12",
     "nodemailer": "^6.7.5",
     "nspell": "^2.1.5",
     "quill": "^1.3.7",

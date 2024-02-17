@@ -20,7 +20,7 @@ const createWindow = () => {
       contextIsolation: false,
       enableRemoteModule: true,
       spellcheck: false,
-      devTools: false
+      devTools: true
     },
     kiosk: true,
     icon: path.join(__dirname, 'assets/icon.png')
@@ -263,6 +263,14 @@ const createWindow = () => {
           click(item, focusWindow){
             mainWindow.webContents.send('headings-to-chaps-clicked');
           }
+        },
+        { type: 'separator' },
+        {
+          label: 'Network Manager',
+          click(item, focusWindow){
+            mainWindow.webContents.send('network-manager-clicked');
+          },
+          accelerator: 'CommandOrControl+W'
         }
       ]
     },
