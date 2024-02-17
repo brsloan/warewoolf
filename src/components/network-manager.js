@@ -1,9 +1,4 @@
 const network = require("node-network-manager");
-/*
-network
-  .getConnectionProfilesList()
-  .then((data) => console.log(data))
-  .catch((error) => console.log(error));*/
 
 function getConnectionState(cback){
   network
