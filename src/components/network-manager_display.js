@@ -27,26 +27,7 @@ function showNetworkManager(){
   popup.appendChild(connectionStateText);
   getConnectionState(updateConnectionState);
 
-  function updateConnectionState(stateData){
-    connectionStateText.innerText = stateData[0].state;
-    connectedNetworkText.innerText = stateData[0].connection;
-  }
-
-  function updateStateUntilConnected(stateData){
-    if(stateData[0].state == 'connected'){
-      connectionStateText.innerText = stateData[0].state;
-      connectedNetworkText.innerText = stateData[0].connection;
-    }
-    else {
-      setTimeout(function(){
-        getConnectionState(updateStateUntilConnected);
-      }, 250);
-    }
-  }
-
-  var statusText = document.createElement('p');
-  statusText.innerText = "";
-  popup.appendChild(statusText);
+  popup.appendChild(document.createElement('br'));
 
   var networkForm = document.createElement('form');
 
@@ -69,28 +50,52 @@ function showNetworkManager(){
   }
   getWifiStatus(updateWifiStatus);
 
-  function alertWifiEnabled(msg){
-    setTimeout(function(){
-      getConnectionState(updateStateUntilConnected);
-    }, 500);
-  }
-
-  function alertWifiDisabled(msg){
-    getConnectionState(updateConnectionState);
-  }
-
   networkForm.appendChild(document.createElement('br'));
+
+  var newConnectionSet = document.createElement("fieldset");
+  networkForm.appendChild(newConnectionSet);
+
+  var newConnectionLegend = document.createElement("legend");
+  newConnectionLegend.innerText = "New Connection";
+  newConnectionSet.appendChild(newConnectionLegend);
 
   var networksLabel = document.createElement("label");
   networksLabel.innerText = "Available networks: ";
   networksLabel.for = "networks-select";
-  networkForm.appendChild(networksLabel);
+  newConnectionSet.appendChild(networksLabel);
 
   var networksSelect = document.createElement("select");
-  networkForm.appendChild(networksSelect);
+  newConnectionSet.appendChild(networksSelect);
   getWifiNetworks(updateNetworksList);
 
+  newConnectionSet.appendChild(document.createElement('br'));
+
+  var networkPassLabel = document.createElement('label');
+  networkPassLabel.for = 'network-pass';
+  networkPassLabel.innerText = 'Password: ';
+  newConnectionSet.appendChild(networkPassLabel);
+
+  var networkPassInput = document.createElement('input');
+  networkPassInput.type = 'password';
+  networkPassInput.id = 'network-pass';
+  newConnectionSet.appendChild(networkPassInput);
+
+  newConnectionSet.appendChild(document.createElement('br'));
+
+  var connectBtn = createButton("Connect");
+  connectBtn.onclick = function(){
+    connectingStatus.innerText = "Connecting...";
+    connectToNewWifi(networksSelect.value, networkPassInput.value, alertNewConnection);
+  }
+  newConnectionSet.appendChild(connectBtn);
+
+  var connectingStatus = document.createElement('p');
+  connectingStatus.innerText = "";
+  newConnectionSet.appendChild(connectingStatus);
+
   popup.appendChild(networkForm);
+
+  popup.appendChild(document.createElement('br'));
 
   var closeBtn = createButton("Close");
   closeBtn.onclick = function(){
@@ -126,4 +131,35 @@ function showNetworkManager(){
 
   }
 
+  function updateConnectionState(stateData){
+    connectionStateText.innerText = stateData[0].state;
+    connectedNetworkText.innerText = stateData[0].connection;
+  }
+
+  function updateStateUntilConnected(stateData){
+    if(stateData[0].state == 'connected'){
+      connectionStateText.innerText = stateData[0].state;
+      connectedNetworkText.innerText = stateData[0].connection;
+    }
+    else {
+      setTimeout(function(){
+        getConnectionState(updateStateUntilConnected);
+      }, 250);
+    }
+  }
+
+  function alertWifiEnabled(msg){
+    setTimeout(function(){
+      getConnectionState(updateStateUntilConnected);
+    }, 500);
+  }
+
+  function alertWifiDisabled(msg){
+    getConnectionState(updateConnectionState);
+  }
+
+  function alertNewConnection(connectData){
+    connectingStatus.innerText = connectData;
+    getConnectionState(updateConnectionState);
+  }
 }

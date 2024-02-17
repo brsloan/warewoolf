@@ -9,7 +9,7 @@ function getConnectionState(cback){
   network
     .deviceStatus()
     .then((result) => cback(result))
-    .catch((error) => console.log(error));
+    .catch((error) => cback(error));
 }
 
 
@@ -31,12 +31,19 @@ function disableWifi(cback){
   network
   .wifiDisable()
   .then(() => cback("wifi was disabled"))
-  .catch((error) => console.log(error));
+  .catch((error) => cback(error));
 }
 
 function enableWifi(cback){
   network
   .wifiEnable()
   .then(() => cback("wifi was enabled"))
-  .catch((error) => console.log(error));
+  .catch((error) => cback(error));
+}
+
+function connectToNewWifi(ssidString, passString, cback){
+  network
+  .wifiConnect(ssidString, passString)
+  .then((data) => cback(data))
+  .catch((error) => cback(error));
 }
