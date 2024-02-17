@@ -2,6 +2,7 @@ const { app, BrowserWindow, Menu, dialog } = require('electron');
 const path = require('path');
 const { ipcMain } = require('electron')
 const remoteMain = require('@electron/remote/main');
+const isLinux = process.platform === "linux";
 remoteMain.initialize();
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
@@ -264,14 +265,17 @@ const createWindow = () => {
             mainWindow.webContents.send('headings-to-chaps-clicked');
           }
         },
-        { type: 'separator' },
-        {
-          label: 'Wi-Fi Manager',
-          click(item, focusWindow){
-            mainWindow.webContents.send('network-manager-clicked');
-          },
-          accelerator: 'CommandOrControl+W'
-        }
+        ...(isLinux ? [
+          { type: 'separator' },
+          {
+            label: 'Wi-Fi Manager',
+            click(item, focusWindow){
+              mainWindow.webContents.send('network-manager-clicked');
+            },
+            accelerator: 'CommandOrControl+W'
+          }
+        ]
+        : [])
       ]
     },
     {
