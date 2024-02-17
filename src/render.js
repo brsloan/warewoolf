@@ -992,6 +992,10 @@ ipcRenderer.on('network-manager-clicked', function(e){
   showNetworkManager();
 });
 
+ipcRenderer.on('save-backup-clicked', function(e, docsDir){
+  backupProject(docsDir);
+});
+
 //**** utils ***/
 
 function closePopups(){

@@ -76,6 +76,13 @@ const createWindow = () => {
             mainWindow.webContents.send('save-copy-clicked', app.getPath("documents"));
           }
         },
+        {
+          label: 'Backup',
+          accelerator: 'CmdOrCtrl+Shift+B',
+          click(item, focusWindow){
+            mainWindow.webContents.send('save-backup-clicked', app.getPath("documents"));
+          }
+        },
         {type: 'separator'},
         {
           label: 'Import',

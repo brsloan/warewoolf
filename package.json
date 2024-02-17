@@ -56,6 +56,7 @@
   },
   "dependencies": {
     "@electron/remote": "^2.0.8",
+    "archiver": "^6.0.1",
     "docx": "^7.3.0",
     "electron-squirrel-startup": "^1.0.0",
     "node-network-manager": "^1.0.12",
