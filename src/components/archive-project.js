@@ -1,15 +1,24 @@
 const archiver = require('archiver');
 
 function backupProject(docsDir){
-  docsDir = convertFilepath(docsDir);
-  const backupDir = (userSettings.backupDirectory && userSettings.backupDirectory != "") ? userSettings.backupDirectory : docsDir;
-
   try{
-    const archive = archiveProject(backupDir);
+    docsDir = convertFilepath(docsDir);
+    if(userSettings.backupDirectory == null || userSettings.backupDirectory == ""){
+      userSettings.backupDirectory = createBackupsDirectory(docsDir);
+    }
+
+    const archive = archiveProject(userSettings.backupDirectory);
   }
   catch(err){
     logError(err);
   }
+}
+
+function createBackupsDirectory(docsDir){
+  const backupsDir = docsDir + "/backups";
+  if(!fs.existsSync(backupsDir))
+    fs.mkdirSync(backupsDir);
+  return backupsDir;
 }
 
 function archiveProject(docsDir){
