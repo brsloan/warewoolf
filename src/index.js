@@ -266,7 +266,7 @@ const createWindow = () => {
         },
         { type: 'separator' },
         {
-          label: 'Network Manager',
+          label: 'Wi-Fi Manager',
           click(item, focusWindow){
             mainWindow.webContents.send('network-manager-clicked');
           },

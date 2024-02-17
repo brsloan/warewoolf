@@ -5,41 +5,47 @@ function showNetworkManager(){
   popup.classList.add("popup");
 
   var header = document.createElement('h1');
-  header.innerText = "Wifi Manager";
+  header.innerText = "Wi-Fi Manager";
   popup.appendChild(header);
+
+  var connectionInfoDiv = document.createElement('div');
+  popup.appendChild(connectionInfoDiv);
 
   var connectedNetworkLabel = document.createElement('label');
   connectedNetworkLabel.innerText = "Network: ";
-  popup.appendChild(connectedNetworkLabel);
+  connectionInfoDiv.appendChild(connectedNetworkLabel);
 
   var connectedNetworkText = document.createElement('label');
   connectedNetworkText.innerText = "checking...";
-  popup.appendChild(connectedNetworkText);
+  connectionInfoDiv.appendChild(connectedNetworkText);
 
-  popup.appendChild(document.createElement('br'));
+  connectionInfoDiv.appendChild(document.createElement('br'));
 
   var connectionStateLabel = document.createElement('label');
   connectionStateLabel.innerText = "State: ";
-  popup.appendChild(connectionStateLabel);
+  connectionInfoDiv.appendChild(connectionStateLabel);
 
   var connectionStateText = document.createElement('label');
   connectionStateText.innerText = "checking...";
-  popup.appendChild(connectionStateText);
+  connectionInfoDiv.appendChild(connectionStateText);
   getConnectionState(updateConnectionState);
 
   popup.appendChild(document.createElement('br'));
 
   var networkForm = document.createElement('form');
 
+  var enableWifiDiv = document.createElement('div');
+  networkForm.appendChild(enableWifiDiv);
+
   var enableWifiLabel = document.createElement('label');
-  enableWifiLabel.innerText = "Enable Wifi?";
+  enableWifiLabel.innerText = "Enable Wi-Fi?";
   enableWifiLabel.for = 'enable-wifi-check';
-  networkForm.appendChild(enableWifiLabel);
+  enableWifiDiv.appendChild(enableWifiLabel);
 
   var enableWifiCheck = document.createElement('input');
   enableWifiCheck.type = 'checkbox';
   enableWifiCheck.id = 'enable-wifi-check';
-  networkForm.appendChild(enableWifiCheck);
+  enableWifiDiv.appendChild(enableWifiCheck);
   enableWifiCheck.onclick = function(){
     if(enableWifiCheck.checked){
       enableWifi(alertWifiEnabled);
