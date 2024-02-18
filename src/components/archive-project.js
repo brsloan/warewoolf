@@ -12,7 +12,7 @@ function backupProject(docsDir, callback){
         fs.mkdirSync(userSettings.backupDirectory);
     }
 
-    const archive = archiveProject(userSettings.backupDirectory, callback);
+    archiveProject(userSettings.backupDirectory, callback);
   }
   catch(err){
     logError(err);
@@ -27,7 +27,6 @@ function createBackupsDirectory(docsDir){
 }
 
 function archiveProject(archiveDir, callback){
-  var result = null;
   if(project.filename != ""){
     const archiveName = project.filename.replace('.woolf','') + getTimeStamp() + '.zip';
     const output = fs.createWriteStream(archiveDir + "/" + archiveName);
@@ -48,12 +47,12 @@ function archiveProject(archiveDir, callback){
 
     // good practice to catch this error explicitly
     archive.on('error', function(err) {
-      callback(err);
+      callback('error');
       throw err;
     });
 
     archive.on('finish', function(){
-      callback('success');
+      callback(archiveName);
     })
 
     // pipe archive data to the file
@@ -64,9 +63,7 @@ function archiveProject(archiveDir, callback){
     archive.directory(project.directory + project.chapsDirectory, project.chapsDirectory);
 
     archive.finalize();
-    result = archiveName;
   }
-  return result;
 }
 
 function getTimeStamp(){

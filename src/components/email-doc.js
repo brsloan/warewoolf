@@ -1,3 +1,5 @@
+const os = require('os');
+
 function prepareAndEmail(sender, pass, receiver, filetype, compileOptions, callback){
   var delt;
   var filename;
@@ -20,6 +22,9 @@ function prepareAndEmail(sender, pass, receiver, filetype, compileOptions, callb
   }
   else if(filetype == ".mdfc"){
     emailDeltaAsMdfc(filename, delt, sender, pass, receiver, callback);
+  }
+  else if(filetype == ".zip"){
+    emailAsZip(sender, pass, receiver, callback);
   }
   else {
     //default to txt
@@ -62,6 +67,22 @@ function emailDeltaAsTxt(filename, delt, sender, pass, receiver, callback){
   ];
 
   emailFile(sender, pass, receiver, attachments, callback);
+}
+
+function emailAsZip(sender, pass, receiver, callback){
+  archiveProject(os.tmpdir(), function(archName){
+    if(archName != 'error'){
+      var attachments = [
+        {
+          filename: archName,
+          path: os.tmpdir() + '/' + archName,
+          contentType: 'application/javascript'
+        }
+      ];
+
+      emailFile(sender, pass, receiver, attachments, callback);
+    }
+  });
 }
 
 function emailFile(sender, pass, receiver, attachments, callback){

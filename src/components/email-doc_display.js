@@ -92,7 +92,7 @@ function showEmailOptions(){
     emailForm.appendChild(chapRadio);
 
     var compiledRadioLabel = document.createElement('label');
-    compiledRadioLabel.innerText = "Send Compiled";
+    compiledRadioLabel.innerText = " | Send Compiled";
     compiledRadioLabel.for = 'email-radio-compiled';
     emailForm.appendChild(compiledRadioLabel);
 
@@ -102,6 +102,18 @@ function showEmailOptions(){
     compiledRadio.id = 'email-radio-compiled';
     compiledRadio.value = 'compiled';
     emailForm.appendChild(compiledRadio);
+
+    var projectRadioLabel = document.createElement('label');
+    projectRadioLabel.innerText = " | Send Project";
+    projectRadioLabel.for = 'email-radio-project';
+    emailForm.appendChild(projectRadioLabel);
+
+    var projectRadio = document.createElement('input');
+    projectRadio.type = 'radio';
+    projectRadio.name = 'email-radio';
+    projectRadio.id = 'email-radio-project';
+    projectRadio.value = 'project';
+    emailForm.appendChild(projectRadio);
 
     emailForm.appendChild(document.createElement('br'));
 
@@ -151,7 +163,7 @@ function showEmailOptions(){
     insertHeadCheck.id = "insert-head-check";
     compileOptionsSet.appendChild(insertHeadCheck);
 
-    compileOptionsSet.style.display = 'none';
+    compileOptionsSet.disabled = true;
     emailForm.appendChild(compileOptionsSet);
 
     emailForm.appendChild(document.createElement('br'));
@@ -180,7 +192,7 @@ function showEmailOptions(){
       prepareAndEmail(senderEmailInput.value,
         senderPassInput.value,
         receiverEmailInput.value,
-        typeSelect.value,
+        projectRadio.checked ? '.zip' : typeSelect.value,
         compileOptions,
         function(resp){
           responseText.innerText = resp;
@@ -198,10 +210,16 @@ function showEmailOptions(){
     popup.appendChild(closeBtn);
 
     chapRadio.onclick = function(){
-      compileOptionsSet.style.display = 'none';
+      compileOptionsSet.disabled = true;
+      typeSelect.disabled = false;
     }
     compiledRadio.onclick = function(){
-      compileOptionsSet.style.display = 'block';
+      compileOptionsSet.disabled = false;
+      typeSelect.disabled = false;
+    }
+    projectRadio.onclick = function(){
+      compileOptionsSet.disabled = true;
+      typeSelect.disabled = true;
     }
 
 
