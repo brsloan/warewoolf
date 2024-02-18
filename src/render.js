@@ -996,6 +996,10 @@ ipcRenderer.on('save-backup-clicked', function(e, docsDir){
   backupProject(docsDir);
 });
 
+ipcRenderer.on('settings-clicked', function(e, docsDir){
+  showSettings(docsDir);
+});
+
 //**** utils ***/
 
 function closePopups(){

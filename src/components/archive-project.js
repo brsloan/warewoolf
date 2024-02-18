@@ -5,6 +5,7 @@ function backupProject(docsDir){
     docsDir = convertFilepath(docsDir);
     if(userSettings.backupDirectory == null || userSettings.backupDirectory == ""){
       userSettings.backupDirectory = createBackupsDirectory(docsDir);
+      userSettings.save();
     }
 
     const archive = archiveProject(userSettings.backupDirectory);
@@ -21,11 +22,11 @@ function createBackupsDirectory(docsDir){
   return backupsDir;
 }
 
-function archiveProject(docsDir){
+function archiveProject(archiveDir){
   var result = null;
   if(project.filename != ""){
     const archiveName = project.filename.replace('.woolf','') + getTimeStamp() + '.zip';
-    const output = fs.createWriteStream(docsDir + "/" + archiveName);
+    const output = fs.createWriteStream(archiveDir + "/" + archiveName);
     const archive = archiver('zip', {
       zlib: { level: 9 } // Sets the compression level.
     });

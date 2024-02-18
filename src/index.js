@@ -121,6 +121,12 @@ const createWindow = () => {
             mainWindow.webContents.send('properties-clicked');
           }
         },
+        {
+          label: 'Settings',
+          click(item, focusWindow){
+            mainWindow.webContents.send('settings-clicked');
+          }
+        },
         {type: 'separator'},
         {
           label: 'File Manager',
