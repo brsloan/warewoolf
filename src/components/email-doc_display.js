@@ -88,7 +88,6 @@ function showEmailOptions(){
     chapRadio.name = 'email-radio';
     chapRadio.id = 'email-radio-chap';
     chapRadio.value = 'chap';
-    chapRadio.checked = true;
     emailForm.appendChild(chapRadio);
 
     var compiledRadioLabel = document.createElement('label');
@@ -163,7 +162,11 @@ function showEmailOptions(){
     insertHeadCheck.id = "insert-head-check";
     compileOptionsSet.appendChild(insertHeadCheck);
 
+    //set defaults
+    projectRadio.checked = true;
     compileOptionsSet.disabled = true;
+    typeSelect.disabled = true;
+
     emailForm.appendChild(compileOptionsSet);
 
     emailForm.appendChild(document.createElement('br'));
