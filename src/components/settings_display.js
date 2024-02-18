@@ -30,7 +30,7 @@ function showSettings(docsDir){
   var saveBackupDir = createButton("Save");
   saveBackupDir.onclick = function(){
     if(backupDirInput.value != ""){
-      userSettings.backupDirectory = backupDirInput.value;
+      userSettings.backupDirectory = convertFilepath(backupDirInput.value);
     }
     userSettings.save();
   }

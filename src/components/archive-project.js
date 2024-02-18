@@ -7,6 +7,10 @@ function backupProject(docsDir){
       userSettings.backupDirectory = createBackupsDirectory(docsDir);
       userSettings.save();
     }
+    else{
+      if(!fs.existsSync(userSettings.backupDirectory))
+        fs.mkdirSync(userSettings.backupDirectory);
+    }
 
     const archive = archiveProject(userSettings.backupDirectory);
   }
