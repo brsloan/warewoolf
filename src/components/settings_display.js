@@ -27,22 +27,36 @@ function showSettings(docsDir){
   }
   settingsForm.appendChild(backupDirPicker);
 
+  settingsForm.appendChild(document.createElement('br'));
+
+  var autoBackupLabel = document.createElement('label');
+  autoBackupLabel.innerText = 'Auto Backup On Close: ';
+  settingsForm.appendChild(autoBackupLabel);
+
+  var autoBackupCheck = document.createElement('input');
+  autoBackupCheck.type = 'checkbox';
+  autoBackupCheck.checked = userSettings.autoBackup;
+  settingsForm.appendChild(autoBackupCheck);
+
+  popup.appendChild(settingsForm);
+
   var saveBackupDir = createButton("Save");
   saveBackupDir.onclick = function(){
     if(backupDirInput.value != ""){
       userSettings.backupDirectory = convertFilepath(backupDirInput.value);
     }
+    userSettings.autoBackup = autoBackupCheck.checked;
     userSettings.save();
   }
-  settingsForm.appendChild(saveBackupDir);
-
-  popup.appendChild(settingsForm);
+  popup.appendChild(saveBackupDir);
 
   var closeBtn = createButton("Close");
   closeBtn.onclick = function(){
     closePopups();
   };
   popup.appendChild(closeBtn);
+
+  closeBtn.focus();
 
   document.body.appendChild(popup);
 }

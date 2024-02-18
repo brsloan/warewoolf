@@ -1,6 +1,6 @@
 const archiver = require('archiver');
 
-function backupProject(docsDir){
+function backupProject(docsDir, callback){
   try{
     docsDir = convertFilepath(docsDir);
     if(userSettings.backupDirectory == null || userSettings.backupDirectory == ""){
@@ -12,7 +12,7 @@ function backupProject(docsDir){
         fs.mkdirSync(userSettings.backupDirectory);
     }
 
-    const archive = archiveProject(userSettings.backupDirectory);
+    const archive = archiveProject(userSettings.backupDirectory, callback);
   }
   catch(err){
     logError(err);
@@ -26,7 +26,7 @@ function createBackupsDirectory(docsDir){
   return backupsDir;
 }
 
-function archiveProject(archiveDir){
+function archiveProject(archiveDir, callback){
   var result = null;
   if(project.filename != ""){
     const archiveName = project.filename.replace('.woolf','') + getTimeStamp() + '.zip';
@@ -48,8 +48,13 @@ function archiveProject(archiveDir){
 
     // good practice to catch this error explicitly
     archive.on('error', function(err) {
+      callback(err);
       throw err;
     });
+
+    archive.on('finish', function(){
+      callback('success');
+    })
 
     // pipe archive data to the file
     archive.pipe(output);

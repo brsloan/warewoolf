@@ -956,7 +956,7 @@ ipcRenderer.on('exit-app-clicked', function(e, docPath){
     displayExitConfirmation(docPath, exitApp);
   }
   else{
-    exitApp();
+    exitApp(docPath);
   }
 });
 
@@ -964,8 +964,14 @@ ipcRenderer.on('save-copy-clicked', function(e, docPath){
   saveProjectCopy(docPath);
 });
 
-function exitApp(){
-  ipcRenderer.send('exit-app-confirmed');
+function exitApp(docPath){
+  if(userSettings.autoBackup == true){
+    backupProject(docPath, function(msg){
+      ipcRenderer.send('exit-app-confirmed');
+    });
+  } else {
+      ipcRenderer.send('exit-app-confirmed');
+  }
 }
 
 ipcRenderer.on('help-doc-clicked', function(e){
@@ -993,8 +999,12 @@ ipcRenderer.on('network-manager-clicked', function(e){
 });
 
 ipcRenderer.on('save-backup-clicked', function(e, docsDir){
-  backupProject(docsDir);
+  backupProject(docsDir, alertBackupResult);
 });
+
+function alertBackupResult(msg){
+  console.log(msg);
+}
 
 ipcRenderer.on('settings-clicked', function(e, docsDir){
   showSettings(docsDir);

@@ -16,6 +16,7 @@ function getUserSettings(userSettingsFilepath){
     compileChapMark: '',
     compileInsert: false,
     backupDirectory: null,
+    autoBackup: true,
     save: save,
     load: load,
     getSettingsFilepath: getSettingsFilepath
