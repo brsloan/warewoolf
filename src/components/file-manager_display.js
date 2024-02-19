@@ -172,6 +172,15 @@ function showFileManager(dirPaths){
     };
     popup.appendChild(deleteBtn);
 
+    var unzipBtn = createButton("<span class='access-key'>U</span>nzip");
+    unzipBtn.accessKey = "u";
+    unzipBtn.onclick = function(){
+      unzipProject(currentDirDisplay.innerText + '/' + fileListSelect.selectedOptions[0].value, function(){
+          populateFileList(currentDirDisplay.innerText, fileListSelect, currentDirDisplay);
+      });
+    };
+    popup.appendChild(unzipBtn);
+
     var close = createButton("Close");
     close.onclick = function(){
         closePopups();

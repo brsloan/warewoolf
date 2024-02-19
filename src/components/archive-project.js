@@ -1,4 +1,5 @@
 const archiver = require('archiver');
+const unzipper = require('unzipper');
 
 function backupProject(docsDir, callback){
   try{
@@ -78,5 +79,18 @@ function getTimeStamp(){
     if(num.length < 2)
       num = "0" + num;
     return num;
+  }
+}
+
+function unzipProject(zipPath, callback){
+  if(zipPath.includes('.zip')){
+    try{
+      fs.createReadStream(zipPath)
+      .pipe(unzipper.Extract({ path: zipPath.replace('.zip','') }))
+      .on('close', callback);
+    }
+    catch(err){
+      logError(err);
+    }
   }
 }
