@@ -1,44 +1,85 @@
-const network = require("node-network-manager");
+const { spawn } = require("child_process");
 
 function getConnectionState(cback){
-  network
-    .deviceStatus()
-    .then((result) => cback(result))
-    .catch((error) => cback(error));
+  const args = ["-t", "device", "status"];
+
+  nmcliMulti(args, function(body){
+    var statusData = body.split('\n');
+    var wifiDataLine = statusData.find(function(line, index, arr){
+      return line.split(':')[1] == 'wifi';
+    });
+    var splitData = wifiDataLine.split(':');
+
+    cback({state: splitData[2], connection: splitData[3]});
+  });
 }
 
+function nmcliMulti(args, cback){
+  const nmcli = spawn('nmcli', args);
+  var body = [];
+  nmcli.stdout.on('data', function(data){
+    body.push(data);
+  });
+
+  nmcli.stderr.on('data', function(data){
+    logError(data.toString());
+  });
+
+  nmcli.on('close', function(code){
+    cback(body.join());
+  });
+}
+
+function nmcliSingle(args, cback){
+  const nmcli = spawn('nmcli', args);
+
+  var responseHasData = false;
+
+  nmcli.stdout.on('data', function(data){
+    responseHasData = true;
+    cback(data.toString().trim());
+  });
+
+  nmcli.stderr.on('data', function(data){
+    logError(data.toString().trim());
+  })
+
+  nmcli.stdout.on('close', function(code){
+    if(!responseHasData)
+      cback('no data');
+  });
+}
 
 function getWifiStatus(cback){
-  network
-    .getWifiStatus()
-    .then((data) => cback(data))
-    .catch((error) => cback(error));
+  nmcliSingle(['radio', 'wifi'], cback);
 }
 
 function getWifiNetworks(cback){
-  network
-    .getWifiList(true)
-    .then((data) => cback(data))
-    .catch((error) => cback(error));
+  nmcliMulti(["-t", "device", "wifi", "list", "--rescan", "yes"], function(body){
+    var dataLines = body.split('\n');
+
+    var connections = dataLines.map(function(line, index, arr){
+      var splitLine = line.split(':');
+      return {
+        ssid: splitLine[7],
+        isConnected: splitLine[0] == '*'
+      }
+    }).filter(function(obj, index, arr){
+      return obj.ssid && obj.ssid != "";
+    });
+
+    cback(connections);
+  });
 }
 
 function disableWifi(cback){
-  network
-  .wifiDisable()
-  .then(() => cback("wifi was disabled"))
-  .catch((error) => cback(error));
-}
+  nmcliSingle(['radio', 'wifi', 'off'], cback);
+};
 
 function enableWifi(cback){
-  network
-  .wifiEnable()
-  .then(() => cback("wifi was enabled"))
-  .catch((error) => cback(error));
+  nmcliSingle(['radio', 'wifi', 'on'], cback);
 }
 
 function connectToNewWifi(ssidString, passString, cback){
-  network
-  .wifiConnect(ssidString, passString)
-  .then((data) => cback(data))
-  .catch((error) => cback(error));
+  nmcliSingle(['device','wifi','connect', ssidString, 'password', passString], cback);
 }

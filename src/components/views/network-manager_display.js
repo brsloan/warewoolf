@@ -126,10 +126,10 @@ function showNetworkManager(){
     if(listData && listData.length > 0){
       listData.forEach(function(op, i){
         var txtOp = document.createElement("option");
-        txtOp.value = op.SSID;
-        txtOp.innerText = op.SSID;
+        txtOp.value = op.ssid;
+        txtOp.innerText = op.ssid;
         networksSelect.appendChild(txtOp);
-        if(op.inUseBoolean === true){
+        if(op.isConnected === true){
           networksSelect.selectedIndex = i;
         }
       });
@@ -138,14 +138,14 @@ function showNetworkManager(){
   }
 
   function updateConnectionState(stateData){
-    connectionStateText.innerText = stateData[0].state;
-    connectedNetworkText.innerText = stateData[0].connection;
+    connectionStateText.innerText = stateData.state;
+    connectedNetworkText.innerText = stateData.connection;
   }
 
   function updateStateUntilConnected(stateData){
-    if(stateData[0].state == 'connected'){
-      connectionStateText.innerText = stateData[0].state;
-      connectedNetworkText.innerText = stateData[0].connection;
+    if(stateData.state == 'connected'){
+      connectionStateText.innerText = stateData.state;
+      connectedNetworkText.innerText = stateData.connection;
     }
     else {
       setTimeout(function(){
