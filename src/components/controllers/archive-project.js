@@ -22,8 +22,13 @@ function backupProject(docsDir, callback){
 
 function createBackupsDirectory(docsDir){
   const backupsDir = docsDir + "/backups";
-  if(!fs.existsSync(backupsDir))
+  try{
+    if(!fs.existsSync(backupsDir))
     fs.mkdirSync(backupsDir);
+  }
+  catch(err){
+    logError(err);
+  }
   return backupsDir;
 }
 
@@ -32,21 +37,17 @@ function archiveProject(archiveDir, callback){
     const archiveName = project.filename.replace('.woolf','') + getTimeStamp() + '.zip';
     const output = fs.createWriteStream(archiveDir + "/" + archiveName);
     const archive = archiver('zip', {
-      zlib: { level: 9 } // Sets the compression level.
+      zlib: { level: 9 }
     });
 
-      // good practice to catch warnings (ie stat failures and other non-blocking errors)
     archive.on('warning', function(err) {
       if (err.code === 'ENOENT') {
-        // log warning
         logError(err);
       } else {
-        // throw error
         throw err;
       }
     });
 
-    // good practice to catch this error explicitly
     archive.on('error', function(err) {
       callback('error');
       throw err;
@@ -56,10 +57,8 @@ function archiveProject(archiveDir, callback){
       callback(archiveName);
     })
 
-    // pipe archive data to the file
     archive.pipe(output);
 
-    // append a file
     archive.file(project.directory + project.filename, { name: project.filename });
     archive.directory(project.directory + project.chapsDirectory, project.chapsDirectory);
 
