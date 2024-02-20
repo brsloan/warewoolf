@@ -649,6 +649,20 @@ function openHelpDoc(){
   displayProject();
 }
 
+function exitApp(docPath){
+  if(userSettings.autoBackup == true){
+    backupProject(docPath, function(msg){
+      ipcRenderer.send('exit-app-confirmed');
+    });
+  } else {
+      ipcRenderer.send('exit-app-confirmed');
+  }
+}
+
+function alertBackupResult(msg){
+  console.log(msg);
+}
+
 ///////////////////////////////////////////////////////////////////
   //Event Handlers ///////////////////////////////////////////////
 
@@ -964,16 +978,6 @@ ipcRenderer.on('save-copy-clicked', function(e, docPath){
   saveProjectCopy(docPath);
 });
 
-function exitApp(docPath){
-  if(userSettings.autoBackup == true){
-    backupProject(docPath, function(msg){
-      ipcRenderer.send('exit-app-confirmed');
-    });
-  } else {
-      ipcRenderer.send('exit-app-confirmed');
-  }
-}
-
 ipcRenderer.on('help-doc-clicked', function(e){
   openHelpDoc();
 });
@@ -1001,10 +1005,6 @@ ipcRenderer.on('network-manager-clicked', function(e){
 ipcRenderer.on('save-backup-clicked', function(e, docsDir){
   backupProject(docsDir, alertBackupResult);
 });
-
-function alertBackupResult(msg){
-  console.log(msg);
-}
 
 ipcRenderer.on('settings-clicked', function(e, docsDir){
   showSettings(docsDir);
