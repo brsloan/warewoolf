@@ -1079,20 +1079,6 @@ function editorIsVisible(){
   return document.getElementById('writing-field').classList.contains('visible');
 }
 
-function logError(e){
-  console.log(e);
-  let time = new Date().toLocaleString();
-  try{
-    fs.appendFile('error_log.txt', time + '\n' + e.stack + '\n', function(err){
-      if(err)
-        console.log('error logging: ' + err);
-    });
-  }
-  catch(er){
-    console.log('error logging: ' + er);
-  }
-}
-
 function generateRow(elOne, elTwo){
   var row = document.createElement('tr');
   var cellOne = document.createElement('td');
