@@ -38,6 +38,18 @@ function showSettings(docsDir){
   autoBackupCheck.checked = userSettings.autoBackup;
   settingsForm.appendChild(autoBackupCheck);
 
+  settingsForm.appendChild(document.createElement('br'));
+
+  var backupsLimitLabel = document.createElement('label');
+  backupsLimitLabel.innerText = 'Quantity of latest backups to keep? (0=infinite): ';
+  settingsForm.appendChild(backupsLimitLabel);
+
+  var backupLimitInput = document.createElement('input');
+  backupLimitInput.type = 'number';
+  backupLimitInput.min = 0;
+  backupLimitInput.value = userSettings.backupsToKeep;
+  settingsForm.appendChild(backupLimitInput);
+
   popup.appendChild(settingsForm);
 
   var saveBackupDir = createButton("Save");
@@ -46,6 +58,7 @@ function showSettings(docsDir){
       userSettings.backupDirectory = convertFilepath(backupDirInput.value);
     }
     userSettings.autoBackup = autoBackupCheck.checked;
+    userSettings.backupsToKeep = backupLimitInput.value;
     userSettings.save();
   }
   popup.appendChild(saveBackupDir);

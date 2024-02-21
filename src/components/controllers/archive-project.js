@@ -13,10 +13,31 @@ function backupProject(docsDir, callback){
         fs.mkdirSync(userSettings.backupDirectory);
     }
 
-    archiveProject(userSettings.backupDirectory, callback);
+    archiveProject(userSettings.backupDirectory, function(archName){
+      deleteOldBackups();
+      callback(archName);
+    });
   }
   catch(err){
     logError(err);
+  }
+}
+
+function deleteOldBackups(){
+  if(userSettings.backupsToKeep > 0){
+    var backups = getFileList(userSettings.backupDirectory).map(function(ob){
+      return ob.name;
+    }).filter(function(filename){
+      //remove the file extension and the 14-digit timestamp from filenames to filter to only this project's backups
+      return filename.split('.')[0].slice(0,-14) == project.filename.replace('.woolf','');
+    }).sort();
+  
+    if(backups.length > userSettings.backupsToKeep){
+      var backupsToDel = backups.slice(0,userSettings.backupsToKeep * -1);
+      backupsToDel.forEach(fn => {
+        deleteFile(userSettings.backupDirectory + '/' + fn);
+      });
+    }
   }
 }
 
