@@ -74,6 +74,7 @@ function showSettings(docsDir){
     userSettings.autosaveInterval = autosaveIntervalInput.value;
     userSettings.save();
     updateAutosave();
+    closePopups();
   }
   popup.appendChild(saveBackupDir);
 
