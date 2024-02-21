@@ -1,4 +1,4 @@
-function showNetworkManager(){
+function showWifiManager(){
 
   removeElementsByClass('popup');
   var popup = document.createElement("div");

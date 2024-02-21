@@ -283,7 +283,7 @@ const createWindow = () => {
           {
             label: 'Wi-Fi Manager',
             click(item, focusWindow){
-              mainWindow.webContents.send('network-manager-clicked');
+              mainWindow.webContents.send('wifi-manager-clicked');
             },
             accelerator: 'CommandOrControl+W'
           }

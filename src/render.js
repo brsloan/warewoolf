@@ -998,8 +998,8 @@ ipcRenderer.on('file-manager-clicked', function(e, dirPaths){
   showFileManager(dirPaths);
 });
 
-ipcRenderer.on('network-manager-clicked', function(e){
-  showNetworkManager();
+ipcRenderer.on('wifi-manager-clicked', function(e){
+  showWifiManager();
 });
 
 ipcRenderer.on('save-backup-clicked', function(e, docsDir){
