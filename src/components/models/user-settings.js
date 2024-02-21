@@ -18,6 +18,7 @@ function getUserSettings(userSettingsFilepath){
     backupDirectory: null,
     autoBackup: true,
     backupsToKeep: 10,
+    autosaveInterval: 0,
     save: save,
     load: load,
     getSettingsFilepath: getSettingsFilepath

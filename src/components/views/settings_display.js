@@ -50,6 +50,18 @@ function showSettings(docsDir){
   backupLimitInput.value = userSettings.backupsToKeep;
   settingsForm.appendChild(backupLimitInput);
 
+  settingsForm.appendChild(document.createElement('br'));
+
+  var autosaveLabel = document.createElement('label');
+  autosaveLabel.innerText = 'Autosave every X minutes (0=never): ';
+  settingsForm.appendChild(autosaveLabel);
+
+  var autosaveIntervalInput = document.createElement('input');
+  autosaveIntervalInput.type = 'number';
+  autosaveIntervalInput.min = 0;
+  autosaveIntervalInput.value = userSettings.autosaveInterval;
+  settingsForm.appendChild(autosaveIntervalInput);
+
   popup.appendChild(settingsForm);
 
   var saveBackupDir = createButton("Save");
@@ -59,7 +71,9 @@ function showSettings(docsDir){
     }
     userSettings.autoBackup = autoBackupCheck.checked;
     userSettings.backupsToKeep = backupLimitInput.value;
+    userSettings.autosaveInterval = autosaveIntervalInput.value;
     userSettings.save();
+    updateAutosave();
   }
   popup.appendChild(saveBackupDir);
 

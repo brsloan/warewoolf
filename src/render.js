@@ -30,6 +30,7 @@ var notesQuill = new Quill('#notes-editor', {
 var project = newProject();
 
 var userSettings = getUserSettings(convertFilepath(remote.app.getPath('userData')) + "/user-settings.json").load();
+var autosaveInterval;
 
 initialize();
 
@@ -74,6 +75,26 @@ function applyUserSettings(){
     enableTypewriterMode()
   updateEditorWidth();
   updatePanelDisplays();
+  initiateAutosave();
+}
+
+function initiateAutosave(){
+  if(userSettings.autosaveInterval > 0)
+    autosaveInterval = setInterval(autoSave, userSettings.autosaveInterval * 60000);
+}
+
+function updateAutosave(){
+  if(autosaveInterval == null)
+    initiateAutosave();
+  else {
+    clearInterval(autosaveInterval);
+    initiateAutosave();
+  }
+}
+
+function autoSave(){
+  console.log('autosaving...');
+  saveProject(convertFilepath(__dirname));
 }
 
 function updateFontSize(){
