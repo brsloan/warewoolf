@@ -2,6 +2,7 @@ const archiver = require('archiver');
 const unzipper = require('unzipper');
 
 function backupProject(docsDir, callback){
+  console.log('gotten to back up with this dir: ' + docsDir);
   try{
     docsDir = convertFilepath(docsDir);
     if(userSettings.backupDirectory == null || userSettings.backupDirectory == ""){
@@ -31,7 +32,7 @@ function deleteOldBackups(){
       //remove the file extension and the 14-digit timestamp from filenames to filter to only this project's backups
       return filename.split('.')[0].slice(0,-14) == project.filename.replace('.woolf','');
     }).sort();
-  
+
     if(backups.length > userSettings.backupsToKeep){
       var backupsToDel = backups.slice(0,userSettings.backupsToKeep * -1);
       backupsToDel.forEach(fn => {

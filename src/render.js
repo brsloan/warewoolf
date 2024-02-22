@@ -368,7 +368,7 @@ function addNewChapter(){
   changeChapterTitle(thisIndex);
 }
 
-function saveProject(docPath){
+function saveProject(){
   if(project.filename != ""){
     clearCurrentChapterIfUnchanged();
     project.saveFile();
@@ -376,13 +376,13 @@ function saveProject(docPath){
     updateFileList();
   }
   else
-    saveProjectAs(docPath);
+    saveProjectAs();
 }
 
-function saveProjectAs(docPath) {
+function saveProjectAs() {
   const options = {
     title: 'Save project as...',
-    defaultPath: docPath,
+    defaultPath: sysDirectories.docs,
     filters: [
       { name: 'WareWoolf Projects', extensions: ['woolf'] }
     ]
@@ -399,10 +399,10 @@ function saveProjectAs(docPath) {
   updateTitleBar();
 }
 
-function saveProjectCopy(docPath) {
+function saveProjectCopy() {
   const options = {
     title: 'Save a copy of project as...',
-    defaultPath: docPath,
+    defaultPath: sysDirectories.docs,
     filters: [
       { name: 'WareWoolf Projects', extensions: ['woolf'] }
     ]
@@ -416,10 +416,10 @@ function saveProjectCopy(docPath) {
   updateTitleBar();
 }
 
-function openAProject(docPath) {
+function openAProject() {
   const options = {
     title: 'Open project...',
-    defaultPath: docPath,
+    defaultPath: sysDirectories.docs,
     filters: [
       { name: 'WareWoolf Projects', extensions: ['woolf'] }
     ]
@@ -653,9 +653,9 @@ function openHelpDoc(){
   displayProject();
 }
 
-function exitApp(docPath){
+function exitApp(){
   if(userSettings.autoBackup == true){
-    backupProject(docPath, function(msg){
+    backupProject(sysDirectories.docs, function(msg){
       ipcRenderer.send('exit-app-confirmed');
     });
   } else {
@@ -860,20 +860,20 @@ function stopDefaultPropagation(keyEvent){
   keyEvent.stopPropagation();
 }
 
-ipcRenderer.on("save-clicked", function(e, docPath){
-  saveProject(docPath);
+ipcRenderer.on("save-clicked", function(e){
+  saveProject();
 });
 
-ipcRenderer.on("save-as-clicked", function(e, docPath){
-  saveProjectAs(docPath);
+ipcRenderer.on("save-as-clicked", function(e){
+  saveProjectAs();
 });
 
-ipcRenderer.on("open-clicked", function(e, docPath){
+ipcRenderer.on("open-clicked", function(e){
   if(project.hasUnsavedChanges){
-    displayExitConfirmation(docPath, openAProject);
+    displayExitConfirmation(openAProject);
   }
   else{
-    openAProject(docPath);
+    openAProject();
   }
 });
 
@@ -881,12 +881,12 @@ ipcRenderer.on('new-project-clicked', function(e){
   createNewProject();
 });
 
-ipcRenderer.on('import-clicked', function(e, docPath){
-  showImportOptions(docPath);
+ipcRenderer.on('import-clicked', function(e){
+  showImportOptions(sysDirectories.docs);
 });
 
-ipcRenderer.on('export-clicked', function(e, docPath){
-  showExportOptions(docPath);
+ipcRenderer.on('export-clicked', function(e){
+  showExportOptions(sysDirectories.docs);
 });
 
 ipcRenderer.on('properties-clicked', function(e){
@@ -894,7 +894,7 @@ ipcRenderer.on('properties-clicked', function(e){
 });
 
 ipcRenderer.on('compile-clicked', function(e){
-  showCompileOptions();
+  showCompileOptions(sysDirectories.docs);
 });
 
 ipcRenderer.on('word-count-clicked', function(e){
@@ -968,18 +968,18 @@ ipcRenderer.on('about-clicked', function(e, licensesPath){
   showAbout(licensesPath);
 });
 
-ipcRenderer.on('exit-app-clicked', function(e, docPath){
+ipcRenderer.on('exit-app-clicked', function(e){
   if(project.hasUnsavedChanges){
     updateFileList();
-    displayExitConfirmation(docPath, exitApp);
+    displayExitConfirmation(exitApp);
   }
   else{
-    exitApp(docPath);
+    exitApp();
   }
 });
 
-ipcRenderer.on('save-copy-clicked', function(e, docPath){
-  saveProjectCopy(docPath);
+ipcRenderer.on('save-copy-clicked', function(e){
+  saveProjectCopy();
 });
 
 ipcRenderer.on('help-doc-clicked', function(e){
@@ -998,20 +998,20 @@ ipcRenderer.on('view-error-log-clicked', function(e){
   showErrorLog();
 });
 
-ipcRenderer.on('file-manager-clicked', function(e, dirPaths){
-  showFileManager(dirPaths);
+ipcRenderer.on('file-manager-clicked', function(e){
+  showFileManager(sysDirectories);
 });
 
 ipcRenderer.on('wifi-manager-clicked', function(e){
   showWifiManager();
 });
 
-ipcRenderer.on('save-backup-clicked', function(e, docsDir){
-  backupProject(docsDir, alertBackupResult);
+ipcRenderer.on('save-backup-clicked', function(e){
+  backupProject(sysDirectories.docs, alertBackupResult);
 });
 
-ipcRenderer.on('settings-clicked', function(e, docsDir){
-  showSettings(docsDir);
+ipcRenderer.on('settings-clicked', function(e){
+  showSettings(sysDirectories.docs);
 });
 
 //**** utils ***/

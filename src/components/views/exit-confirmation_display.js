@@ -1,4 +1,4 @@
-function displayExitConfirmation(docPath, continueFunc){
+function displayExitConfirmation(continueFunc){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup");
@@ -13,16 +13,16 @@ function displayExitConfirmation(docPath, continueFunc){
 
   var save = createButton("Save");
   save.onclick = function(){
-    saveProject(docPath);
+    saveProject();
     closePopups();
-    continueFunc(docPath);
+    continueFunc();
   };
   popup.appendChild(save);
 
   var quit = createButton("Continue Without Saving");
   quit.onclick = function(){
     closePopups();
-    continueFunc(docPath);
+    continueFunc();
   };
   popup.appendChild(quit);
 

@@ -1,13 +1,10 @@
-function showFileManager(dirPaths){
-    dirPaths.docsDir = convertFilepath(dirPaths.docsDir);
-    dirPaths.homeDir = convertFilepath(dirPaths.homeDir);
-
+function showFileManager(sysDir){
     removeElementsByClass('popup');
     var popup = document.createElement("div");
     popup.classList.add("popup");
 
     var currentDirDisplay = document.createElement("p");
-    currentDirDisplay.innerText = dirPaths.docsDir;
+    currentDirDisplay.innerText = sysDir.docs;
     popup.appendChild(currentDirDisplay);
 
     var selectFieldsContainer = document.createElement("div");
@@ -261,20 +258,20 @@ function showFileManager(dirPaths){
         }
     });
 
-    populateShortcutsList(dirPaths, dirShortcutSelect);
-    populateFileList(dirPaths.docsDir, fileListSelect, currentDirDisplay);
+    populateShortcutsList(sysDir, dirShortcutSelect);
+    populateFileList(sysDir.docs, fileListSelect, currentDirDisplay);
 
     document.body.appendChild(popup);
     fileListSelect.focus();
 }
 
-function populateShortcutsList(dirPaths, listElement){
+function populateShortcutsList(sysDir, listElement){
     var shortcuts = [];
-    if (dirPaths.docsDir != null && dirPaths.docsDir != "")
-        shortcuts.push(dirPaths.docsDir);
+    if (sysDir.docs != null && sysDir.docs != "")
+        shortcuts.push(sysDir.docs);
 
-    if(dirPaths.homeDir != dirPaths.docsDir)
-        shortcuts.push(dirPaths.homeDir);
+    if(sysDir.home != sysDir.docs)
+        shortcuts.push(sysDir.home);
 
     var cleanedProjDir = project.directory;
     if(project.directory.endsWith("/"))
