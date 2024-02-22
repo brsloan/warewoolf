@@ -353,4 +353,14 @@ app.on('activate', () => {
 // code. You can also put them in separate files and import them here.
 ipcMain.on('exit-app-confirmed', function(e){
   app.quit();
-})
+});
+
+ipcMain.on('get-directories', function(e){
+  e.returnValue = {
+    userData: app.getPath('userData').replaceAll('\\', '/'),
+    home: app.getPath('home').replaceAll('\\', '/'),
+    temp: app.getPath('temp').replaceAll('\\', '/'),
+    docs: app.getPath('documents').replaceAll('\\', '/'),
+    app: __dirname.replaceAll('\\', '/')
+  }
+});

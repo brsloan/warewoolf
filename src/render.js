@@ -6,6 +6,7 @@ const Quill = require('quill');
 const docx = require('docx');
 const quillParser = require('quilljs-parser');
 const nodemailer = require('nodemailer');
+const sysDirectories = ipcRenderer.sendSync('get-directories');
 
 var editorQuill = new Quill('#editor-container', {
   modules: {
@@ -29,8 +30,7 @@ var notesQuill = new Quill('#notes-editor', {
 
 var project = newProject();
 
-var userSettings = getUserSettings(convertFilepath(remote.app.getPath('userData')) + "/user-settings.json").load();
-
+var userSettings = getUserSettings(sysDirectories.userData + "/user-settings.json").load();
 
 initialize();
 
@@ -42,7 +42,7 @@ function initialize(){
 
 function loadInitialProject(){
   //Load last project opened, or if none logged, load example project, and if example gone, create new project
-  const defaultProject = convertFilepath(__dirname) + "/examples/Frankenstein/Frankenstein.woolf";
+  const defaultProject = sysDirectories.app + "/examples/Frankenstein/Frankenstein.woolf";
 
   if(userSettings.lastProject != null && fs.existsSync(userSettings.lastProject))
     setProject(userSettings.lastProject);
@@ -646,7 +646,7 @@ function scrollChapterListToActiveChapter(){
 }
 
 function openHelpDoc(){
-  const helpDocPath = convertFilepath(__dirname) + "/examples/HelpDoc/HelpDoc.woolf";
+  const helpDocPath = sysDirectories.app + "/examples/HelpDoc/HelpDoc.woolf";
   project.loadFile(helpDocPath);
   displayProject();
 }
