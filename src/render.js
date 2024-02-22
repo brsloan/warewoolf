@@ -345,11 +345,13 @@ function moveChapDown(chapInd){
 
 
 function createNewProject(){
-  project = newProject();
   requestProjectTitle(function(title){
-    project.title = title;
-    addNewChapter();
-    displayProject();
+    if(title && title != ""){
+      project = newProject();
+      project.title = title;
+      addNewChapter();
+      displayProject();
+    }
   });
 }
 
