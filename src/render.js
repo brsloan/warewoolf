@@ -40,6 +40,8 @@ function initialize(){
   loadInitialProject();
 }
 
+//testFileDialog();
+
 function loadInitialProject(){
   //Load last project opened, or if none logged, load example project, and if example gone, create new project
   const defaultProject = sysDirectories.app + "/examples/Frankenstein/Frankenstein.woolf";
