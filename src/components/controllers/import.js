@@ -1,15 +1,24 @@
-function initiateImport(docPath, options){
-  var filepaths = getImportFilepaths(docPath, {
-    name: options.fileType.name,
-    extensions: options.fileType.extensions
-  });
+function initiateImport(sysDirectories, options, cback){
 
-  try{
-    importFiles(filepaths, options);
-  }
-  catch(err){
-    logError(err);
-  }
+  const dialogOptions = {
+    title: 'Import files...',
+    defaultPath: sysDirectories.docs,
+    filters: [
+      { name: options.fileType.name, extensions: options.fileType.extensions }
+    ],
+    bookmarkedPaths: [sysDirectories.docs, sysDirectories.home],
+    dialogType: 'open'
+  };
+
+  showFileDialog(dialogOptions, function(filepaths){
+    try{
+      importFiles(filepaths, options);
+    }
+    catch(err){
+      logError(err);
+    }
+    cback();
+  });
 }
 
 function importFiles(filepaths, options){
@@ -25,17 +34,6 @@ function importFiles(filepaths, options){
       addImportedChapter(delt.delta, delt.filename);
     });
   });
-}
-
-function getImportFilepaths(docPath, filter){
-    const options = {
-      title: 'Import files...',
-      defaultPath: docPath,
-      properties: ['openFile', 'multiSelections'],
-      filters: [filter]
-    };
-    var filepaths = dialog.showOpenDialogSync(options);
-    return filepaths;
 }
 
 function importPlainText(filepath, options){

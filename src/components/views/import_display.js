@@ -1,4 +1,4 @@
-function showImportOptions(docPath){
+function showImportOptions(sysDirectories){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup");
@@ -152,12 +152,12 @@ function showImportOptions(docPath){
       }
     };
 
-    initiateImport(docPath, importOptions);
-
-    closePopups();
-    displayChapterByIndex(project.activeChapterIndex);
-    if(project.chapters.length > 0)
-      editorQuill.enable();
+    initiateImport(sysDirectories, importOptions, function(){
+      closePopups();
+      displayChapterByIndex(project.activeChapterIndex);
+      if(project.chapters.length > 0)
+        editorQuill.enable();
+    });
   };
 
   popup.appendChild(importForm);

@@ -1,7 +1,5 @@
 const { ipcRenderer } = require('electron');
 const fs = require('fs');
-const remote = require('@electron/remote');
-const { dialog } = remote;
 const Quill = require('quill');
 const docx = require('docx');
 const quillParser = require('quilljs-parser');
@@ -387,18 +385,21 @@ function saveProjectAs() {
     defaultPath: sysDirectories.docs,
     filters: [
       { name: 'WareWoolf Projects', extensions: ['woolf'] }
-    ]
+    ],
+    bookmarkedPaths: [sysDirectories.docs, sysDirectories.home],
+    dialogType: 'save'
   };
-  var filepath = dialog.showSaveDialogSync(options);
-  if (filepath){
-    filepath = project.saveAs(filepath);
-    userSettings.lastProject = filepath;
-    userSettings.save();
-  }
 
-  project.hasUnsavedChanges = false;
-  updateFileList();
-  updateTitleBar();
+  showFileDialog(options, function(filepath){
+    if (filepath){
+      filepath = project.saveAs(filepath);
+      userSettings.lastProject = filepath;
+      userSettings.save();
+      project.hasUnsavedChanges = false;
+      updateFileList();
+      updateTitleBar();
+    }
+  });
 }
 
 function saveProjectCopy() {
@@ -407,15 +408,19 @@ function saveProjectCopy() {
     defaultPath: sysDirectories.docs,
     filters: [
       { name: 'WareWoolf Projects', extensions: ['woolf'] }
-    ]
+    ],
+    bookmarkedPaths: [sysDirectories.docs, sysDirectories.home],
+    dialogType: 'save'
   };
-  var filepath = dialog.showSaveDialogSync(options);
-  if (filepath){
-    project.saveAs(filepath, true);
-  }
 
-  updateFileList();
-  updateTitleBar();
+  showFileDialog(options, function(filepath){
+    if (filepath){
+      project.saveAs(filepath, true);
+    }
+
+    updateFileList();
+    updateTitleBar();
+  })
 }
 
 function openAProject() {
@@ -424,15 +429,19 @@ function openAProject() {
     defaultPath: sysDirectories.docs,
     filters: [
       { name: 'WareWoolf Projects', extensions: ['woolf'] }
-    ]
+    ],
+    bookmarkedPaths: [sysDirectories.docs, sysDirectories.home],
+    dialogType: 'open'
   };
-  var filepath = dialog.showOpenDialogSync(options);
-  if (filepath) {
-    project.loadFile(filepath[0]);
-    displayProject();
-    userSettings.lastProject = filepath[0];
-    userSettings.save();
-  }
+
+  showFileDialog(options, function(filepath){
+    if (filepath) {
+      project.loadFile(filepath[0]);
+      displayProject();
+      userSettings.lastProject = filepath[0];
+      userSettings.save();
+    }
+  });
 }
 
 function changeChapsDirectory(){
@@ -441,18 +450,22 @@ function changeChapsDirectory(){
     defaultPath: project.directory,
     filters: [
       { name: '.pup files', extensions: ['pup'] }
-    ]
+    ],
+    bookmarkedPaths: [sysDirectories.docs, sysDirectories.home],
+    dialogType: 'open'
   };
-  var filepaths = dialog.showOpenDialogSync(options);
-  if (filepaths) {
-    filepath = filepaths[0].replaceAll('\\', '/');
-    var parts = filepath.split('/');
-    var subDir = parts.slice(0,parts.length - 1).join('/').concat('/').replace(project.directory, '');
 
-    project.chapsDirectory = subDir;
-    project.hasUnsavedChanges = true;
-    displayProject();
-  }
+  showFileDialog(options, function(filepaths){
+    if (filepaths) {
+      filepath = filepaths[0].replaceAll('\\', '/');
+      var parts = filepath.split('/');
+      var subDir = parts.slice(0,parts.length - 1).join('/').concat('/').replace(project.directory, '');
+
+      project.chapsDirectory = subDir;
+      project.hasUnsavedChanges = true;
+      displayProject();
+    }
+  });
 }
 
 function clearCurrentChapterIfUnchanged(){
@@ -884,11 +897,11 @@ ipcRenderer.on('new-project-clicked', function(e){
 });
 
 ipcRenderer.on('import-clicked', function(e){
-  showImportOptions(sysDirectories.docs);
+  showImportOptions(sysDirectories);
 });
 
 ipcRenderer.on('export-clicked', function(e){
-  showExportOptions(sysDirectories.docs);
+  showExportOptions(sysDirectories);
 });
 
 ipcRenderer.on('properties-clicked', function(e){
@@ -896,7 +909,7 @@ ipcRenderer.on('properties-clicked', function(e){
 });
 
 ipcRenderer.on('compile-clicked', function(e){
-  showCompileOptions(sysDirectories.docs);
+  showCompileOptions(sysDirectories);
 });
 
 ipcRenderer.on('word-count-clicked', function(e){
@@ -1013,7 +1026,7 @@ ipcRenderer.on('save-backup-clicked', function(e){
 });
 
 ipcRenderer.on('settings-clicked', function(e){
-  showSettings(sysDirectories.docs);
+  showSettings(sysDirectories);
 });
 
 //**** utils ***/
@@ -1022,6 +1035,17 @@ function closePopups(){
   removeElementsByClass('popup');
   disableSearchView();
   editorQuill.focus();
+}
+
+function closePopupDialogs(){
+  removeElementsByClass('popup-dialog');
+  var popups = document.getElementsByClassName('popup');
+  if(popups.length > 0){
+    popups[0].focus();
+  }
+  else {
+    editorQuill.focus();
+  }
 }
 
 function removeElementsByClass(className){

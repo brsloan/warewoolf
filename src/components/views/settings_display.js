@@ -1,4 +1,4 @@
-function showSettings(docsDir){
+function showSettings(sysDirectories){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup");
@@ -21,9 +21,11 @@ function showSettings(docsDir){
 
   var backupDirPicker = createButton("Change...");
   backupDirPicker.onclick = function(){
-    var defaultDir = backupDirInput.value != "" ? backupDirInput.value : docsDir;
-    var chosenDir = promptToChooseDirectory(defaultDir);
-    backupDirInput.value = chosenDir;
+    var defaultDir = backupDirInput.value != "" ? backupDirInput.value : sysDirectories.docs;
+    promptToChooseDirectory(defaultDir, sysDirectories, function(dirpath){
+      backupDirInput.value = dirpath;
+    });
+
   }
   settingsForm.appendChild(backupDirPicker);
 
@@ -89,15 +91,16 @@ function showSettings(docsDir){
   document.body.appendChild(popup);
 }
 
-function promptToChooseDirectory(defPath){
-  //TODO: Known electron bug causes this to appear BEHIND screen after one successful use.
-  //Consider replacing with own filepicker entirely
+function promptToChooseDirectory(defPath, sysDirectories, cback){
   const options = {
     title: 'Choose Backups Directory...',
     defaultPath: defPath,
-    properties: ['openDirectory']
+    filters: [],
+    bookmarkedPaths: [sysDirectories.docs, sysDirectories.home],
+    dialogType: 'chooseDirectory'
   };
 
-  var filepath = dialog.showOpenDialogSync(options);
-  return filepath ? filepath : "";
+  showFileDialog(options, function(dirpath){
+    cback(dirpath ? dirpath : "");
+  })
 }

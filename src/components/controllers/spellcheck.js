@@ -13,7 +13,7 @@ function loadDictionaries(){
     var aff = fs.readFileSync(baseFilepath + '/dictionaries/en_US-large.aff', 'utf8');
     var dic = fs.readFileSync(baseFilepath + '/dictionaries/en_US-large.dic', 'utf8');
 
-    var personal = fs.readFileSync(convertFilepath(remote.app.getPath('userData')) + '/dictionaries/personal.dic', 'utf8');
+    var personal = fs.readFileSync(convertFilepath(sysDirectories.userData) + '/dictionaries/personal.dic', 'utf8');
 
     var spellchecker = nspell({ aff: aff, dic: dic });
     spellchecker.personal(personal);
@@ -27,12 +27,12 @@ function loadDictionaries(){
 
 function createPersonalDicIfNeeded(){
   try{
-    let personalDicDir = convertFilepath(remote.app.getPath('userData')) + '/dictionaries';
+    let personalDicDir = convertFilepath(sysDirectories.userData) + '/dictionaries';
     if(!fs.existsSync(personalDicDir)){
       fs.mkdirSync(personalDicDir);
     }
 
-    let personalPath = convertFilepath(remote.app.getPath('userData')) + '/dictionaries/personal.dic';
+    let personalPath = convertFilepath(sysDirectories.userData) + '/dictionaries/personal.dic';
     if(!fs.existsSync(personalPath)){
       fs.writeFileSync(personalPath, "WareWoolf\n", 'utf8');
     }
@@ -84,7 +84,7 @@ function findInvalidWord(spellchecker, startingIndex = 0, wordsToIgnore = []) {
 
 function getPersonalDict(){
   try{
-    return fs.readFileSync(convertFilepath(remote.app.getPath('userData')) + '/dictionaries/personal.dic', 'utf8').split("\n");
+    return fs.readFileSync(convertFilepath(sysDirectories.userData) + '/dictionaries/personal.dic', 'utf8').split("\n");
   }
   catch(err){
     logError(err);
@@ -96,7 +96,7 @@ function addWordToPersonalDictFile(word){
     var personal = getPersonalDict();
     if(personal.indexOf(word) == -1){
         personal.push(word);
-        fs.writeFileSync(convertFilepath(remote.app.getPath('userData')) + '/dictionaries/personal.dic', personal.join("\n"), 'utf8');
+        fs.writeFileSync(convertFilepath(sysDirectories.userData) + '/dictionaries/personal.dic', personal.join("\n"), 'utf8');
     }
   }
   catch(err){

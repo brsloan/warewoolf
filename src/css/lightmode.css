@@ -14,7 +14,7 @@ body {
   background: #aaa;
 }
 
-.popup {
+.popup, .popup-dialog {
   background-color: #2B2D42;
   color: white;
 }

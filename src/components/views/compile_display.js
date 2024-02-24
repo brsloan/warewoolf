@@ -1,4 +1,4 @@
-function showCompileOptions(docPath){
+function showCompileOptions(sysDirectories){
     removeElementsByClass('popup');
     var popup = document.createElement("div");
     popup.classList.add("popup");
@@ -64,8 +64,9 @@ function showCompileOptions(docPath){
         insertStrng: insertStrInput.value,
         insertHead: insertHeadCheck.checked
       }
-      getCompileFilepath(options, docPath);
-      popup.remove();
+      getCompileFilepath(options, sysDirectories, function(){
+        popup.remove();
+      });
     };
 
     popup.appendChild(compileForm);
@@ -74,15 +75,20 @@ function showCompileOptions(docPath){
 
   }
 
-  function getCompileFilepath(options, docPath){
+  function getCompileFilepath(options, sysDirectories, cback){
     const dialogOptions = {
       title: 'Save compilation as...',
-      defaultPath: docPath,
+      defaultPath: sysDirectories.docs,
       filters: [
         { name: 'Documents', extensions: [options.type.replaceAll('.','')] }
-      ]
+      ],
+      bookmarkedPaths: [sysDirectories.docs, sysDirectories.home],
+      dialogType: 'save'
     };
-    var filepath = dialog.showSaveDialogSync(dialogOptions);
-    if (filepath)
-      compileProject(options, filepath);
+    
+    showFileDialog(dialogOptions, function(filepath){
+      if (filepath)
+        compileProject(options, filepath);
+        cback();
+    })
   }

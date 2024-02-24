@@ -88,7 +88,7 @@ input, textarea, select, button {
   font-weight: bold;
 }
 
-.popup {
+.popup, .popup-dialog {
   display: block;
   position: fixed;
   top: 50%;

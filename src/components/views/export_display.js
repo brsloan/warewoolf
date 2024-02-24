@@ -1,4 +1,4 @@
-function showExportOptions(docPath){
+function showExportOptions(sysDirectories){
     removeElementsByClass('popup');
     var popup = document.createElement("div");
     popup.classList.add("popup");
@@ -51,8 +51,9 @@ function showExportOptions(docPath){
         type: typeSelect.value
         //insertHead: insertHeadCheck.checked
       }
-      getExportFilePath(options, docPath);
-      closePopups();
+      getExportFilePath(options, sysDirectories, function(){
+          closePopups();
+      });
     };
 
     popup.appendChild(exportForm);
@@ -60,13 +61,18 @@ function showExportOptions(docPath){
     exportBtn.focus();
   }
 
-  function getExportFilePath(options, docPath){
+  function getExportFilePath(options, sysDirectories, cback){
     const saveOptions = {
       title: 'Export files to... (Subdirectory will be created)',
-      defaultPath: docPath,
-      properties: ['openDirectory']
+      defaultPath: sysDirectories.docs,
+      bookmarkedPaths: [sysDirectories.docs, sysDirectories.home],
+      filters: [],
+      dialogType: 'chooseDirectory'
     };
-    var filepath = convertFilepath(dialog.showOpenDialogSync(saveOptions)[0]);
-    if(filepath)
-      exportProject(options, filepath);
+
+    showFileDialog(saveOptions, function(dirpath){
+      if(dirpath)
+        exportProject(options, dirpath);
+      cback();
+    });
   }

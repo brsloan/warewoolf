@@ -17,7 +17,7 @@ function showFileManager(sysDir){
     selectFieldsContainer.appendChild(dirShortcutSelect);
     dirShortcutSelect.addEventListener('keydown', function(e){
         if(e.key === "Enter"){
-            populateFileList(dirShortcutSelect.value, fileListSelect, currentDirDisplay);
+            populateFMFileList(dirShortcutSelect.value, fileListSelect, currentDirDisplay);
         }
         else if(e.key === "ArrowRight"){
             fileListSelect.focus();
@@ -46,7 +46,7 @@ function showFileManager(sysDir){
         console.log("entered: " + newDirNameInput.value);
 
         createNewDirectory(newDirNameInput.value, currentDirDisplay.innerText);
-        populateFileList(currentDirDisplay.innerText, fileListSelect, currentDirDisplay);
+        populateFMFileList(currentDirDisplay.innerText, fileListSelect, currentDirDisplay);
 
         newDirNameInput.value = "";
         newDirInputPanel.style.display = "none";
@@ -81,7 +81,7 @@ function showFileManager(sysDir){
           deleteFile(currentDirDisplay.innerText + "/" + item);
       });
 
-      populateFileList(currentDirDisplay.innerText, fileListSelect, currentDirDisplay);
+      populateFMFileList(currentDirDisplay.innerText, fileListSelect, currentDirDisplay);
       deleteVerifyPanel.style.display = "none";
       fileListSelect.focus();
     };
@@ -111,7 +111,7 @@ function showFileManager(sysDir){
 
         renameFiles(selectedFiles, renameInput.value, currentDirDisplay.innerText);
 
-        populateFileList(currentDirDisplay.innerText, fileListSelect, currentDirDisplay);
+        populateFMFileList(currentDirDisplay.innerText, fileListSelect, currentDirDisplay);
 
         renamePanel.style.display = "none";
         fileListSelect.focus();
@@ -173,7 +173,7 @@ function showFileManager(sysDir){
     unzipBtn.accessKey = "u";
     unzipBtn.onclick = function(){
       unzipProject(currentDirDisplay.innerText + '/' + fileListSelect.selectedOptions[0].value, function(){
-          populateFileList(currentDirDisplay.innerText, fileListSelect, currentDirDisplay);
+          populateFMFileList(currentDirDisplay.innerText, fileListSelect, currentDirDisplay);
       });
     };
     popup.appendChild(unzipBtn);
@@ -191,10 +191,10 @@ function showFileManager(sysDir){
         if(e.key === "Enter"){
             var selectedFiletype = fileListSelect.options[fileListSelect.selectedIndex].dataset.filetype;
             if (selectedFiletype == "dir"){
-                populateFileList(currentDirDisplay.innerText + "/" + fileListSelect.value, fileListSelect, currentDirDisplay);
+                populateFMFileList(currentDirDisplay.innerText + "/" + fileListSelect.value, fileListSelect, currentDirDisplay);
             }
             else if(fileListSelect.value == "uplevel"){
-                populateFileList(getParentDirectory(currentDirDisplay.innerText), fileListSelect, currentDirDisplay);
+                populateFMFileList(getParentDirectory(currentDirDisplay.innerText), fileListSelect, currentDirDisplay);
             }
         }
         else if(e.key === "ArrowLeft"){
@@ -247,25 +247,25 @@ function showFileManager(sysDir){
             moveFiles(filesToBeCut, currentDirDisplay.innerText);
             filesToBeCut = [];
 
-            populateFileList(currentDirDisplay.innerText, fileListSelect, currentDirDisplay);
+            populateFMFileList(currentDirDisplay.innerText, fileListSelect, currentDirDisplay);
           }
           else if(filesToBeCopied.length > 0){
             copyFiles(filesToBeCopied, currentDirDisplay.innerText);
             filesToBeCopied = [];
 
-            populateFileList(currentDirDisplay.innerText, fileListSelect, currentDirDisplay);
+            populateFMFileList(currentDirDisplay.innerText, fileListSelect, currentDirDisplay);
           }
         }
     });
 
-    populateShortcutsList(sysDir, dirShortcutSelect);
-    populateFileList(sysDir.docs, fileListSelect, currentDirDisplay);
+    populateFMShortcutsList(sysDir, dirShortcutSelect);
+    populateFMFileList(sysDir.docs, fileListSelect, currentDirDisplay);
 
     document.body.appendChild(popup);
     fileListSelect.focus();
 }
 
-function populateShortcutsList(sysDir, listElement){
+function populateFMShortcutsList(sysDir, listElement){
     var shortcuts = [];
     if (sysDir.docs != null && sysDir.docs != "")
         shortcuts.push(sysDir.docs);
@@ -288,7 +288,7 @@ function populateShortcutsList(sysDir, listElement){
     }
 }
 
-function populateFileList(directoryPath, listElement, currentDirDisplay){
+function populateFMFileList(directoryPath, listElement, currentDirDisplay){
     currentDirDisplay.innerText = directoryPath;
 
     listElement.innerHTML = "";

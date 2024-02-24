@@ -8,7 +8,7 @@ function testFileDialog(){
       { name: 'Compressed File', extensions: ['zip', 'gzip'] }
     ],
     bookmarkedPaths: [sysDirectories.docs, sysDirectories.home],
-    dialogType: 'save'
+    dialogType: 'open'
   };
 
   showFileDialog(optionsModel, function(selected){
@@ -18,9 +18,9 @@ function testFileDialog(){
 
 
 function showFileDialog(options, callback){
-    removeElementsByClass('popup');
+    //removeElementsByClass('popup');
     var popup = document.createElement("div");
-    popup.classList.add("popup");
+    popup.classList.add("popup-dialog");
 
     var dialogTitle = document.createElement('h3');
     dialogTitle.innerText = options.title;
@@ -52,15 +52,26 @@ function showFileDialog(options, callback){
     fileListSelect.classList.add("file-manager-list");
     selectFieldsContainer.appendChild(fileListSelect);
 
+    var filenameIn = document.createElement('input');
+
     if(options.dialogType == 'save'){
-      var filenameIn = document.createElement('input');
+      //Only append filenameInput if in save mode
       filenameIn.type = 'text';
+      filenameIn.value = "." + options.filters[0].extensions[0];
       popup.appendChild(filenameIn);
 
       fileListSelect.onchange = function(){
         if(fileListSelect.selectedOptions[0].dataset.filetype == 'file')
           filenameIn.value = fileListSelect.value;
       };
+
+      filenameIn.addEventListener('keydown', function(e){
+        if(e.key === 'Enter'){
+          stopDefaultPropagation(e);
+          closePopupDialogs();
+          callback(currentDirDisplay.innerText + '/' + filenameIn.value);
+        }
+      });
 
       popup.appendChild(document.createElement('br'));
     }
@@ -76,24 +87,34 @@ function showFileDialog(options, callback){
     if(options.dialogType == 'open'){
       var openBtn = createButton('Open');
       openBtn.onclick = function(){
-        closePopups();
+        closePopupDialogs();
         callback(collectionToArray(fileListSelect.selectedOptions, currentDirDisplay.innerText + '/'));
       }
       popup.appendChild(openBtn);
     }
-    else {
+    else if(options.dialogType == 'save'){
       var saveBtn = createButton('Save');
       saveBtn.onclick = function(){
-        callback(currentDirDisplay.innerText + '/' + filenameIn.value);
+        closePopupDialogs();
+        var checkedFilename = checkFilenameForExtension(filenameIn.value, options.filters[filterSelect.value]);
+        console.log('Inputted filename ' + filenameIn.value + ' converted to ' + checkedFilename);
+        callback(currentDirDisplay.innerText + '/' + checkedFilename);
       }
       popup.appendChild(saveBtn);
     }
-
-
+    else if(options.dialogType == 'chooseDirectory'){
+      console.log('in choose dir');
+      var chooseBtn = createButton('Choose Displayed Directory');
+      chooseBtn.onclick = function(){
+        closePopupDialogs();
+        callback(currentDirDisplay.innerText);
+      }
+      popup.appendChild(chooseBtn);
+    }
 
     var close = createButton("Close");
     close.onclick = function(){
-        closePopups();
+        closePopupDialogs();
     };
     popup.appendChild(close);
 
@@ -119,7 +140,36 @@ function showFileDialog(options, callback){
     populateFileList(options.defaultPath, fileListSelect, currentDirDisplay, options.filters[filterSelect.value]);
 
     document.body.appendChild(popup);
-    fileListSelect.focus();
+    if(options.dialogType !== 'save')
+      fileListSelect.focus();
+    else {
+      filenameIn.focus();
+      filenameIn.setSelectionRange(0,0);
+    }
+}
+
+function checkFilenameForExtension(filename, filter){
+  var checkedFilename = '';
+  console.log('checker running, input is: ' + filename);
+
+  if(filename.includes('.') == false){
+    console.log(filename + 'does not have a period, so add extension...');
+    checkedFilename = filename + '.' + filter.extensions[0];
+  }
+  else {
+    console.log(filename + 'DOES have a period, so split it...');
+    var fnameParts = filename.split('.');
+    console.log(fnameParts);
+    if(filter.extensions.includes(fnameParts[fnameParts.length - 1]) == false){
+      fnameParts.pop();
+      checkedFilename = fnameParts.join() + '.' + filter.extensions[0];
+    }
+    else {
+      checkedFilename = filename;
+    }
+  }
+
+  return checkedFilename;
 }
 
 function populateShortcutsList(shortcuts, listElement){
