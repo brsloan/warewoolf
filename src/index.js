@@ -1,9 +1,7 @@
 const { app, BrowserWindow, Menu, dialog } = require('electron');
 const path = require('path');
-const { ipcMain } = require('electron')
-const remoteMain = require('@electron/remote/main');
+const { ipcMain } = require('electron');
 const isLinux = process.platform === "linux";
-remoteMain.initialize();
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) { // eslint-disable-line global-require
@@ -26,8 +24,6 @@ const createWindow = () => {
     kiosk: true,
     icon: path.join(__dirname, 'assets/icon.png')
   });
-
-  remoteMain.enable(mainWindow.webContents);
 
   mainWindow.maximize();
 
