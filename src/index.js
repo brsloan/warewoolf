@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, dialog } = require('electron');
+const { app, BrowserWindow, Menu, nativeTheme } = require('electron');
 const path = require('path');
 const { ipcMain } = require('electron');
 const isLinux = process.platform === "linux";
@@ -354,5 +354,17 @@ ipcMain.on('get-directories', function(e){
     temp: app.getPath('temp').replaceAll('\\', '/'),
     docs: app.getPath('documents').replaceAll('\\', '/'),
     app: __dirname.replaceAll('\\', '/')
+  }
+});
+
+ipcMain.on('set-dark-mode', function(e, darkMode){
+  if(darkMode == 'system'){
+    nativeTheme.themeSource = 'system';
+  }
+  else if(darkMode == 'dark'){
+    nativeTheme.themeSource = 'dark';
+  }
+  else if(darkMode == 'light') {
+    nativeTheme.themeSource = 'light';
   }
 });

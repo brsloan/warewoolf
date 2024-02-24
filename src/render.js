@@ -36,6 +36,7 @@ function initialize(){
   setUpQuills();
   applyUserSettings();
   loadInitialProject();
+
 }
 
 //testFileDialog();
@@ -76,6 +77,7 @@ function applyUserSettings(){
   updateEditorWidth();
   updatePanelDisplays();
   initiateAutosave();
+  setDarkMode();
 }
 
 function updateFontSize(){
@@ -87,6 +89,10 @@ function updateEditorWidth(){
   document.documentElement.style.setProperty('--editor-width', userSettings.editorWidth + '%');
   document.documentElement.style.setProperty('--sidebar-width', ((100 - userSettings.editorWidth) / 2) + "%");
   document.documentElement.style.setProperty('--sidebar-width-double-view', (100 - userSettings.editorWidth) + "%");
+}
+
+function setDarkMode(){
+  ipcRenderer.send('set-dark-mode', userSettings.darkMode);
 }
 
 function setProject(filepath){
@@ -1027,7 +1033,9 @@ ipcRenderer.on('save-backup-clicked', function(e){
 });
 
 ipcRenderer.on('settings-clicked', function(e){
-  showSettings(sysDirectories);
+  showSettings(sysDirectories, function(){
+    setDarkMode();
+  });
 });
 
 //**** utils ***/

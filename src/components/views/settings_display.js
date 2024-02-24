@@ -1,4 +1,4 @@
-function showSettings(sysDirectories){
+function showSettings(sysDirectories, callback){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup");
@@ -64,6 +64,67 @@ function showSettings(sysDirectories){
   autosaveIntervalInput.value = userSettings.autosaveInterval;
   settingsForm.appendChild(autosaveIntervalInput);
 
+  settingsForm.appendChild(document.createElement('br'));
+
+  var darkModeLabel = document.createElement('label');
+  darkModeLabel.innerText = 'Dark Mode: ';
+  settingsForm.appendChild(darkModeLabel);
+
+
+  settingsForm.appendChild(document.createElement('br'));
+  /*var darkModeCheck = document.createElement('input');
+  darkModeCheck.type = 'checkbox';
+  darkModeCheck.checked = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  settingsForm.appendChild(darkModeCheck);*/
+
+  var darkModeSys = document.createElement('input');
+  darkModeSys.type = 'radio';
+  darkModeSys.name = 'dark-mode';
+  darkModeSys.value = 'system';
+  darkModeSys.id = 'dark-mode-sys';
+  if(userSettings.darkMode == 'system')
+    darkModeSys.checked = true;
+  settingsForm.appendChild(darkModeSys);
+
+  var darkModeSysLabel = document.createElement('label');
+  darkModeSysLabel.innerText = "System Default";
+  darkModeSysLabel.for = 'dark-mode-sys';
+  settingsForm.appendChild(darkModeSysLabel);
+
+  settingsForm.appendChild(document.createElement('br'));
+
+  var darkModeDark = document.createElement('input');
+  darkModeDark.type = 'radio';
+  darkModeDark.name = 'dark-mode';
+  darkModeDark.value = 'dark';
+  darkModeDark.id = 'dark-mode-dark';
+  if(userSettings.darkMode == 'dark')
+    darkModeDark.checked = true;
+  settingsForm.appendChild(darkModeDark);
+
+  var darkModeDarkLabel = document.createElement('label');
+  darkModeDarkLabel.innerText = "Dark";
+  darkModeDarkLabel.for = 'dark-mode-dark';
+  settingsForm.appendChild(darkModeDarkLabel);
+
+  settingsForm.appendChild(document.createElement('br'));
+
+  var darkModeLight = document.createElement('input');
+  darkModeLight.type = 'radio';
+  darkModeLight.name = 'dark-mode';
+  darkModeLight.value = 'light';
+  darkModeLight.id = 'dark-mode-light';
+  if(userSettings.darkMode == 'light')
+    darkModeLight.checked = true;
+  settingsForm.appendChild(darkModeLight);
+
+  var darkModeLightLabel = document.createElement('label');
+  darkModeLightLabel.innerText = "Light";
+  darkModeLightLabel.for = 'dark-mode-light';
+  settingsForm.appendChild(darkModeLightLabel);
+
+  settingsForm.appendChild(document.createElement('br'));
+
   popup.appendChild(settingsForm);
 
   var saveBackupDir = createButton("Save");
@@ -74,8 +135,10 @@ function showSettings(sysDirectories){
     userSettings.autoBackup = autoBackupCheck.checked;
     userSettings.backupsToKeep = backupLimitInput.value;
     userSettings.autosaveInterval = autosaveIntervalInput.value;
+    userSettings.darkMode = document.querySelector('input[type=radio][name=dark-mode]:checked').value;
     userSettings.save();
     updateAutosave();
+    callback();
     closePopups();
   }
   popup.appendChild(saveBackupDir);

@@ -19,6 +19,7 @@ function getUserSettings(userSettingsFilepath){
     autoBackup: true,
     backupsToKeep: 10,
     autosaveInterval: 0,
+    darkMode: 'system',
     save: save,
     load: load,
     getSettingsFilepath: getSettingsFilepath

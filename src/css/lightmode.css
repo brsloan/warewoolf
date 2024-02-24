@@ -1,50 +1,55 @@
-body {
-  background-color: #EDF2F4;
-}
+@media (prefers-color-scheme: light) {
 
-#writing-field {
-  background-color: #ffffff;
-}
+  body {
+    background-color: #EDF2F4;
+  }
 
-::-webkit-scrollbar {
-  background-color: none;
-}
+  #writing-field {
+    background-color: #ffffff;
+  }
 
-::-webkit-scrollbar-thumb {
-  background: #aaa;
-}
+  ::-webkit-scrollbar {
+    background-color: none;
+  }
 
-.popup, .popup-dialog {
-  background-color: #2B2D42;
-  color: white;
-}
+  ::-webkit-scrollbar-thumb {
+    background: #aaa;
+  }
 
-.popup-outliner {
-  background-color: #2B2D42;
-  color: black;
-}
+  .popup, .popup-dialog {
+    background-color: #2B2D42;
+    color: white;
+  }
 
-.popup-outliner th{
-  background-color: #EDF2F4;
-}
+  .popup-outliner {
+    background-color: #2B2D42;
+    color: black;
+  }
 
-.popup-outliner td{
-  background-color: #EDF2F4;
-}
+  .popup-outliner th{
+    background-color: #EDF2F4;
+  }
 
-.popup a{
-  color: white;
-}
+  .popup-outliner td{
+    background-color: #EDF2F4;
+  }
 
-button, input[type=submit] {
-  background-color: #EDF2F4;
-  color: black;
-}
+  .popup a{
+    color: white;
+  }
 
-:focus {
-  outline-color: #EF233C;
-}
+  button, input[type=submit] {
+    background-color: #EDF2F4;
+    color: black;
+  }
 
-#chapter-list-sidebar:focus {
-  outline: none;
+  :focus {
+    outline-color: #EF233C;
+  }
+
+  #chapter-list-sidebar:focus {
+    outline: none;
+  }
+
+  
 }
