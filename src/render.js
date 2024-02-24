@@ -931,8 +931,9 @@ ipcRenderer.on('spellcheck-clicked', function(e){
 
 ipcRenderer.on('convert-first-lines-clicked', function(e){
   if(editorHasFocus()){
-    convertFirstLinesToTitles();
-    displayChapterByIndex(project.activeChapterIndex);
+    showConvertFirstLines(function(){
+        displayChapterByIndex(project.activeChapterIndex);
+    });
   }
 });
 

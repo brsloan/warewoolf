@@ -30,13 +30,18 @@ function showTabOptions(){
 
     tabForm.onsubmit = function(e){
       e.preventDefault();
-      
+
       convertMarkedTabsForAllChapters(tabStrInput.value);
       displayChapterByIndex(project.activeChapterIndex);
       closePopups();
     };
 
     popup.appendChild(tabForm);
+
+    var undoWarning = document.createElement('p');
+    undoWarning.innerText = 'WARNING: This action cannot be undone. Be sure to save first.';
+    popup.appendChild(undoWarning);
+
     document.body.appendChild(popup);
     tabStrInput.focus();
 

@@ -36,6 +36,11 @@ function showItalicsOptions(){
     };
 
     popup.appendChild(italicsForm);
+
+    var undoWarning = document.createElement('p');
+    undoWarning.innerText = 'WARNING: This action cannot be undone. Be sure to save first.';
+    popup.appendChild(undoWarning);
+
     document.body.appendChild(popup);
     italicsStrInput.focus();
 

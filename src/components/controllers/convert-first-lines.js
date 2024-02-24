@@ -1,5 +1,6 @@
 
 function convertFirstLinesToTitles(){
+  console.log('converting');
   var tempQuill = getTempQuill();
 
   project.chapters.forEach(function(chap){

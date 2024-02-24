@@ -83,6 +83,10 @@ function showRenumberChapters(){
 
   popup.appendChild(renumberForm);
 
+  var undoWarning = document.createElement('p');
+  undoWarning.innerText = 'WARNING: This action cannot be undone. Be sure to save first.';
+  popup.appendChild(undoWarning);
+
   document.body.appendChild(popup);
   close.focus();
 
