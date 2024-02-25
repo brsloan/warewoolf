@@ -807,6 +807,7 @@ document.addEventListener ("keydown", function (e) {
     }
     else if(e.key === "Escape"){
       removeElementsByClass('popup');
+      removeElementsByClass('popup-dialog');
       disableSearchView();
       updatePanelDisplays();
     }
