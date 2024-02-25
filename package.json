@@ -56,7 +56,7 @@
   },
   "dependencies": {
     "archiver": "^6.0.1",
-    "docx": "^7.3.0",
+    "docx": "^7.8.2",
     "electron-squirrel-startup": "^1.0.0",
     "nodemailer": "^6.7.5",
     "nspell": "^2.1.5",
