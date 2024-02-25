@@ -70,12 +70,7 @@ function showSettings(sysDirectories, callback){
   darkModeLabel.innerText = 'Dark Mode: ';
   settingsForm.appendChild(darkModeLabel);
 
-
   settingsForm.appendChild(document.createElement('br'));
-  /*var darkModeCheck = document.createElement('input');
-  darkModeCheck.type = 'checkbox';
-  darkModeCheck.checked = window.matchMedia('(prefers-color-scheme: dark)').matches;
-  settingsForm.appendChild(darkModeCheck);*/
 
   var darkModeSys = document.createElement('input');
   darkModeSys.type = 'radio';
@@ -149,9 +144,9 @@ function showSettings(sysDirectories, callback){
   };
   popup.appendChild(closeBtn);
 
-  closeBtn.focus();
-
   document.body.appendChild(popup);
+
+  backupDirInput.focus();
 }
 
 function promptToChooseDirectory(defPath, sysDirectories, cback){

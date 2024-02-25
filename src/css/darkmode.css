@@ -31,4 +31,12 @@
     color: white;
   }
 
+  :focus {
+    outline-color: #EF233C;
+  }
+
+  #chapter-list-sidebar:focus {
+    outline: none;
+  }
+
 }
