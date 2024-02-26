@@ -1,10 +1,21 @@
-function importDocx(){
-  var inText = fs.readFileSync(sysDirectories.docs + '/document.xml', 'utf8');
-  var docDom = parseDocx(inText);
+function importDocx(filepath, cback){
+  tempUnzipDocx(filepath, function(xmlPath){
+    var inText = fs.readFileSync(xmlPath, 'utf8');
+    var docDom = parseDocx(inText);
 
-  var delta = docxToDelta(docDom);
+    var delta = docxToDelta(docDom);
 
-  editorQuill.setContents(delta);
+    cback(delta);
+  })
+}
+
+function tempUnzipDocx(filepath, callback){
+  var unzipDestination = sysDirectories.temp + '/docxguts';
+  fs.createReadStream(filepath)
+  .pipe(unzipper.Extract({ path: unzipDestination }))
+  .on('close', function(){
+    callback(unzipDestination + '/word/document.xml');
+  });
 }
 
 function docxToDelta(docDom){
@@ -45,16 +56,25 @@ function docxToDelta(docDom){
 
 function getParaStyles(para){
   var styles = {};
-  var paraStyleTags = para.getElementsByTagName('w:pPr')[0];
-  var styleName = paraStyleTags.getElementsByTagName('w:pStyle')[0].getAttribute('w:val');
-  var alignment = paraStyleTags.getElementsByTagName('w:jc')[0].getAttribute('w:val');
+  var paraStyleTags = para.getElementsByTagName('w:pPr');
 
-  styles.align = alignment;
+  if(paraStyleTags.length > 0){
 
-  if(styleName.includes('Heading')){
-    var headerVal = parseInt(styleName.replace('Heading',''));
-    if(!isNaN(headerVal))
-      styles.header = headerVal;
+    var paraStyleTag = paraStyleTags[0];
+    var styleNameTags = paraStyleTag.getElementsByTagName('w:pStyle');
+    var alignmentTags = paraStyleTag.getElementsByTagName('w:jc');
+
+    var styleName = styleNameTags.length > 0 ? styleNameTags[0].getAttribute('w:val') : null;
+    var alignment = alignmentTags.length > 0 ? alignmentTags[0].getAttribute('w:val') : 'left';
+
+    styles.align = alignment;
+
+    if(styleName && styleName.includes('Heading')){
+      var headerVal = parseInt(styleName.replace('Heading',''));
+      if(!isNaN(headerVal))
+        styles.header = headerVal;
+    }
+
   }
 
   return styles;
