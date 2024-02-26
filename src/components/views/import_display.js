@@ -5,6 +5,7 @@ function showImportOptions(sysDirectories){
   var importForm = document.createElement("form");
 
   var filetypes = [
+    { name: 'Docx', id: 'docxSelect', extensions: ['docx']},
     { name: 'Plain Text', id: 'txtSelect', extensions: ['txt'] },
     { name: 'MarkdownFic', id: 'mdfcSelect', extensions: ['mdfc', 'txt', "md"] }
   ];
@@ -163,8 +164,11 @@ function showImportOptions(sysDirectories){
   popup.appendChild(importForm);
   document.body.appendChild(popup);
 
+  var docxSelect = document.getElementById('docxSelect');
+  docxSelect.checked = true;
+  plainTextOptionsSet.disabled = true;
+
   var textSelect = document.getElementById('txtSelect');
-  textSelect.checked = true;
   importForm.onchange = function(){
     plainTextOptionsSet.disabled = !textSelect.checked;
   };

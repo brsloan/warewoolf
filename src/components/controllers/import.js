@@ -12,28 +12,46 @@ function initiateImport(sysDirectories, options, cback){
 
   showFileDialog(dialogOptions, function(filepaths){
     try{
-      importFiles(filepaths, options);
+      importFilesAsync(filepaths, options, cback);
     }
     catch(err){
       logError(err);
     }
-    cback();
   });
 }
 
-function importFiles(filepaths, options){
-  filepaths.forEach(function(path){
-    var importedDeltas;
+function importFilesAsync(filepaths, options, cback, importedDeltas = []){
+  var path = filepaths.shift();
 
-    if(options.fileType.id == 'txtSelect')
-      importedDeltas = importPlainText(path, options.txtOptions);
-    else if(options.fileType.id == 'mdfcSelect')
-      importedDeltas = importMDF(path);
+  if(options.fileType.id == 'docxSelect'){
+    importDocx(path, function(delt){
+        recurse([{
+          filename: generateChapTitleFromFirstLine(delt),
+          delta: delt
+        }]);
+    })
+  }
+  else if(options.fileType.id == 'txtSelect'){
+    recurse(importPlainText(path, options.txtOptions));
+  }
+  else if(options.fileType.id == 'mdfcSelect')
+    recurse(importMDF(path));
 
-    importedDeltas.forEach((delt, i) => {
-      addImportedChapter(delt.delta, delt.filename);
+  function recurse(packagedDelts){
+    packagedDelts.forEach((packagedDelt, i) => {
+        importedDeltas.push(packagedDelt);
     });
-  });
+
+    if(filepaths.length > 0){
+      importFilesAsync(filepaths, options, cback, importedDeltas);
+    }
+    else {
+      importedDeltas.forEach((delt, i) => {
+        addImportedChapter(delt.delta, delt.filename);
+      });
+      cback();
+    }
+  }
 }
 
 function importPlainText(filepath, options){
