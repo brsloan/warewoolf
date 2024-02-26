@@ -60,6 +60,7 @@ WIP: Features added since last release:
 * Footnote support
 * Built-in File Manager now can unzip zip files
 * Dark Mode support/options
+* Import .docx files
 
 2023-06-11: Releasing v0.10.0-beta. Improvements: built-in file manager, Properties tool now allows altering project's chapters directory location. About now shows license. Minor fixes.
 
