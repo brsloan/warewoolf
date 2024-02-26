@@ -24,11 +24,14 @@ function importFilesAsync(filepaths, options, cback, importedDeltas = []){
   var path = filepaths.shift();
 
   if(options.fileType.id == 'docxSelect'){
-    importDocx(path, function(delt){
-        recurse([{
-          filename: generateChapTitleFromFirstLine(delt),
-          delta: delt
-        }]);
+    importDocx(path, function(delts){
+        recurse(delts.map(function(delt, i, arr){
+          console.log(delt);
+          return {
+            filename: generateChapTitleFromFirstLine(delt),
+            delta: delt
+          };
+        }));
     })
   }
   else if(options.fileType.id == 'txtSelect'){

@@ -18,14 +18,22 @@ function tempUnzipDocx(filepath, callback){
   });
 }
 
-function docxToDelta(docDom){
+function docxToDelta(docDom, split = false){
   var paras = docDom.getElementsByTagName('w:p');
+  var deltas = [];
   var delta = {
     ops: []
   };
 
   for(i=0;i<paras.length;i++){
     var runs = paras[i].getElementsByTagName('w:r');
+    var paraStyles = getParaStyles(paras[i]);
+    if(paraStyles.header == 1 && split){
+      if(delta.ops.length > 0)
+        deltas.push(JSON.parse(JSON.stringify(delta)));
+      delta.ops = [];
+    }
+
     for(r=0;r<runs.length;r++){
       var plaintext = '';
 
@@ -45,13 +53,15 @@ function docxToDelta(docDom){
         attributes: attributes
       });
     }
+
     delta.ops.push({
       insert: '\n',
-      attributes: getParaStyles(paras[i])
+      attributes: paraStyles
     });
   }
+  deltas.push(delta);
 
-  return delta;
+  return deltas;
 }
 
 function getParaStyles(para){
