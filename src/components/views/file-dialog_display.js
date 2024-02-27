@@ -18,7 +18,6 @@ function testFileDialog(){
 
 
 function showFileDialog(options, callback){
-    //removeElementsByClass('popup');
     var popup = document.createElement("div");
     popup.classList.add("popup-dialog");
 
@@ -87,18 +86,14 @@ function showFileDialog(options, callback){
     if(options.dialogType == 'open'){
       var openBtn = createButton('Open');
       openBtn.onclick = function(){
-        closePopupDialogs();
-        callback(collectionToArray(fileListSelect.selectedOptions, currentDirDisplay.innerText + '/'));
+        openSelectedFile();
       }
       popup.appendChild(openBtn);
     }
     else if(options.dialogType == 'save'){
       var saveBtn = createButton('Save');
       saveBtn.onclick = function(){
-        closePopupDialogs();
-        var checkedFilename = checkFilenameForExtension(filenameIn.value, options.filters[filterSelect.value]);
-        console.log('Inputted filename ' + filenameIn.value + ' converted to ' + checkedFilename);
-        callback(currentDirDisplay.innerText + '/' + checkedFilename);
+        saveSelectedFile();
       }
       popup.appendChild(saveBtn);
     }
@@ -106,8 +101,7 @@ function showFileDialog(options, callback){
       console.log('in choose dir');
       var chooseBtn = createButton('Choose Displayed Directory');
       chooseBtn.onclick = function(){
-        closePopupDialogs();
-        callback(currentDirDisplay.innerText);
+        openSelectedDir();
       }
       popup.appendChild(chooseBtn);
     }
@@ -130,6 +124,14 @@ function showFileDialog(options, callback){
             else if(fileListSelect.value == "uplevel"){
                 populateFileList(getParentDirectory(currentDirDisplay.innerText), fileListSelect, currentDirDisplay, options.filters[filterSelect.value]);
             }
+            else if(selectedFiletype = 'file'){
+              if(options.dialogType == 'open')
+                openSelectedFile();
+              else if(options.dialogType == 'save')
+                saveSelectedFile();
+              else if(options.dialogType == 'chooseDirectory')
+                openSelectedDir();
+            }
         }
         else if(e.key === "ArrowLeft"){
             dirShortcutSelect.focus();
@@ -145,6 +147,23 @@ function showFileDialog(options, callback){
     else {
       filenameIn.focus();
       filenameIn.setSelectionRange(0,0);
+    }
+
+    function saveSelectedFile(){
+      closePopupDialogs();
+      var checkedFilename = checkFilenameForExtension(filenameIn.value, options.filters[filterSelect.value]);
+      console.log('Inputted filename ' + filenameIn.value + ' converted to ' + checkedFilename);
+      callback(currentDirDisplay.innerText + '/' + checkedFilename);
+    }
+
+    function openSelectedFile(){
+      closePopupDialogs();
+      callback(collectionToArray(fileListSelect.selectedOptions, currentDirDisplay.innerText + '/'));
+    }
+
+    function openSelectedDir(){
+      closePopupDialogs();
+      callback(currentDirDisplay.innerText);
     }
 }
 
