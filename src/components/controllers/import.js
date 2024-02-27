@@ -24,7 +24,7 @@ function importFilesAsync(filepaths, options, cback, importedDeltas = []){
   var path = filepaths.shift();
 
   if(options.fileType.id == 'docxSelect'){
-    importDocx(path, function(delts){
+    importDocx(path, options.docxOptions.splitChapters, function(delts){
         recurse(delts.map(function(delt, i, arr){
           console.log(delt);
           return {

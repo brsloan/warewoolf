@@ -1,11 +1,11 @@
-function importDocx(filepath, cback){
+function importDocx(filepath, split, cback){
   tempUnzipDocx(filepath, function(xmlPath){
     var inText = fs.readFileSync(xmlPath, 'utf8');
     var docDom = parseDocx(inText);
 
-    var delta = docxToDelta(docDom);
+    var deltas = docxToDelta(docDom, split);
 
-    cback(delta);
+    cback(deltas);
   })
 }
 

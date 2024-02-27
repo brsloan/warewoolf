@@ -118,6 +118,27 @@ function showImportOptions(sysDirectories){
   plainTextOptionsSet.appendChild(opsTable);
   importForm.appendChild(plainTextOptionsSet);
 
+  var docxOptionsSet = document.createElement('fieldset');
+
+  var docxOptionsLabel = document.createElement('legend');
+  docxOptionsLabel.innerText = 'Docx Options';
+  docxOptionsSet.appendChild(docxOptionsLabel);
+
+  var docxOpsTable = document.createElement('table');
+
+  var docxSplitChapsLabel = document.createElement("label");
+  docxSplitChapsLabel.innerText = "Split Into Chapters At Headings (Lvl 1): ";
+  docxSplitChapsLabel.for = "docx-split-chaps-check";
+
+  var docxSplitChapsCheck = document.createElement("input");
+  docxSplitChapsCheck.type = "checkbox";
+  docxSplitChapsCheck.id = "docx-split-chaps-check";
+  docxSplitChapsCheck.checked = true;
+
+  docxOpsTable.appendChild(generateRow(docxSplitChapsLabel, docxSplitChapsCheck));
+  docxOptionsSet.appendChild(docxOpsTable);
+  importForm.appendChild(docxOptionsSet);
+
   importForm.appendChild(document.createElement('br'));
 
   var importBtn = document.createElement("input");
@@ -153,6 +174,10 @@ function showImportOptions(sysDirectories){
       }
     };
 
+    importOptions.docxOptions = {
+      splitChapters: docxSplitChapsCheck.checked
+    };
+
     initiateImport(sysDirectories, importOptions, function(){
       closePopups();
       displayChapterByIndex(project.activeChapterIndex);
@@ -171,6 +196,7 @@ function showImportOptions(sysDirectories){
   var textSelect = document.getElementById('txtSelect');
   importForm.onchange = function(){
     plainTextOptionsSet.disabled = !textSelect.checked;
+    docxOptionsSet.disabled = !docxSelect.checked;
   };
 
   importBtn.focus();
