@@ -1,12 +1,26 @@
 function importDocx(filepath, split, cback){
-  tempUnzipDocx(filepath, function(xmlPath){
-    var inText = fs.readFileSync(xmlPath, 'utf8');
-    var docDom = parseDocx(inText);
+  tempUnzipDocx(filepath, function(xmlDir){
 
-    var deltas = docxToDelta(docDom, split);
+    var docInText = fs.readFileSync(xmlDir + '/document.xml', 'utf8');
+    var docDom = parseDocx(docInText);
+
+    var fnDom = getFootnotes(xmlDir);
+
+    var deltas = docxToDelta(docDom, fnDom, split);
 
     cback(deltas);
   })
+}
+
+function getFootnotes(dir){
+  var fnDom = null;
+
+  if(fs.existsSync(dir + '/footnotes.xml')){
+    var fnInText = fs.readFileSync(dir + '/footnotes.xml', 'utf8');
+    var fnDom = parseDocx(fnInText);
+  }
+
+  return fnDom;
 }
 
 function tempUnzipDocx(filepath, callback){
@@ -14,18 +28,18 @@ function tempUnzipDocx(filepath, callback){
   fs.createReadStream(filepath)
   .pipe(unzipper.Extract({ path: unzipDestination }))
   .on('close', function(){
-    callback(unzipDestination + '/word/document.xml');
+    callback(unzipDestination + '/word');
   });
 }
 
-function docxToDelta(docDom, split = false){
+function docxToDelta(docDom, fnDom, split = false){
   var paras = docDom.getElementsByTagName('w:p');
   var deltas = [];
   var delta = {
     ops: []
   };
 
-  for(i=0;i<paras.length;i++){
+  for(let i=0;i<paras.length;i++){
     var runs = paras[i].getElementsByTagName('w:r');
     var paraStyles = getParaStyles(paras[i]);
     if(paraStyles.header == 1 && split){
@@ -34,17 +48,23 @@ function docxToDelta(docDom, split = false){
       delta.ops = [];
     }
 
-    for(r=0;r<runs.length;r++){
+    for(let r=0;r<runs.length;r++){
       var plaintext = '';
 
       var tabs = runs[r].getElementsByTagName('w:tab');
-      for(t=0;t<tabs.length;t++){
+      for(let t=0;t<tabs.length;t++){
         plaintext = plaintext.concat('\t')
       }
 
       var textNodes = runs[r].getElementsByTagName('w:t');
-      for(z=0;z<textNodes.length;z++){
+      for(let z=0;z<textNodes.length;z++){
           plaintext = plaintext.concat(textNodes[z].childNodes[0].nodeValue);
+      }
+
+      var footnoteRefs = runs[r].getElementsByTagName('w:footnoteReference');
+      for(let f=0;f<footnoteRefs.length;f++){
+        var refNum = footnoteRefs[f].getAttribute('w:id');
+        plaintext = plaintext.concat('[^' + refNum + ']');
       }
 
       var attributes = getRunStyles(runs[r]);
@@ -58,10 +78,76 @@ function docxToDelta(docDom, split = false){
       insert: '\n',
       attributes: paraStyles
     });
+
+
+    var fnRefsInPara = paras[i].getElementsByTagName('w:footnoteReference');
+    if(fnRefsInPara.length > 0){
+
+      var fnoteBods = fnDom.getElementsByTagName('w:footnote');
+
+      for(let f=0;f<fnRefsInPara.length;f++){
+        var refNum = fnRefsInPara[f].getAttribute('w:id');
+        var fnoteBod = getMatchingFNBody(refNum, fnoteBods);
+
+        delta.ops.push({
+          insert: '[^' + refNum + ']: '
+        })
+
+        delta.ops = delta.ops.concat(getFootnoteOps(fnoteBod));
+      }
+    }
+
+
   }
   deltas.push(delta);
 
   return deltas;
+}
+
+function getFootnoteOps(fnoteBod){
+  var ops = [];
+  var paras = fnoteBod.getElementsByTagName('w:p');
+
+  for(let i=0;i<paras.length;i++){
+    var runs = paras[i].getElementsByTagName('w:r');
+    var paraStyles = getParaStyles(paras[i]);
+
+    for(let r=0;r<runs.length;r++){
+      var plaintext = '';
+
+      var tabs = runs[r].getElementsByTagName('w:tab');
+      if(i != 0)
+        for(let t=0;t<tabs.length;t++){
+          plaintext = plaintext.concat('\t')
+        }
+
+      var textNodes = runs[r].getElementsByTagName('w:t');
+      for(let z=0;z<textNodes.length;z++){
+          plaintext = plaintext.concat(textNodes[z].childNodes[0].nodeValue);
+      }
+
+      var attributes = getRunStyles(runs[r]);
+      ops.push({
+        insert: plaintext,
+        attributes: attributes
+      });
+    }
+
+    ops.push({
+      insert: '\n',
+      attributes: paraStyles
+    });
+  }
+  return ops;
+}
+
+function getMatchingFNBody(refNum, fnoteBods){
+  var match = null;
+  for(let i=0; i < fnoteBods.length; i++){
+    if(fnoteBods[i].getAttribute('w:id') == refNum)
+      match = fnoteBods[i];
+  }
+  return match;
 }
 
 function getParaStyles(para){
