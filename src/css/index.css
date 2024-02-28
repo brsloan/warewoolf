@@ -88,7 +88,7 @@ input, textarea, select, button {
   font-weight: bold;
 }
 
-.popup, .popup-dialog {
+.popup, .popup-dialog, .working-popup {
   display: block;
   position: fixed;
   top: 50%;
@@ -293,4 +293,21 @@ button, input[type=submit] {
 .to-be-cut {
   font-style: italic;
   opacity: 0.5;
+}
+
+.working-img {
+  animation: rotation 4s infinite linear;
+}
+
+.working-popup h1{
+  color: #d39d01;
+}
+
+@keyframes rotation {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(359deg);
+  }
 }
