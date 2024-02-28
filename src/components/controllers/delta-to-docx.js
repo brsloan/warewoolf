@@ -19,7 +19,7 @@ function packageDocxBase64(doc, callback){
 function convertDeltaToDocx(delt){
   var parsedQuill = quillParser.parseQuillDelta(delt);
 
-  var fnoteParRegx = /^\[\^.+]:/gm;
+  var fnoteParRegx = /^\[\^\d+]:/;
 
   var footnoteBodies = [];
   var nonfootnoteParas = [];
@@ -29,8 +29,8 @@ function convertDeltaToDocx(delt){
     if(para.textRuns && para.textRuns.length > 0 && para.textRuns[0].text)
     {
       var thisMarker = fnoteParRegx.exec(para.textRuns[0].text);
+
       if(thisMarker){
-        console.log('we have a footnote! marker: ' + thisMarker);
         var xRuns = [];
         para.textRuns[0].text = para.textRuns[0].text.replace(thisMarker, '');
 
@@ -43,10 +43,19 @@ function convertDeltaToDocx(delt){
         var xParaAttributes = convertParaAttributes(para.attributes);
         xParaAttributes.children = xRuns;
 
-        footnoteBodies.push({
-          marker: thisMarker[0].slice(0,-1),
-          paras: [ new docx.Paragraph(xParaAttributes) ]
+        var matchingBody = footnoteBodies.findIndex(function(fb,i,arr){
+          return fb.marker == thisMarker[0].slice(0,-1);
         });
+
+        if(matchingBody > -1){
+            footnoteBodies[matchingBody].paras.push(new docx.Paragraph(xParaAttributes));
+        }
+        else {
+          footnoteBodies.push({
+            marker: thisMarker[0].slice(0,-1),
+            paras: [ new docx.Paragraph(xParaAttributes) ]
+          });
+        }
       }
       else {
         nonfootnoteParas.push(para);
@@ -58,32 +67,43 @@ function convertDeltaToDocx(delt){
   });
 
   var xParagraphs = [];
-  var fnoteMarkerRegx = /\[\^.+]/gm;
+  var fnoteMarkerRegx = /\[\^\d+]/gm;
 
   nonfootnoteParas.forEach(function(para){
     var xRuns = [];
     para.textRuns.forEach(function(run){
-      var fnoteMarker = fnoteMarkerRegx.exec(run.text);
+      var fnoteMarker = run.text.match(fnoteMarkerRegx);
 
       //If run has a footnote marker, split into 2 runs with marker between.
       if(fnoteMarker){
-        var cutPoint = run.text.indexOf(fnoteMarker[0]);
-        var text1 = run.text.slice(0, cutPoint);
-        var text2 = run.text.slice(cutPoint + fnoteMarker[0].length)
-        var xRun1Attr = convertRunAtttributes(run.attributes);
-        xRun1Attr.text = text1;
-        var xRun2Attr = convertRunAtttributes(run.attributes);
-        xRun2Attr.text = text2;
+        var textToSplit = run.text;
 
-        var fnoteBodyNum = footnoteBodies.findIndex(function(fn, i, arr){
-          return fn.marker == fnoteMarker[0];
-        }) + 1;
+        for(let m=0; m < fnoteMarker.length; m++){
+          var cutPoint = textToSplit.indexOf(fnoteMarker[m]);
+          var text1 = textToSplit.slice(0, cutPoint);
+          var text2 = textToSplit.slice(cutPoint + fnoteMarker[m].length)
+          var xRun1Attr = convertRunAtttributes(run.attributes);
+          xRun1Attr.text = text1;
 
-        var fnMarkerRun = new docx.FootnoteReferenceRun(fnoteBodyNum);
+          var fnoteBodyNum = footnoteBodies.findIndex(function(fn, i, arr){
+            return fn.marker == fnoteMarker[m];
+          }) + 1;
 
-        xRuns.push(new docx.TextRun(xRun1Attr));
-        xRuns.push(fnMarkerRun);
-        xRuns.push(new docx.TextRun(xRun2Attr));
+          var fnMarkerRun = new docx.FootnoteReferenceRun(fnoteBodyNum);
+
+
+          xRuns.push(new docx.TextRun(xRun1Attr));
+          xRuns.push(fnMarkerRun);
+
+          textToSplit = text2;
+
+          if(m == fnoteMarker.length - 1){
+            var xRun2Attr = convertRunAtttributes(run.attributes);
+            xRun2Attr.text = text2;
+            xRuns.push(new docx.TextRun(xRun2Attr));
+          }
+
+        }
       }
       else {
         var xRunAttributes = convertRunAtttributes(run.attributes);
@@ -105,6 +125,8 @@ function convertDeltaToDocx(delt){
       children: footnoteBodies[i].paras
     }
   }
+
+  console.log(footnotes);
 
   const doc = new docx.Document({
     creator: project.author,

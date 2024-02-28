@@ -89,11 +89,11 @@ function docxToDelta(docDom, fnDom, split = false){
         var refNum = fnRefsInPara[f].getAttribute('w:id');
         var fnoteBod = getMatchingFNBody(refNum, fnoteBods);
 
-        delta.ops.push({
+        /*delta.ops.push({
           insert: '[^' + refNum + ']: '
-        })
+        })*/
 
-        delta.ops = delta.ops.concat(getFootnoteOps(fnoteBod));
+        delta.ops = delta.ops.concat(getFootnoteOps(fnoteBod, refNum));
       }
     }
 
@@ -104,11 +104,15 @@ function docxToDelta(docDom, fnDom, split = false){
   return deltas;
 }
 
-function getFootnoteOps(fnoteBod){
+function getFootnoteOps(fnoteBod, refNum){
   var ops = [];
   var paras = fnoteBod.getElementsByTagName('w:p');
 
   for(let i=0;i<paras.length;i++){
+    ops.push({
+      insert: '[^' + refNum + ']: '
+    });
+
     var runs = paras[i].getElementsByTagName('w:r');
     var paraStyles = getParaStyles(paras[i]);
 
@@ -116,13 +120,16 @@ function getFootnoteOps(fnoteBod){
       var plaintext = '';
 
       var tabs = runs[r].getElementsByTagName('w:tab');
-      if(i != 0)
-        for(let t=0;t<tabs.length;t++){
+
+      for(let t=0;t<tabs.length;t++){
+        if(i != 0 || t > 0)
           plaintext = plaintext.concat('\t')
-        }
+      }
 
       var textNodes = runs[r].getElementsByTagName('w:t');
       for(let z=0;z<textNodes.length;z++){
+          if(z % 2 != 0)
+            plaintext = plaintext.concat('\n[^' + refNum + ']: ');
           plaintext = plaintext.concat(textNodes[z].childNodes[0].nodeValue);
       }
 
