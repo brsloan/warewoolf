@@ -42,7 +42,30 @@ function docxToDelta(docDom, fnDom, split = false){
   for(let i=0;i<paras.length;i++){
     var runs = paras[i].getElementsByTagName('w:r');
     var paraStyles = getParaStyles(paras[i]);
+
+    //Split into multiple deltas at headings if requested
     if(paraStyles.header == 1 && split){
+      if(delta.ops.length > 0)
+        deltas.push(JSON.parse(JSON.stringify(delta)));
+      delta.ops = [];
+    }
+
+    //Split at manual page breaks
+    let manualPageBreak = false;
+    var breaks = paras[i].getElementsByTagName('w:br');
+    if(breaks.length > 0 ){
+      for(let b=0; b < breaks.length; b++){
+        if(breaks[b].getAttribute('w:type') == 'page' && delta.ops.length > 0){
+          manualPageBreak = true;
+          deltas.push(JSON.parse(JSON.stringify(delta)));
+          delta.ops = [];
+        }
+      }
+    }
+
+    //Split at elements set to break page before
+    var breakBefores = paras[i].getElementsByTagName('w:pageBreakBefore');
+    if(breakBefores.length > 0){
       if(delta.ops.length > 0)
         deltas.push(JSON.parse(JSON.stringify(delta)));
       delta.ops = [];
@@ -68,16 +91,20 @@ function docxToDelta(docDom, fnDom, split = false){
       }
 
       var attributes = getRunStyles(runs[r]);
-      delta.ops.push({
-        insert: plaintext,
-        attributes: attributes
-      });
+
+      if(plaintext != '')
+        delta.ops.push({
+          insert: plaintext,
+          attributes: attributes
+        });
     }
 
-    delta.ops.push({
-      insert: '\n',
-      attributes: paraStyles
-    });
+    //Every paragraph should end in a newline. Manual breaks are not real paragraphs so do not need one. (Runs plaintext will be blank above.)
+    if(!manualPageBreak)
+      delta.ops.push({
+        insert: '\n',
+        attributes: paraStyles
+      });
 
 
     var fnRefsInPara = paras[i].getElementsByTagName('w:footnoteReference');
