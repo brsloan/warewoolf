@@ -89,10 +89,6 @@ function docxToDelta(docDom, fnDom, split = false){
         var refNum = fnRefsInPara[f].getAttribute('w:id');
         var fnoteBod = getMatchingFNBody(refNum, fnoteBods);
 
-        /*delta.ops.push({
-          insert: '[^' + refNum + ']: '
-        })*/
-
         delta.ops = delta.ops.concat(getFootnoteOps(fnoteBod, refNum));
       }
     }
