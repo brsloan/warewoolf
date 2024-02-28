@@ -136,7 +136,7 @@ function updateFileList(){
   function generateChapterList() {
     project.chapters.forEach(function (chap, chapIndex) {
       var listChap = document.createElement("li");
-      listChap.innerHTML = chap.title;
+      listChap.innerText = chap.title != '' ? chap.title : '(untitled)';
       listChap.dataset.chapIndex = chapIndex;
       listChap.onclick = function () {
         displayChapterByIndex(this.dataset.chapIndex);
