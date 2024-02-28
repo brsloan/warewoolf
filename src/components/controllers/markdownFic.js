@@ -258,6 +258,7 @@ function markdownFic(){
       mdf += getLineMarker(para.attributes);
 
       para.textRuns.forEach((run, i) => {
+        run.text = escapeAnyMarkers(run.text);
         mdf += getMarkedTextFromRun(run);
       });
 
@@ -313,5 +314,11 @@ function markdownFic(){
 
     return marker;
   };
+
+  function escapeAnyMarkers(text){
+    var escapedMarkersRegx = /(\*\*|\*|~~|__|#|\[>|>|\[\^)/g;
+
+    return text.replace(escapedMarkersRegx, '\\$1');
+  }
 
 }
