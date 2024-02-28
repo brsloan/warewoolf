@@ -2,7 +2,6 @@ const { ipcRenderer } = require('electron');
 const fs = require('fs');
 const Quill = require('quill');
 const docx = require('docx');
-const quillParser = require('quilljs-parser');
 const nodemailer = require('nodemailer');
 const sysDirectories = ipcRenderer.sendSync('get-directories');
 

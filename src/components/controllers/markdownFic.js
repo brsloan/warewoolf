@@ -252,7 +252,7 @@ function markdownFic(){
   function convertDeltaToMDF(delt){
     var mdf = '';
 
-    var parsedQuill = quillParser.parseQuillDelta(delt);
+    var parsedQuill = parseDelta(delt);
 
     parsedQuill.paragraphs.forEach((para, i) => {
       mdf += getLineMarker(para.attributes);

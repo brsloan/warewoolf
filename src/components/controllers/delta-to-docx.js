@@ -17,7 +17,7 @@ function packageDocxBase64(doc, callback){
 }
 
 function convertDeltaToDocx(delt){
-  var parsedQuill = quillParser.parseQuillDelta(delt);
+  var parsedQuill = parseDelta(delt);
 
   var fnoteParRegx = /^\[\^\d+]:/;
 
