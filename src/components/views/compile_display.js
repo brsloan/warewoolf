@@ -88,7 +88,9 @@ function showCompileOptions(sysDirectories){
     
     showFileDialog(dialogOptions, function(filepath){
       if (filepath)
+        showWorking();
         compileProject(options, filepath);
+        hideWorking();
         cback();
     })
   }
