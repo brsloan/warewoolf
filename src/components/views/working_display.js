@@ -14,6 +14,6 @@ function showWorking(){
     document.body.appendChild(workingPopup);
 }
 
-function removeWorking(){
+function hideWorking(){
     removeElementsByClass('working-popup');
 }

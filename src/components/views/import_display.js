@@ -182,7 +182,7 @@ function showImportOptions(sysDirectories){
     showWorking();
 
     initiateImport(sysDirectories, importOptions, function(){
-      removeWorking();
+      hideWorking();
       closePopups();
       displayChapterByIndex(project.activeChapterIndex);
       if(project.chapters.length > 0)
