@@ -24,6 +24,7 @@
   .popup, .popup-dialog {
     background-color: #2B2D42;
     color: white;
+    border: 2px solid gray;
   }
 
   .popup-outliner {
