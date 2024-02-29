@@ -117,6 +117,7 @@ function showFileDialog(options, callback){
 
     fileListSelect.addEventListener('keydown', function(e){
         if(e.key === "Enter"){
+          e.preventDefault();
             var selectedFiletype = fileListSelect.options[fileListSelect.selectedIndex].dataset.filetype;
             if (selectedFiletype == "dir"){
                 populateFileList(currentDirDisplay.innerText + "/" + fileListSelect.value, fileListSelect, currentDirDisplay, options.filters[filterSelect.value]);
