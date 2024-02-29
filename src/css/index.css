@@ -311,3 +311,20 @@ button, input[type=submit] {
     transform: rotate(359deg);
   }
 }
+
+.save-input {
+  width: 100%;
+}
+
+.popup-dialog h3{
+  margin: 0px 0px 0px 0px;
+  padding: 0px 0px 0px 0px;
+  font-size: var(--dialog-font-size);
+}
+
+.popup-dialog p{
+  text-align: left;
+  margin: 3px 0px 3px 0px;
+  color: white;
+  padding-left: 6px;
+}

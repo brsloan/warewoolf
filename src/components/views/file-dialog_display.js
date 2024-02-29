@@ -33,6 +33,7 @@ function showFileDialog(options, callback){
     selectFieldsContainer.appendChild(fileListSelect);
 
     var filenameIn = document.createElement('input');
+    filenameIn.classList.add('save-input');
 
     if(options.dialogType == 'save'){
       //Only append filenameInput if in save mode
@@ -60,6 +61,7 @@ function showFileDialog(options, callback){
     filterSelect.onchange = function(){
       populateFileList(currentDirDisplay.innerText, fileListSelect, currentDirDisplay, options.filters[filterSelect.value])
     }
+    filterSelect.classList.add('save-input');
     popup.appendChild(filterSelect);
 
     popup.appendChild(document.createElement('br'));
