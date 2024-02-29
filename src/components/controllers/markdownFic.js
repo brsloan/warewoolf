@@ -264,9 +264,6 @@ function markdownFic(){
       mdf += '\r\n';
     });
 
-    //remove extra white lines added after last line
-    mdf = mdf.slice(0, mdf.length - 4);
-
     return mdf;
   }
 
