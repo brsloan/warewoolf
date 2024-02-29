@@ -200,6 +200,10 @@ function getParaStyles(para){
       if(!isNaN(headerVal))
         styles.header = headerVal;
     }
+    else if(styleName && styleName.includes('Title')){
+      styles.header = 1;
+      styles.align = 'center';
+    }
 
   }
 
