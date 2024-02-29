@@ -1,22 +1,3 @@
-function testFileDialog(){
-  const optionsModel = {
-    //TODELETE, temp
-    title: 'Save a copy of project as...',
-    defaultPath: sysDirectories.docs,
-    filters: [
-      { name: 'WareWoolf Projects', extensions: ['woolf', 'txt'] },
-      { name: 'Compressed File', extensions: ['zip', 'gzip'] }
-    ],
-    bookmarkedPaths: [sysDirectories.docs, sysDirectories.home],
-    dialogType: 'open'
-  };
-
-  showFileDialog(optionsModel, function(selected){
-    console.log(selected);
-  });
-}
-
-
 function showFileDialog(options, callback){
     var popup = document.createElement("div");
     popup.classList.add("popup-dialog");
