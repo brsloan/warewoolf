@@ -85,12 +85,13 @@ function showCompileOptions(sysDirectories){
       bookmarkedPaths: [sysDirectories.docs, sysDirectories.home],
       dialogType: 'save'
     };
-    
+
     showFileDialog(dialogOptions, function(filepath){
-      if (filepath)
+      if(filepath){
         showWorking();
         compileProject(options, filepath);
         hideWorking();
         cback();
+      }
     })
   }
