@@ -21,6 +21,7 @@ function initiateImport(sysDirectories, options, cback){
 }
 
 function importFilesAsync(filepaths, options, cback, importedDeltas = []){
+  showWorking();
   var path = filepaths.shift();
 
   if(options.fileType.id == 'docxSelect'){
@@ -51,6 +52,7 @@ function importFilesAsync(filepaths, options, cback, importedDeltas = []){
       importedDeltas.forEach((delt, i) => {
         addImportedChapter(delt.delta, delt.filename);
       });
+      hideWorking();
       cback();
     }
   }
