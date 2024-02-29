@@ -16,6 +16,7 @@ function initiateImport(sysDirectories, options, cback){
     }
     catch(err){
       logError(err);
+      hideWorking();
     }
   });
 }
@@ -35,10 +36,14 @@ function importFilesAsync(filepaths, options, cback, importedDeltas = []){
     })
   }
   else if(options.fileType.id == 'txtSelect'){
-    recurse(importPlainText(path, options.txtOptions));
+    importPlainText(path, options.txtOptions, function(delts){
+      recurse(delts);
+    });
   }
   else if(options.fileType.id == 'mdfcSelect')
-    recurse(importMDF(path));
+    importMDF(path, function(delts){
+      recurse(delts);
+    });
 
   function recurse(packagedDelts){
     packagedDelts.forEach((packagedDelt, i) => {
@@ -46,7 +51,7 @@ function importFilesAsync(filepaths, options, cback, importedDeltas = []){
     });
 
     if(filepaths.length > 0){
-      importFilesAsync(filepaths, options, cback, importedDeltas);
+      importFilesAsync(filepaths, options, statusDisplay, cback, importedDeltas);
     }
     else {
       importedDeltas.forEach((delt, i) => {
@@ -58,42 +63,42 @@ function importFilesAsync(filepaths, options, cback, importedDeltas = []){
   }
 }
 
-function importPlainText(filepath, options){
+function importPlainText(filepath, options, callback){
   try{
-    var inText = fs.readFileSync(filepath, 'utf8');
+    fs.readFile(filepath, 'utf8', function(err, inText){
+      var tempQuill = getTempQuill();
+      tempQuill.setText(inText);
+      var newChapContents = tempQuill.getContents();
+      var filename = getFilenameFromFilepath(filepath);
 
-    var tempQuill = getTempQuill();
-    tempQuill.setText(inText);
-    var newChapContents = tempQuill.getContents();
-    var filename = getFilenameFromFilepath(filepath);
+      var packagedDeltas = [{
+        filename: filename,
+        delta: newChapContents
+      }];
 
-    var packagedDeltas = [{
-      filename: filename,
-      delta: newChapContents
-    }];
+      if(options.splitChapters.split){
+        packagedDeltas = [];
+        var splitDeltas = splitDeltAtMarker(newChapContents, options.splitChapters.marker);
 
-    if(options.splitChapters.split){
-      packagedDeltas = [];
-      var splitDeltas = splitDeltAtMarker(newChapContents, options.splitChapters.marker);
-
-      splitDeltas.forEach((delt, i) => {
-        packagedDeltas.push({
-          filename: generateChapTitleFromFirstLine(delt),
-          delta: delt
+        splitDeltas.forEach((delt, i) => {
+          packagedDeltas.push({
+            filename: generateChapTitleFromFirstLine(delt),
+            delta: delt
+          });
         });
+      }
+
+      packagedDeltas.forEach((deltPack, i) => {
+        if(options.convertFirstLines)
+          deltPack.delta = convertFirstLineToTitle(deltPack.delta).delta;
+        if(options.convertItalics.convert)
+          deltPack.delta = convertMarkedItalics(deltPack.delta, options.convertItalics.marker).delta;
+        if(options.convertTabs.convert)
+          deltPack.delta = convertMarkedTabs(deltPack.delta, options.convertTabs.marker).delta;
       });
-    }
 
-    packagedDeltas.forEach((deltPack, i) => {
-      if(options.convertFirstLines)
-        deltPack.delta = convertFirstLineToTitle(deltPack.delta).delta;
-      if(options.convertItalics.convert)
-        deltPack.delta = convertMarkedItalics(deltPack.delta, options.convertItalics.marker).delta;
-      if(options.convertTabs.convert)
-        deltPack.delta = convertMarkedTabs(deltPack.delta, options.convertTabs.marker).delta;
+      callback(packagedDeltas);
     });
-
-    return packagedDeltas;
   }
   catch(err){
     logError(err);
@@ -154,16 +159,17 @@ function removeChapterMarker(delt, markerRegx){
 }
 
 
-function importMDF(filepath){
+function importMDF(filepath, callback){
   try{
-    var inText = fs.readFileSync(filepath, 'utf8');
-    var delta = markdownFic().parseMDF(inText);
-    var filename = getFilenameFromFilepath(filepath);
+    fs.readFile(filepath, 'utf8', function(err, data){
+      var delta = markdownFic().parseMDF(data);
+      var filename = getFilenameFromFilepath(filepath);
 
-    return [{
-      filename: filename,
-      delta: delta
-    }];
+      callback([{
+        filename: filename,
+        delta: delta
+      }]);
+    });
   }
   catch(err){
     logError(err);
