@@ -295,6 +295,10 @@ button, input[type=submit] {
   opacity: 0.5;
 }
 
+.working-popup {
+  z-index: 9;
+}
+
 .working-img {
   animation: rotation 4s infinite linear;
 }
