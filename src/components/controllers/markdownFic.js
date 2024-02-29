@@ -198,7 +198,6 @@ function markdownFic(){
 
         if(foundIndex > -1){
             counter++;
-            console.log(matchResult);
             tempQuill.formatText(foundIndex, matchResult[0].length, style, true);
 
             //delete second marker first
