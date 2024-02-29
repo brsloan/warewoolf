@@ -309,7 +309,7 @@ const createWindow = () => {
         {
           label: 'About',
           click(item, focusWindow){
-            mainWindow.webContents.send('about-clicked', path.join(__dirname, 'licenses.txt'));
+            mainWindow.webContents.send('about-clicked', app.getVersion());
           }
         }
       ]

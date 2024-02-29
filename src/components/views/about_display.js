@@ -1,4 +1,4 @@
-function showAbout(licensesPath){
+function showAbout(sysDirectories, appVersion){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup");
@@ -9,7 +9,7 @@ function showAbout(licensesPath){
   popup.appendChild(logo);
 
   var version = document.createElement('h1');
-  version.innerText = "0.10.0";
+  version.innerText = appVersion;
   popup.appendChild(version);
 
   var descr = document.createElement('p');
@@ -31,7 +31,7 @@ function showAbout(licensesPath){
   licensePanel.style.display = "none";
 
   var licenseText = document.createElement('pre');
-  licenseText.innerText = loadLicenseText(licensesPath);
+  licenseText.innerText = loadLicenseText(sysDirectories.app + '/licenses.txt');
   licenseText.tabIndex = 0;
 
   licensePanel.appendChild(licenseText);

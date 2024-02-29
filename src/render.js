@@ -983,9 +983,8 @@ ipcRenderer.on('convert-tabs-clicked', function(e){
   showTabOptions();
 });
 
-ipcRenderer.on('about-clicked', function(e, licensesPath){
-  console.log(licensesPath);
-  showAbout(licensesPath);
+ipcRenderer.on('about-clicked', function(e, appVersion){
+  showAbout(sysDirectories, appVersion);
 });
 
 ipcRenderer.on('exit-app-clicked', function(e){
