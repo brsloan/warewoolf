@@ -28,9 +28,7 @@ function breakHeadingsIntoChapters(headingLevel = 1){
     }
     else {
       chapBuilder.push(opsIn[i]);
-    }
-    
-    
+    } 
     
     if(i == opsIn.length - 1){
       chaps.push({ops: chapBuilder});
