@@ -2,7 +2,7 @@ const archiver = require('archiver');
 const unzipper = require('unzipper');
 
 function backupProject(docsDir, callback){
-  console.log('gotten to back up with this dir: ' + docsDir);
+  console.log('backing up project...');
   try{
     docsDir = convertFilepath(docsDir);
     if(userSettings.backupDirectory == null || userSettings.backupDirectory == ""){
@@ -21,6 +21,7 @@ function backupProject(docsDir, callback){
   }
   catch(err){
     logError(err);
+    callback(err);
   }
 }
 
@@ -55,7 +56,7 @@ function createBackupsDirectory(docsDir){
 }
 
 function archiveProject(archiveDir, callback){
-  if(project.filename != ""){
+  if(project.filename != null && project.filename != ""){
     const archiveName = project.filename.replace('.woolf','') + getTimeStamp() + '.zip';
     const output = fs.createWriteStream(archiveDir + "/" + archiveName);
     const archive = archiver('zip', {

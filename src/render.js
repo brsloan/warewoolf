@@ -672,7 +672,7 @@ function openHelpDoc(){
 }
 
 function exitApp(){
-  if(userSettings.autoBackup == true){
+  if(userSettings.autoBackup == true && project.filename != ''){
     backupProject(sysDirectories.docs, function(msg){
       ipcRenderer.send('exit-app-confirmed');
     });
