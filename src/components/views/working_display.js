@@ -1,17 +1,29 @@
-function showWorking(){
-    var workingPopup = document.createElement('div');
-    workingPopup.classList.add('working-popup');
+function showWorking(status = 'Working...'){
 
-    var hardhat = document.createElement('img');
-    hardhat.src = "assets/warewoolf_at_work.png";
-    hardhat.classList.add('working-img');
-    workingPopup.appendChild(hardhat);
+    var workups = document.getElementsByClassName('working-popup');
 
-    var title = document.createElement('h1');
-    title.innerText = "Working...";
-    workingPopup.appendChild(title);
+    if(workups.length == 0){
+        var workingPopup = document.createElement('div');
+        workingPopup.classList.add('working-popup');
 
-    document.body.appendChild(workingPopup);
+        var hardhat = document.createElement('img');
+        hardhat.src = "assets/warewoolf_at_work.png";
+        hardhat.classList.add('working-img');
+        workingPopup.appendChild(hardhat);
+
+        var title = document.createElement('h1');
+        title.id = 'working-status';
+        title.innerText = status;
+        workingPopup.appendChild(title);
+
+
+        document.body.appendChild(workingPopup);
+    }
+    else {
+        document.getElementById('working-status').innerText = status;
+    }
+
+    
 }
 
 function hideWorking(){

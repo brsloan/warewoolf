@@ -21,7 +21,7 @@
     background: #4b5362;
   }
 
-  .popup, .popup-dialog {
+  .popup, .popup-dialog, .working-popup {
     background-color: #2B2D42;
     color: white;
     border: 2px solid gray;

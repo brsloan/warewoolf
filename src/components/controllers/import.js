@@ -22,7 +22,9 @@ function initiateImport(sysDirectories, options, cback){
 }
 
 function importFilesAsync(filepaths, options, cback, importedDeltas = []){
-  showWorking();
+  showWorking('Importing file...');
+  if(importedDeltas.length > 0)
+    showWorking('Chapters Generated So Far: ' + importedDeltas.length);
   var path = filepaths.shift();
 
   if(options.fileType.id == 'docxSelect'){

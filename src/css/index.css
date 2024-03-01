@@ -296,7 +296,7 @@ button, input[type=submit] {
 }
 
 .working-popup {
-  z-index: 9;
+  z-index: 4;
 }
 
 .working-img {
