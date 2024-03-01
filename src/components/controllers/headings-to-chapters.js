@@ -1,4 +1,5 @@
 function breakHeadingsIntoChapters(headingLevel = 1){
+
   var headerIndices = getHeaderIndices(editorQuill.getText(), headingLevel);
 
   if(headerIndices.length > 0){
@@ -9,6 +10,7 @@ function breakHeadingsIntoChapters(headingLevel = 1){
       addImportedChapter(chap, generateChapTitleFromFirstLine(chap));
     });
   }
+  hideWorking();
 }
 
 function getHeaderIndices(totalText, headingLevel){

@@ -34,7 +34,9 @@ function showBreakHeadingsOptions(){
 
   breakHeadingsForm.onsubmit = function(e){
     e.preventDefault();
-    breakHeadingsIntoChapters(headingSelect.value);
+    showWorkingAndThen('Breaking headings into chapters...', function(){
+      breakHeadingsIntoChapters(headingSelect.value);
+    });
     closePopups();
   };
 
