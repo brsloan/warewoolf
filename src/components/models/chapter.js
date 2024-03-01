@@ -43,9 +43,11 @@ function newChapter(){
     }
 
     function getContentsOrFile(){
-      var cont = this.contents ? this.contents : null;
-      if(cont == null && this.filename != null)
-        cont = getFile();
+      var chap = this;
+
+      var cont = chap.contents ? chap.contents : null;
+      if(cont == null && chap.filename != null)
+        cont = chap.getFile();
 
       return cont;
     }
