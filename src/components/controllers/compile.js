@@ -47,10 +47,10 @@ function compileChapterDeltas(options){
       compiled.insert(project.chapters[0].title);
       compiled.insert('\n', { header: 1 } );
     }
-    compiled = compiled.concat(new Delta(project.chapters[0].getFile()));
+    compiled = compiled.concat(new Delta(project.chapters[0].getContentsOrFile()));
 
     for(i=1; i<project.chapters.length; i++){
-        var thisDelta = new Delta(project.chapters[i].getFile());
+        var thisDelta = new Delta(project.chapters[i].getContentsOrFile());
         compiled.insert(divider + '\n');
 
         if(options.insertHead){

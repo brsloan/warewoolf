@@ -31,7 +31,7 @@ function importFilesAsync(filepaths, options, cback, importedDeltas = []){
     importDocx(path, options.docxOptions.splitChapters, function(delts){
         recurse(delts.map(function(delt, i, arr){
           return {
-            filename: generateChapTitleFromFirstLine(delt),
+            title: generateChapTitleFromFirstLine(delt),
             delta: delt
           };
         }));
@@ -57,7 +57,7 @@ function importFilesAsync(filepaths, options, cback, importedDeltas = []){
     }
     else {
       importedDeltas.forEach((delt, i) => {
-        addImportedChapter(delt.delta, delt.filename);
+        addImportedChapter(delt.delta, delt.title);
       });
       hideWorking();
       cback();
@@ -74,7 +74,7 @@ function importPlainText(filepath, options, callback){
       var filename = getFilenameFromFilepath(filepath);
 
       var packagedDeltas = [{
-        filename: filename,
+        title: filename,
         delta: newChapContents
       }];
 
@@ -84,7 +84,7 @@ function importPlainText(filepath, options, callback){
 
         splitDeltas.forEach((delt, i) => {
           packagedDeltas.push({
-            filename: generateChapTitleFromFirstLine(delt),
+            title: generateChapTitleFromFirstLine(delt),
             delta: delt
           });
         });
@@ -168,7 +168,7 @@ function importMDF(filepath, callback){
       var filename = getFilenameFromFilepath(filepath);
 
       callback([{
-        filename: filename,
+        title: filename,
         delta: delta
       }]);
     });

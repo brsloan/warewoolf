@@ -10,7 +10,8 @@ function newChapter(){
       parseChapter: parseChapter,
       getFile: getFile,
       saveFile: saveFile,
-      saveCopy: saveCopy
+      saveCopy: saveCopy,
+      getContentsOrFile: getContentsOrFile
     };
 
     function deleteChapterFile(){
@@ -39,6 +40,14 @@ function newChapter(){
       catch(err){
         logError(err);
       }
+    }
+
+    function getContentsOrFile(){
+      var cont = this.contents ? this.contents : null;
+      if(cont == null && this.filename != null)
+        cont = getFile();
+
+      return cont;
     }
 
 
