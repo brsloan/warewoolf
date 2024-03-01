@@ -23,7 +23,7 @@ function exportProject(options, filepath){
 function exportAsMDF(dir){
   try{
     for(let i=0; i < project.chapters.length; i++){
-      var chapFile = project.chapters[i].getFile();
+      var chapFile = project.chapters[i].getContentsOrFile();
       var outName = generateChapterFilename(i);
 
       fs.writeFileSync(dir + outName + '.mdfc', markdownFic().convertDeltaToMDF(chapFile));
@@ -39,7 +39,7 @@ function exportAsMDF(dir){
 function exportAsText(dir){
   try{
     for(i=0; i<project.chapters.length; i++){
-        var chapFile = project.chapters[i].getFile();
+        var chapFile = project.chapters[i].getContentsOrFile();
         var outName = generateChapterFilename(i);
 
         fs.writeFileSync(dir + outName + ".txt", convertToPlainText(chapFile));
@@ -67,7 +67,7 @@ function exportAsWord(dir){
 
 function exportChapsAsWord(dir, num = 0){
     for(let i=0; i<project.chapters.length;i++){
-      var chapFile = project.chapters[i].getFile();
+      var chapFile = project.chapters[i].getContentsOrFile();
       var outName = generateChapterFilename(i);
 
       var doc = convertDeltaToDocx(chapFile);
