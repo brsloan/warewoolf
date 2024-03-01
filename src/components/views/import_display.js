@@ -178,8 +178,8 @@ function showImportOptions(sysDirectories){
       splitChapters: docxSplitChapsCheck.checked
     };
 
+    closePopups();
     initiateImport(sysDirectories, importOptions, function(){
-      closePopups();
       displayChapterByIndex(project.activeChapterIndex);
       if(project.chapters.length > 0)
         editorQuill.enable();
