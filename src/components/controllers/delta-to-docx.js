@@ -298,7 +298,12 @@ function convertRunAtttributes(attr){
 }
 
 function getTitlePageFirstLine(){
-  var wordCount = (Math.round(getTotalWordCount()/100)*100) + ' words';
+  var wordCount = (Math.round(getTotalWordCount()/100)*100).toString();
+  if(wordCount.length > 3){
+    wordCount = wordCount.slice(0,-3) + ',' + wordCount.slice(-3);
+  }
+  wordCount += ' words';
+
   var spaceCount = project.author.length > 20 ? 8 : 9;
 
   var lineText = '';
