@@ -17,6 +17,7 @@ function showCompileOptions(sysDirectories){
       txtOp.innerText = op;
       typeSelect.appendChild(txtOp);
     });
+    typeSelect.value = userSettings.compileType;
     compileForm.appendChild(typeSelect);
 
     compileForm.appendChild(document.createElement('br'));
@@ -28,7 +29,7 @@ function showCompileOptions(sysDirectories){
 
     var insertStrInput = document.createElement("input");
     insertStrInput.type = "text";
-    insertStrInput.value = "";
+    insertStrInput.value = userSettings.compileChapMark;
     insertStrInput.id = "insert-str-input";
     compileForm.appendChild(insertStrInput);
 
@@ -42,6 +43,7 @@ function showCompileOptions(sysDirectories){
     var insertHeadCheck = document.createElement("input");
     insertHeadCheck.type = "checkbox";
     insertHeadCheck.id = "insert-head-check";
+    insertHeadCheck.checked = userSettings.compileInsertHeaders;
     compileForm.appendChild(insertHeadCheck);
 
     compileForm.appendChild(document.createElement('br'));
@@ -52,6 +54,7 @@ function showCompileOptions(sysDirectories){
 
     var titlePageCheck = document.createElement('input');
     titlePageCheck.type = 'checkbox';
+    titlePageCheck.checked = userSettings.compileGenTitlePage;
     compileForm.appendChild(titlePageCheck);
 
     var compileBtn = document.createElement("input");
@@ -67,6 +70,13 @@ function showCompileOptions(sysDirectories){
 
     compileForm.onsubmit = function(e){
       e.preventDefault();
+
+      userSettings.compileType = typeSelect.value;
+      userSettings.compileInsertHeaders = insertHeadCheck.checked;
+      userSettings.compileChapMark = insertStrInput.value;
+      userSettings.compileGenTitlePage = titlePageCheck.checked;
+      userSettings.save();
+
       var options = {
         type: typeSelect.value,
         insertStrng: insertStrInput.value,
