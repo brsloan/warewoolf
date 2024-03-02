@@ -9,15 +9,20 @@ function showSettings(sysDirectories, callback){
 
   var settingsForm = document.createElement('form');
 
+  var saveSet = document.createElement('fieldset');
+  var saveSetLeg = document.createElement('legend');
+  saveSetLeg.innerText = 'Saving';
+  saveSet.appendChild(saveSetLeg);
+
   var backupDirLabel = document.createElement('label');
   backupDirLabel.innerText = "Backups Directory: ";
-  settingsForm.appendChild(backupDirLabel);
+  saveSet.appendChild(backupDirLabel);
 
   var backupDirInput = document.createElement('input');
   backupDirInput.type = "text";
   backupDirInput.value = userSettings.backupDirectory ? userSettings.backupDirectory : "";
   backupDirInput.id = 'backup-dir-input';
-  settingsForm.appendChild(backupDirInput);
+  saveSet.appendChild(backupDirInput);
 
   var backupDirPicker = createButton("Change...");
   backupDirPicker.onclick = function(){
@@ -27,50 +32,55 @@ function showSettings(sysDirectories, callback){
     });
 
   }
-  settingsForm.appendChild(backupDirPicker);
+  saveSet.appendChild(backupDirPicker);
 
-  settingsForm.appendChild(document.createElement('br'));
+  saveSet.appendChild(document.createElement('br'));
 
   var autoBackupLabel = document.createElement('label');
   autoBackupLabel.innerText = 'Auto Backup On Close: ';
-  settingsForm.appendChild(autoBackupLabel);
+  saveSet.appendChild(autoBackupLabel);
 
   var autoBackupCheck = document.createElement('input');
   autoBackupCheck.type = 'checkbox';
   autoBackupCheck.checked = userSettings.autoBackup;
-  settingsForm.appendChild(autoBackupCheck);
+  saveSet.appendChild(autoBackupCheck);
 
-  settingsForm.appendChild(document.createElement('br'));
+  saveSet.appendChild(document.createElement('br'));
 
   var backupsLimitLabel = document.createElement('label');
   backupsLimitLabel.innerText = 'Quantity of latest backups to keep? (0=infinite): ';
-  settingsForm.appendChild(backupsLimitLabel);
+  saveSet.appendChild(backupsLimitLabel);
 
   var backupLimitInput = document.createElement('input');
   backupLimitInput.type = 'number';
   backupLimitInput.min = 0;
   backupLimitInput.value = userSettings.backupsToKeep;
-  settingsForm.appendChild(backupLimitInput);
+  saveSet.appendChild(backupLimitInput);
 
-  settingsForm.appendChild(document.createElement('br'));
+  saveSet.appendChild(document.createElement('br'));
 
   var autosaveLabel = document.createElement('label');
   autosaveLabel.innerText = 'Autosave every X minutes (0=never): ';
-  settingsForm.appendChild(autosaveLabel);
+  saveSet.appendChild(autosaveLabel);
 
   var autosaveIntervalInput = document.createElement('input');
   autosaveIntervalInput.type = 'number';
   autosaveIntervalInput.min = 0;
   autosaveIntervalInput.value = userSettings.autosaveInterval;
-  settingsForm.appendChild(autosaveIntervalInput);
+  saveSet.appendChild(autosaveIntervalInput);
 
-  settingsForm.appendChild(document.createElement('br'));
+  settingsForm.appendChild(saveSet);
+
+  var appearanceSet = document.createElement('fieldset');
+  var appearanceLeg = document.createElement('legend');
+  appearanceLeg.innerText = "Appearance";
+  appearanceSet.appendChild(appearanceLeg);
 
   var darkModeLabel = document.createElement('label');
   darkModeLabel.innerText = 'Dark Mode: ';
-  settingsForm.appendChild(darkModeLabel);
+  appearanceSet.appendChild(darkModeLabel);
 
-  settingsForm.appendChild(document.createElement('br'));
+  appearanceSet.appendChild(document.createElement('br'));
 
   var darkModeSys = document.createElement('input');
   darkModeSys.type = 'radio';
@@ -79,14 +89,14 @@ function showSettings(sysDirectories, callback){
   darkModeSys.id = 'dark-mode-sys';
   if(userSettings.darkMode == 'system')
     darkModeSys.checked = true;
-  settingsForm.appendChild(darkModeSys);
+  appearanceSet.appendChild(darkModeSys);
 
   var darkModeSysLabel = document.createElement('label');
   darkModeSysLabel.innerText = "System Default";
   darkModeSysLabel.for = 'dark-mode-sys';
-  settingsForm.appendChild(darkModeSysLabel);
+  appearanceSet.appendChild(darkModeSysLabel);
 
-  settingsForm.appendChild(document.createElement('br'));
+  appearanceSet.appendChild(document.createElement('br'));
 
   var darkModeDark = document.createElement('input');
   darkModeDark.type = 'radio';
@@ -95,14 +105,14 @@ function showSettings(sysDirectories, callback){
   darkModeDark.id = 'dark-mode-dark';
   if(userSettings.darkMode == 'dark')
     darkModeDark.checked = true;
-  settingsForm.appendChild(darkModeDark);
+  appearanceSet.appendChild(darkModeDark);
 
   var darkModeDarkLabel = document.createElement('label');
   darkModeDarkLabel.innerText = "Dark";
   darkModeDarkLabel.for = 'dark-mode-dark';
-  settingsForm.appendChild(darkModeDarkLabel);
+  appearanceSet.appendChild(darkModeDarkLabel);
 
-  settingsForm.appendChild(document.createElement('br'));
+  appearanceSet.appendChild(document.createElement('br'));
 
   var darkModeLight = document.createElement('input');
   darkModeLight.type = 'radio';
@@ -111,14 +121,14 @@ function showSettings(sysDirectories, callback){
   darkModeLight.id = 'dark-mode-light';
   if(userSettings.darkMode == 'light')
     darkModeLight.checked = true;
-  settingsForm.appendChild(darkModeLight);
+  appearanceSet.appendChild(darkModeLight);
 
   var darkModeLightLabel = document.createElement('label');
   darkModeLightLabel.innerText = "Light";
   darkModeLightLabel.for = 'dark-mode-light';
-  settingsForm.appendChild(darkModeLightLabel);
+  appearanceSet.appendChild(darkModeLightLabel);
 
-  settingsForm.appendChild(document.createElement('br'));
+  settingsForm.appendChild(appearanceSet);
 
   var infoSet = document.createElement('fieldset');
   var infoLegend = document.createElement('legend');
