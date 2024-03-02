@@ -63,7 +63,7 @@ function showExportOptions(sysDirectories){
 
   function getExportFilePath(options, sysDirectories, cback){
     const saveOptions = {
-      title: 'Export files to... (Subdirectory will be created)',
+      title: 'Export files to... (Subdirectory "' + (project.title.length > 0 ? project.title.replace(/[^a-z0-9]/gi, '_') : 'exports') + '" will be created)',
       defaultPath: sysDirectories.docs,
       bookmarkedPaths: [sysDirectories.docs, sysDirectories.home],
       filters: [],
