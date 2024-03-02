@@ -16,7 +16,7 @@ function packageDocxBase64(doc, callback){
   });
 }
 
-function convertDeltaToDocx(delt){
+function convertDeltaToDocx(delt, options){
   var parsedQuill = parseDelta(delt);
 
   var fnoteParRegx = /^\[\^\d+]:/;
@@ -128,6 +128,12 @@ function convertDeltaToDocx(delt){
 
   console.log(footnotes);
 
+  var sections = [];
+  if(options.generateTitlePage == true)
+    sections.push(getTitlePage());
+
+  sections.push(getDocBody(xParagraphs));
+
   const doc = new docx.Document({
     creator: project.author,
     title: project.title,
@@ -177,10 +183,7 @@ function convertDeltaToDocx(delt){
       ]
     },
     footnotes: footnotes,
-    sections: [
-      getTitlePage(),
-      getDocBody(xParagraphs)
-    ]
+    sections: sections
   });
 
   return doc;

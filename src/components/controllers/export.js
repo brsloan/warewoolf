@@ -71,7 +71,7 @@ function exportChapsAsWord(dir, num = 0){
       var chapFile = project.chapters[i].getContentsOrFile();
       var outName = generateChapterFilename(i);
 
-      var doc = convertDeltaToDocx(chapFile);
+      var doc = convertDeltaToDocx(chapFile, { generateTitlePage: false });
       saveDocx(dir + outName + ".docx", doc);
     }
 }
@@ -79,7 +79,7 @@ function exportChapsAsWord(dir, num = 0){
 function exportNotesAsWord(dir){
     var chapFile = project.notes;
 
-    var doc = convertDeltaToDocx(chapFile);
+    var doc = convertDeltaToDocx(chapFile, { generateTitlePage: false });
     saveDocx(dir + "notes" + ".docx", doc);
 }
 

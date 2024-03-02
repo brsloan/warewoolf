@@ -46,6 +46,14 @@ function showCompileOptions(sysDirectories){
 
     compileForm.appendChild(document.createElement('br'));
 
+    var titlePageLabel = document.createElement('label');
+    titlePageLabel.innerText = 'Generate Title Page: ';
+    compileForm.appendChild(titlePageLabel);
+
+    var titlePageCheck = document.createElement('input');
+    titlePageCheck.type = 'checkbox';
+    compileForm.appendChild(titlePageCheck);
+
     var compileBtn = document.createElement("input");
     compileBtn.type = "submit";
     compileBtn.value = "Compile";
@@ -62,7 +70,8 @@ function showCompileOptions(sysDirectories){
       var options = {
         type: typeSelect.value,
         insertStrng: insertStrInput.value,
-        insertHead: insertHeadCheck.checked
+        insertHead: insertHeadCheck.checked,
+        generateTitlePage: titlePageCheck.checked
       }
       getCompileFilepath(options, sysDirectories, function(){
         popup.remove();

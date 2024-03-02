@@ -34,7 +34,7 @@ function prepareAndEmail(sender, pass, receiver, filetype, compileOptions, callb
 }
 
 function emailDeltaAsDocx(filename, delt, sender, pass, receiver, callback){
-  var doc = convertDeltaToDocx(delt);
+  var doc = convertDeltaToDocx(delt, { generateTitlePage: false });
   packageDocxBase64(doc, (docString) => {
     var attachments = [
       {

@@ -9,7 +9,7 @@ function compileProject(options, filepath){
             compilePlainText(filepath, allChaps);
             break;
         case ".docx":
-            compileDocx(filepath, allChaps);
+            compileDocx(filepath, allChaps, options);
             break;
         case ".mdfc":
             compileMDF(filepath, allChaps);
@@ -65,7 +65,7 @@ function compileChapterDeltas(options){
 }
 
 
-function compileDocx(filepath, delt) {
-  var doc = convertDeltaToDocx(delt);
+function compileDocx(filepath, delt, options) {
+  var doc = convertDeltaToDocx(delt, options);
   saveDocx(filepath, doc);
 }
