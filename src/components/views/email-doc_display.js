@@ -86,7 +86,7 @@ function showEmailOptions(){
     chapRadio.type = 'radio';
     chapRadio.name = 'email-radio';
     chapRadio.id = 'email-radio-chap';
-    chapRadio.value = 'chap';
+    chapRadio.value = 'chapter';
     emailForm.appendChild(chapRadio);
 
     var compiledRadioLabel = document.createElement('label');
@@ -133,10 +133,15 @@ function showEmailOptions(){
     emailForm.appendChild(document.createElement('br'));
 
     //set defaults
-    projectRadio.checked = true;
+    if(userSettings.emailType == 'project'){
+      projectRadio.checked = true;
+      typeSelect.disabled = true;
+    }
+    else if(userSettings.emailType == 'chapter')
+      chapRadio.checked = true;
+    else if(userSettings.emailType == 'compiled')
+      compiledRadio.checked = true;
     typeSelect.value = userSettings.compileType;
-    typeSelect.disabled = true;
-
 
     emailForm.appendChild(document.createElement('br'));
 
@@ -147,6 +152,12 @@ function showEmailOptions(){
 
       userSettings.senderEmail = senderEmailInput.value;
       userSettings.receiverEmail = receiverEmailInput.value;
+      if(projectRadio.checked)
+        userSettings.emailType = 'project';
+      else if(chapRadio.checked)
+        userSettings.emailType = 'chapter';
+      else if(compiledRadio.checked)
+        userSettings.emailType = 'compiled';
       if(rememberPassCheck.checked){
         userSettings.senderPass = crypt.encrypt(senderPassInput.value);
       }
