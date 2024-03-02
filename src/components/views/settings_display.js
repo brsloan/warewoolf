@@ -150,9 +150,10 @@ function showSettings(sysDirectories, callback){
   addressLab.innerText = 'Address Info (for cover page export): ';
   infoSet.appendChild(addressLab);
 
-  var addressIn = document.createElement('input');
-  addressIn.type = 'text';
+  var addressIn = document.createElement('textarea');
+  addressIn.rows = 5;
   addressIn.value = userSettings.addressInfo;
+  addressIn.placeholder = '123 Main Street\nWinseburg, Ohio 46041\n555-555-0123\nemail@warewoolf.org';
   infoSet.appendChild(addressIn);
 
   settingsForm.appendChild(infoSet);
