@@ -12,7 +12,7 @@ function getUserSettings(userSettingsFilepath){
     senderEmail: null,
     senderPass: null,
     receiverEmail: null,
-    emailCompiled: false,
+    emailType: 'project',
     compileType: '.docx',
     compileChapMark: '',
     compileInsertHeaders: false,
