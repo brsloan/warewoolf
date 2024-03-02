@@ -1,6 +1,7 @@
 function exportProject(options, filepath){
     //TODO: Need to create function to safely convert titles to folder/filenames
-    var newDir = filepath.concat("/").concat(project.title.replace(/[^a-z0-9]/gi, '_')).concat("/");
+    var dirName = project.title.length > 0 ? project.title.replace(/[^a-z0-9]/gi, '_') : 'exports';
+    var newDir = filepath.concat("/").concat(dirName).concat("/");
 
     if(!fs.existsSync(newDir))
         fs.mkdirSync(newDir);
