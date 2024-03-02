@@ -120,10 +120,36 @@ function showSettings(sysDirectories, callback){
 
   settingsForm.appendChild(document.createElement('br'));
 
+  var infoSet = document.createElement('fieldset');
+  var infoLegend = document.createElement('legend');
+  infoLegend.innerText = 'Author Info';
+  infoSet.appendChild(infoLegend);
+
+  var defAuthLab = document.createElement('label');
+  defAuthLab.innerText = 'Default Author: ';
+  infoSet.appendChild(defAuthLab);
+
+  var defAuthIn = document.createElement('input');
+  defAuthIn.type = 'text';
+  defAuthIn.value = userSettings.defaultAuthor;
+  infoSet.appendChild(defAuthIn);
+
+  infoSet.appendChild(document.createElement('br'));
+
+  var addressLab = document.createElement('label');
+  addressLab.innerText = 'Address Info (for cover page export): ';
+  infoSet.appendChild(addressLab);
+
+  var addressIn = document.createElement('input');
+  addressIn.type = 'text';
+  addressIn.value = userSettings.addressInfo;
+  infoSet.appendChild(addressIn);
+
+  settingsForm.appendChild(infoSet);
   popup.appendChild(settingsForm);
 
-  var saveBackupDir = createButton("Save");
-  saveBackupDir.onclick = function(){
+  var saveBtn = createButton("Save");
+  saveBtn.onclick = function(){
     if(backupDirInput.value != ""){
       userSettings.backupDirectory = convertFilepath(backupDirInput.value);
     }
@@ -131,12 +157,15 @@ function showSettings(sysDirectories, callback){
     userSettings.backupsToKeep = backupLimitInput.value;
     userSettings.autosaveInterval = autosaveIntervalInput.value;
     userSettings.darkMode = document.querySelector('input[type=radio][name=dark-mode]:checked').value;
+    userSettings.defaultAuthor = defAuthIn.value;
+    userSettings.addressInfo = addressIn.value;
+
     userSettings.save();
     updateAutosave();
     callback();
     closePopups();
   }
-  popup.appendChild(saveBackupDir);
+  popup.appendChild(saveBtn);
 
   var closeBtn = createButton("Close");
   closeBtn.onclick = function(){
