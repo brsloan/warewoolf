@@ -250,6 +250,51 @@ function getDocBody(xParagraphs){
 }
 
 function getTitlePage(){
+  var titleParas = [];
+  titleParas.push(new docx.Paragraph({
+    text: getTitlePageFirstLine(),
+    style: 'address'
+  }));
+
+  var addressLines = userSettings.addressInfo.split('\n');
+  addressLines.forEach((line, i) => {
+    titleParas.push(new docx.Paragraph({
+      text: line,
+      style: 'address'
+    }));
+  });
+
+  if(addressLines.length < 4){
+    for(let i=0; i < 4 - addressLines.length; i++){
+      titleParas.push(new docx.Paragraph({
+        text: '',
+        style: 'address'
+      }));
+    }
+  }
+
+  for(let i=0; i<7; i++){
+    titleParas.push(new docx.Paragraph(''));
+  }
+
+  titleParas.push(new docx.Paragraph({
+    alignment: docx.AlignmentType.CENTER,
+    children: [
+      new docx.TextRun({
+        children: [project.title != '' ? project.title : 'TITLE']
+      })
+    ]
+  }));
+
+  titleParas.push(new docx.Paragraph({
+    alignment: docx.AlignmentType.CENTER,
+    children: [
+      new docx.TextRun({
+        children: ['by ' + (project.author != '' ? project.author : 'Author')]
+      })
+    ]
+  }));
+
   return {
     properties: {
       titlePage: true,
@@ -260,51 +305,7 @@ function getTitlePage(){
         }
       }
     },
-    children: [
-      new docx.Paragraph({
-        text: getTitlePageFirstLine(),
-        style: 'address'
-      }),
-      new docx.Paragraph({
-        text: '',
-        style: 'address'
-      }),
-      new docx.Paragraph({
-        text: '',
-        style: 'address'
-      }),
-      new docx.Paragraph({
-        text: '',
-        style: 'address'
-      }),
-      new docx.Paragraph({
-        text: '',
-        style: 'address'
-      }),
-      new docx.Paragraph(''),
-      new docx.Paragraph(''),
-      new docx.Paragraph(''),
-      new docx.Paragraph(''),
-      new docx.Paragraph(''),
-      new docx.Paragraph(''),
-      new docx.Paragraph(''),
-      new docx.Paragraph({
-        alignment: docx.AlignmentType.CENTER,
-        children: [
-          new docx.TextRun({
-            children: [project.title != '' ? project.title : 'TITLE']
-          })
-        ]
-      }),
-      new docx.Paragraph({
-        alignment: docx.AlignmentType.CENTER,
-        children: [
-          new docx.TextRun({
-            children: ['by ' + (project.author != '' ? project.author : 'Author')]
-          })
-        ]
-      })
-    ]
+    children: titleParas
   };
 
 }
