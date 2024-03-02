@@ -129,7 +129,7 @@ function convertDeltaToDocx(delt, options){
   console.log(footnotes);
 
   var sections = [];
-  if(options.generateTitlePage == true)
+  if(options && options.generateTitlePage == true)
     sections.push(getTitlePage());
 
   sections.push(getDocBody(xParagraphs));
