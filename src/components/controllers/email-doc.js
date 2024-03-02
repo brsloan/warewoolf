@@ -18,7 +18,7 @@ function prepareAndEmail(sender, pass, receiver, filetype, compileOptions, callb
   }
 
   if(filetype == ".docx"){
-    emailDeltaAsDocx(filename, delt, sender, pass, receiver, callback);
+    emailDeltaAsDocx(filename, delt, compileOptions, sender, pass, receiver, callback);
   }
   else if(filetype == ".mdfc"){
     emailDeltaAsMdfc(filename, delt, sender, pass, receiver, callback);
@@ -33,8 +33,8 @@ function prepareAndEmail(sender, pass, receiver, filetype, compileOptions, callb
 
 }
 
-function emailDeltaAsDocx(filename, delt, sender, pass, receiver, callback){
-  var doc = convertDeltaToDocx(delt, { generateTitlePage: false });
+function emailDeltaAsDocx(filename, delt, options, sender, pass, receiver, callback){
+  var doc = convertDeltaToDocx(delt, options);
   packageDocxBase64(doc, (docString) => {
     var attachments = [
       {

@@ -77,7 +77,6 @@ function showEmailOptions(){
     responseText.innerText = "";
     emailForm.appendChild(responseText);
 
-
     var chapRadioLabel = document.createElement('label');
     chapRadioLabel.innerText = "Send Chapter";
     chapRadioLabel.for = 'email-radio-chap';
@@ -133,41 +132,11 @@ function showEmailOptions(){
 
     emailForm.appendChild(document.createElement('br'));
 
-    var compileOptionsSet = document.createElement('fieldset');
-
-    var compileOptionsLabel = document.createElement('legend');
-    compileOptionsLabel.innerText = 'Compile Options';
-    compileOptionsSet.appendChild(compileOptionsLabel);
-
-    var insertStrLabel = document.createElement("label");
-    insertStrLabel.innerText = "Insert string to mark chapter breaks: ";
-    insertStrLabel.for = "insert-str-input";
-    compileOptionsSet.appendChild(insertStrLabel);
-
-    var insertStrInput = document.createElement("input");
-    insertStrInput.type = "text";
-    insertStrInput.value = "";
-    insertStrInput.id = "insert-str-input";
-    compileOptionsSet.appendChild(insertStrInput);
-
-    compileOptionsSet.appendChild(document.createElement('br'));
-
-    var insertHeadLabel = document.createElement("label");
-    insertHeadLabel.innerText = "Insert chapter titles as headings: ";
-    insertHeadLabel.for = "insert-head-check";
-    compileOptionsSet.appendChild(insertHeadLabel);
-
-    var insertHeadCheck = document.createElement("input");
-    insertHeadCheck.type = "checkbox";
-    insertHeadCheck.id = "insert-head-check";
-    compileOptionsSet.appendChild(insertHeadCheck);
-
     //set defaults
     projectRadio.checked = true;
-    compileOptionsSet.disabled = true;
+    typeSelect.value = userSettings.compileType;
     typeSelect.disabled = true;
 
-    emailForm.appendChild(compileOptionsSet);
 
     emailForm.appendChild(document.createElement('br'));
 
@@ -187,8 +156,9 @@ function showEmailOptions(){
       if(compiledRadio.checked){
         compileOptions = {
           type: typeSelect.value,
-          insertStrng: insertStrInput.value,
-          insertHead: insertHeadCheck.checked
+          insertStrng: userSettings.compileChapMark,
+          insertHead: userSettings.compileInsertHeaders,
+          generateTitlePage: userSettings.compileGenTitlePage
         }
       }
 
@@ -213,15 +183,12 @@ function showEmailOptions(){
     popup.appendChild(closeBtn);
 
     chapRadio.onclick = function(){
-      compileOptionsSet.disabled = true;
       typeSelect.disabled = false;
     }
     compiledRadio.onclick = function(){
-      compileOptionsSet.disabled = false;
       typeSelect.disabled = false;
     }
     projectRadio.onclick = function(){
-      compileOptionsSet.disabled = true;
       typeSelect.disabled = true;
     }
 
