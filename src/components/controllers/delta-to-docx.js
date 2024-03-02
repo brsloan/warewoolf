@@ -160,6 +160,19 @@ function convertDeltaToDocx(delt){
               line: 480,
             }
           }
+        },
+        {
+          id: 'address',
+          name: 'Address',
+          quickFormat: true,
+          run: {
+            size: 24,
+          },
+          paragraph: {
+            spacing: {
+              line: 240,
+            }
+          }
         }
       ]
     },
@@ -167,12 +180,83 @@ function convertDeltaToDocx(delt){
     sections: [
       {
         properties: {
+          titlePage: true,
           page: {
             size: {
               width: 12240,
               height: 15840
             }
           }
+        },
+        children: [
+          new docx.Paragraph({
+            text: getTitlePageFirstLine(),
+            style: 'address'
+          }),
+          new docx.Paragraph({
+            text: '',
+            style: 'address'
+          }),
+          new docx.Paragraph({
+            text: '',
+            style: 'address'
+          }),
+          new docx.Paragraph({
+            text: '',
+            style: 'address'
+          }),
+          new docx.Paragraph({
+            text: '',
+            style: 'address'
+          }),
+          new docx.Paragraph(''),
+          new docx.Paragraph(''),
+          new docx.Paragraph(''),
+          new docx.Paragraph(''),
+          new docx.Paragraph(''),
+          new docx.Paragraph(''),
+          new docx.Paragraph(''),
+          new docx.Paragraph({
+            alignment: docx.AlignmentType.CENTER,
+            children: [
+              new docx.TextRun({
+                children: [project.title != '' ? project.title : 'TITLE']
+              })
+            ]
+          }),
+          new docx.Paragraph({
+            alignment: docx.AlignmentType.CENTER,
+            children: [
+              new docx.TextRun({
+                children: ['by ' + (project.author != '' ? project.author : 'Author')]
+              })
+            ]
+          })
+        ]
+      },
+      {
+        properties: {
+          page: {
+            pageNumbers: {
+              start: 1
+            },
+            size: {
+              width: 12240,
+              height: 15840
+            }
+          }
+        },
+        headers: {
+          default: new docx.Header({
+            children: [ new docx.Paragraph({
+              alignment: docx.AlignmentType.RIGHT,
+              children: [
+                new docx.TextRun({
+                  children: [project.author + ' / ' + project.title + ' / ', docx.PageNumber.CURRENT]
+                })
+              ]
+            })]
+          })
         },
         children: xParagraphs
       }
@@ -211,4 +295,18 @@ function convertRunAtttributes(attr){
   }
 
   return xAttr;
+}
+
+function getTitlePageFirstLine(){
+  var wordCount = (Math.round(getTotalWordCount()/100)*100) + ' words';
+  var spaceCount = project.author.length > 20 ? 8 : 9;
+
+  var lineText = '';
+
+  for(let i=0; i < spaceCount; i++)
+    lineText = lineText.concat('\t');
+
+  lineText = project.author + lineText + wordCount;
+
+  return lineText;
 }
