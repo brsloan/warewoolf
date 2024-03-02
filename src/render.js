@@ -352,6 +352,7 @@ function createNewProject(){
     if(title && title != ""){
       project = newProject();
       project.title = title;
+      project.author = userSettings.defaultAuthor;
       addNewChapter();
       displayProject();
     }
