@@ -178,88 +178,8 @@ function convertDeltaToDocx(delt){
     },
     footnotes: footnotes,
     sections: [
-      {
-        properties: {
-          titlePage: true,
-          page: {
-            size: {
-              width: 12240,
-              height: 15840
-            }
-          }
-        },
-        children: [
-          new docx.Paragraph({
-            text: getTitlePageFirstLine(),
-            style: 'address'
-          }),
-          new docx.Paragraph({
-            text: '',
-            style: 'address'
-          }),
-          new docx.Paragraph({
-            text: '',
-            style: 'address'
-          }),
-          new docx.Paragraph({
-            text: '',
-            style: 'address'
-          }),
-          new docx.Paragraph({
-            text: '',
-            style: 'address'
-          }),
-          new docx.Paragraph(''),
-          new docx.Paragraph(''),
-          new docx.Paragraph(''),
-          new docx.Paragraph(''),
-          new docx.Paragraph(''),
-          new docx.Paragraph(''),
-          new docx.Paragraph(''),
-          new docx.Paragraph({
-            alignment: docx.AlignmentType.CENTER,
-            children: [
-              new docx.TextRun({
-                children: [project.title != '' ? project.title : 'TITLE']
-              })
-            ]
-          }),
-          new docx.Paragraph({
-            alignment: docx.AlignmentType.CENTER,
-            children: [
-              new docx.TextRun({
-                children: ['by ' + (project.author != '' ? project.author : 'Author')]
-              })
-            ]
-          })
-        ]
-      },
-      {
-        properties: {
-          page: {
-            pageNumbers: {
-              start: 1
-            },
-            size: {
-              width: 12240,
-              height: 15840
-            }
-          }
-        },
-        headers: {
-          default: new docx.Header({
-            children: [ new docx.Paragraph({
-              alignment: docx.AlignmentType.RIGHT,
-              children: [
-                new docx.TextRun({
-                  children: [project.author + ' / ' + project.title + ' / ', docx.PageNumber.CURRENT]
-                })
-              ]
-            })]
-          })
-        },
-        children: xParagraphs
-      }
+      getTitlePage(),
+      getDocBody(xParagraphs)
     ]
   });
 
@@ -295,6 +215,95 @@ function convertRunAtttributes(attr){
   }
 
   return xAttr;
+}
+
+function getDocBody(xParagraphs){
+  return {
+    properties: {
+      page: {
+        pageNumbers: {
+          start: 1
+        },
+        size: {
+          width: 12240,
+          height: 15840
+        }
+      }
+    },
+    headers: {
+      default: new docx.Header({
+        children: [ new docx.Paragraph({
+          alignment: docx.AlignmentType.RIGHT,
+          children: [
+            new docx.TextRun({
+              children: [project.author + ' / ' + project.title + ' / ', docx.PageNumber.CURRENT]
+            })
+          ]
+        })]
+      })
+    },
+    children: xParagraphs
+  }
+}
+
+function getTitlePage(){
+  return {
+    properties: {
+      titlePage: true,
+      page: {
+        size: {
+          width: 12240,
+          height: 15840
+        }
+      }
+    },
+    children: [
+      new docx.Paragraph({
+        text: getTitlePageFirstLine(),
+        style: 'address'
+      }),
+      new docx.Paragraph({
+        text: '',
+        style: 'address'
+      }),
+      new docx.Paragraph({
+        text: '',
+        style: 'address'
+      }),
+      new docx.Paragraph({
+        text: '',
+        style: 'address'
+      }),
+      new docx.Paragraph({
+        text: '',
+        style: 'address'
+      }),
+      new docx.Paragraph(''),
+      new docx.Paragraph(''),
+      new docx.Paragraph(''),
+      new docx.Paragraph(''),
+      new docx.Paragraph(''),
+      new docx.Paragraph(''),
+      new docx.Paragraph(''),
+      new docx.Paragraph({
+        alignment: docx.AlignmentType.CENTER,
+        children: [
+          new docx.TextRun({
+            children: [project.title != '' ? project.title : 'TITLE']
+          })
+        ]
+      }),
+      new docx.Paragraph({
+        alignment: docx.AlignmentType.CENTER,
+        children: [
+          new docx.TextRun({
+            children: ['by ' + (project.author != '' ? project.author : 'Author')]
+          })
+        ]
+      })
+    ]
+  };
+
 }
 
 function getTitlePageFirstLine(){
