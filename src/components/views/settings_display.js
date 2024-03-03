@@ -18,6 +18,8 @@ function showSettings(sysDirectories, callback){
   backupDirLabel.innerText = "Backups Directory: ";
   saveSet.appendChild(backupDirLabel);
 
+  saveSet.appendChild(document.createElement('br'));
+
   var backupDirInput = document.createElement('input');
   backupDirInput.type = "text";
   backupDirInput.value = userSettings.backupDirectory ? userSettings.backupDirectory : "";
@@ -36,39 +38,40 @@ function showSettings(sysDirectories, callback){
 
   saveSet.appendChild(document.createElement('br'));
 
+  var backupTbl = document.createElement('table');
+
   var autoBackupLabel = document.createElement('label');
   autoBackupLabel.innerText = 'Auto Backup On Close: ';
-  saveSet.appendChild(autoBackupLabel);
 
   var autoBackupCheck = document.createElement('input');
   autoBackupCheck.type = 'checkbox';
   autoBackupCheck.checked = userSettings.autoBackup;
-  saveSet.appendChild(autoBackupCheck);
 
-  saveSet.appendChild(document.createElement('br'));
+  backupTbl.appendChild(generateRow(autoBackupLabel, autoBackupCheck));
 
   var backupsLimitLabel = document.createElement('label');
-  backupsLimitLabel.innerText = 'Quantity of latest backups to keep? (0=infinite): ';
-  saveSet.appendChild(backupsLimitLabel);
+  backupsLimitLabel.innerText = 'Latest backups to keep (0=infinite): ';
 
   var backupLimitInput = document.createElement('input');
   backupLimitInput.type = 'number';
   backupLimitInput.min = 0;
   backupLimitInput.value = userSettings.backupsToKeep;
-  saveSet.appendChild(backupLimitInput);
+  backupLimitInput.classList.add('number-ticker');
 
-  saveSet.appendChild(document.createElement('br'));
+  backupTbl.appendChild(generateRow(backupsLimitLabel, backupLimitInput));
 
   var autosaveLabel = document.createElement('label');
   autosaveLabel.innerText = 'Autosave every X minutes (0=never): ';
-  saveSet.appendChild(autosaveLabel);
 
   var autosaveIntervalInput = document.createElement('input');
   autosaveIntervalInput.type = 'number';
   autosaveIntervalInput.min = 0;
   autosaveIntervalInput.value = userSettings.autosaveInterval;
-  saveSet.appendChild(autosaveIntervalInput);
+  autosaveIntervalInput.classList.add('number-ticker');
 
+  backupTbl.appendChild(generateRow(autosaveLabel, autosaveIntervalInput));
+
+  saveSet.appendChild(backupTbl);
   settingsForm.appendChild(saveSet);
 
   var appearanceSet = document.createElement('fieldset');
@@ -154,6 +157,7 @@ function showSettings(sysDirectories, callback){
   addressIn.rows = 5;
   addressIn.value = userSettings.addressInfo;
   addressIn.placeholder = '123 Main Street\nWinseburg, Ohio 46041\n555-555-0123\nemail@warewoolf.org';
+  addressIn.id = 'address-info-input';
   infoSet.appendChild(addressIn);
 
   settingsForm.appendChild(infoSet);

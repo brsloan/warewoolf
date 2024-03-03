@@ -11,10 +11,11 @@ function showEmailOptions(){
 
     var emailForm = document.createElement('form');
 
+    var emTbl = document.createElement('table');
+
     var senderEmailLabel = document.createElement('label');
     senderEmailLabel.for = 'sender-email-input';
     senderEmailLabel.innerText = 'Sender Email:';
-    emailForm.appendChild(senderEmailLabel);
 
     var senderEmailInput = document.createElement('input');
     senderEmailInput.type = 'text';
@@ -22,14 +23,12 @@ function showEmailOptions(){
     senderEmailInput.id = 'sender-email-input';
     if(userSettings.senderEmail != null)
       senderEmailInput.value = userSettings.senderEmail;
-    emailForm.appendChild(senderEmailInput);
 
-    emailForm.appendChild(document.createElement('br'));
+    emTbl.appendChild(generateRow(senderEmailLabel, senderEmailInput));
 
     var senderPassLabel = document.createElement('label');
     senderPassLabel.for = 'sender-email-pass';
     senderPassLabel.innerText = 'Sender Password:';
-    emailForm.appendChild(senderPassLabel);
 
     var senderPassInput = document.createElement('input');
     senderPassInput.type = 'password';
@@ -40,28 +39,23 @@ function showEmailOptions(){
         senderPassInput.value = decrypedPass;
     }
 
-    emailForm.appendChild(senderPassInput);
-
-    emailForm.appendChild(document.createElement('br'));
+    emTbl.appendChild(generateRow(senderPassLabel, senderPassInput));
 
     var rememberPassLabel = document.createElement('label');
     rememberPassLabel.innerText = "Remember Password?";
     rememberPassLabel.for = 'remember-pass-check';
-    emailForm.appendChild(rememberPassLabel);
 
     var rememberPassCheck = document.createElement('input');
     rememberPassCheck.type = 'checkbox';
     rememberPassCheck.id = 'remember-pass-check';
     if(userSettings.senderPass != null)
       rememberPassCheck.checked = true;
-    emailForm.appendChild(rememberPassCheck);
 
-    emailForm.appendChild(document.createElement('br'));
+    emTbl.appendChild(generateRow(rememberPassLabel, rememberPassCheck));
 
     var receiverEmailLabel = document.createElement('label');
     receiverEmailLabel.for = 'receiver-email-input';
     receiverEmailLabel.innerText = 'Receiver Email:';
-    emailForm.appendChild(receiverEmailLabel);
 
     var receiverEmailInput = document.createElement('input');
     receiverEmailInput.type = 'text';
@@ -69,56 +63,62 @@ function showEmailOptions(){
     receiverEmailInput.id = 'receiver-email-input';
     if(userSettings.receiverEmail != null)
       receiverEmailInput.value = userSettings.receiverEmail;
-    emailForm.appendChild(receiverEmailInput);
 
-    emailForm.appendChild(document.createElement('br'));
+    emTbl.appendChild(generateRow(receiverEmailLabel, receiverEmailInput));
+
+    emailForm.appendChild(emTbl);
+
+    var attachSet = document.createElement('fieldset');
+    var attachLeg = document.createElement('legend');
+    attachLeg.innerText = 'Attachment Options';
+    attachSet.appendChild(attachLeg);
 
     var responseText = document.createElement('p');
     responseText.innerText = "";
-    emailForm.appendChild(responseText);
+    attachSet.appendChild(responseText);
 
     var chapRadioLabel = document.createElement('label');
     chapRadioLabel.innerText = "Send Chapter";
     chapRadioLabel.for = 'email-radio-chap';
-    emailForm.appendChild(chapRadioLabel);
+    attachSet.appendChild(chapRadioLabel);
 
     var chapRadio = document.createElement('input');
     chapRadio.type = 'radio';
     chapRadio.name = 'email-radio';
     chapRadio.id = 'email-radio-chap';
     chapRadio.value = 'chapter';
-    emailForm.appendChild(chapRadio);
+    attachSet.appendChild(chapRadio);
 
     var compiledRadioLabel = document.createElement('label');
     compiledRadioLabel.innerText = " | Send Compiled";
     compiledRadioLabel.for = 'email-radio-compiled';
-    emailForm.appendChild(compiledRadioLabel);
+    attachSet.appendChild(compiledRadioLabel);
 
     var compiledRadio = document.createElement('input');
     compiledRadio.type = 'radio';
     compiledRadio.name = 'email-radio';
     compiledRadio.id = 'email-radio-compiled';
     compiledRadio.value = 'compiled';
-    emailForm.appendChild(compiledRadio);
+    attachSet.appendChild(compiledRadio);
 
     var projectRadioLabel = document.createElement('label');
     projectRadioLabel.innerText = " | Send Project";
     projectRadioLabel.for = 'email-radio-project';
-    emailForm.appendChild(projectRadioLabel);
+    attachSet.appendChild(projectRadioLabel);
 
     var projectRadio = document.createElement('input');
     projectRadio.type = 'radio';
     projectRadio.name = 'email-radio';
     projectRadio.id = 'email-radio-project';
     projectRadio.value = 'project';
-    emailForm.appendChild(projectRadio);
+    attachSet.appendChild(projectRadio);
 
-    emailForm.appendChild(document.createElement('br'));
+    attachSet.appendChild(document.createElement('br'));
 
     var typeLabel = document.createElement("label");
     typeLabel.innerText = "File Type: ";
     typeLabel.for = "filetype-select";
-    emailForm.appendChild(typeLabel);
+    attachSet.appendChild(typeLabel);
 
     var typeSelect = document.createElement("select");
     const typeOptions = [".docx", ".txt", ".mdfc"];
@@ -128,7 +128,9 @@ function showEmailOptions(){
       txtOp.innerText = op;
       typeSelect.appendChild(txtOp);
     });
-    emailForm.appendChild(typeSelect);
+    attachSet.appendChild(typeSelect);
+
+    emailForm.appendChild(attachSet);
 
     emailForm.appendChild(document.createElement('br'));
 
@@ -142,8 +144,6 @@ function showEmailOptions(){
     else if(userSettings.emailType == 'compiled')
       compiledRadio.checked = true;
     typeSelect.value = userSettings.compileType;
-
-    emailForm.appendChild(document.createElement('br'));
 
     var sendButton = createButton('Send');
     sendButton.onclick = function(){
@@ -185,13 +185,14 @@ function showEmailOptions(){
     };
     emailForm.appendChild(sendButton);
 
-    popup.appendChild(emailForm);
-
     var closeBtn = createButton("Close");
     closeBtn.onclick = function(){
       closePopups();
     };
-    popup.appendChild(closeBtn);
+    emailForm.appendChild(closeBtn);
+
+    popup.appendChild(emailForm);
+
 
     chapRadio.onclick = function(){
       typeSelect.disabled = false;

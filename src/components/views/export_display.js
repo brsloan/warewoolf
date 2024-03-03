@@ -2,6 +2,11 @@ function showExportOptions(sysDirectories){
     removeElementsByClass('popup');
     var popup = document.createElement("div");
     popup.classList.add("popup");
+
+    var popupTitle = document.createElement('h1');
+    popupTitle.innerText = 'Export Project';
+    popup.appendChild(popupTitle);
+
     var exportForm = document.createElement("form");
 
     var typeLabel = document.createElement("label");

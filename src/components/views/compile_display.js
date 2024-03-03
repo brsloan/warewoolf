@@ -2,12 +2,18 @@ function showCompileOptions(sysDirectories){
     removeElementsByClass('popup');
     var popup = document.createElement("div");
     popup.classList.add("popup");
+
+    var popupTitle = document.createElement('h1');
+    popupTitle.innerText = 'Compile Project';
+    popup.appendChild(popupTitle);
+
     var compileForm = document.createElement("form");
+
+    var compTbl = document.createElement('table');
 
     var typeLabel = document.createElement("label");
     typeLabel.innerText = "File Type: ";
     typeLabel.for = "filetype-select";
-    compileForm.appendChild(typeLabel);
 
     var typeSelect = document.createElement("select");
     const typeOptions = [".docx", ".txt", ".mdfc"];
@@ -18,44 +24,41 @@ function showCompileOptions(sysDirectories){
       typeSelect.appendChild(txtOp);
     });
     typeSelect.value = userSettings.compileType;
-    compileForm.appendChild(typeSelect);
 
-    compileForm.appendChild(document.createElement('br'));
+    compTbl.appendChild(generateRow(typeLabel, typeSelect));
 
     var insertStrLabel = document.createElement("label");
     insertStrLabel.innerText = "Insert string to mark chapter breaks: ";
     insertStrLabel.for = "insert-str-input";
-    compileForm.appendChild(insertStrLabel);
 
     var insertStrInput = document.createElement("input");
     insertStrInput.type = "text";
     insertStrInput.value = userSettings.compileChapMark;
     insertStrInput.id = "insert-str-input";
-    compileForm.appendChild(insertStrInput);
 
-    compileForm.appendChild(document.createElement('br'));
+    compTbl.appendChild(generateRow(insertStrLabel, insertStrInput));
 
     var insertHeadLabel = document.createElement("label");
     insertHeadLabel.innerText = "Insert chapter titles as headings: ";
     insertHeadLabel.for = "insert-head-check";
-    compileForm.appendChild(insertHeadLabel);
 
     var insertHeadCheck = document.createElement("input");
     insertHeadCheck.type = "checkbox";
     insertHeadCheck.id = "insert-head-check";
     insertHeadCheck.checked = userSettings.compileInsertHeaders;
-    compileForm.appendChild(insertHeadCheck);
 
-    compileForm.appendChild(document.createElement('br'));
+    compTbl.appendChild(generateRow(insertHeadLabel, insertHeadCheck));
 
     var titlePageLabel = document.createElement('label');
     titlePageLabel.innerText = 'Generate Title Page: ';
-    compileForm.appendChild(titlePageLabel);
 
     var titlePageCheck = document.createElement('input');
     titlePageCheck.type = 'checkbox';
     titlePageCheck.checked = userSettings.compileGenTitlePage;
-    compileForm.appendChild(titlePageCheck);
+
+    compTbl.appendChild(generateRow(titlePageLabel, titlePageCheck));
+
+    compileForm.appendChild(compTbl);
 
     var compileBtn = document.createElement("input");
     compileBtn.type = "submit";
@@ -67,6 +70,14 @@ function showCompileOptions(sysDirectories){
       closePopups();
     };
     compileForm.appendChild(cancelBtn);
+
+    typeSelect.onchange = function(){
+      if(typeSelect.value != '.docx')
+        titlePageCheck.disabled = true;
+      else {
+        titlePageCheck.disabled = false;
+      }
+    }
 
     compileForm.onsubmit = function(e){
       e.preventDefault();

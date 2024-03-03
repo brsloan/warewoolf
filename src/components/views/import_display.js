@@ -2,7 +2,18 @@ function showImportOptions(sysDirectories){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup");
+
+  var popupTitle = document.createElement('h1');
+  popupTitle.innerText = 'Import Documents';
+  popup.appendChild(popupTitle);
+
   var importForm = document.createElement("form");
+
+  var filetypeSet = document.createElement('fieldset');
+  importForm.appendChild(filetypeSet);
+  var filetypeLeg = document.createElement('legend');
+  filetypeLeg.innerText = 'File Type';
+  filetypeSet.appendChild(filetypeLeg);
 
   var filetypes = [
     { name: 'Docx', id: 'docxSelect', extensions: ['docx']},
@@ -16,12 +27,12 @@ function showImportOptions(sysDirectories){
     filetypeSelect.name = 'typeSelect';
     filetypeSelect.value = i;
     filetypeSelect.id = type.id;
-    importForm.appendChild(filetypeSelect);
+    filetypeSet.appendChild(filetypeSelect);
 
     var typeLabel = document.createElement('label');
     typeLabel.for = filetypeSelect.name;
     typeLabel.innerText = type.name;
-    importForm.appendChild(typeLabel);
+    filetypeSet.appendChild(typeLabel);
   });
 
   var plainTextOptionsSet = document.createElement('fieldset');

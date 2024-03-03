@@ -2,12 +2,18 @@ function requestProjectTitle(callback){
   var popup = document.createElement("div");
   popup.classList.add("popup");
 
+  var popupTitle = document.createElement('h1');
+  popupTitle.innerText = 'New Project';
+  popup.appendChild(popupTitle);
+
   var titleForm = document.createElement("form");
 
   var message = document.createElement("label");
   message.innerText = "What is the title of this project?";
   message.for = "title-input";
   titleForm.appendChild(message);
+
+  titleForm.appendChild(document.createElement('br'));
 
   var titleInput = document.createElement("input");
   titleInput.type = "text";
