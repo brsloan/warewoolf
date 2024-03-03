@@ -44,4 +44,7 @@
     color: darkorange;
   }
 
+.ql-editor.ql-blank::before{
+    color: #abb2bf;
+  }
 }
