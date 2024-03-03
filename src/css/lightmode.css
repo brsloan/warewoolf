@@ -51,5 +51,8 @@
     outline: none;
   }
 
+  .warning-text {
+    color: gold;
+  }
 
 }
