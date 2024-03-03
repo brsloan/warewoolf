@@ -189,9 +189,10 @@ function newProject(){
     }
 
     function testChapsDirectory(){
-      var firstChapExists = fs.existsSync(project.directory + project.chapsDirectory + '1.pup');
+      var firstChapExists = fs.existsSync(project.directory + project.chapsDirectory + project.chapters[0].filename);
 
       if(!firstChapExists){
+          console.log('could not find first pup: ' + project.directory + project.chapsDirectory + project.chapters[0].filename);
           promptForMissingPups();
       }
     }
