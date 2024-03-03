@@ -3,6 +3,10 @@ function showAbout(sysDirectories, appVersion){
   var popup = document.createElement("div");
   popup.classList.add("popup");
 
+  var popupTitle = document.createElement('h1');
+  popupTitle.innerText = 'About';
+  popup.appendChild(popupTitle);
+
   var logo = document.createElement('img');
   logo.src = "assets/logo.png";
   logo.classList.add('logo');
@@ -10,19 +14,17 @@ function showAbout(sysDirectories, appVersion){
 
   var version = document.createElement('h1');
   version.innerText = appVersion;
+  version.classList.add('about-version');
   popup.appendChild(version);
+
+  var wwLink = document.createElement('a');
+  wwLink.innerText = "WareWoolf.org";
+  wwLink.classList.add('about-url');
+  popup.appendChild(wwLink);
 
   var descr = document.createElement('p');
   descr.innerText = "WareWoolf is free, open source software released under an MIT license.";
   popup.appendChild(descr);
-
-  var githubLink = document.createElement('p');
-  githubLink.innerText = "github.com/brsloan/warewoolf";
-  popup.appendChild(githubLink);
-
-  var wwLink = document.createElement('a');
-  wwLink.innerText = "WareWoolf.org";
-  popup.appendChild(wwLink);
 
   var displayLicBtn = createButton('View License');
   popup.appendChild(displayLicBtn);

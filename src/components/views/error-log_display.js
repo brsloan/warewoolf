@@ -3,6 +3,10 @@ function showErrorLog(){
   var popup = document.createElement("div");
   popup.classList.add("popup");
 
+  var popupTitle = document.createElement('h1');
+  popupTitle.innerText = 'Error Log';
+  popup.appendChild(popupTitle);
+
   var errorLogTextBox = document.createElement("pre");
   var errorLogText = loadErrorLog();
   errorLogTextBox.innerText = errorLogText != '' ? errorLogText : '(Log Empty)';
@@ -16,10 +20,11 @@ function showErrorLog(){
 
   var emailForm = document.createElement('form');
 
+  var emlTbl = document.createElement('table');
+
   var senderEmailLabel = document.createElement('label');
   senderEmailLabel.for = 'sender-email-input';
   senderEmailLabel.innerText = 'Sender Email:';
-  emailForm.appendChild(senderEmailLabel);
 
   var senderEmailInput = document.createElement('input');
   senderEmailInput.type = 'text';
@@ -27,14 +32,12 @@ function showErrorLog(){
   senderEmailInput.id = 'sender-email-input';
   if(userSettings.senderEmail != null)
     senderEmailInput.value = userSettings.senderEmail;
-  emailForm.appendChild(senderEmailInput);
 
-  emailForm.appendChild(document.createElement('br'));
+  emlTbl.appendChild(generateRow(senderEmailLabel, senderEmailInput));
 
   var senderPassLabel = document.createElement('label');
   senderPassLabel.for = 'sender-email-pass';
   senderPassLabel.innerText = 'Sender Password:';
-  emailForm.appendChild(senderPassLabel);
 
   var senderPassInput = document.createElement('input');
   senderPassInput.type = 'password';
@@ -45,14 +48,11 @@ function showErrorLog(){
       senderPassInput.value = decrypedPass;
   }
 
-  emailForm.appendChild(senderPassInput);
-
-  emailForm.appendChild(document.createElement('br'));
+  emlTbl.appendChild(generateRow(senderPassLabel, senderPassInput));
 
   var receiverEmailLabel = document.createElement('label');
   receiverEmailLabel.for = 'receiver-email-input';
   receiverEmailLabel.innerText = 'Receiver Email:';
-  emailForm.appendChild(receiverEmailLabel);
 
   var receiverEmailInput = document.createElement('input');
   receiverEmailInput.type = 'text';
@@ -60,9 +60,10 @@ function showErrorLog(){
   receiverEmailInput.id = 'receiver-email-input';
   if(userSettings.receiverEmail != null)
     receiverEmailInput.value = userSettings.receiverEmail;
-  emailForm.appendChild(receiverEmailInput);
 
-  emailForm.appendChild(document.createElement('br'));
+  emlTbl.appendChild(generateRow(receiverEmailLabel, receiverEmailInput));
+
+  emailForm.appendChild(emlTbl);
 
   var responseText = document.createElement('p');
   responseText.innerText = "";

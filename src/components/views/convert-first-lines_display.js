@@ -9,6 +9,7 @@ function showConvertFirstLines(cback){
 
   var undoWarning = document.createElement('p');
   undoWarning.innerText = 'WARNING: This action cannot be undone. Be sure to save first.';
+  undoWarning.classList.add('warning-text');
   popup.appendChild(undoWarning);
 
   var convertBtn = createButton('Convert');

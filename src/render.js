@@ -539,9 +539,16 @@ function verifyToDelete(ind){
   if(indexIsTrash(ind)){
     var popup = document.createElement("div");
     popup.classList.add("popup");
+
+    var warningTitle = document.createElement('h1');
+    warningTitle.innerText = 'WARNING:'
+    popup.appendChild(warningTitle);
+
     var message = document.createElement("p");
-    message.innerHTML = "Are you sure you want to delete this file? This is permanent.";
+    message.innerText = "Are you sure you want to delete this file? This is permanent.";
+    message.classList.add('warning-text');
     popup.appendChild(message);
+
     var yesButton = createButton("Yes");
     yesButton.onclick = function(){
       deleteChapter(ind);

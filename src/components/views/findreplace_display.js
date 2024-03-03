@@ -5,6 +5,10 @@ function showFindReplace(){
     popup.classList.add("popup");
     popup.classList.add("popup-search-view");
 
+    var popupTitle = document.createElement('h1');
+    popupTitle.innerText = 'Find / Replace';
+    popup.appendChild(popupTitle);
+
     var findForm = document.createElement("form");
 
     var findIn = document.createElement("input");

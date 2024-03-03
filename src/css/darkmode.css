@@ -12,7 +12,7 @@
   .sidebar {
     color: #abb2bf;
   }
-
+and
   ::-webkit-scrollbar {
     background-color: none;
   }
@@ -38,6 +38,10 @@
 
   #chapter-list-sidebar:focus {
     outline: none;
+  }
+
+  .warning-text {
+    color: darkorange;
   }
 
 }

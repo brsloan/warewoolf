@@ -8,44 +8,19 @@ function showWifiManager(){
   header.innerText = "Wi-Fi Manager";
   popup.appendChild(header);
 
-  var connectionInfoDiv = document.createElement('div');
-  popup.appendChild(connectionInfoDiv);
-
-  var connectedNetworkLabel = document.createElement('label');
-  connectedNetworkLabel.innerText = "Network: ";
-  connectionInfoDiv.appendChild(connectedNetworkLabel);
-
-  var connectedNetworkText = document.createElement('label');
-  connectedNetworkText.innerText = "checking...";
-  connectionInfoDiv.appendChild(connectedNetworkText);
-
-  connectionInfoDiv.appendChild(document.createElement('br'));
-
-  var connectionStateLabel = document.createElement('label');
-  connectionStateLabel.innerText = "State: ";
-  connectionInfoDiv.appendChild(connectionStateLabel);
-
-  var connectionStateText = document.createElement('label');
-  connectionStateText.innerText = "checking...";
-  connectionInfoDiv.appendChild(connectionStateText);
-  getConnectionState(updateConnectionState);
-
-  popup.appendChild(document.createElement('br'));
-
   var networkForm = document.createElement('form');
 
-  var enableWifiDiv = document.createElement('div');
-  networkForm.appendChild(enableWifiDiv);
+  var networkTbl = document.createElement('table');
 
   var enableWifiLabel = document.createElement('label');
-  enableWifiLabel.innerText = "Enable Wi-Fi?";
+  enableWifiLabel.innerText = "Enable Wi-Fi: ";
   enableWifiLabel.for = 'enable-wifi-check';
-  enableWifiDiv.appendChild(enableWifiLabel);
 
   var enableWifiCheck = document.createElement('input');
   enableWifiCheck.type = 'checkbox';
   enableWifiCheck.id = 'enable-wifi-check';
-  enableWifiDiv.appendChild(enableWifiCheck);
+
+  networkTbl.appendChild(generateRow(enableWifiLabel, enableWifiCheck));
   enableWifiCheck.onclick = function(){
     if(enableWifiCheck.checked){
       enableWifi(alertWifiEnabled);
@@ -56,7 +31,24 @@ function showWifiManager(){
   }
   getWifiStatus(updateWifiStatus);
 
-  networkForm.appendChild(document.createElement('br'));
+  var connectionStateLabel = document.createElement('label');
+  connectionStateLabel.innerText = "State: ";
+
+  var connectionStateText = document.createElement('label');
+  connectionStateText.innerText = "checking...";
+
+  networkTbl.appendChild(generateRow(connectionStateLabel, connectionStateText));
+  getConnectionState(updateConnectionState);
+
+  var connectedNetworkLabel = document.createElement('label');
+  connectedNetworkLabel.innerText = "Network: ";
+
+  var connectedNetworkText = document.createElement('label');
+  connectedNetworkText.innerText = "checking...";
+
+  networkTbl.appendChild(generateRow(connectedNetworkLabel, connectedNetworkText));
+
+  networkForm.appendChild(networkTbl);
 
   var newConnectionSet = document.createElement("fieldset");
   networkForm.appendChild(newConnectionSet);
@@ -65,28 +57,28 @@ function showWifiManager(){
   newConnectionLegend.innerText = "New Connection";
   newConnectionSet.appendChild(newConnectionLegend);
 
+  var newConTbl = document.createElement('table');
+
   var networksLabel = document.createElement("label");
   networksLabel.innerText = "Available networks: ";
   networksLabel.for = "networks-select";
-  newConnectionSet.appendChild(networksLabel);
 
   var networksSelect = document.createElement("select");
-  newConnectionSet.appendChild(networksSelect);
-  getWifiNetworks(updateNetworksList);
+  newConTbl.appendChild(generateRow(networksLabel, networksSelect));
 
-  newConnectionSet.appendChild(document.createElement('br'));
+  getWifiNetworks(updateNetworksList);
 
   var networkPassLabel = document.createElement('label');
   networkPassLabel.for = 'network-pass';
   networkPassLabel.innerText = 'Password: ';
-  newConnectionSet.appendChild(networkPassLabel);
 
   var networkPassInput = document.createElement('input');
   networkPassInput.type = 'password';
   networkPassInput.id = 'network-pass';
-  newConnectionSet.appendChild(networkPassInput);
 
-  newConnectionSet.appendChild(document.createElement('br'));
+  newConTbl.appendChild(generateRow(networkPassLabel, networkPassInput));
+  newConnectionSet.appendChild(newConTbl);
+  //newConnectionSet.appendChild(document.createElement('br'));
 
   var connectBtn = createButton("Connect");
   connectBtn.onclick = function(){

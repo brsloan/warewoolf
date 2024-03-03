@@ -84,6 +84,8 @@ function showShortcutsHelp(){
       popup.appendChild(shortcutsTable);
     });
 
+    popup.appendChild(document.createElement('br'));
+
     var closeBtn = createButton("Close");
     closeBtn.onclick = function(){
       closePopups();

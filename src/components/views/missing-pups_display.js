@@ -5,6 +5,7 @@ function promptForMissingPups(){
 
   var warningTitle = document.createElement("h1");
   warningTitle.innerText = "Oops! This Woolf's Pups Are Missing!";
+  warningTitle.classList.add('warning-text');
   popup.appendChild(warningTitle);
 
   var warning = document.createElement("p");

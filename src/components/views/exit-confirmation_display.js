@@ -9,6 +9,7 @@ function displayExitConfirmation(continueFunc){
 
   var subWarning = document.createElement('p');
   subWarning.innerText = 'You have unsaved changes. Would you like to save first?';
+  subWarning.classList.add('warning-text');
   popup.appendChild(subWarning);
 
   var save = createButton("Save");

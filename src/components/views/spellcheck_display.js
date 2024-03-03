@@ -10,6 +10,10 @@ function showSpellcheck(startingIndex = 0, wordsToIgnore = []){
     popup.classList.add("popup");
     popup.classList.add("popup-search-view");
 
+    var popupTitle = document.createElement('h1');
+    popupTitle.innerText = 'Spell Check';
+    popup.appendChild(popupTitle);
+
     var wordDisplay = document.createElement("h2");
     wordDisplay.innerText = invalidWord ? invalidWord.word : "*spellcheck finished*";
     popup.appendChild(wordDisplay);

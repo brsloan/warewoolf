@@ -2,6 +2,16 @@ function showTabOptions(){
     removeElementsByClass('popup');
     var popup = document.createElement("div");
     popup.classList.add("popup");
+
+    var popupTitle = document.createElement('h1');
+    popupTitle.innerText = 'Convert Marked Tabs';
+    popup.appendChild(popupTitle);
+
+    var undoWarning = document.createElement('p');
+    undoWarning.innerText = 'WARNING: This action cannot be undone. Be sure to save first.';
+    undoWarning.classList.add('warning-text');
+    popup.appendChild(undoWarning);
+
     var tabForm = document.createElement("form");
 
     var tabStrLabel = document.createElement("label");
@@ -37,10 +47,6 @@ function showTabOptions(){
     };
 
     popup.appendChild(tabForm);
-
-    var undoWarning = document.createElement('p');
-    undoWarning.innerText = 'WARNING: This action cannot be undone. Be sure to save first.';
-    popup.appendChild(undoWarning);
 
     document.body.appendChild(popup);
     tabStrInput.focus();

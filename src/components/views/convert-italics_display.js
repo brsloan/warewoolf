@@ -2,6 +2,16 @@ function showItalicsOptions(){
     removeElementsByClass('popup');
     var popup = document.createElement("div");
     popup.classList.add("popup");
+
+    var popupTitle = document.createElement('h1');
+    popupTitle.innerText = 'Convert Marked Italics';
+    popup.appendChild(popupTitle);
+
+    var undoWarning = document.createElement('p');
+    undoWarning.innerText = 'WARNING: This action cannot be undone. Be sure to save first.';
+    undoWarning.classList.add('warning-text');
+    popup.appendChild(undoWarning);
+
     var italicsForm = document.createElement("form");
 
     var italicsStrLabel = document.createElement("label");
@@ -36,10 +46,6 @@ function showItalicsOptions(){
     };
 
     popup.appendChild(italicsForm);
-
-    var undoWarning = document.createElement('p');
-    undoWarning.innerText = 'WARNING: This action cannot be undone. Be sure to save first.';
-    popup.appendChild(undoWarning);
 
     document.body.appendChild(popup);
     italicsStrInput.focus();

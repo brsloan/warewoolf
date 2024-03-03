@@ -3,30 +3,52 @@ function showWordCount(){
     var popup = document.createElement("div");
     popup.classList.add("popup");
 
+    var popupTitle = document.createElement('h1');
+    popupTitle.innerText = 'Word Count';
+    popup.appendChild(popupTitle);
+
+    var cntTbl = document.createElement('table');
+
+    var chapLabel = document.createElement('label');
+    chapLabel.innerText = 'Chapter: ';
+
     var chapTotalDisplay = document.createElement('p');
-    chapTotalDisplay.innerText = "Chapter Word Count: Calculating...";
-    popup.appendChild(chapTotalDisplay);
+    chapTotalDisplay.innerText = "Calculating...";
+
+    cntTbl.appendChild(generateRow(chapLabel, chapTotalDisplay));
+
+    var totalLabel = document.createElement('label');
+    totalLabel.innerText = 'Project: ';
 
     var totalDisplay = document.createElement('p');
-    totalDisplay.innerText = "Total Word Count: Calculating...";
-    popup.appendChild(totalDisplay);
+    totalDisplay.innerText = "Calculating...";
+
+    cntTbl.appendChild(generateRow(totalLabel, totalDisplay));
+
+    var sessLabel = document.createElement('label');
+    sessLabel.innerText = 'Session: ';
 
     var sessionTotalDisplay = document.createElement('p');
-    sessionTotalDisplay.innerText = "Session Word Count: Calculating...";
-    popup.appendChild(sessionTotalDisplay);
+    sessionTotalDisplay.innerText = "Calculating...";
+
+    cntTbl.appendChild(generateRow(sessLabel, sessionTotalDisplay));
 
     var goalLabel = document.createElement('label');
     goalLabel.innerText = "Goal: ";
     goalLabel.for = "word-goal-input";
-    popup.appendChild(goalLabel);
 
     var goalInput = document.createElement('input');
     goalInput.type = "number";
     goalInput.value = project.wordGoal;
     goalInput.id = "word-goal-input";
-    popup.appendChild(goalInput);
 
-    popup.appendChild(document.createElement('br'));
+    cntTbl.appendChild(generateRow(goalLabel, goalInput));
+
+    popup.appendChild(cntTbl);
+
+    var progressBarLabel = document.createElement('label');
+    progressBarLabel.innerText = "Progress";
+    popup.appendChild(progressBarLabel);
 
     var progressBarContainer = document.createElement('div');
     progressBarContainer.id = "prog-bar-container";
@@ -52,9 +74,9 @@ function showWordCount(){
       updateProgressBar();
     };
 
-    chapTotalDisplay.innerText = "Chapter Word Count: " + activeTotal;
-    totalDisplay.innerText = "Total Word Count: " + total;
-    sessionTotalDisplay.innerText = "Session Word Count: " + (total - project.wordCountOnLoad);
+    chapTotalDisplay.innerText = activeTotal;
+    totalDisplay.innerText = total;
+    sessionTotalDisplay.innerText = total - project.wordCountOnLoad;
     closeBtn.focus();
 
     function updateProgressBar(){
