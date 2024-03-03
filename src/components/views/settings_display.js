@@ -191,7 +191,7 @@ function showSettings(sysDirectories, callback){
 
   document.body.appendChild(popup);
 
-  backupDirInput.focus();
+  defAuthIn.focus();
 }
 
 function promptToChooseDirectory(defPath, sysDirectories, cback){
