@@ -83,26 +83,28 @@ function newChapter(){
     function saveFile(){
       try{
         var chap = this;
-
-        if(chap.filename == undefined || chap.filename == null)
-          chap.filename = getNewFilename();
-
-        fs.writeFileSync(project.directory + project.chapsDirectory + chap.filename, JSON.stringify(chap.contents), "utf8");
-        chap.contents = null;
-        chap.hasUnsavedChanges = false;
+        if(chap.contents !== null){
 
 
-        function getNewFilename(){
-          var largestFilename = 0;
+          if(chap.filename == undefined || chap.filename == null)
+            chap.filename = getNewFilename();
 
-          fs.readdirSync(project.directory + project.chapsDirectory).forEach(file => {
-            var nameNumber = parseInt(file.split(".")[0]);
-            if(nameNumber > largestFilename)
-              largestFilename = nameNumber;
-          });
+          fs.writeFileSync(project.directory + project.chapsDirectory + chap.filename, JSON.stringify(chap.contents), "utf8");
+          chap.contents = null;
 
-          return (largestFilename + 1).toString() + ".pup";
+          function getNewFilename(){
+            var largestFilename = 0;
+
+            fs.readdirSync(project.directory + project.chapsDirectory).forEach(file => {
+              var nameNumber = parseInt(file.split(".")[0]);
+              if(nameNumber > largestFilename)
+                largestFilename = nameNumber;
+            });
+
+            return (largestFilename + 1).toString() + ".pup";
+          }
         }
+        chap.hasUnsavedChanges = false;
       }
       catch(err){
         logError(err);
