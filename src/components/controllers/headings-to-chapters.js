@@ -6,11 +6,11 @@ function breakHeadingsIntoChapters(headingLevel = 1){
   var chapBuilder = [];
 
   for(let i=0;i < opsIn.length;i++){
-    if(i < opsIn.length - 1 && opsIn[i + 1].attributes && opsIn[i + 1].attributes.header && opsIn[i + 1].attributes.header == headingLevel){
+    if(i != 0 && i < opsIn.length - 1 && opsIn[i + 1].attributes && opsIn[i + 1].attributes.header && opsIn[i + 1].attributes.header == headingLevel){
       var splitPoint = opsIn[i].insert.lastIndexOf('\n');
       if(splitPoint > -1){
         chapBuilder.push({
-          insert: opsIn[i].insert.slice(0, splitPoint), 
+          insert: opsIn[i].insert.slice(0, splitPoint),
           attributes: opsIn[i].attributes
         });
       }
@@ -18,7 +18,7 @@ function breakHeadingsIntoChapters(headingLevel = 1){
       chapBuilder = [];
       if(splitPoint > -1){
         chapBuilder.push({
-          insert: opsIn[i].insert.slice(splitPoint + 1), 
+          insert: opsIn[i].insert.slice(splitPoint + 1),
           attributes: opsIn[i].attributes
         });
       }
@@ -28,8 +28,8 @@ function breakHeadingsIntoChapters(headingLevel = 1){
     }
     else {
       chapBuilder.push(opsIn[i]);
-    } 
-    
+    }
+
     if(i == opsIn.length - 1){
       chaps.push({ops: chapBuilder});
     }
