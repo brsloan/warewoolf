@@ -15,7 +15,7 @@ What it does have is an array of tools for importing plaintext and docx files an
 Dark Mode:
 ![screenshot of dark mode of program described](src/assets/screenshot_darkmode.png?raw=true "WareWoolf")
 Light Mode:
- ![screenshot of program described](src/assets/screenshot.png?raw=true "WareWoolf")
+ ![screenshot of program described](src/assets/screenshot_lightmode.png?raw=true "WareWoolf")
 
 For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.com/brsloan/warewoolf/wiki).
 
