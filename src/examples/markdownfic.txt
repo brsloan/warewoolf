@@ -1,11 +1,11 @@
 [>c]# Title
 ## Subtitle
 
-	This is the first paragraph. This is the first paragraph. This is the first paragraph. This is the first paragraph. This is the first paragraph. This is the first paragraph.
+	This is the first paragraph. You will note that MarkdownFic supports indented paragraphs. This is the first paragraph. This is the first paragraph. This is the first paragraph. This is the first paragraph. This is the first paragraph.
 	This is the second paragraph.
 This third paragraph is not indented.
 
-There should be a line of white space above this.
+There should be a line of white space above this. \*This\* should show asterisks (\**this two\**) and not be italicized because they are escaped.
 
 	*This sentence is italic.* **This sentence is bold.** ~~This sentence is struck through.~~ __This is underlined.__  ***~~__This is everything.__~~***
 >This is a one-line block quote. This is a one-line block quote. This is a one-line block quote. This is a one-line block quote. This is a one-line block quote. This is a one-line block quote. This is a one-line block quote. This is a one-line block quote. This is a one-line block quote. This is a one-line block quote. This is a one-line block quote. This is a one-line block quote. This is a one-line block quote. This is a one-line block quote. This is a one-line block quote. This is a one-line block quote. This is a one-line block quote. This is a one-line block quote. This is a one-line block quote. This is a one-line block quote. This is a one-line block quote.
@@ -21,3 +21,4 @@ There should be a line of white space above this.
 
 This line has a footnote. [^1]
 [^1]: This is the footnote.
+[^1]: 	This is a second paragraph on the same footnote, this one indented. Unlike in standard markdown, in MarkdownFic you mark multi-paragraph footnotes with the marker on every paragraph.
