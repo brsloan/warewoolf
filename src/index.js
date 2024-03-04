@@ -1,8 +1,7 @@
-const { app, BrowserWindow, Menu, dialog } = require('electron');
+const { app, BrowserWindow, Menu, nativeTheme } = require('electron');
 const path = require('path');
-const { ipcMain } = require('electron')
-const remoteMain = require('@electron/remote/main');
-remoteMain.initialize();
+const { ipcMain } = require('electron');
+const isLinux = process.platform === "linux";
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) { // eslint-disable-line global-require
@@ -18,7 +17,6 @@ const createWindow = () => {
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
-      enableRemoteModule: true,
       spellcheck: false,
       devTools: false
     },
@@ -26,15 +24,13 @@ const createWindow = () => {
     icon: path.join(__dirname, 'assets/icon.png')
   });
 
-  remoteMain.enable(mainWindow.webContents);
-
   mainWindow.maximize();
 
   // and load the index.html of the app.
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
 
   // Open the DevTools.
-  mainWindow.webContents.openDevTools();
+  //mainWindow.webContents.openDevTools();
 
   var menu = Menu.buildFromTemplate([
     {
@@ -44,14 +40,14 @@ const createWindow = () => {
           label: 'New Project',
           accelerator: 'CmdOrCtrl+Shift+N',
           click(item, focusWindow){
-            mainWindow.webContents.send("new-project-clicked", app.getPath("documents"));
+            mainWindow.webContents.send("new-project-clicked");
           }
         },
         {
           label: 'Open Project',
           accelerator: 'CmdOrCtrl+Shift+O',
           click(item, focusWindow){
-            mainWindow.webContents.send("open-clicked", app.getPath("documents"));
+            mainWindow.webContents.send("open-clicked");
           }
         },
         {type: 'separator'},
@@ -59,20 +55,27 @@ const createWindow = () => {
           label: 'Save',
           accelerator: 'CmdOrCtrl+S',
           click(item, focusWindow){
-            mainWindow.webContents.send("save-clicked", app.getPath("documents"));
+            mainWindow.webContents.send("save-clicked");
           }
         },
         {
           label: 'Save As',
           accelerator: 'CmdOrCtrl+Shift+S',
           click(item, focusWindow){
-              mainWindow.webContents.send('save-as-clicked', app.getPath("documents"));
+              mainWindow.webContents.send('save-as-clicked');
           }
         },
         {
           label: 'Save Copy',
           click(item, focusWindow){
-            mainWindow.webContents.send('save-copy-clicked', app.getPath("documents"));
+            mainWindow.webContents.send('save-copy-clicked');
+          }
+        },
+        {
+          label: 'Backup',
+          accelerator: 'CmdOrCtrl+Shift+B',
+          click(item, focusWindow){
+            mainWindow.webContents.send('save-backup-clicked');
           }
         },
         {type: 'separator'},
@@ -80,21 +83,21 @@ const createWindow = () => {
           label: 'Import',
           accelerator: 'CmdOrCtrl+Shift+I',
           click(item, focusWindow){
-              mainWindow.webContents.send('import-clicked', app.getPath("documents"));
+              mainWindow.webContents.send('import-clicked');
           }
         },
         {
           label: 'Export',
           accelerator: 'CmdOrCtrl+Shift+E',
           click(item, focusWindow){
-              mainWindow.webContents.send('export-clicked', app.getPath("documents"));
+              mainWindow.webContents.send('export-clicked');
           }
         },
         {
           label: 'Compile',
           accelerator: 'CmdOrCtrl+Shift+C',
           click(item, focusWindow){
-              mainWindow.webContents.send('compile-clicked', app.getPath("documents"));
+              mainWindow.webContents.send('compile-clicked');
           }
         },
         { type: 'separator' },
@@ -113,14 +116,17 @@ const createWindow = () => {
             mainWindow.webContents.send('properties-clicked');
           }
         },
+        {
+          label: 'Settings',
+          click(item, focusWindow){
+            mainWindow.webContents.send('settings-clicked');
+          }
+        },
         {type: 'separator'},
         {
           label: 'File Manager',
           click(item, focusWindow){
-              mainWindow.webContents.send('file-manager-clicked', {
-                homeDir: app.getPath("home"),
-                docsDir: app.getPath("documents")
-              });
+              mainWindow.webContents.send('file-manager-clicked');
           },
           accelerator: 'CmdOrCtrl+Shift+F'
         },
@@ -129,7 +135,7 @@ const createWindow = () => {
           label: 'Exit',
           click() {
             //app.quit();
-            mainWindow.webContents.send('exit-app-clicked', app.getPath("documents"));
+            mainWindow.webContents.send('exit-app-clicked');
           },
           accelerator: 'CmdOrCtrl+Shift+X'
         }
@@ -263,7 +269,18 @@ const createWindow = () => {
           click(item, focusWindow){
             mainWindow.webContents.send('headings-to-chaps-clicked');
           }
-        }
+        },
+        ...(isLinux ? [
+          { type: 'separator' },
+          {
+            label: 'Wi-Fi Manager',
+            click(item, focusWindow){
+              mainWindow.webContents.send('wifi-manager-clicked');
+            },
+            accelerator: 'CommandOrControl+W'
+          }
+        ]
+        : [])
       ]
     },
     {
@@ -292,7 +309,7 @@ const createWindow = () => {
         {
           label: 'About',
           click(item, focusWindow){
-            mainWindow.webContents.send('about-clicked', path.join(__dirname, 'licenses.txt'));
+            mainWindow.webContents.send('about-clicked', app.getVersion());
           }
         }
       ]
@@ -328,4 +345,26 @@ app.on('activate', () => {
 // code. You can also put them in separate files and import them here.
 ipcMain.on('exit-app-confirmed', function(e){
   app.quit();
-})
+});
+
+ipcMain.on('get-directories', function(e){
+  e.returnValue = {
+    userData: app.getPath('userData').replaceAll('\\', '/'),
+    home: app.getPath('home').replaceAll('\\', '/'),
+    temp: app.getPath('temp').replaceAll('\\', '/'),
+    docs: app.getPath('documents').replaceAll('\\', '/'),
+    app: __dirname.replaceAll('\\', '/')
+  }
+});
+
+ipcMain.on('set-dark-mode', function(e, darkMode){
+  if(darkMode == 'system'){
+    nativeTheme.themeSource = 'system';
+  }
+  else if(darkMode == 'dark'){
+    nativeTheme.themeSource = 'dark';
+  }
+  else if(darkMode == 'light') {
+    nativeTheme.themeSource = 'light';
+  }
+});

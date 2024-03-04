@@ -1,30 +1,50 @@
-body {
-  background-color: #191a26;
-}
+@media (prefers-color-scheme: dark) {
 
-#writing-field {
-  background-color: #191a26;
-  color: #ffffff;
-}
+  body {
+    background-color: #191a26;
+  }
 
-.sidebar {
-  color: #abb2bf;
-}
+  #writing-field {
+    background-color: #191a26;
+    color: #ffffff;
+  }
 
-::-webkit-scrollbar {
-  background-color: none;
-}
+  .sidebar {
+    color: #abb2bf;
+  }
 
-::-webkit-scrollbar-thumb {
-  background: #4b5362;
-}
+  ::-webkit-scrollbar {
+    background-color: none;
+  }
 
-.popup {
-  background-color: #2B2D42;
-  color: white;
-}
+  ::-webkit-scrollbar-thumb {
+    background: #4b5362;
+  }
 
-.popup-outliner {
-  background-color: #191a26;
-  color: white;
+  .popup, .popup-dialog, .working-popup {
+    background-color: #2B2D42;
+    color: white;
+    border: 2px solid gray;
+  }
+
+  .popup-outliner {
+    background-color: #191a26;
+    color: white;
+  }
+
+  :focus {
+    outline-color: #EF233C;
+  }
+
+  #chapter-list-sidebar:focus {
+    outline: none;
+  }
+
+  .warning-text {
+    color: darkorange;
+  }
+
+.ql-editor.ql-blank::before{
+    color: #abb2bf;
+  }
 }

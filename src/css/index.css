@@ -15,6 +15,7 @@ body {
 input, textarea, select, button {
   box-sizing: border-box;
   border-radius: 0px;
+  margin-bottom: 3px;
 }
 
 .sidebar {
@@ -88,7 +89,7 @@ input, textarea, select, button {
   font-weight: bold;
 }
 
-.popup {
+.popup, .popup-dialog, .working-popup {
   display: block;
   position: fixed;
   top: 50%;
@@ -97,16 +98,11 @@ input, textarea, select, button {
   width: 50%;
   padding: 8px;
   font-size: var(--dialog-font-size);
-  text-align: center;
+  text-align: left;
   max-height: 100%;
   overflow-x: hidden;
   overflow-wrap: break-word;
   hyphens: auto;
-}
-
-.popup table{
-  margin-left: auto;
-  margin-right: auto;
 }
 
 .popup td{
@@ -124,6 +120,16 @@ input, textarea, select, button {
   text-align: left;
   background-color: white;
   color: black;
+}
+
+.popup h1{
+  margin: 0px 0px 12px 3px;
+  padding: 0px 0px 0px 0px;
+  font-size: var(--dialog-font-size);
+}
+
+.popup label{
+  margin-left: 3px;
 }
 
 .popup-search-view {
@@ -152,10 +158,8 @@ input, textarea, select, button {
 #prog-bar-container {
   display: block;
   background-color: gray;
-  width: 90%;
+  width: 100%;
   height: 30px;
-  margin-left: auto;
-  margin-right: auto;
   margin-top: 8px;
   margin-bottom: 8px;
 }
@@ -170,11 +174,6 @@ input, textarea, select, button {
 .access-key {
   text-decoration: underline;
   font-weight: bold;
-}
-
-.shortcuts-table {
-  margin-left: auto;
-  margin-right: auto;
 }
 
 .shortcuts-table td {
@@ -248,6 +247,10 @@ input, textarea, select, button {
   margin-bottom: 0px;
 }
 
+.about-version, .about-url {
+  text-align: center;
+}
+
 .popup a{
   display: block;
   margin: 8px;
@@ -293,4 +296,75 @@ button, input[type=submit] {
 .to-be-cut {
   font-style: italic;
   opacity: 0.5;
+}
+
+.working-popup {
+  z-index: 4;
+  text-align: center;
+}
+
+.working-img {
+  animation: rotation 4s infinite linear;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.working-popup h1{
+  color: #d39d01;
+}
+
+@keyframes rotation {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(359deg);
+  }
+}
+
+.save-input {
+  width: 100%;
+}
+
+.popup-dialog h3{
+  margin: 0px 0px 0px 0px;
+  padding: 0px 0px 0px 0px;
+  font-size: var(--dialog-font-size);
+}
+
+.popup-dialog p{
+  text-align: left;
+  margin: 3px 0px 3px 0px;
+  color: white;
+  padding-left: 6px;
+}
+
+#title-input {
+  width: 50%;
+}
+
+#address-info-input {
+  width: 100%;
+}
+
+#backup-dir-input {
+  width: 75%;
+}
+
+.number-ticker {
+  width: 3em;
+}
+
+#word-goal-input {
+  width: 6em;
+}
+
+.warning-text {
+  font-size: var(--main-font-size);
+  border: 1px dashed;
+  padding: 6px !important;
+}
+
+#network-pass {
+  width: 100%;
 }

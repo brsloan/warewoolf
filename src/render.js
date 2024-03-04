@@ -1,11 +1,9 @@
 const { ipcRenderer } = require('electron');
 const fs = require('fs');
-const remote = require('@electron/remote');
-const { dialog } = remote;
 const Quill = require('quill');
 const docx = require('docx');
-const quillParser = require('quilljs-parser');
 const nodemailer = require('nodemailer');
+const sysDirectories = ipcRenderer.sendSync('get-directories');
 
 var editorQuill = new Quill('#editor-container', {
   modules: {
@@ -29,7 +27,7 @@ var notesQuill = new Quill('#notes-editor', {
 
 var project = newProject();
 
-var userSettings = getUserSettings(convertFilepath(remote.app.getPath('userData')) + "/user-settings.json").load();
+var userSettings = getUserSettings(sysDirectories.userData + "/user-settings.json").load();
 
 initialize();
 
@@ -37,11 +35,12 @@ function initialize(){
   setUpQuills();
   applyUserSettings();
   loadInitialProject();
+
 }
 
 function loadInitialProject(){
   //Load last project opened, or if none logged, load example project, and if example gone, create new project
-  const defaultProject = convertFilepath(__dirname) + "/examples/Frankenstein/Frankenstein.woolf";
+  const defaultProject = sysDirectories.app + "/examples/Frankenstein/Frankenstein.woolf";
 
   if(userSettings.lastProject != null && fs.existsSync(userSettings.lastProject))
     setProject(userSettings.lastProject);
@@ -74,6 +73,8 @@ function applyUserSettings(){
     enableTypewriterMode()
   updateEditorWidth();
   updatePanelDisplays();
+  initiateAutosave();
+  setDarkMode();
 }
 
 function updateFontSize(){
@@ -85,6 +86,10 @@ function updateEditorWidth(){
   document.documentElement.style.setProperty('--editor-width', userSettings.editorWidth + '%');
   document.documentElement.style.setProperty('--sidebar-width', ((100 - userSettings.editorWidth) / 2) + "%");
   document.documentElement.style.setProperty('--sidebar-width-double-view', (100 - userSettings.editorWidth) + "%");
+}
+
+function setDarkMode(){
+  ipcRenderer.send('set-dark-mode', userSettings.darkMode);
 }
 
 function setProject(filepath){
@@ -130,7 +135,7 @@ function updateFileList(){
   function generateChapterList() {
     project.chapters.forEach(function (chap, chapIndex) {
       var listChap = document.createElement("li");
-      listChap.innerHTML = chap.title;
+      listChap.innerText = chap.title != '' ? chap.title : '(untitled)';
       listChap.dataset.chapIndex = chapIndex;
       listChap.onclick = function () {
         displayChapterByIndex(this.dataset.chapIndex);
@@ -343,11 +348,14 @@ function moveChapDown(chapInd){
 
 
 function createNewProject(){
-  project = newProject();
   requestProjectTitle(function(title){
-    project.title = title;
-    addNewChapter();
-    displayProject();
+    if(title && title != ""){
+      project = newProject();
+      project.title = title;
+      project.author = userSettings.defaultAuthor;
+      addNewChapter();
+      displayProject();
+    }
   });
 }
 
@@ -364,7 +372,7 @@ function addNewChapter(){
   changeChapterTitle(thisIndex);
 }
 
-function saveProject(docPath){
+function saveProject(){
   if(project.filename != ""){
     clearCurrentChapterIfUnchanged();
     project.saveFile();
@@ -372,61 +380,72 @@ function saveProject(docPath){
     updateFileList();
   }
   else
-    saveProjectAs(docPath);
+    saveProjectAs();
 }
 
-function saveProjectAs(docPath) {
+function saveProjectAs() {
   const options = {
     title: 'Save project as...',
-    defaultPath: docPath,
+    defaultPath: sysDirectories.docs,
     filters: [
       { name: 'WareWoolf Projects', extensions: ['woolf'] }
-    ]
+    ],
+    bookmarkedPaths: [sysDirectories.docs, sysDirectories.home],
+    dialogType: 'save'
   };
-  var filepath = dialog.showSaveDialogSync(options);
-  if (filepath){
-    filepath = project.saveAs(filepath);
-    userSettings.lastProject = filepath;
-    userSettings.save();
-  }
 
-  project.hasUnsavedChanges = false;
-  updateFileList();
-  updateTitleBar();
+  showFileDialog(options, function(filepath){
+    if (filepath){
+      filepath = project.saveAs(filepath);
+      userSettings.lastProject = filepath;
+      userSettings.save();
+      project.hasUnsavedChanges = false;
+      updateFileList();
+      updateTitleBar();
+    }
+  });
 }
 
-function saveProjectCopy(docPath) {
+function saveProjectCopy() {
   const options = {
     title: 'Save a copy of project as...',
-    defaultPath: docPath,
+    defaultPath: sysDirectories.docs,
     filters: [
       { name: 'WareWoolf Projects', extensions: ['woolf'] }
-    ]
+    ],
+    bookmarkedPaths: [sysDirectories.docs, sysDirectories.home],
+    dialogType: 'save'
   };
-  var filepath = dialog.showSaveDialogSync(options);
-  if (filepath){
-    project.saveAs(filepath, true);
-  }
 
-  updateFileList();
-  updateTitleBar();
+  showFileDialog(options, function(filepath){
+    if (filepath){
+      project.saveAs(filepath, true);
+    }
+
+    updateFileList();
+    updateTitleBar();
+  })
 }
 
-function openAProject(docPath) {
+function openAProject() {
   const options = {
     title: 'Open project...',
-    defaultPath: docPath,
+    defaultPath: sysDirectories.docs,
     filters: [
       { name: 'WareWoolf Projects', extensions: ['woolf'] }
-    ]
+    ],
+    bookmarkedPaths: [sysDirectories.docs, sysDirectories.home],
+    dialogType: 'open'
   };
-  var filepath = dialog.showOpenDialogSync(options);
-  if (filepath) {
-    project.loadFile(filepath[0]);
-    displayProject();
-    userSettings.lastProject = filepath[0];
-    userSettings.save();
-  }
+
+  showFileDialog(options, function(filepath){
+    if (filepath) {
+      project.loadFile(filepath[0]);
+      displayProject();
+      userSettings.lastProject = filepath[0];
+      userSettings.save();
+    }
+  });
 }
 
 function changeChapsDirectory(){
@@ -435,18 +454,22 @@ function changeChapsDirectory(){
     defaultPath: project.directory,
     filters: [
       { name: '.pup files', extensions: ['pup'] }
-    ]
+    ],
+    bookmarkedPaths: [sysDirectories.docs, sysDirectories.home],
+    dialogType: 'open'
   };
-  var filepaths = dialog.showOpenDialogSync(options);
-  if (filepaths) {
-    filepath = filepaths[0].replaceAll('\\', '/');
-    var parts = filepath.split('/');
-    var subDir = parts.slice(0,parts.length - 1).join('/').concat('/').replace(project.directory, '');
 
-    project.chapsDirectory = subDir;
-    project.hasUnsavedChanges = true;
-    displayProject();
-  }
+  showFileDialog(options, function(filepaths){
+    if (filepaths) {
+      filepath = filepaths[0].replaceAll('\\', '/');
+      var parts = filepath.split('/');
+      var subDir = parts.slice(0,parts.length - 1).join('/').concat('/').replace(project.directory, '');
+
+      project.chapsDirectory = subDir;
+      project.hasUnsavedChanges = true;
+      displayProject();
+    }
+  });
 }
 
 function clearCurrentChapterIfUnchanged(){
@@ -516,9 +539,16 @@ function verifyToDelete(ind){
   if(indexIsTrash(ind)){
     var popup = document.createElement("div");
     popup.classList.add("popup");
+
+    var warningTitle = document.createElement('h1');
+    warningTitle.innerText = 'WARNING:'
+    popup.appendChild(warningTitle);
+
     var message = document.createElement("p");
-    message.innerHTML = "Are you sure you want to delete this file? This is permanent.";
+    message.innerText = "Are you sure you want to delete this file? This is permanent.";
+    message.classList.add('warning-text');
     popup.appendChild(message);
+
     var yesButton = createButton("Yes");
     yesButton.onclick = function(){
       deleteChapter(ind);
@@ -644,9 +674,23 @@ function scrollChapterListToActiveChapter(){
 }
 
 function openHelpDoc(){
-  const helpDocPath = convertFilepath(__dirname) + "/examples/HelpDoc/HelpDoc.woolf";
+  const helpDocPath = sysDirectories.app + "/examples/HelpDoc/HelpDoc.woolf";
   project.loadFile(helpDocPath);
   displayProject();
+}
+
+function exitApp(){
+  if(userSettings.autoBackup == true && project.filename != ''){
+    backupProject(sysDirectories.docs, function(msg){
+      ipcRenderer.send('exit-app-confirmed');
+    });
+  } else {
+      ipcRenderer.send('exit-app-confirmed');
+  }
+}
+
+function alertBackupResult(msg){
+  console.log(msg);
 }
 
 ///////////////////////////////////////////////////////////////////
@@ -768,6 +812,7 @@ document.addEventListener ("keydown", function (e) {
     }
     else if(e.key === "Escape"){
       removeElementsByClass('popup');
+      removeElementsByClass('popup-dialog');
       disableSearchView();
       updatePanelDisplays();
     }
@@ -842,20 +887,20 @@ function stopDefaultPropagation(keyEvent){
   keyEvent.stopPropagation();
 }
 
-ipcRenderer.on("save-clicked", function(e, docPath){
-  saveProject(docPath);
+ipcRenderer.on("save-clicked", function(e){
+  saveProject();
 });
 
-ipcRenderer.on("save-as-clicked", function(e, docPath){
-  saveProjectAs(docPath);
+ipcRenderer.on("save-as-clicked", function(e){
+  saveProjectAs();
 });
 
-ipcRenderer.on("open-clicked", function(e, docPath){
+ipcRenderer.on("open-clicked", function(e){
   if(project.hasUnsavedChanges){
-    displayExitConfirmation(docPath, openAProject);
+    displayExitConfirmation(openAProject);
   }
   else{
-    openAProject(docPath);
+    openAProject();
   }
 });
 
@@ -863,12 +908,12 @@ ipcRenderer.on('new-project-clicked', function(e){
   createNewProject();
 });
 
-ipcRenderer.on('import-clicked', function(e, docPath){
-  showImportOptions(docPath);
+ipcRenderer.on('import-clicked', function(e){
+  showImportOptions(sysDirectories);
 });
 
-ipcRenderer.on('export-clicked', function(e, docPath){
-  showExportOptions(docPath);
+ipcRenderer.on('export-clicked', function(e){
+  showExportOptions(sysDirectories);
 });
 
 ipcRenderer.on('properties-clicked', function(e){
@@ -876,7 +921,7 @@ ipcRenderer.on('properties-clicked', function(e){
 });
 
 ipcRenderer.on('compile-clicked', function(e){
-  showCompileOptions();
+  showCompileOptions(sysDirectories);
 });
 
 ipcRenderer.on('word-count-clicked', function(e){
@@ -898,8 +943,9 @@ ipcRenderer.on('spellcheck-clicked', function(e){
 
 ipcRenderer.on('convert-first-lines-clicked', function(e){
   if(editorHasFocus()){
-    convertFirstLinesToTitles();
-    displayChapterByIndex(project.activeChapterIndex);
+    showConvertFirstLines(function(){
+        displayChapterByIndex(project.activeChapterIndex);
+    });
   }
 });
 
@@ -945,28 +991,23 @@ ipcRenderer.on('convert-tabs-clicked', function(e){
   showTabOptions();
 });
 
-ipcRenderer.on('about-clicked', function(e, licensesPath){
-  console.log(licensesPath);
-  showAbout(licensesPath);
+ipcRenderer.on('about-clicked', function(e, appVersion){
+  showAbout(sysDirectories, appVersion);
 });
 
-ipcRenderer.on('exit-app-clicked', function(e, docPath){
+ipcRenderer.on('exit-app-clicked', function(e){
   if(project.hasUnsavedChanges){
     updateFileList();
-    displayExitConfirmation(docPath, exitApp);
+    displayExitConfirmation(exitApp);
   }
   else{
     exitApp();
   }
 });
 
-ipcRenderer.on('save-copy-clicked', function(e, docPath){
-  saveProjectCopy(docPath);
+ipcRenderer.on('save-copy-clicked', function(e){
+  saveProjectCopy();
 });
-
-function exitApp(){
-  ipcRenderer.send('exit-app-confirmed');
-}
 
 ipcRenderer.on('help-doc-clicked', function(e){
   openHelpDoc();
@@ -984,8 +1025,22 @@ ipcRenderer.on('view-error-log-clicked', function(e){
   showErrorLog();
 });
 
-ipcRenderer.on('file-manager-clicked', function(e, dirPaths){
-  showFileManager(dirPaths);
+ipcRenderer.on('file-manager-clicked', function(e){
+  showFileManager(sysDirectories);
+});
+
+ipcRenderer.on('wifi-manager-clicked', function(e){
+  showWifiManager();
+});
+
+ipcRenderer.on('save-backup-clicked', function(e){
+  backupProject(sysDirectories.docs, alertBackupResult);
+});
+
+ipcRenderer.on('settings-clicked', function(e){
+  showSettings(sysDirectories, function(){
+    setDarkMode();
+  });
 });
 
 //**** utils ***/
@@ -994,6 +1049,17 @@ function closePopups(){
   removeElementsByClass('popup');
   disableSearchView();
   editorQuill.focus();
+}
+
+function closePopupDialogs(){
+  removeElementsByClass('popup-dialog');
+  var popups = document.getElementsByClassName('popup');
+  if(popups.length > 0){
+    popups[0].focus();
+  }
+  else {
+    editorQuill.focus();
+  }
 }
 
 function removeElementsByClass(className){
@@ -1036,20 +1102,6 @@ function editorIsVisible(){
   return document.getElementById('writing-field').classList.contains('visible');
 }
 
-function logError(e){
-  console.log(e);
-  let time = new Date().toLocaleString();
-  try{
-    fs.appendFile('error_log.txt', time + '\n' + e.stack + '\n', function(err){
-      if(err)
-        console.log('error logging: ' + err);
-    });
-  }
-  catch(er){
-    console.log('error logging: ' + er);
-  }
-}
-
 function generateRow(elOne, elTwo){
   var row = document.createElement('tr');
   var cellOne = document.createElement('td');
@@ -1059,4 +1111,16 @@ function generateRow(elOne, elTwo){
   cellTwo.appendChild(elTwo);
   row.appendChild(cellTwo);
   return row;
+}
+
+function removeOptions(selectElement) {
+  try{
+    var i, L = selectElement.options.length - 1;
+    for(i = L; i >= 0; i--) {
+       selectElement.remove(i);
+    }
+  }
+  catch(err){
+    logError(err)
+  }
 }

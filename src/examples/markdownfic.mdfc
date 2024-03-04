@@ -1,7 +1,7 @@
-[>c]# Title
+[>c] # Title
 ## Subtitle
 
-	This is the first paragraph. This is the first paragraph. This is the first paragraph. This is the first paragraph. This is the first paragraph. This is the first paragraph.
+	This is the first paragraph. You will note that MarkdownFic supports indented paragraphs. This is the first paragraph. This is the first paragraph. This is the first paragraph. This is the first paragraph. This is the first paragraph.
 	This is the second paragraph.
 This third paragraph is not indented.
 
@@ -21,3 +21,4 @@ There should be a line of white space above this. \*This\* should show asterisks
 
 This line has a footnote. [^1]
 [^1]: This is the footnote.
+[^1]: 	This is a second paragraph on the same footnote, this one indented. Unlike in standard markdown, in MarkdownFic you mark multi-paragraph footnotes with the marker on every paragraph.

@@ -2,7 +2,7 @@
 	"filename": "HelpDoc.woolf",
 	"chapsDirectory": "HelpDoc_pups/",
 	"title": "helpDoc",
-	"author": "",
+	"author": "Benjamin Sloan",
 	"notes": {
 		"ops": [
 			{
@@ -14,6 +14,12 @@
 		{
 			"title": "WareWoolf Basics",
 			"filename": "1.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Backup / Auto-Backup",
+			"filename": "21.pup",
 			"filter": null,
 			"summary": null
 		},
@@ -44,6 +50,12 @@
 		{
 			"title": "Importing Plaintext Files",
 			"filename": "11.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "MarkdownFic",
+			"filename": "22.pup",
 			"filter": null,
 			"summary": null
 		},
@@ -84,6 +96,12 @@
 			"summary": null
 		},
 		{
+			"title": "Wi-Fi Manager",
+			"filename": "20.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
 			"title": "Word Counts",
 			"filename": "18.pup",
 			"filter": null,
@@ -92,7 +110,7 @@
 	],
 	"filters": [],
 	"trash": [],
-	"activeChapterIndex": 4,
+	"activeChapterIndex": 0,
 	"wordGoal": "0",
 	"textCursorPosition": 0
 }
