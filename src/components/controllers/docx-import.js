@@ -81,7 +81,8 @@ function docxToDelta(docDom, fnDom, split = false){
 
       var textNodes = runs[r].getElementsByTagName('w:t');
       for(let z=0;z<textNodes.length;z++){
-          plaintext = plaintext.concat(textNodes[z].childNodes[0].nodeValue);
+          if(textNodes[z].childNodes.length > 0)
+            plaintext = plaintext.concat(textNodes[z].childNodes[0].nodeValue);
       }
 
       var footnoteRefs = runs[r].getElementsByTagName('w:footnoteReference');
