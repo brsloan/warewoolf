@@ -1,7 +1,7 @@
 <p align="center">
 	<img src="./src/assets/logo.png" style="width: 280px"/>
 </p>
-<p align="center">v0.XX.0 (beta)</p>
+<p align="center">v1.0.0</p>
 <p align="center">"The only writing software I use." -Virginia Woolf</p>
 
 WareWoolf is designed for one thing: writing fiction. It is intentionally simplified: you cannot change the font, line spacing, or color. But it has everything you need to organize, edit, and revise a novel--and you don't even need a mouse.
@@ -10,10 +10,12 @@ It is composed of three simple text-based panels with no icons: Chapters, Editor
 
 That's it. There is no toolbar with twenty buttons cluttering the screen. There isn't even a file menu unless you summon it by pressing Alt. All formatting is done with shortcuts. (But don't worry, there aren't many to memorize, and you can always press **CTRL** + **H** to show them all in the Shortcut Helper. It's not like you do a lot of formatting when writing fiction anyway.)
 
-What it does have is an array of tools for importing plaintext files and converting them into proper manuscript format, as well as features such as self-emailing drafts at the press of a button, a built-in file manager, and a wi-fi manager for easy use in standalone writing devices ("writerDecks") without access to any other software.
+What it does have is an array of tools for importing plaintext and docx files and converting them into proper manuscript format, as well as features such as self-emailing drafts at the press of a button, a built-in file manager, and a wi-fi manager for easy use in standalone writing devices ("writerDecks") without access to any other software.
 
  ![screenshot of program described](src/assets/screenshot.png?raw=true "WareWoolf")
+ light mode
  ![screenshot of dark mode of program described](src/assets/screenshot_darkmode.png?raw=true "WareWoolf")
+ dark mode
 
 For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.com/brsloan/warewoolf/wiki).
 
@@ -56,7 +58,7 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 
 ## Status
 
-WIP: Features added since last release:
+2024-03-03: We have reached version 1.0.0! All the basic features I had originally envisioned are now implemented and working. I use it daily for my own novel writing. Features added/changed since last release:
 * Built-in Wi-Fi Manager (on Linux) for use as writerDeck
 * Import .docx files
 * Footnote support (import and export/compile)
@@ -65,7 +67,12 @@ WIP: Features added since last release:
 * Email zipped project file
 * Built-in File Manager now can unzip zip files
 * Dark Mode support/options
-* Markdown improvements, bug fixes
+* Markdown improvements
+* Docx export drastically improved, with automatic cover page generation, page number headers in Standard Manuscript Format, etc. Can now export ready-to-submit manuscript documents
+* Retains more settings user sets for email attachments, etc.
+* Replaced native file dialogs with custom in-app for better keyboard-only workflow
+* Bug fixes
+* 70% less ugly
 
 2023-06-11: Releasing v0.10.0-beta. Improvements: built-in file manager, Properties tool now allows altering project's chapters directory location. About now shows license. Minor fixes.
 

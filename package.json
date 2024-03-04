@@ -1,7 +1,7 @@
 {
   "name": "warewoolf",
   "productName": "warewoolf",
-  "version": "0.10.0",
+  "version": "1.0.0",
   "description": "A simple novel writing system designed to be usable without a mouse.",
   "main": "src/index.js",
   "scripts": {
