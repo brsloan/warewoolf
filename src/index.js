@@ -18,7 +18,7 @@ const createWindow = () => {
       nodeIntegration: true,
       contextIsolation: false,
       spellcheck: false,
-      devTools: true
+      devTools: false
     },
     kiosk: true,
     icon: path.join(__dirname, 'assets/icon.png')
@@ -30,7 +30,7 @@ const createWindow = () => {
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
 
   // Open the DevTools.
-  mainWindow.webContents.openDevTools();
+  //mainWindow.webContents.openDevTools();
 
   var menu = Menu.buildFromTemplate([
     {
