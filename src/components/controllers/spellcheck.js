@@ -62,7 +62,6 @@ function findInvalidWord(spellchecker, startingIndex = 0, wordsToIgnore = []) {
             masterIndex += nextStart;
             text = text.slice(nextStart);
 
-            console.log(nextWord[0]);
             wordIsValid = spellchecker.correct(nextWord[0]);
             if(!wordIsValid){
                 invalidWord = {
