@@ -43,6 +43,9 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 
 Binaries of the current release for Windows, Debian AMD64, and Debian ARM64 (Raspberry Pi) are available in the [releases page](https://github.com/brsloan/warewoolf/releases).
 
+> [!WARNING]
+> The Wi-Fi Manager uses nmcli/Network Manager, which Raspberry Pi OS does not have installed/enabled by default. You will have to add it manually for this function to work.
+
 ## Run or Build From Source
 
 This app was built using Electron Forge. To run it from source...
