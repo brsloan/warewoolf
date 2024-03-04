@@ -12,10 +12,10 @@ That's it. There is no toolbar with twenty buttons cluttering the screen. There 
 
 What it does have is an array of tools for importing plaintext and docx files and converting them into proper manuscript format, as well as features such as self-emailing drafts at the press of a button, a built-in file manager, and a wi-fi manager for easy use in standalone writing devices ("writerDecks") without access to any other software.
 
+Dark Mode:
+![screenshot of dark mode of program described](src/assets/screenshot_darkmode.png?raw=true "WareWoolf")
 Light Mode:
  ![screenshot of program described](src/assets/screenshot.png?raw=true "WareWoolf")
- Dark Mode:
- ![screenshot of dark mode of program described](src/assets/screenshot_darkmode.png?raw=true "WareWoolf")
 
 For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.com/brsloan/warewoolf/wiki).
 
