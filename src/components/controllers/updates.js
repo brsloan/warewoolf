@@ -1,7 +1,5 @@
 const https = require('https');
 
-//getUpdates('0.9.0', console.log);
-
 function getUpdates(thisAppVersion, callback){
     fetchLatestReleaseDataTest(function(latest){
         if(isUpdateAvailable(latest.tag, thisAppVersion)){
