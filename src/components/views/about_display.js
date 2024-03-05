@@ -26,8 +26,50 @@ function showAbout(sysDirectories, appVersion){
   descr.innerText = "WareWoolf is free, open source software released under an MIT license.";
   popup.appendChild(descr);
 
+  var checkUpdatesBtn = createButton('Check For Updates');
+  popup.appendChild(checkUpdatesBtn);
+
   var displayLicBtn = createButton('View License');
   popup.appendChild(displayLicBtn);
+
+  var updatesPanel = document.createElement('div');
+  updatesPanel.classList.add('updates-panel');
+  updatesPanel.style.display = 'none';
+
+  var updatesTitle = document.createElement('label');
+  updatesPanel.appendChild(updatesTitle);
+
+  var downloadBtn = createButton('Download');
+  updatesPanel.appendChild(downloadBtn);
+
+  var updatesText = document.createElement('p');
+  updatesText.classList.add('updates-text');
+  updatesPanel.appendChild(updatesText);
+
+  popup.appendChild(updatesPanel);
+
+  checkUpdatesBtn.onclick = function(){
+    checkUpdatesBtn.disabled = true;
+    checkUpdatesBtn.innerText = 'Checking...';
+    getUpdates(appVersion, function(latest){
+      console.log('gotten updates');
+      console.log(latest);
+      if(latest){
+        updatesTitle.innerText = 'WareWoolf ' + latest.tag + ' Available: ';
+        updatesText.innerText = 'Published ' + latest.date.slice(0,10) + ':\n' + latest.description;
+        updatesPanel.style.display = 'block';
+        checkUpdatesBtn.innerText = 'Updates Available!';
+        downloadBtn.onclick = function(){
+          downloadUpdate(latest.downloadInfo);
+        }
+        downloadBtn.focus();
+      }
+      else {
+        checkUpdatesBtn.innerText = 'No Updates Available';
+        checkUpdatesBtn.disabled = false;
+      }
+    });
+  }
 
   var licensePanel = document.createElement('div');
   licensePanel.style.display = "none";
