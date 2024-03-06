@@ -101,14 +101,18 @@ function deleteFile(fpth){
 
 function getParentDirectory(filepath){
     var cutIndex = filepath.lastIndexOf('/');
-    return cutIndex > -1 ? filepath.slice(0,cutIndex) : filepath;
+
+    return cutIndex > 0 ? filepath.slice(0,cutIndex) : filepath;
 }
 
 function getFileList(dirPath){
+  if(dirPath == '')
+    dirPath = '/home';
+
   try {
       return fs.readdirSync(dirPath, {withFileTypes: true});
   } catch (err) {
-      logErrror(err);
+      logError(err);
   }
 }
 
