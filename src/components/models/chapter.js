@@ -1,3 +1,5 @@
+const fs = require('fs');
+
 function newChapter(){
     return {
       title: "new",
@@ -111,3 +113,5 @@ function newChapter(){
       }
   }
 }
+
+module.exports = newChapter;

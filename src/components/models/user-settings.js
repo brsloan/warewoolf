@@ -1,3 +1,5 @@
+const fs = require('fs');
+
 function getUserSettings(userSettingsFilepath){
   return {
     editorWidth: 50,
@@ -61,3 +63,5 @@ function getUserSettings(userSettingsFilepath){
   }
 
 }
+
+module.exports = getUserSettings;

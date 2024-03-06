@@ -4,6 +4,9 @@ const Quill = require('quill');
 const docx = require('docx');
 const nodemailer = require('nodemailer');
 const sysDirectories = ipcRenderer.sendSync('get-directories');
+const getUserSettings = require('./components/models/user-settings');
+const newChapter = require('./components/models/chapter');
+const newProject = require('./components/models/project');
 
 var editorQuill = new Quill('#editor-container', {
   modules: {

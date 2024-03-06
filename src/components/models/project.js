@@ -1,3 +1,6 @@
+const fs = require('fs');
+const newChapter = require('./chapter');
+
 function newProject(){
     return {
         filename: "",
@@ -197,3 +200,5 @@ function newProject(){
       }
     }
 }
+
+module.exports = newProject;
