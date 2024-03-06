@@ -60,6 +60,8 @@ function showAbout(sysDirectories, appVersion){
         updatesPanel.style.display = 'block';
         checkUpdatesBtn.innerText = 'Updates Available!';
         downloadBtn.onclick = function(){
+          downloadBtn.innerText = 'Downloading...';
+          downloadBtn.disabled = true;
           if(process.platform == 'linux')
             downloadUpdate(latest.downloadInfo, showInstallUpdate);
           else {
