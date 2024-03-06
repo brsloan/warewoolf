@@ -1,8 +1,8 @@
 var autosaveInterval;
 
 function initiateAutosave(){
-    if(userSettings.autosaveInterval > 0)
-      autosaveInterval = setInterval(autoSave, userSettings.autosaveInterval * 60000);
+    if(userSettings.autosaveIntMinutes > 0)
+      autosaveInterval = setInterval(autoSave, userSettings.autosaveIntMinutes * 60000);
 }
   
 function updateAutosave(){

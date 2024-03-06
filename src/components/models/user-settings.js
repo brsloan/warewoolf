@@ -22,7 +22,7 @@ function getUserSettings(userSettingsFilepath){
     backupDirectory: null,
     autoBackup: true,
     backupsToKeep: 10,
-    autosaveInterval: 0,
+    autosaveIntMinutes: 0,
     darkMode: 'system',
     save: save,
     load: load,
