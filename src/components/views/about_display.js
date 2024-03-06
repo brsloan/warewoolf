@@ -60,7 +60,13 @@ function showAbout(sysDirectories, appVersion){
         updatesPanel.style.display = 'block';
         checkUpdatesBtn.innerText = 'Updates Available!';
         downloadBtn.onclick = function(){
-          downloadUpdate(latest.downloadInfo);
+          if(process.platform == 'linux')
+            downloadUpdate(latest.downloadInfo, showInstallUpdate);
+          else {
+            downloadUpdate(latest.downloadInfo, function(fpath){
+              downloadBtn.innerText = "Downloaded Into Downloads Folder";
+            });
+          }
         }
         downloadBtn.focus();
       }

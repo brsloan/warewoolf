@@ -1,7 +1,7 @@
 const https = require('https');
 
 function getUpdates(thisAppVersion, callback){
-    fetchLatestReleaseDataTest(function(latest){
+    fetchLatestReleaseData(function(latest){
         if(isUpdateAvailable(latest.tag, thisAppVersion)){
             latest.downloadInfo = extractUpdateDownloadInfo(latest);
             callback(latest);
@@ -18,23 +18,23 @@ function fetchLatestReleaseData(callback){
         path: '/repos/brsloan/warewoolf/releases/latest',
         method: 'GET',
         headers: {
-            'User-Agent': 'warewoolf' 
+            'User-Agent': 'warewoolf'
         }
     };
-    
+
     https.request(options, function(res){
         let data = '';
-    
+
         res.on('data', function(chunk){
             data += chunk;
         });
-    
+
         res.on('end', function(){
             var packagedData = packageReleaseData(JSON.parse(data));
             callback(packagedData);
         });
-    
-    
+
+
     }).on('error', function(err){
         logError(err);
     }).end();
@@ -86,7 +86,7 @@ function packageReleaseData(releaseData){
 }
 
 function extractUpdateDownloadInfo(releaseData){
-    
+
     var binUrl = '';
     var binType = 'unsupported';
 
@@ -131,17 +131,32 @@ function isUpdateAvailable(latestTag, thisAppVersion = '1.0.0'){
     return avail;
 }
 
-function downloadUpdate(downloadInfo){
-    var filePath = sysDirectories.docs + '/' + downloadInfo.name;
-    console.log('commence downloading at: ' + downloadInfo.url + ' to ' + filePath);
-    
-    const file = fs.createWriteStream(filePath);
+function downloadUpdate(downloadInfo, callback){
+    var filePath = '';
 
-    file.on('finish', function(){
-        console.log("finished download");
-    });
+    if(process.platform == 'linux')
+      filePath = sysDirectories.temp + '/' + downloadInfo.name;
+    else {
+      filePath = sysDirectories.downloads + '/' + downloadInfo.name;
+    }
 
-    downloadRequest(file, filePath, downloadInfo.url);
+    if(fs.existsSync(filePath)){
+      console.log('File already downloaded.');
+      callback(filePath);
+    }
+    else {
+
+      console.log('commence downloading at: ' + downloadInfo.url + ' to ' + filePath);
+
+      const file = fs.createWriteStream(filePath);
+
+      file.on('finish', function(){
+          console.log("finished download: " + filePath);
+          callback(filePath);
+      });
+
+      downloadRequest(file, filePath, downloadInfo.url);
+    }
 }
 
 function downloadRequest(file, filePath, url){
@@ -175,4 +190,28 @@ function downloadRequest(file, filePath, url){
 
 
     request.end();
+}
+
+function installUpdate(pass, filePath, statusElement){
+
+  const updater = spawn(' sudo -S <<< "' + pass + '" apt install ' + filePath, {
+    stdio: 'pipe',
+    shell: '/bin/bash'
+  });
+
+  updater.stdout.on('data', function(data){
+    console.log('updater: ' + data);
+    statusElement.innerText = data;
+  });
+
+  updater.stderr.on('data', function(data){
+    console.log('updater error: ' + data);
+    statusElement.innerText = 'Error: ' + data;
+  });
+
+  updater.on('close', function(data){
+    console.log('updater closed');
+    statusElement.innerText += '\nInstallation Finished! Reboot to complete.';
+  })
+
 }
