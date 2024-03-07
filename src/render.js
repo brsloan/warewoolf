@@ -8,6 +8,7 @@ const getUserSettings = require('./components/models/user-settings');
 const newChapter = require('./components/models/chapter');
 const newProject = require('./components/models/project');
 const autosaver = require('./components/controllers/autosave');
+const { backupProject, archiveProject, unzipProject } = require('./components/controllers/backup-project');
 
 var editorQuill = new Quill('#editor-container', {
   modules: {

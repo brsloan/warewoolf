@@ -116,3 +116,9 @@ function unzipProject(zipPath, callback){
     }
   }
 }
+
+module.exports = {
+  backupProject, 
+  archiveProject,
+  unzipProject
+}
