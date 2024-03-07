@@ -177,7 +177,7 @@ function showSettings(sysDirectories, callback){
     userSettings.addressInfo = addressIn.value;
 
     userSettings.save();
-    updateAutosave();
+    autosaver.updateAutosave(userSettings.autosaveIntMinutes, saveProject);
     callback();
     closePopups();
   }
