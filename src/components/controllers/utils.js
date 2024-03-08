@@ -1,7 +1,7 @@
 const { logError } = require('./error-log');
 
 function focusEditor(){
-    document.getElementById('editor-container').focus();
+    document.getElementById('editor-container').getElementsByClassName('ql-editor')[0].focus();
 }
 
 function closePopups(){
