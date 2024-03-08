@@ -1,5 +1,5 @@
-const { closePopupDialogs, createButton } = require('../../render');
-
+const { closePopupDialogs, createButton } = require('../controllers/utils');
+const { getFileList, getParentDirectory } = require('../controllers/file-manager');
 
 function showFileDialog(options, callback){
     var popup = document.createElement("div");

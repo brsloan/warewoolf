@@ -1,5 +1,5 @@
 const fs = require('fs');
-const { closePopups, createButton, removeElementsByClass } = require('../../render');
+const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
 const { getUpdates, downloadUpdate } = require('../controllers/updates');
 const { logError } = require('../controllers/error-log');
 

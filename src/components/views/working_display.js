@@ -1,4 +1,4 @@
-const { removeElementsByClass } = require('../../render');
+const { removeElementsByClass } = require('../controllers/utils');
 
 
 function showWorking(status = 'Working...'){

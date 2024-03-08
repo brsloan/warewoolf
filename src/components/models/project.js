@@ -1,5 +1,6 @@
 const fs = require('fs');
 const newChapter = require('./chapter');
+const { logError } = require('../controllers/error-log');
 
 function newProject(){
     return {

@@ -1,4 +1,5 @@
 const fs = require('fs');
+const { logError } = require('../controllers/error-log');
 
 function newChapter(){
     return {

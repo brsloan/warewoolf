@@ -1,7 +1,7 @@
 const fs = require('fs');
 const markdownFic = require('./markdownFic');
 const Quill = require('quill');
-const { convertDeltaToDocx } = require('./delta-to-docx');
+const { convertDeltaToDocx, saveDocx } = require('./delta-to-docx');
 const { logError } = require('./error-log');
 
 function compileProject(project, options, filepath){
