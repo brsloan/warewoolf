@@ -1,6 +1,6 @@
 var nspell = require('nspell');
 const fs = require('fs');
-const { convertFilepath, sysDirectories } = require('../../render');
+const { convertFilepath, sysDirectories } = require('../controllers/utils');
 
 function runSpellcheck(editorQuill, startingIndex = 0, wordsToIgnore){
     var spellchecker = loadDictionaries();

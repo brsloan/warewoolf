@@ -1,7 +1,7 @@
-const { closePopups, createButton, removeElementsByClass } = require('../../render');
+const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
 const { convertFirstLinesToTitles } = require('../controllers/convert-first-lines');
 
-function showConvertFirstLines(cback){
+function showConvertFirstLines(project, cback){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup");
@@ -34,4 +34,4 @@ function showConvertFirstLines(cback){
 
 }
 
-modules.exports = showConvertFirstLines;
+module.exports = showConvertFirstLines;

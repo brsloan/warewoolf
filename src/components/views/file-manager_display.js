@@ -1,4 +1,4 @@
-const { closePopups, createButton, removeElementsByClass } = require('../../render');
+const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
 const { unzipProject } = require('../controllers/backup-project');
 const { createNewDirectory, renameFiles, moveFiles, getFileList, deleteFile } = require('../controllers/file-manager');
 

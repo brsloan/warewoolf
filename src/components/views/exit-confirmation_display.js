@@ -1,7 +1,7 @@
-const { closePopups, createButton, removeElementsByClass, saveProject } = require('../../render');
+const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
 
 
-function displayExitConfirmation(continueFunc){
+function displayExitConfirmation(saveFunc, continueFunc){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup");
@@ -17,7 +17,7 @@ function displayExitConfirmation(continueFunc){
 
   var save = createButton("Save");
   save.onclick = function(){
-    saveProject();
+    saveFunc();
     closePopups();
     continueFunc();
   };

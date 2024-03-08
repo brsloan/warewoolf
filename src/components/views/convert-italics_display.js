@@ -1,4 +1,4 @@
-const { closePopups, createButton, removeElementsByClass, displayChapterByIndex } = require('../../render');
+const { closePopups, createButton, removeElementsByClass, displayChapterByIndex } = require('../controllers/utils');
 const { convertMarkedItalicsForAllChapters } = require('../controllers/convert-italics');
 
 function showItalicsOptions(){

@@ -1,5 +1,5 @@
 const { getTempQuill } = require('./quill-utils');
-const { displayChapterByIndex } = require('../../render');
+const { displayChapterByIndex } = require('../controllers/utils');
 
 function find(editorQuill, project, str, caseSensitive = true, startingIndex, searchAllChapters){
     var index = -1;

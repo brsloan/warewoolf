@@ -1,4 +1,4 @@
-const { closePopups, createButton, removeElementsByClass, enableSearchView, displayChapterByIndex } = require('../../render');
+const { closePopups, createButton, removeElementsByClass, enableSearchView, displayChapterByIndex } = require('../controllers/utils');
 const { find, replace, replaceAllInChapter, replaceAllInAllChapters } = require('../controllers/findreplace');
 
 function showFindReplace(){

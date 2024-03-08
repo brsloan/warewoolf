@@ -1,4 +1,4 @@
-const { closePopups, createButton, removeElementsByClass, changeChapsDirectory } = require('../../render');
+const { closePopups, createButton, removeElementsByClass, changeChapsDirectory } = require('../controllers/utils');
 
 function promptForMissingPups(){
   removeElementsByClass('popup');

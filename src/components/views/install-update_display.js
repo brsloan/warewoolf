@@ -1,4 +1,4 @@
-const { closePopups, createButton, removeElementsByClass } = require('../../render');
+const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
 const { installUpdate } = require('../controllers/updates');
 
 function showInstallUpdate(filepath){

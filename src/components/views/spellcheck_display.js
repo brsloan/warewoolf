@@ -1,4 +1,4 @@
-const { closePopups, createButton, removeElementsByClass, enableSearchView, displayChapterByIndex } = require('../../render');
+const { closePopups, createButton, removeElementsByClass, enableSearchView, displayChapterByIndex } = require('../controllers/utils');
 const { runSpellcheck, addWordToPersonalDictFile } = require('../controllers/spellcheck');
 const { replace, replaceAllInAllChapters } = require('../controllers/findreplace');
 

@@ -1,4 +1,4 @@
-const {addImportedChapter} = require('../../render');
+const {addImportedChapter} = require('../controllers/utils');
 const { generateChapTitleFromFirstLine } = require('./quill-utils');
 const { hideWorking } = require('../views/working_display');
 

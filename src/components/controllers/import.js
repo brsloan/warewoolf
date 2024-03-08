@@ -8,7 +8,7 @@ const { convertFirstLineToTitle } = require('./convert-first-lines')
 const { convertMarkedItalics } = require('./convert-italics');
 const { convertMarkedTabs } = require('./convert-tabs');
 const { markdownFic } = require('./markdownFic');
-const { addImportedChapter } = require('../../render');
+const { addImportedChapter } = require('../controllers/utils');
 
 function initiateImport(sysDirectories, options, cback){
 

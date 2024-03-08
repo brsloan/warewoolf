@@ -1,4 +1,4 @@
-const { closePopups, createButton, removeElementsByClass, generateRow, updateFileList, displayChapterByIndex } = require('../../render');
+const { closePopups, createButton, removeElementsByClass, generateRow, updateFileList, displayChapterByIndex } = require('../controllers/utils');
 const { renumberChaps } = require('../controllers/renumber-chapters');
 
 function showRenumberChapters(){

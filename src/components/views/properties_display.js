@@ -1,4 +1,4 @@
-const { closePopups, createButton, removeElementsByClass, generateRow } = require('../../render');
+const { closePopups, createButton, removeElementsByClass, generateRow } = require('../controllers/utils');
 
 
 function showProperties(project, userSettings){

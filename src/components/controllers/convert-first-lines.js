@@ -2,7 +2,7 @@
 
 function convertFirstLinesToTitles(project){
   console.log('converting');
-  var tempQuill = getTempQuill();
+  //var tempQuill = getTempQuill();
 
   project.chapters.forEach(function(chap){
     var result = convertFirstLineToTitle(chap.contents ? chap.contents : chap.getFile());

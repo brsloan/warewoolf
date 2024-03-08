@@ -1,4 +1,4 @@
-const { closePopups, createButton, removeElementsByClass, generateRow } = require('../../render');
+const { closePopups, createButton, removeElementsByClass, generateRow } = require('../controllers/utils');
 const { loadErrorLog, clearErrorLog } = require('../controllers/error-log');
 const getCrypto = require('../controllers/crypto');
 const { emailFile } = require('../controllers/email-doc');

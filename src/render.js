@@ -906,8 +906,9 @@ ipcRenderer.on("save-as-clicked", function(e){
 });
 
 ipcRenderer.on("open-clicked", function(e){
+  const displayExitConfirmation = require('./components/views/exit-confirmation_display');
   if(project.hasUnsavedChanges){
-    displayExitConfirmation(openAProject);
+    displayExitConfirmation(saveProject, openAProject);
   }
   else{
     openAProject();
@@ -953,8 +954,9 @@ ipcRenderer.on('spellcheck-clicked', function(e){
 });
 
 ipcRenderer.on('convert-first-lines-clicked', function(e){
+  const showConvertFirstLines = require('./components/views/convert-first-lines_display');
   if(editorHasFocus()){
-    showConvertFirstLines(function(){
+    showConvertFirstLines(project, function(){
         displayChapterByIndex(project.activeChapterIndex);
     });
   }
@@ -1009,8 +1011,9 @@ ipcRenderer.on('about-clicked', function(e, appVersion){
 
 ipcRenderer.on('exit-app-clicked', function(e){
   if(project.hasUnsavedChanges){
+    const displayExitConfirmation = require('./components/views/exit-confirmation_display');
     updateFileList();
-    displayExitConfirmation(exitApp);
+    displayExitConfirmation(saveProject, exitApp);
   }
   else{
     exitApp();

@@ -1,4 +1,4 @@
-const { closePopups, createButton, removeElementsByClass, generateRow, displayChapterByIndex } = require('../../render');
+const { closePopups, createButton, removeElementsByClass, generateRow, displayChapterByIndex } = require('../controllers/utils');
 const { initiateImport } = require('../controllers/import');
 
 function showImportOptions(editorQuill, sysDirectories){

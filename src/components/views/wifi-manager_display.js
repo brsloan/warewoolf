@@ -1,4 +1,4 @@
-const { closePopups, createButton, removeElementsByClass, generateRow, removeOptions } = require('../../render');
+const { closePopups, createButton, removeElementsByClass, generateRow, removeOptions } = require('../controllers/utils');
 const { enableWifi, disableWifi, getWifiStatus, getWifiNetworks, getConnectionState, connectToNewWifi } = require('../controllers/wifi-manager');
 
 function showWifiManager(){
