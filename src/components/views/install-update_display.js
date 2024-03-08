@@ -1,3 +1,6 @@
+const { closePopups, createButton, removeElementsByClass } = require('../../render');
+const { installUpdate } = require('../controllers/updates');
+
 function showInstallUpdate(filepath){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
@@ -40,3 +43,5 @@ function showInstallUpdate(filepath){
   document.body.appendChild(popup);
   passInput.focus();
 }
+
+module.exports = showInstallUpdate;

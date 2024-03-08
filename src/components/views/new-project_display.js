@@ -1,3 +1,5 @@
+
+
 function requestProjectTitle(callback){
   var popup = document.createElement("div");
   popup.classList.add("popup");
@@ -41,3 +43,5 @@ function requestProjectTitle(callback){
   document.body.appendChild(popup);
   titleInput.focus();
 }
+
+module.exports = requestProjectTitle;

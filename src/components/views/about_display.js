@@ -1,3 +1,8 @@
+const fs = require('fs');
+const { closePopups, createButton, removeElementsByClass } = require('../../render');
+const { getUpdates, downloadUpdate } = require('../controllers/updates');
+const { logError } = require('../controllers/error-log');
+
 function showAbout(sysDirectories, appVersion){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
@@ -63,9 +68,9 @@ function showAbout(sysDirectories, appVersion){
           downloadBtn.innerText = 'Downloading...';
           downloadBtn.disabled = true;
           if(process.platform == 'linux')
-            downloadUpdate(latest.downloadInfo, showInstallUpdate);
+            downloadUpdate(sysDirectories, latest.downloadInfo, showInstallUpdate);
           else {
-            downloadUpdate(latest.downloadInfo, function(fpath){
+            downloadUpdate(sysDirectories, latest.downloadInfo, function(fpath){
               downloadBtn.innerText = "Downloaded Into Downloads Folder";
             });
           }
@@ -120,3 +125,5 @@ function loadLicenseText(licensesPath){
 
   return licenseText;
 }
+
+module.exports = showAbout;

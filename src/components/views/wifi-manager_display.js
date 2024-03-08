@@ -1,3 +1,6 @@
+const { closePopups, createButton, removeElementsByClass, generateRow, removeOptions } = require('../../render');
+const { enableWifi, disableWifi, getWifiStatus, getWifiNetworks, getConnectionState, connectToNewWifi } = require('../controllers/wifi-manager');
+
 function showWifiManager(){
 
   removeElementsByClass('popup');
@@ -161,3 +164,5 @@ function showWifiManager(){
     getConnectionState(updateConnectionState);
   }
 }
+
+module.exports = showWifiManager;

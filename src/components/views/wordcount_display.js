@@ -1,4 +1,7 @@
-function showWordCount(){
+const { closePopups, createButton, removeElementsByClass, generateRow } = require('../../render');
+const { countWords, getTotalWordCount } = require('../controllers/wordcount');
+
+function showWordCount(project, editorQuill){
     removeElementsByClass('popup');
     var popup = document.createElement("div");
     popup.classList.add("popup");
@@ -66,7 +69,7 @@ function showWordCount(){
     document.body.appendChild(popup);
 
     var activeTotal = countWords(editorQuill.getText());
-    var total = getTotalWordCount();
+    var total = getTotalWordCount(project);
     updateProgressBar();
 
     goalInput.onkeyup = function(){
@@ -91,3 +94,5 @@ function showWordCount(){
       return ["hsl(",hue,",95%,40%)"].join("");
   }
   };
+
+  module.exports = showWordCount;

@@ -1,3 +1,6 @@
+const { closePopups, createButton, removeElementsByClass, displayChapterByIndex } = require('../../render');
+const { convertMarkedItalicsForAllChapters } = require('../controllers/convert-italics');
+
 function showItalicsOptions(){
     removeElementsByClass('popup');
     var popup = document.createElement("div");
@@ -40,7 +43,7 @@ function showItalicsOptions(){
 
     italicsForm.onsubmit = function(e){
       e.preventDefault();
-      convertMarkedItalicsForAllChapters(italicsStrInput.value);
+      convertMarkedItalicsForAllChapters(project, italicsStrInput.value);
       displayChapterByIndex(project.activeChapterIndex);
       closePopups();
     };
@@ -51,3 +54,5 @@ function showItalicsOptions(){
     italicsStrInput.focus();
 
   }
+
+  module.exports = showItalicsOptions;

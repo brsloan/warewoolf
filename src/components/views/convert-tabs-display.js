@@ -1,3 +1,6 @@
+const { closePopups, createButton, removeElementsByClass, displayChapterByIndex } = require('../../render');
+const { convertMarkedTabsForAllChapters } = require('../controllers/convert-tabs');
+
 function showTabOptions(){
     removeElementsByClass('popup');
     var popup = document.createElement("div");
@@ -41,7 +44,7 @@ function showTabOptions(){
     tabForm.onsubmit = function(e){
       e.preventDefault();
 
-      convertMarkedTabsForAllChapters(tabStrInput.value);
+      convertMarkedTabsForAllChapters(project, tabStrInput.value);
       displayChapterByIndex(project.activeChapterIndex);
       closePopups();
     };
@@ -52,3 +55,5 @@ function showTabOptions(){
     tabStrInput.focus();
 
   }
+
+  module.exports = showTabOptions;

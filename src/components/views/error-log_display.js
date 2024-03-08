@@ -1,3 +1,8 @@
+const { closePopups, createButton, removeElementsByClass, generateRow } = require('../../render');
+const { loadErrorLog, clearErrorLog } = require('../controllers/error-log');
+const getCrypto = require('../controllers/crypto');
+const { emailFile } = require('../controllers/email-doc');
+
 function showErrorLog(){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
@@ -114,3 +119,5 @@ function showErrorLog(){
   document.body.appendChild(popup);
   errorLogTextBox.focus();
 }
+
+module.exports = showErrorLog;

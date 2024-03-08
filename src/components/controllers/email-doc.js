@@ -1,7 +1,12 @@
 const os = require('os');
-//const { archiveProject } = require('./backup-project');
+const nodemailer = require('nodemailer');
+const { archiveProject } = require('./backup-project');
+const { compileChapterDeltas } = require('./compile');
+const { convertDeltaToDocx, packageDocxBase64 } = require('./delta-to-docx');
+const markdownFic = require('./markdownFic');
+const { logError } = require('./error-log');
 
-function prepareAndEmail(sender, pass, receiver, filetype, compileOptions, callback){
+function prepareAndEmail(project, userSettings, editorQuill, sender, pass, receiver, filetype, compileOptions, callback){
   var delt;
   var filename;
 
@@ -19,7 +24,7 @@ function prepareAndEmail(sender, pass, receiver, filetype, compileOptions, callb
   }
 
   if(filetype == ".docx"){
-    emailDeltaAsDocx(filename, delt, compileOptions, sender, pass, receiver, callback);
+    emailDeltaAsDocx(project, userSettings, filename, delt, compileOptions, sender, pass, receiver, callback);
   }
   else if(filetype == ".mdfc"){
     emailDeltaAsMdfc(filename, delt, sender, pass, receiver, callback);
@@ -34,8 +39,8 @@ function prepareAndEmail(sender, pass, receiver, filetype, compileOptions, callb
 
 }
 
-function emailDeltaAsDocx(filename, delt, options, sender, pass, receiver, callback){
-  var doc = convertDeltaToDocx(delt, options);
+function emailDeltaAsDocx(project, userSettings, filename, delt, options, sender, pass, receiver, callback){
+  var doc = convertDeltaToDocx(delt, options, project, userSettings);
   packageDocxBase64(doc, (docString) => {
     var attachments = [
       {
@@ -112,4 +117,17 @@ function emailFile(sender, pass, receiver, attachments, callback){
       callback('Email sent successfully.');
     }
   });
+}
+
+function convertToPlainText(delt){
+  var text = '';
+  delt.ops.forEach(op => {
+    text += op.insert;
+  });
+  return text;
+}
+
+module.exports = {
+  prepareAndEmail,
+  emailFile
 }

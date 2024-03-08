@@ -1,3 +1,6 @@
+const { closePopups, createButton, removeElementsByClass, generateRow, updateFileList, displayChapterByIndex } = require('../../render');
+const { renumberChaps } = require('../controllers/renumber-chapters');
+
 function showRenumberChapters(){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
@@ -87,7 +90,7 @@ function showRenumberChapters(){
 
   var submit = createButton("Submit");
   submit.onclick = function(){
-    renumberChaps(parseInt(startChapDrop.value), parseInt(endChapDrop.value), insertReplaceCheck.checked, useNumeralsCheck.checked, formatInput.value);
+    renumberChaps(project, parseInt(startChapDrop.value), parseInt(endChapDrop.value), insertReplaceCheck.checked, useNumeralsCheck.checked, formatInput.value);
     updateFileList();
     displayChapterByIndex(project.activeChapterIndex);
     closePopups();
@@ -120,3 +123,5 @@ function showRenumberChapters(){
     return chapDrop;
   }
 }
+
+module.exports = showRenumberChapters;

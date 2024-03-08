@@ -1,3 +1,6 @@
+const { closePopups, createButton, removeElementsByClass } = require('../../render');
+
+
 function showShortcutsHelp(){
     removeElementsByClass('popup');
     var popup = document.createElement("div");
@@ -96,3 +99,5 @@ function showShortcutsHelp(){
     closeBtn.focus();
     popup.scrollTop = 0;
 }
+
+module.exports = showShortcutsHelp;

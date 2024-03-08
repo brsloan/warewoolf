@@ -1,3 +1,7 @@
+const { closePopups, createButton, removeElementsByClass } = require('../../render');
+const showFileDialog = require('./file-dialog_display');
+const { exportProject } = require('../controllers/export');
+
 function showExportOptions(sysDirectories){
     removeElementsByClass('popup');
     var popup = document.createElement("div");
@@ -77,7 +81,9 @@ function showExportOptions(sysDirectories){
 
     showFileDialog(saveOptions, function(dirpath){
       if(dirpath)
-        exportProject(options, dirpath);
+        exportProject(project, userSettings, options, dirpath);
       cback();
     });
   }
+
+  module.exports = showExportOptions;

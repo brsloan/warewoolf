@@ -1,7 +1,11 @@
-function showSpellcheck(startingIndex = 0, wordsToIgnore = []){
+const { closePopups, createButton, removeElementsByClass, enableSearchView, displayChapterByIndex } = require('../../render');
+const { runSpellcheck, addWordToPersonalDictFile } = require('../controllers/spellcheck');
+const { replace, replaceAllInAllChapters } = require('../controllers/findreplace');
+
+function showSpellcheck(editorQuill, project, startingIndex = 0, wordsToIgnore = []){
     enableSearchView();
 
-    var invalidWord = runSpellcheck(startingIndex, wordsToIgnore);
+    var invalidWord = runSpellcheck(editorQuill, startingIndex, wordsToIgnore);
     if(invalidWord)
       editorQuill.setSelection(invalidWord.index, invalidWord.word.length);
 
@@ -68,7 +72,7 @@ function showSpellcheck(startingIndex = 0, wordsToIgnore = []){
     var ignoreBtn = createButton("Ignore");
     ignoreBtn.onclick = function(){
       var nextIndex = invalidWord ? invalidWord.index + invalidWord.word.length : 0;
-      showSpellcheck(nextIndex, wordsToIgnore);
+      showSpellcheck(editorQuill, project, nextIndex, wordsToIgnore);
     }
     popup.appendChild(ignoreBtn);
 
@@ -92,7 +96,7 @@ function showSpellcheck(startingIndex = 0, wordsToIgnore = []){
 
       if(invalidWord && selectedReplacement != null){
         editorQuill.setSelection(invalidWord.index, invalidWord.word.length);
-        replace(selectedReplacement.value);
+        replace(editorQuill, selectedReplacement.value);
         ignoreBtn.click();
       }
     }
@@ -105,7 +109,7 @@ function showSpellcheck(startingIndex = 0, wordsToIgnore = []){
         selectedReplacement = customInput;
 
       if(invalidWord && selectedReplacement != null){
-        replaceAllInAllChapters(invalidWord.word, selectedReplacement.value, true, project.chapters);
+        replaceAllInAllChapters(project, invalidWord.word, selectedReplacement.value, true);
         displayChapterByIndex(project.activeChapterIndex);
         ignoreBtn.click();
       }
@@ -140,3 +144,5 @@ function showSpellcheck(startingIndex = 0, wordsToIgnore = []){
       ignoreBtn.focus();
     }
   }
+
+  module.exports = showSpellcheck;

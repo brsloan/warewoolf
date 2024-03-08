@@ -1,3 +1,8 @@
+const { closePopups, createButton, removeElementsByClass, generateRow } = require('../../render');
+const showFileDialog = require('./file-dialog_display');
+const { showWorking, hideWorking } = require('./working_display');
+const { compileProject } = require('../controllers/compile');
+
 function showCompileOptions(sysDirectories){
     removeElementsByClass('popup');
     var popup = document.createElement("div");
@@ -125,3 +130,5 @@ function showCompileOptions(sysDirectories){
       }
     })
   }
+
+  module.exports = showCompileOptions;

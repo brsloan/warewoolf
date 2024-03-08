@@ -1,4 +1,7 @@
-function showImportOptions(sysDirectories){
+const { closePopups, createButton, removeElementsByClass, generateRow, displayChapterByIndex } = require('../../render');
+const { initiateImport } = require('../controllers/import');
+
+function showImportOptions(editorQuill, sysDirectories){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup");
@@ -212,3 +215,5 @@ function showImportOptions(sysDirectories){
 
   importBtn.focus();
 }
+
+module.exports = showImportOptions;

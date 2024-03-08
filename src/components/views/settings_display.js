@@ -1,4 +1,6 @@
-function showSettings(sysDirectories, callback){
+const { closePopups, createButton, removeElementsByClass, convertFilepath } = require('../../render');
+
+function showSettings(userSettings, autosaver, sysDirectories, callback){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup");
@@ -207,3 +209,5 @@ function promptToChooseDirectory(defPath, sysDirectories, cback){
     cback(dirpath ? dirpath : "");
   })
 }
+
+module.exports = showSettings;

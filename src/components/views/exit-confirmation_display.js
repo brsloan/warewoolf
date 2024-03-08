@@ -1,3 +1,6 @@
+const { closePopups, createButton, removeElementsByClass, saveProject } = require('../../render');
+
+
 function displayExitConfirmation(continueFunc){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
@@ -36,3 +39,5 @@ function displayExitConfirmation(continueFunc){
   document.body.appendChild(popup);
   save.focus();
 }
+
+module.exports = displayExitConfirmation;

@@ -1,4 +1,6 @@
-function renumberChaps(startIndex, endIndex, withinChaps, useNumerals, template){
+const { getTempQuill } = require('./quill-utils');
+
+function renumberChaps(project, startIndex, endIndex, withinChaps, useNumerals, template){
   //template should have [num] where number should go
   var newNum = 1;
 
@@ -150,3 +152,5 @@ function integerToWord(i){
 
   return words[i];
 }
+
+module.exports = renumberChaps;

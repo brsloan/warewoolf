@@ -1,4 +1,7 @@
-function find(str, caseSensitive = true, startingIndex, searchAllChapters){
+const { getTempQuill } = require('./quill-utils');
+const { displayChapterByIndex } = require('../../render');
+
+function find(editorQuill, project, str, caseSensitive = true, startingIndex, searchAllChapters){
     var index = -1;
 
     if(str){
@@ -23,7 +26,7 @@ function find(str, caseSensitive = true, startingIndex, searchAllChapters){
                 while(result < 0){
                     if(project.activeChapterIndex < project.chapters.length - 1){
                         displayChapterByIndex(project.activeChapterIndex + 1);
-                        result = find(str, caseSensitive, 0);
+                        result = find(editorQuill, project, str, caseSensitive, 0);
                         index = result;
                     }
                     else {
@@ -31,7 +34,7 @@ function find(str, caseSensitive = true, startingIndex, searchAllChapters){
                         if(startingChapIndex != 0){
                             startingChapIndex = 0;
                             displayChapterByIndex(0);
-                            result = find(str, caseSensitive, 0);
+                            result = find(editorQuill, project, str, caseSensitive, 0);
                             index = result;
                         }
                         else {
@@ -41,7 +44,7 @@ function find(str, caseSensitive = true, startingIndex, searchAllChapters){
                 }
             } else {
                 if(startingIndex != 0){
-                    index =  find(str, caseSensitive, 0);
+                    index =  find(editorQuill, project, str, caseSensitive, 0);
                 }
 
             }
@@ -63,7 +66,7 @@ function findInText(str, text, caseSensitive, startingIndex){
     return index;
 }
 
-function replace(newStr){
+function replace(editorQuill, newStr){
     var selectedRange = editorQuill.getSelection(true);
     if(selectedRange.length > 0){
         editorQuill.deleteText(selectedRange.index, selectedRange.length, 'user');
@@ -71,7 +74,7 @@ function replace(newStr){
     }
 }
 
-function replaceAllInAllChapters(oldStr, newStr, caseSensitive){
+function replaceAllInAllChapters(project, oldStr, newStr, caseSensitive){
   var numReplaced = 0;
 
   project.chapters.forEach(function(chap){
@@ -118,4 +121,12 @@ function replaceAllInDelta(oldStr, newStr, caseSensitive, delt){
       changed: counter,
       delta: delt
     };
+}
+
+module.exports = {
+    find,
+    replace,
+    replaceAllInAllChapters,
+    replaceAllInChapter,
+    replaceAllInDelta
 }

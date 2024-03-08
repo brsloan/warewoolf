@@ -1,5 +1,6 @@
+ const { getTempQuill } = require('./quill-utils');
 
-function convertFirstLinesToTitles(){
+function convertFirstLinesToTitles(project){
   console.log('converting');
   var tempQuill = getTempQuill();
 
@@ -36,4 +37,9 @@ function convertFirstLineToTitle(delt){
     delta: tempQuill.getContents()
   }
 
+}
+
+module.exports = {
+  convertFirstLinesToTitles,
+  convertFirstLineToTitle
 }

@@ -1,4 +1,8 @@
-function showEmailOptions(){
+const { closePopups, createButton, removeElementsByClass } = require('../../render');
+const getCrypto = require('../controllers/crypto');
+const { prepareAndEmail } = require('../controllers/email-doc');
+
+function showEmailOptions(userSettings){
     removeElementsByClass('popup');
     var popup = document.createElement("div");
     popup.classList.add("popup");
@@ -173,7 +177,7 @@ function showEmailOptions(){
         }
       }
 
-      prepareAndEmail(senderEmailInput.value,
+      prepareAndEmail(project, userSettings, editorQuill, senderEmailInput.value,
         senderPassInput.value,
         receiverEmailInput.value,
         projectRadio.checked ? '.zip' : typeSelect.value,
@@ -215,3 +219,5 @@ function showEmailOptions(){
     else
       sendButton.focus();
   };
+
+  module.exports = showEmailOptions;

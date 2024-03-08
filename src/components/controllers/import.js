@@ -1,3 +1,15 @@
+const fs = require('fs');
+const { showFileDialog } = require('../views/file-dialog_display');
+const { logError } = require('./error-log');
+const { showWorking, hideWorking } = require('../views/working_display');
+const { importDocx } = require('./docx-import');
+const { generateChapTitleFromFirstLine, getTempQuill } = require('./quill-utils');
+const { convertFirstLineToTitle } = require('./convert-first-lines')
+const { convertMarkedItalics } = require('./convert-italics');
+const { convertMarkedTabs } = require('./convert-tabs');
+const { markdownFic } = require('./markdownFic');
+const { addImportedChapter } = require('../../render');
+
 function initiateImport(sysDirectories, options, cback){
 
   const dialogOptions = {
@@ -178,18 +190,10 @@ function importMDF(filepath, callback){
   }
 }
 
-function addImportedChapter(chapDelta, title){
-    var newChap = newChapter();
-    newChap.hasUnsavedChanges = true;
-    newChap.contents = chapDelta;
-    newChap.title = title;
-
-    project.chapters.splice(project.activeChapterIndex + 1, 0, newChap);
-    updateFileList();
-    var thisIndex = project.chapters.indexOf(newChap);
-    displayChapterByIndex(thisIndex);
-}
-
 function getFilenameFromFilepath(filepath){
   return filepath.replaceAll('\\', '/').split('/').pop().split('.')[0];
+}
+
+module.exports = {
+  initiateImport
 }

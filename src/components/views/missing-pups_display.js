@@ -1,3 +1,5 @@
+const { closePopups, createButton, removeElementsByClass, changeChapsDirectory } = require('../../render');
+
 function promptForMissingPups(){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
@@ -32,3 +34,5 @@ function promptForMissingPups(){
   document.body.appendChild(popup);
   find.focus();
 }
+
+module.exports = promptForMissingPups;

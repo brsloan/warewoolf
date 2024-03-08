@@ -1,3 +1,6 @@
+const { closePopupDialogs, createButton } = require('../../render');
+
+
 function showFileDialog(options, callback){
     var popup = document.createElement("div");
     popup.classList.add("popup-dialog");
@@ -269,3 +272,5 @@ function collectionToArray(coll, pre = ''){
   }
   return arr;
 }
+
+module.exports = showFileDialog;

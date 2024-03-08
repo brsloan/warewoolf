@@ -1,3 +1,6 @@
+const { closePopups, createButton, removeElementsByClass, enableSearchView, displayChapterByIndex } = require('../../render');
+const { find, replace, replaceAllInChapter, replaceAllInAllChapters } = require('../controllers/findreplace');
+
 function showFindReplace(){
     enableSearchView();
     removeElementsByClass('popup');
@@ -50,7 +53,7 @@ function showFindReplace(){
     var findBtn = createButton("<span class='access-key'>F</span>ind");
     findBtn.onclick = function(){
       replacementCount.innerText = "";
-      var found = find(findIn.value, caseSensitive.checked, editorQuill.getSelection(true).index, inAllChapters.checked);
+      var found = find(editorQuill, project, findIn.value, caseSensitive.checked, editorQuill.getSelection(true).index, inAllChapters.checked);
       if(found < 0)
         replacementCount.innerText = "None Found.";
       findBtn.focus();
@@ -62,7 +65,7 @@ function showFindReplace(){
     replaceBtn.id = "replace-btn";
     replaceBtn.onclick = function(){
       replacementCount.innerText = "";
-      replace(replaceIn.value);
+      replace(editorQuill, replaceIn.value);
       findBtn.click();
       replaceBtn.focus();
     };
@@ -78,7 +81,7 @@ function showFindReplace(){
       var numReplaced = 0;
 
       if(inAllChapters.checked)
-        numReplaced = replaceAllInAllChapters(findIn.value, replaceIn.value, caseSensitive.checked);
+        numReplaced = replaceAllInAllChapters(project, findIn.value, replaceIn.value, caseSensitive.checked);
       else {
         numReplaced = replaceAllInChapter(findIn.value, replaceIn.value, caseSensitive.checked, project.getActiveChapter());
       }
@@ -113,3 +116,5 @@ function showFindReplace(){
     document.body.appendChild(popup);
     findIn.focus();
   }
+
+  module.exports = showFindReplace;

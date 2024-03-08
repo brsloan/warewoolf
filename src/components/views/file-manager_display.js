@@ -1,4 +1,6 @@
-//const { unzipProject } = require('../controllers/backup-project');
+const { closePopups, createButton, removeElementsByClass } = require('../../render');
+const { unzipProject } = require('../controllers/backup-project');
+const { createNewDirectory, renameFiles, moveFiles, getFileList, deleteFile } = require('../controllers/file-manager');
 
 function showFileManager(sysDir){
     removeElementsByClass('popup');
@@ -317,3 +319,5 @@ function populateFMFileList(directoryPath, listElement, currentDirDisplay){
 
     parentDir.selected = true;
 }
+
+module.exports = showFileManager;

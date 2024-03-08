@@ -1,8 +1,10 @@
 var nspell = require('nspell');
+const fs = require('fs');
+const { convertFilepath, sysDirectories } = require('../../render');
 
-function runSpellcheck(startingIndex = 0, wordsToIgnore){
+function runSpellcheck(editorQuill, startingIndex = 0, wordsToIgnore){
     var spellchecker = loadDictionaries();
-    return findInvalidWord(spellchecker, startingIndex, wordsToIgnore)
+    return findInvalidWord(editorQuill, spellchecker, startingIndex, wordsToIgnore)
 }
 
 function loadDictionaries(){
@@ -43,7 +45,7 @@ function createPersonalDicIfNeeded(){
   }
 }
 
-function findInvalidWord(spellchecker, startingIndex = 0, wordsToIgnore = []) {
+function findInvalidWord(editorQuill, spellchecker, startingIndex = 0, wordsToIgnore = []) {
     var invalidWord = null;
 
     var text = editorQuill.getText().slice(startingIndex);
@@ -117,4 +119,10 @@ function getBeginningOfCurrentWord(text, position){
   }
 
   return position;
+}
+
+module.exports = {
+  runSpellcheck,
+  addWordToPersonalDictFile,
+  getBeginningOfCurrentWord
 }

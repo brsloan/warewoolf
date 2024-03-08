@@ -1,14 +1,12 @@
 const { ipcRenderer } = require('electron');
 const fs = require('fs');
 const Quill = require('quill');
-const docx = require('docx');
-const nodemailer = require('nodemailer');
 const sysDirectories = ipcRenderer.sendSync('get-directories');
 const getUserSettings = require('./components/models/user-settings');
 const newChapter = require('./components/models/chapter');
 const newProject = require('./components/models/project');
 const autosaver = require('./components/controllers/autosave');
-const { backupProject, archiveProject, unzipProject } = require('./components/controllers/backup-project');
+const { backupProject } = require('./components/controllers/backup-project');
 
 var editorQuill = new Quill('#editor-container', {
   modules: {
@@ -116,7 +114,8 @@ function displayProject(){
 }
 
 function setWordCountOnLoad(){
-  project.wordCountOnLoad = getTotalWordCount();
+  const { getTotalWordCount } = require('./components/controllers/wordcount');
+  project.wordCountOnLoad = getTotalWordCount(project);
 }
 
 function updateFileList(){
@@ -686,7 +685,7 @@ function openHelpDoc(){
 
 function exitApp(){
   if(userSettings.autoBackup == true && project.filename != ''){
-    backupProject(sysDirectories.docs, function(msg){
+    backupProject(project, userSettings, sysDirectories.docs, function(msg){
       ipcRenderer.send('exit-app-confirmed');
     });
   } else {
@@ -696,6 +695,18 @@ function exitApp(){
 
 function alertBackupResult(msg){
   console.log(msg);
+}
+
+function addImportedChapter(chapDelta, title){
+  var newChap = newChapter();
+  newChap.hasUnsavedChanges = true;
+  newChap.contents = chapDelta;
+  newChap.title = title;
+
+  project.chapters.splice(project.activeChapterIndex + 1, 0, newChap);
+  updateFileList();
+  var thisIndex = project.chapters.indexOf(newChap);
+  displayChapterByIndex(thisIndex);
 }
 
 ///////////////////////////////////////////////////////////////////
@@ -829,12 +840,12 @@ document.addEventListener ("keydown", function (e) {
     }
     else if(e.ctrlKey && e.altKey && e.key === "t"){
       if(userSettings.typewriterMode){
-        disableTypewriterMode();
+        disableTypewriterMode(editorQuill);
         userSettings.typewriterMode = false;
         userSettings.save();
       }
       else {
-        enableTypewriterMode();
+        enableTypewriterMode(editorQuill);
         userSettings.typewriterMode = true;
         userSettings.save();
       }
@@ -914,7 +925,7 @@ ipcRenderer.on('new-project-clicked', function(e){
 });
 
 ipcRenderer.on('import-clicked', function(e){
-  showImportOptions(sysDirectories);
+  showImportOptions(editorQuill, sysDirectories);
 });
 
 ipcRenderer.on('export-clicked', function(e){
@@ -922,7 +933,7 @@ ipcRenderer.on('export-clicked', function(e){
 });
 
 ipcRenderer.on('properties-clicked', function(e){
-  showProperties();
+  showProperties(project, userSettings);
 });
 
 ipcRenderer.on('compile-clicked', function(e){
@@ -930,7 +941,7 @@ ipcRenderer.on('compile-clicked', function(e){
 });
 
 ipcRenderer.on('word-count-clicked', function(e){
-  showWordCount();
+  showWordCount(project, editorQuill);
 });
 
 ipcRenderer.on('find-replace-clicked', function(e){
@@ -942,7 +953,7 @@ ipcRenderer.on('spellcheck-clicked', function(e){
   if(editorHasFocus()){
     var currentIndex = editorQuill.getSelection(true).index;
     var beginningOfWord = getBeginningOfCurrentWord(editorQuill.getText(), currentIndex);
-    showSpellcheck(beginningOfWord);
+    showSpellcheck(editorQuill, project, beginningOfWord);
   }
 });
 
@@ -989,7 +1000,7 @@ ipcRenderer.on('shortcuts-clicked', function(e){
 });
 
 ipcRenderer.on('outliner-clicked', function(e){
-  showOutliner();
+  showOutliner(project);
 });
 
 ipcRenderer.on('convert-tabs-clicked', function(e){
@@ -1023,7 +1034,7 @@ ipcRenderer.on('renumber-chapters-clicked', function(e){
 });
 
 ipcRenderer.on('send-via-email-clicked', function(e){
-  showEmailOptions();
+  showEmailOptions(userSettings);
 });
 
 ipcRenderer.on('view-error-log-clicked', function(e){
@@ -1039,11 +1050,11 @@ ipcRenderer.on('wifi-manager-clicked', function(e){
 });
 
 ipcRenderer.on('save-backup-clicked', function(e){
-  backupProject(sysDirectories.docs, alertBackupResult);
+  backupProject(project, userSettings, sysDirectories.docs, alertBackupResult);
 });
 
 ipcRenderer.on('settings-clicked', function(e){
-  showSettings(sysDirectories, function(){
+  showSettings(userSettings, autosaver, sysDirectories, function(){
     setDarkMode();
   });
 });
@@ -1128,4 +1139,22 @@ function removeOptions(selectElement) {
   catch(err){
     logError(err)
   }
+}
+
+module.exports = {
+  displayChapterByIndex,
+  addImportedChapter,
+  convertFilepath,
+  sysDirectories,
+  closePopups,
+  closePopupDialogs,
+  removeElementsByClass,
+  createButton,
+  generateRow,
+  removeOptions,
+  saveProject,
+  enableSearchView,
+  disableSearchView,
+  changeChapsDirectory,
+  updateFileList
 }
