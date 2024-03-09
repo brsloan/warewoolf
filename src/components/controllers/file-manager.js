@@ -110,7 +110,7 @@ function getParentDirectory(filepath){
 
 function getFileList(dirPath){
   if(dirPath == '')
-    dirPath = '/home';
+    dirPath = '/';
 
   try {
       return fs.readdirSync(dirPath, {withFileTypes: true});
