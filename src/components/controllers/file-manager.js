@@ -113,7 +113,9 @@ function getFileList(dirPath){
     dirPath += '/';
 
   try {
-      return fs.readdirSync(dirPath, {withFileTypes: true});
+      return fs.readdirSync(dirPath, {withFileTypes: true}).filter(function(dirent){
+        return dirent.name.charAt(0) !== '.';
+      });
   } catch (err) {
       logError(err);
   }
