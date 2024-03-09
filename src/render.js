@@ -1114,13 +1114,3 @@ function editorHasFocus(){
 function editorIsVisible(){
   return document.getElementById('writing-field').classList.contains('visible');
 }
-
-
-module.exports = {
-  displayChapterByIndex,
-  addImportedChapter,
-  sysDirectories,
-  saveProject,
-  changeChapsDirectory,
-  updateFileList
-}
