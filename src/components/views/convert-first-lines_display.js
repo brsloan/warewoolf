@@ -1,4 +1,7 @@
-function showConvertFirstLines(cback){
+const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
+const { convertFirstLinesToTitles } = require('../controllers/convert-first-lines');
+
+function showConvertFirstLines(project, cback){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup");
@@ -14,7 +17,7 @@ function showConvertFirstLines(cback){
 
   var convertBtn = createButton('Convert');
   convertBtn.onclick = function(){
-    convertFirstLinesToTitles();
+    convertFirstLinesToTitles(project);
     closePopups();
     cback();
   };
@@ -30,3 +33,5 @@ function showConvertFirstLines(cback){
   convertBtn.focus();
 
 }
+
+module.exports = showConvertFirstLines;

@@ -1,4 +1,7 @@
-function showImportOptions(sysDirectories){
+const { closePopups, createButton, removeElementsByClass, generateRow } = require('../controllers/utils');
+const { initiateImport } = require('../controllers/import');
+
+function showImportOptions(sysDirectories, addImportedChapter, onFinish){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup");
@@ -190,11 +193,7 @@ function showImportOptions(sysDirectories){
     };
 
     closePopups();
-    initiateImport(sysDirectories, importOptions, function(){
-      displayChapterByIndex(project.activeChapterIndex);
-      if(project.chapters.length > 0)
-        editorQuill.enable();
-    });
+    initiateImport(sysDirectories, importOptions, addImportedChapter, onFinish);
   };
 
   popup.appendChild(importForm);
@@ -212,3 +211,5 @@ function showImportOptions(sysDirectories){
 
   importBtn.focus();
 }
+
+module.exports = showImportOptions;

@@ -1,4 +1,6 @@
-function displayExitConfirmation(continueFunc){
+const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
+
+function displayExitConfirmation(saveFunc, continueFunc){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup");
@@ -14,7 +16,7 @@ function displayExitConfirmation(continueFunc){
 
   var save = createButton("Save");
   save.onclick = function(){
-    saveProject();
+    saveFunc();
     closePopups();
     continueFunc();
   };
@@ -36,3 +38,5 @@ function displayExitConfirmation(continueFunc){
   document.body.appendChild(popup);
   save.focus();
 }
+
+module.exports = displayExitConfirmation;

@@ -1,8 +1,13 @@
+const fs = require('fs');
+const markdownFic = require('./markdownFic');
+const Quill = require('quill');
+const { convertDeltaToDocx, saveDocx } = require('./delta-to-docx');
+const { logError } = require('./error-log');
 
-function compileProject(options, filepath){
+function compileProject(project, options, filepath){
     console.log(options);
     console.log(filepath);
-    var allChaps = compileChapterDeltas(options);
+    var allChaps = compileChapterDeltas(project, options);
 
     switch(options.type){
         case ".txt":
@@ -39,7 +44,7 @@ function compilePlainText(dir, allChaps){
   }
 }
 
-function compileChapterDeltas(options){
+function compileChapterDeltas(project, options){
     var divider = options.insertStrng;
     var Delta = Quill.import('delta');
     var compiled = new Delta();
@@ -66,6 +71,19 @@ function compileChapterDeltas(options){
 
 
 function compileDocx(filepath, delt, options) {
-  var doc = convertDeltaToDocx(delt, options);
+  var doc = convertDeltaToDocx(delt, options, project, userSettings);
   saveDocx(filepath, doc);
+}
+
+function convertToPlainText(delt){
+  var text = '';
+  delt.ops.forEach(op => {
+    text += op.insert;
+  });
+  return text;
+}
+
+module.exports = {
+  compileProject,
+  compileChapterDeltas
 }

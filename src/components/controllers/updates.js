@@ -1,4 +1,7 @@
 const https = require('https');
+const { logError } = require('./error-log');
+const process = require('node:process');
+const { spawn } = require('node:child_process');
 
 function getUpdates(thisAppVersion, callback){
     fetchLatestReleaseData(function(latest){
@@ -131,7 +134,7 @@ function isUpdateAvailable(latestTag, thisAppVersion = '1.0.0'){
     return avail;
 }
 
-function downloadUpdate(downloadInfo, callback){
+function downloadUpdate(sysDirectories, downloadInfo, callback){
     var filePath = '';
 
     if(process.platform == 'linux')
@@ -215,3 +218,9 @@ function installUpdate(pass, filePath, statusElement){
   })
 
 }
+
+module.exports = {
+    getUpdates,
+    downloadUpdate,
+    installUpdate
+};

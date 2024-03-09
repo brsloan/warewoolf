@@ -1,4 +1,6 @@
-function showSettings(sysDirectories, callback){
+const { closePopups, createButton, removeElementsByClass, convertFilepath, generateRow } = require('../controllers/utils');
+
+function showSettings(userSettings, autosaver, sysDirectories, callback){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup");
@@ -95,7 +97,7 @@ function showSettings(sysDirectories, callback){
   var autosaveIntervalInput = document.createElement('input');
   autosaveIntervalInput.type = 'number';
   autosaveIntervalInput.min = 0;
-  autosaveIntervalInput.value = userSettings.autosaveInterval;
+  autosaveIntervalInput.value = userSettings.autosaveIntMinutes;
   autosaveIntervalInput.classList.add('number-ticker');
 
   backupTbl.appendChild(generateRow(autosaveLabel, autosaveIntervalInput));
@@ -171,13 +173,13 @@ function showSettings(sysDirectories, callback){
     }
     userSettings.autoBackup = autoBackupCheck.checked;
     userSettings.backupsToKeep = backupLimitInput.value;
-    userSettings.autosaveInterval = autosaveIntervalInput.value;
+    userSettings.autosaveIntMinutes = autosaveIntervalInput.value;
     userSettings.darkMode = document.querySelector('input[type=radio][name=dark-mode]:checked').value;
     userSettings.defaultAuthor = defAuthIn.value;
     userSettings.addressInfo = addressIn.value;
 
     userSettings.save();
-    updateAutosave();
+    autosaver.updateAutosave(userSettings.autosaveIntMinutes, saveProject);
     callback();
     closePopups();
   }
@@ -207,3 +209,5 @@ function promptToChooseDirectory(defPath, sysDirectories, cback){
     cback(dirpath ? dirpath : "");
   })
 }
+
+module.exports = showSettings;

@@ -1,3 +1,6 @@
+const fs = require('fs');
+const { logError } = require('./error-log');
+
 function copyFiles(filesToCopy, newLocation){
     try {
       filesToCopy.forEach((ftc, i) => {
@@ -123,4 +126,15 @@ function thisFileExists(filepath){
   catch(err){
     logError(err);
   }
+}
+
+module.exports = {
+  copyFiles,
+  renameFiles,
+  moveFiles,
+  createNewDirectory,
+  deleteFile,
+  getParentDirectory,
+  getFileList,
+  thisFileExists
 }

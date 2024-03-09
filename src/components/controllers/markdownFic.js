@@ -1,3 +1,5 @@
+const { getTempQuill, parseDelta } = require('./quill-utils');
+
 function markdownFic(){
   return {
     parseMDF: parseMDF,
@@ -318,3 +320,5 @@ function markdownFic(){
   }
 
 }
+
+module.exports = markdownFic;

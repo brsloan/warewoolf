@@ -1,3 +1,6 @@
+const fs = require('fs');
+const { logError } = require('../controllers/error-log');
+
 function newChapter(){
     return {
       title: "new",
@@ -111,3 +114,5 @@ function newChapter(){
       }
   }
 }
+
+module.exports = newChapter;

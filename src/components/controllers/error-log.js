@@ -1,3 +1,5 @@
+const fs = require('fs');
+
 function logError(e){
     console.log(e);
     let time = new Date().toLocaleString();
@@ -40,3 +42,8 @@ function logError(e){
     }
   }
   
+  module.exports = {
+    logError,
+    loadErrorLog,
+    clearErrorLog
+  }

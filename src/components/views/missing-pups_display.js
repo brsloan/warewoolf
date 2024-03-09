@@ -1,4 +1,6 @@
-function promptForMissingPups(){
+const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
+
+function promptForMissingPups(project, changeChapsDirectory){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup");
@@ -32,3 +34,5 @@ function promptForMissingPups(){
   document.body.appendChild(popup);
   find.focus();
 }
+
+module.exports = promptForMissingPups;

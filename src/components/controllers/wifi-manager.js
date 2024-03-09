@@ -1,4 +1,5 @@
 const { spawn } = require("child_process");
+const { logError } = require('./error-log');
 
 function getConnectionState(cback){
   const args = ["-t", "device", "status"];
@@ -82,4 +83,13 @@ function enableWifi(cback){
 
 function connectToNewWifi(ssidString, passString, cback){
   nmcliSingle(['device','wifi','connect', ssidString, 'password', passString], cback);
+}
+
+module.exports = {
+  getConnectionState,
+  getWifiStatus,
+  getWifiNetworks,
+  disableWifi,
+  enableWifi,
+  connectToNewWifi
 }

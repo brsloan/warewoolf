@@ -1,3 +1,5 @@
+const Quill = require('quill');
+
 function getTempQuill(){
   return new Quill(document.createElement('div'), {
       modules: {
@@ -86,4 +88,12 @@ function flattenInserts(ops){
   }
 
   return flattened;
+}
+
+module.exports = {
+  getTempQuill,
+  splitDeltaAtIndices,
+  generateChapTitleFromFirstLine,
+  parseDelta,
+  flattenInserts
 }

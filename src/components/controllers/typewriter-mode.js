@@ -1,4 +1,4 @@
-function typewriterScroll(){
+function typewriterScroll(editorQuill){
   if(editorQuill.hasFocus()){
     var viewTop = editorQuill.getBounds(editorQuill.getSelection().index).top;
     var toScroll = viewTop - editorQuill.getBounds(0).top;
@@ -8,10 +8,19 @@ function typewriterScroll(){
   }
 }
 
-function enableTypewriterMode(){
-  editorQuill.on('editor-change', typewriterScroll);
+function enableTypewriterMode(editorQuill){
+  editorQuill.on('editor-change', function(){
+    typewriterScroll(editorQuill);
+  });
 }
 
-function disableTypewriterMode(){
-  editorQuill.off('editor-change', typewriterScroll);
+function disableTypewriterMode(editorQuill){
+  editorQuill.off('editor-change', function(){
+    typewriterScroll(editorQuill);
+  });
 }
+
+module.exports = {
+  enableTypewriterMode,
+  disableTypewriterMode
+};

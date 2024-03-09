@@ -1,3 +1,5 @@
+const fs = require('fs');
+
 function getUserSettings(userSettingsFilepath){
   return {
     editorWidth: 50,
@@ -20,7 +22,7 @@ function getUserSettings(userSettingsFilepath){
     backupDirectory: null,
     autoBackup: true,
     backupsToKeep: 10,
-    autosaveInterval: 0,
+    autosaveIntMinutes: 0,
     darkMode: 'system',
     save: save,
     load: load,
@@ -61,3 +63,5 @@ function getUserSettings(userSettingsFilepath){
   }
 
 }
+
+module.exports = getUserSettings;

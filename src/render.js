@@ -1,9 +1,19 @@
 const { ipcRenderer } = require('electron');
 const fs = require('fs');
 const Quill = require('quill');
-const docx = require('docx');
-const nodemailer = require('nodemailer');
 const sysDirectories = ipcRenderer.sendSync('get-directories');
+const getUserSettings = require('./components/models/user-settings');
+const newChapter = require('./components/models/chapter');
+const newProject = require('./components/models/project');
+const autosaver = require('./components/controllers/autosave');
+const { backupProject } = require('./components/controllers/backup-project');
+const showFileDialog = require('./components/views/file-dialog_display');
+const {
+  removeElementsByClass,
+  createButton,
+  disableSearchView
+} = require('./components/controllers/utils');
+
 
 var editorQuill = new Quill('#editor-container', {
   modules: {
@@ -73,7 +83,7 @@ function applyUserSettings(){
     enableTypewriterMode()
   updateEditorWidth();
   updatePanelDisplays();
-  initiateAutosave();
+  autosaver.initiateAutosave(userSettings.autosaveIntMinutes, saveProject);
   setDarkMode();
 }
 
@@ -94,10 +104,16 @@ function setDarkMode(){
 
 function setProject(filepath){
   if(filepath && filepath != null){
-    project.loadFile(filepath);
+    var chapsExist = project.loadFile(filepath);
+    if(!chapsExist){
+      console.log('could not find first pup: ' + project.directory + project.chapsDirectory + project.chapters[0].filename);
+      const promptForMissingPups = require('./components/views/missing-pups_display');
+      promptForMissingPups(project, changeChapsDirectory);
+    }
+    else{
+      displayProject();
+    }
   }
-
-  displayProject();
 }
 
 function displayProject(){
@@ -111,7 +127,8 @@ function displayProject(){
 }
 
 function setWordCountOnLoad(){
-  project.wordCountOnLoad = getTotalWordCount();
+  const { getTotalWordCount } = require('./components/controllers/wordcount');
+  project.wordCountOnLoad = getTotalWordCount(project);
 }
 
 function updateFileList(){
@@ -348,6 +365,7 @@ function moveChapDown(chapInd){
 
 
 function createNewProject(){
+  const requestProjectTitle = require('./components/views/new-project_display');
   requestProjectTitle(function(title){
     if(title && title != ""){
       project = newProject();
@@ -440,8 +458,14 @@ function openAProject() {
 
   showFileDialog(options, function(filepath){
     if (filepath) {
-      project.loadFile(filepath[0]);
-      displayProject();
+      var chapsExist = project.loadFile(filepath[0]);
+      if(!chapsExist){
+        const promptForMissingPups = require('./components/views/missing-pups_display');
+        promptForMissingPups(project, changeChapsDirectory);
+      }
+      else{
+        displayProject();
+      }
       userSettings.lastProject = filepath[0];
       userSettings.save();
     }
@@ -628,19 +652,6 @@ function splitChapter(){
   }
 }
 
-
-function enableSearchView(){
-  document.getElementById("chapter-list-sidebar").classList.add("sidebar-search-view");
-  document.getElementById("project-notes").classList.add("sidebar-search-view");
-  document.getElementById("writing-field").classList.add("writing-field-search-view");
-}
-
-function disableSearchView(){
-  document.getElementById("chapter-list-sidebar").classList.remove("sidebar-search-view");
-  document.getElementById("project-notes").classList.remove("sidebar-search-view");
-  document.getElementById("writing-field").classList.remove("writing-field-search-view");
-}
-
 function increaseEditorWidthSetting(){
   userSettings.editorWidth++;
   updateEditorWidth();
@@ -681,7 +692,7 @@ function openHelpDoc(){
 
 function exitApp(){
   if(userSettings.autoBackup == true && project.filename != ''){
-    backupProject(sysDirectories.docs, function(msg){
+    backupProject(project, userSettings, sysDirectories.docs, function(msg){
       ipcRenderer.send('exit-app-confirmed');
     });
   } else {
@@ -691,6 +702,18 @@ function exitApp(){
 
 function alertBackupResult(msg){
   console.log(msg);
+}
+
+function addImportedChapter(chapDelta, title){
+  var newChap = newChapter();
+  newChap.hasUnsavedChanges = true;
+  newChap.contents = chapDelta;
+  newChap.title = title;
+
+  project.chapters.splice(project.activeChapterIndex + 1, 0, newChap);
+  updateFileList();
+  var thisIndex = project.chapters.indexOf(newChap);
+  displayChapterByIndex(thisIndex);
 }
 
 ///////////////////////////////////////////////////////////////////
@@ -824,12 +847,12 @@ document.addEventListener ("keydown", function (e) {
     }
     else if(e.ctrlKey && e.altKey && e.key === "t"){
       if(userSettings.typewriterMode){
-        disableTypewriterMode();
+        disableTypewriterMode(editorQuill);
         userSettings.typewriterMode = false;
         userSettings.save();
       }
       else {
-        enableTypewriterMode();
+        enableTypewriterMode(editorQuill);
         userSettings.typewriterMode = true;
         userSettings.save();
       }
@@ -896,8 +919,9 @@ ipcRenderer.on("save-as-clicked", function(e){
 });
 
 ipcRenderer.on("open-clicked", function(e){
+  const displayExitConfirmation = require('./components/views/exit-confirmation_display');
   if(project.hasUnsavedChanges){
-    displayExitConfirmation(openAProject);
+    displayExitConfirmation(saveProject, openAProject);
   }
   else{
     openAProject();
@@ -909,54 +933,75 @@ ipcRenderer.on('new-project-clicked', function(e){
 });
 
 ipcRenderer.on('import-clicked', function(e){
-  showImportOptions(sysDirectories);
+  const showImportOptions = require('./components/views/import_display');
+  showImportOptions(sysDirectories, addImportedChapter, function(){
+    displayChapterByIndex(project.activeChapterIndex);
+    if(project.chapters.length > 0)
+      editorQuill.enable();
+  });
 });
 
 ipcRenderer.on('export-clicked', function(e){
-  showExportOptions(sysDirectories);
+  const showExportOptions = require('./components/views/export_display');
+  showExportOptions(project, userSettings, sysDirectories);
 });
 
 ipcRenderer.on('properties-clicked', function(e){
-  showProperties();
+  const showProperties = require('./components/views/properties_display');
+  showProperties(project, userSettings);
 });
 
 ipcRenderer.on('compile-clicked', function(e){
-  showCompileOptions(sysDirectories);
+  const showCompileOptions = require('./components/views/compile_display');
+  showCompileOptions(project, sysDirectories, userSettings);
 });
 
 ipcRenderer.on('word-count-clicked', function(e){
-  showWordCount();
+  const showWordCount = require('./components/views/wordcount_display');
+  showWordCount(project, editorQuill);
 });
 
 ipcRenderer.on('find-replace-clicked', function(e){
-  if(editorHasFocus())
-    showFindReplace();
+  if(editorHasFocus()){
+    const showFindReplace = require('./components/views/findreplace_display');
+    showFindReplace(project, editorQuill, displayChapterByIndex);
+  }
 });
 
 ipcRenderer.on('spellcheck-clicked', function(e){
   if(editorHasFocus()){
+    const showSpellcheck = require('./components/views/spellcheck_display');
+    const { getBeginningOfCurrentWord } = require('./components/controllers/spellcheck');
     var currentIndex = editorQuill.getSelection(true).index;
     var beginningOfWord = getBeginningOfCurrentWord(editorQuill.getText(), currentIndex);
-    showSpellcheck(beginningOfWord);
+    showSpellcheck(editorQuill, project, sysDirectories, displayChapterByIndex, beginningOfWord);
   }
 });
 
 ipcRenderer.on('convert-first-lines-clicked', function(e){
+  const showConvertFirstLines = require('./components/views/convert-first-lines_display');
   if(editorHasFocus()){
-    showConvertFirstLines(function(){
+    showConvertFirstLines(project, function(){
         displayChapterByIndex(project.activeChapterIndex);
     });
   }
 });
 
 ipcRenderer.on('headings-to-chaps-clicked', function(e){
-  if(editorHasFocus())
-    showBreakHeadingsOptions();
+  if(editorHasFocus()){
+    const showBreakHeadingsOptions = require('./components/views/headings-to-chapters_display');
+    showBreakHeadingsOptions(editorQuill, addImportedChapter);
+  }
+    
 });
 
 ipcRenderer.on('convert-italics-clicked', function(e){
-  if(editorHasFocus())
-    showItalicsOptions();
+  if(editorHasFocus()){
+    const showItalicsOptions = require('./components/views/convert-italics_display');
+    showItalicsOptions(project, function(){
+      displayChapterByIndex(project.activeChapterIndex);
+    });
+  }
 });
 
 ipcRenderer.on('split-chapter-clicked', function(e){
@@ -980,25 +1025,32 @@ ipcRenderer.on('restore-chapter-clicked', function(e){
 });
 
 ipcRenderer.on('shortcuts-clicked', function(e){
+  const showShortcutsHelp = require('./components/views/shortcuts-help_display');
   showShortcutsHelp();
 });
 
 ipcRenderer.on('outliner-clicked', function(e){
-  showOutliner();
+  const showOutliner = require('./components/views/outliner_display');
+  showOutliner(project);
 });
 
 ipcRenderer.on('convert-tabs-clicked', function(e){
-  showTabOptions();
+  const showTabOptions = require('./components/views/convert-tabs-display');
+  showTabOptions(project, function(){
+    displayChapterByIndex(project.activeChapterIndex);
+  });
 });
 
 ipcRenderer.on('about-clicked', function(e, appVersion){
+  const showAbout = require('./components/views/about_display');
   showAbout(sysDirectories, appVersion);
 });
 
 ipcRenderer.on('exit-app-clicked', function(e){
   if(project.hasUnsavedChanges){
+    const displayExitConfirmation = require('./components/views/exit-confirmation_display');
     updateFileList();
-    displayExitConfirmation(exitApp);
+    displayExitConfirmation(saveProject, exitApp);
   }
   else{
     exitApp();
@@ -1014,85 +1066,46 @@ ipcRenderer.on('help-doc-clicked', function(e){
 });
 
 ipcRenderer.on('renumber-chapters-clicked', function(e){
-  showRenumberChapters();
+  const showRenumberChapters = require('./components/views/renumber-chapters_display');
+  showRenumberChapters(project, function(){
+    updateFileList();
+    displayChapterByIndex(project.activeChapterIndex);
+  });
 });
 
 ipcRenderer.on('send-via-email-clicked', function(e){
-  showEmailOptions();
+  const showEmailOptions = require('./components/views/email-doc_display');
+  showEmailOptions(project, userSettings, editorQuill);
 });
 
 ipcRenderer.on('view-error-log-clicked', function(e){
-  showErrorLog();
+  const showErrorLog = require('./components/views/error-log_display');
+  showErrorLog(userSettings);
 });
 
 ipcRenderer.on('file-manager-clicked', function(e){
-  showFileManager(sysDirectories);
+  const showFileManager = require('./components/views/file-manager_display');
+  showFileManager(sysDirectories, project.directory);
 });
 
 ipcRenderer.on('wifi-manager-clicked', function(e){
+  const showWifiManager = require('./components/views/wifi-manager_display');
   showWifiManager();
 });
 
 ipcRenderer.on('save-backup-clicked', function(e){
-  backupProject(sysDirectories.docs, alertBackupResult);
+  backupProject(project, userSettings, sysDirectories.docs, alertBackupResult);
 });
 
 ipcRenderer.on('settings-clicked', function(e){
-  showSettings(sysDirectories, function(){
+  const showSettings = require('./components/views/settings_display');
+  showSettings(userSettings, autosaver, sysDirectories, function(){
     setDarkMode();
   });
 });
 
 //**** utils ***/
 
-function closePopups(){
-  removeElementsByClass('popup');
-  disableSearchView();
-  editorQuill.focus();
-}
-
-function closePopupDialogs(){
-  removeElementsByClass('popup-dialog');
-  var popups = document.getElementsByClassName('popup');
-  if(popups.length > 0){
-    popups[0].focus();
-  }
-  else {
-    editorQuill.focus();
-  }
-}
-
-function removeElementsByClass(className){
-  try{
-    var elements = document.getElementsByClassName(className);
-    while(elements.length > 0){
-        elements[0].onblur = null;
-        elements[0].parentNode.removeChild(elements[0]);
-    }
-  }
-  catch(err){
-    logError(err);
-  }
-}
-
-function convertFilepath(fpath){
-  //Convert Windows filepaths to maintain linux/windows compatibility
-  try{
-    var converted = fpath.replaceAll('\\', '/');
-  }
-  catch(err){
-    logError(err);
-  }
-
-  return converted;
-}
-
-function createButton(text){
-  var btn = document.createElement("button");
-  btn.innerHTML = text;
-  btn.type = "button";
-  return btn;
-}
 
 function editorHasFocus(){
   return editorIsVisible() && document.querySelector(".ql-editor") === document.activeElement;
@@ -1100,27 +1113,4 @@ function editorHasFocus(){
 
 function editorIsVisible(){
   return document.getElementById('writing-field').classList.contains('visible');
-}
-
-function generateRow(elOne, elTwo){
-  var row = document.createElement('tr');
-  var cellOne = document.createElement('td');
-  cellOne.appendChild(elOne);
-  row.appendChild(cellOne);
-  var cellTwo = document.createElement('td');
-  cellTwo.appendChild(elTwo);
-  row.appendChild(cellTwo);
-  return row;
-}
-
-function removeOptions(selectElement) {
-  try{
-    var i, L = selectElement.options.length - 1;
-    for(i = L; i >= 0; i--) {
-       selectElement.remove(i);
-    }
-  }
-  catch(err){
-    logError(err)
-  }
 }
