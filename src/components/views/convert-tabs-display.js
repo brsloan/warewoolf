@@ -1,7 +1,7 @@
-const { closePopups, createButton, removeElementsByClass, displayChapterByIndex } = require('../controllers/utils');
+const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
 const { convertMarkedTabsForAllChapters } = require('../controllers/convert-tabs');
 
-function showTabOptions(){
+function showTabOptions(project, onFinish){
     removeElementsByClass('popup');
     var popup = document.createElement("div");
     popup.classList.add("popup");
@@ -45,8 +45,8 @@ function showTabOptions(){
       e.preventDefault();
 
       convertMarkedTabsForAllChapters(project, tabStrInput.value);
-      displayChapterByIndex(project.activeChapterIndex);
       closePopups();
+      onFinish();
     };
 
     popup.appendChild(tabForm);

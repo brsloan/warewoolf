@@ -1,8 +1,8 @@
 const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
 const { unzipProject } = require('../controllers/backup-project');
-const { createNewDirectory, renameFiles, moveFiles, getFileList, deleteFile } = require('../controllers/file-manager');
+const { createNewDirectory, renameFiles, moveFiles, getFileList, deleteFile, getParentDirectory } = require('../controllers/file-manager');
 
-function showFileManager(sysDir){
+function showFileManager(sysDir, projDir){
     removeElementsByClass('popup');
     var popup = document.createElement("div");
     popup.classList.add("popup");
@@ -262,14 +262,14 @@ function showFileManager(sysDir){
         }
     });
 
-    populateFMShortcutsList(sysDir, dirShortcutSelect);
+    populateFMShortcutsList(projDir, sysDir, dirShortcutSelect);
     populateFMFileList(sysDir.docs, fileListSelect, currentDirDisplay);
 
     document.body.appendChild(popup);
     fileListSelect.focus();
 }
 
-function populateFMShortcutsList(sysDir, listElement){
+function populateFMShortcutsList(projDir, sysDir, listElement){
     var shortcuts = [];
     if (sysDir.docs != null && sysDir.docs != "")
         shortcuts.push(sysDir.docs);
@@ -277,9 +277,9 @@ function populateFMShortcutsList(sysDir, listElement){
     if(sysDir.home != sysDir.docs)
         shortcuts.push(sysDir.home);
 
-    var cleanedProjDir = project.directory;
-    if(project.directory.endsWith("/"))
-        cleanedProjDir = project.directory.slice(0,-1);
+    var cleanedProjDir = projDir;
+    if(projDir.endsWith("/"))
+        cleanedProjDir = projDir.slice(0,-1);
 
     if(cleanedProjDir != "" && shortcuts.includes(cleanedProjDir) == false)
         shortcuts.push(cleanedProjDir);

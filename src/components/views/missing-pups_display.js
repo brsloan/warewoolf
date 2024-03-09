@@ -1,6 +1,6 @@
-const { closePopups, createButton, removeElementsByClass, changeChapsDirectory } = require('../controllers/utils');
+const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
 
-function promptForMissingPups(){
+function promptForMissingPups(project, changeChapsDirectory){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup");

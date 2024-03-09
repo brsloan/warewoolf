@@ -1,5 +1,3 @@
-
-
 function requestProjectTitle(callback){
   var popup = document.createElement("div");
   popup.classList.add("popup");

@@ -1,11 +1,11 @@
-const { closePopups, createButton, removeElementsByClass, enableSearchView, displayChapterByIndex } = require('../controllers/utils');
+const { closePopups, createButton, removeElementsByClass, enableSearchView } = require('../controllers/utils');
 const { runSpellcheck, addWordToPersonalDictFile } = require('../controllers/spellcheck');
 const { replace, replaceAllInAllChapters } = require('../controllers/findreplace');
 
-function showSpellcheck(editorQuill, project, startingIndex = 0, wordsToIgnore = []){
+function showSpellcheck(editorQuill, project, sysDirectories, displayChapterByIndex, startingIndex = 0, wordsToIgnore = []){
     enableSearchView();
 
-    var invalidWord = runSpellcheck(editorQuill, startingIndex, wordsToIgnore);
+    var invalidWord = runSpellcheck(editorQuill, sysDirectories, startingIndex, wordsToIgnore);
     if(invalidWord)
       editorQuill.setSelection(invalidWord.index, invalidWord.word.length);
 
@@ -72,7 +72,7 @@ function showSpellcheck(editorQuill, project, startingIndex = 0, wordsToIgnore =
     var ignoreBtn = createButton("Ignore");
     ignoreBtn.onclick = function(){
       var nextIndex = invalidWord ? invalidWord.index + invalidWord.word.length : 0;
-      showSpellcheck(editorQuill, project, nextIndex, wordsToIgnore);
+      showSpellcheck(editorQuill, project, sysDirectories, displayChapterByIndex, nextIndex, wordsToIgnore);
     }
     popup.appendChild(ignoreBtn);
 
@@ -121,7 +121,7 @@ function showSpellcheck(editorQuill, project, startingIndex = 0, wordsToIgnore =
 
     var addToDic = createButton("<span class='access-key'>A</span>dd To Dictionary");
     addToDic.onclick = function(){
-      addWordToPersonalDictFile(invalidWord.word);
+      addWordToPersonalDictFile(invalidWord.word, sysDirectories);
       ignoreBtn.click();
     }
     addToDic.accessKey = "a";

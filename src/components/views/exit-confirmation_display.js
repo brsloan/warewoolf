@@ -1,6 +1,5 @@
 const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
 
-
 function displayExitConfirmation(saveFunc, continueFunc){
   removeElementsByClass('popup');
   var popup = document.createElement("div");

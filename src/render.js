@@ -104,10 +104,16 @@ function setDarkMode(){
 
 function setProject(filepath){
   if(filepath && filepath != null){
-    project.loadFile(filepath);
+    var chapsExist = project.loadFile(filepath);
+    if(!chapsExist){
+      console.log('could not find first pup: ' + project.directory + project.chapsDirectory + project.chapters[0].filename);
+      const promptForMissingPups = require('./components/views/missing-pups_display');
+      promptForMissingPups(project, changeChapsDirectory);
+    }
+    else{
+      displayProject();
+    }
   }
-
-  displayProject();
 }
 
 function displayProject(){
@@ -359,6 +365,7 @@ function moveChapDown(chapInd){
 
 
 function createNewProject(){
+  const requestProjectTitle = require('./components/views/new-project_display');
   requestProjectTitle(function(title){
     if(title && title != ""){
       project = newProject();
@@ -451,8 +458,14 @@ function openAProject() {
 
   showFileDialog(options, function(filepath){
     if (filepath) {
-      project.loadFile(filepath[0]);
-      displayProject();
+      var chapsExist = project.loadFile(filepath[0]);
+      if(!chapsExist){
+        const promptForMissingPups = require('./components/views/missing-pups_display');
+        promptForMissingPups(project, changeChapsDirectory);
+      }
+      else{
+        displayProject();
+      }
       userSettings.lastProject = filepath[0];
       userSettings.save();
     }
@@ -920,14 +933,21 @@ ipcRenderer.on('new-project-clicked', function(e){
 });
 
 ipcRenderer.on('import-clicked', function(e){
-  showImportOptions(editorQuill, sysDirectories);
+  const showImportOptions = require('./components/views/import_display');
+  showImportOptions(sysDirectories, addImportedChapter, function(){
+    displayChapterByIndex(project.activeChapterIndex);
+    if(project.chapters.length > 0)
+      editorQuill.enable();
+  });
 });
 
 ipcRenderer.on('export-clicked', function(e){
-  showExportOptions(sysDirectories);
+  const showExportOptions = require('./components/views/export_display');
+  showExportOptions(project, userSettings, sysDirectories);
 });
 
 ipcRenderer.on('properties-clicked', function(e){
+  const showProperties = require('./components/views/properties_display');
   showProperties(project, userSettings);
 });
 
@@ -937,19 +957,24 @@ ipcRenderer.on('compile-clicked', function(e){
 });
 
 ipcRenderer.on('word-count-clicked', function(e){
+  const showWordCount = require('./components/views/wordcount_display');
   showWordCount(project, editorQuill);
 });
 
 ipcRenderer.on('find-replace-clicked', function(e){
-  if(editorHasFocus())
-    showFindReplace();
+  if(editorHasFocus()){
+    const showFindReplace = require('./components/views/findreplace_display');
+    showFindReplace(project, editorQuill, displayChapterByIndex);
+  }
 });
 
 ipcRenderer.on('spellcheck-clicked', function(e){
   if(editorHasFocus()){
+    const showSpellcheck = require('./components/views/spellcheck_display');
+    const { getBeginningOfCurrentWord } = require('./components/controllers/spellcheck');
     var currentIndex = editorQuill.getSelection(true).index;
     var beginningOfWord = getBeginningOfCurrentWord(editorQuill.getText(), currentIndex);
-    showSpellcheck(editorQuill, project, beginningOfWord);
+    showSpellcheck(editorQuill, project, sysDirectories, displayChapterByIndex, beginningOfWord);
   }
 });
 
@@ -963,13 +988,20 @@ ipcRenderer.on('convert-first-lines-clicked', function(e){
 });
 
 ipcRenderer.on('headings-to-chaps-clicked', function(e){
-  if(editorHasFocus())
-    showBreakHeadingsOptions();
+  if(editorHasFocus()){
+    const showBreakHeadingsOptions = require('./components/views/headings-to-chapters_display');
+    showBreakHeadingsOptions(editorQuill, addImportedChapter);
+  }
+    
 });
 
 ipcRenderer.on('convert-italics-clicked', function(e){
-  if(editorHasFocus())
-    showItalicsOptions();
+  if(editorHasFocus()){
+    const showItalicsOptions = require('./components/views/convert-italics_display');
+    showItalicsOptions(project, function(){
+      displayChapterByIndex(project.activeChapterIndex);
+    });
+  }
 });
 
 ipcRenderer.on('split-chapter-clicked', function(e){
@@ -993,15 +1025,20 @@ ipcRenderer.on('restore-chapter-clicked', function(e){
 });
 
 ipcRenderer.on('shortcuts-clicked', function(e){
+  const showShortcutsHelp = require('./components/views/shortcuts-help_display');
   showShortcutsHelp();
 });
 
 ipcRenderer.on('outliner-clicked', function(e){
+  const showOutliner = require('./components/views/outliner_display');
   showOutliner(project);
 });
 
 ipcRenderer.on('convert-tabs-clicked', function(e){
-  showTabOptions();
+  const showTabOptions = require('./components/views/convert-tabs-display');
+  showTabOptions(project, function(){
+    displayChapterByIndex(project.activeChapterIndex);
+  });
 });
 
 ipcRenderer.on('about-clicked', function(e, appVersion){
@@ -1029,22 +1066,30 @@ ipcRenderer.on('help-doc-clicked', function(e){
 });
 
 ipcRenderer.on('renumber-chapters-clicked', function(e){
-  showRenumberChapters();
+  const showRenumberChapters = require('./components/views/renumber-chapters_display');
+  showRenumberChapters(project, function(){
+    updateFileList();
+    displayChapterByIndex(project.activeChapterIndex);
+  });
 });
 
 ipcRenderer.on('send-via-email-clicked', function(e){
-  showEmailOptions(userSettings);
+  const showEmailOptions = require('./components/views/email-doc_display');
+  showEmailOptions(project, userSettings, editorQuill);
 });
 
 ipcRenderer.on('view-error-log-clicked', function(e){
-  showErrorLog();
+  const showErrorLog = require('./components/views/error-log_display');
+  showErrorLog(userSettings);
 });
 
 ipcRenderer.on('file-manager-clicked', function(e){
-  showFileManager(sysDirectories);
+  const showFileManager = require('./components/views/file-manager_display');
+  showFileManager(sysDirectories, project.directory);
 });
 
 ipcRenderer.on('wifi-manager-clicked', function(e){
+  const showWifiManager = require('./components/views/wifi-manager_display');
   showWifiManager();
 });
 
@@ -1053,6 +1098,7 @@ ipcRenderer.on('save-backup-clicked', function(e){
 });
 
 ipcRenderer.on('settings-clicked', function(e){
+  const showSettings = require('./components/views/settings_display');
   showSettings(userSettings, autosaver, sysDirectories, function(){
     setDarkMode();
   });

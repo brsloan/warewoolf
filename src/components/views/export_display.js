@@ -2,7 +2,7 @@ const { closePopups, createButton, removeElementsByClass } = require('../control
 const showFileDialog = require('./file-dialog_display');
 const { exportProject } = require('../controllers/export');
 
-function showExportOptions(sysDirectories){
+function showExportOptions(project, userSettings, sysDirectories){
     removeElementsByClass('popup');
     var popup = document.createElement("div");
     popup.classList.add("popup");
@@ -60,7 +60,7 @@ function showExportOptions(sysDirectories){
         type: typeSelect.value
         //insertHead: insertHeadCheck.checked
       }
-      getExportFilePath(options, sysDirectories, function(){
+      getExportFilePath(project, userSettings, options, sysDirectories, function(){
           closePopups();
       });
     };
@@ -70,7 +70,7 @@ function showExportOptions(sysDirectories){
     exportBtn.focus();
   }
 
-  function getExportFilePath(options, sysDirectories, cback){
+  function getExportFilePath(project, userSettings, options, sysDirectories, cback){
     const saveOptions = {
       title: 'Export files to... (Subdirectory "' + (project.title.length > 0 ? project.title.replace(/[^a-z0-9]/gi, '_') : 'exports') + '" will be created)',
       defaultPath: sysDirectories.docs,

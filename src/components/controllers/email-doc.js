@@ -11,7 +11,7 @@ function prepareAndEmail(project, userSettings, editorQuill, sender, pass, recei
   var filename;
 
   if(compileOptions){
-    delt = compileChapterDeltas(compileOptions);
+    delt = compileChapterDeltas(project, compileOptions);
     let projectTitle = project.filename == "" ? "untitled" : project.filename.split('.')[0];
     if(projectTitle == "untitled" && project.title != "")
       projectTitle = project.title;
@@ -30,7 +30,8 @@ function prepareAndEmail(project, userSettings, editorQuill, sender, pass, recei
     emailDeltaAsMdfc(filename, delt, sender, pass, receiver, callback);
   }
   else if(filetype == ".zip"){
-    emailAsZip(sender, pass, receiver, callback);
+    console.log('you chose to email as zip');
+    emailAsZip(project, sender, pass, receiver, callback);
   }
   else {
     //default to txt
@@ -75,8 +76,9 @@ function emailDeltaAsTxt(filename, delt, sender, pass, receiver, callback){
   emailFile(sender, pass, receiver, attachments, callback);
 }
 
-function emailAsZip(sender, pass, receiver, callback){
-  archiveProject(os.tmpdir(), function(archName){
+function emailAsZip(project, sender, pass, receiver, callback){
+  console.log('about to archive project');
+  archiveProject(project, os.tmpdir(), function(archName){
     if(archName != 'error'){
       var attachments = [
         {

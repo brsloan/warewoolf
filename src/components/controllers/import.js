@@ -1,5 +1,5 @@
 const fs = require('fs');
-const { showFileDialog } = require('../views/file-dialog_display');
+const showFileDialog = require('../views/file-dialog_display');
 const { logError } = require('./error-log');
 const { showWorking, hideWorking } = require('../views/working_display');
 const { importDocx } = require('./docx-import');
@@ -7,10 +7,9 @@ const { generateChapTitleFromFirstLine, getTempQuill } = require('./quill-utils'
 const { convertFirstLineToTitle } = require('./convert-first-lines')
 const { convertMarkedItalics } = require('./convert-italics');
 const { convertMarkedTabs } = require('./convert-tabs');
-const { markdownFic } = require('./markdownFic');
-const { addImportedChapter } = require('../controllers/utils');
+const markdownFic = require('./markdownFic');
 
-function initiateImport(sysDirectories, options, cback){
+function initiateImport(sysDirectories, options, addImportedChapter, cback){
 
   const dialogOptions = {
     title: 'Import files...',
@@ -24,7 +23,7 @@ function initiateImport(sysDirectories, options, cback){
 
   showFileDialog(dialogOptions, function(filepaths){
     try{
-      importFilesAsync(filepaths, options, cback);
+      importFilesAsync(filepaths, options, addImportedChapter, cback);
     }
     catch(err){
       logError(err);
@@ -33,7 +32,7 @@ function initiateImport(sysDirectories, options, cback){
   });
 }
 
-function importFilesAsync(filepaths, options, cback, importedDeltas = []){
+function importFilesAsync(filepaths, options, addImportedChapter, cback, importedDeltas = []){
   showWorking('Importing file...');
   if(importedDeltas.length > 0)
     showWorking('Chapters Generated So Far: ' + importedDeltas.length);
@@ -65,7 +64,7 @@ function importFilesAsync(filepaths, options, cback, importedDeltas = []){
     });
 
     if(filepaths.length > 0){
-      importFilesAsync(filepaths, options, statusDisplay, cback, importedDeltas);
+      importFilesAsync(filepaths, options, addImportedChapter, cback, importedDeltas);
     }
     else {
       importedDeltas.forEach((delt, i) => {

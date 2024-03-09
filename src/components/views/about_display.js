@@ -2,6 +2,7 @@ const fs = require('fs');
 const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
 const { getUpdates, downloadUpdate } = require('../controllers/updates');
 const { logError } = require('../controllers/error-log');
+const showInstallUpdate = require('./install-update_display');
 
 function showAbout(sysDirectories, appVersion){
   removeElementsByClass('popup');

@@ -1,4 +1,4 @@
-const { getTempQuill } = require('./quill-utils');
+const { getTempQuill, parseDelta } = require('./quill-utils');
 
 function markdownFic(){
   return {

@@ -1,4 +1,4 @@
-const { closePopups, createButton, removeElementsByClass, convertFilepath } = require('../controllers/utils');
+const { closePopups, createButton, removeElementsByClass, convertFilepath, generateRow } = require('../controllers/utils');
 
 function showSettings(userSettings, autosaver, sysDirectories, callback){
   removeElementsByClass('popup');

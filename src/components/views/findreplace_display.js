@@ -1,7 +1,7 @@
-const { closePopups, createButton, removeElementsByClass, enableSearchView, displayChapterByIndex } = require('../controllers/utils');
+const { closePopups, createButton, removeElementsByClass, enableSearchView } = require('../controllers/utils');
 const { find, replace, replaceAllInChapter, replaceAllInAllChapters } = require('../controllers/findreplace');
 
-function showFindReplace(){
+function showFindReplace(project, editorQuill, displayChapterByIndex){
     enableSearchView();
     removeElementsByClass('popup');
     var popup = document.createElement("div");
@@ -53,7 +53,7 @@ function showFindReplace(){
     var findBtn = createButton("<span class='access-key'>F</span>ind");
     findBtn.onclick = function(){
       replacementCount.innerText = "";
-      var found = find(editorQuill, project, findIn.value, caseSensitive.checked, editorQuill.getSelection(true).index, inAllChapters.checked);
+      var found = find(editorQuill, project, findIn.value, caseSensitive.checked, editorQuill.getSelection(true).index, inAllChapters.checked, displayChapterByIndex);
       if(found < 0)
         replacementCount.innerText = "None Found.";
       findBtn.focus();

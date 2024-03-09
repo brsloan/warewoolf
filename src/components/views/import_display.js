@@ -1,7 +1,7 @@
-const { closePopups, createButton, removeElementsByClass, generateRow, displayChapterByIndex } = require('../controllers/utils');
+const { closePopups, createButton, removeElementsByClass, generateRow } = require('../controllers/utils');
 const { initiateImport } = require('../controllers/import');
 
-function showImportOptions(editorQuill, sysDirectories){
+function showImportOptions(sysDirectories, addImportedChapter, onFinish){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup");
@@ -193,11 +193,7 @@ function showImportOptions(editorQuill, sysDirectories){
     };
 
     closePopups();
-    initiateImport(sysDirectories, importOptions, function(){
-      displayChapterByIndex(project.activeChapterIndex);
-      if(project.chapters.length > 0)
-        editorQuill.enable();
-    });
+    initiateImport(sysDirectories, importOptions, addImportedChapter, onFinish);
   };
 
   popup.appendChild(importForm);

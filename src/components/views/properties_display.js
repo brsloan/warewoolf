@@ -1,6 +1,5 @@
 const { closePopups, createButton, removeElementsByClass, generateRow } = require('../controllers/utils');
 
-
 function showProperties(project, userSettings){
     removeElementsByClass('popup');
     var popup = document.createElement("div");

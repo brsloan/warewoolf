@@ -1,6 +1,5 @@
 const { removeElementsByClass } = require('../controllers/utils');
 
-
 function showWorking(status = 'Working...'){
 
     var workups = document.getElementsByClassName('working-popup');

@@ -60,7 +60,7 @@ function newProject(){
         this.trash = trashChaps;
 
         this.hasUnsavedChanges = false;
-        testChapsDirectory();
+        return testChapsDirectory();
       }
       catch(err){
         logError(err);
@@ -193,12 +193,12 @@ function newProject(){
     }
 
     function testChapsDirectory(){
-      var firstChapExists = fs.existsSync(project.directory + project.chapsDirectory + project.chapters[0].filename);
-
-      if(!firstChapExists){
-          console.log('could not find first pup: ' + project.directory + project.chapsDirectory + project.chapters[0].filename);
-          promptForMissingPups();
+      var chapsExist = true;
+      for(let i=0;i<project.chapters.length;i++){
+        if(!fs.existsSync(project.directory + project.chapsDirectory + project.chapters[i].filename))
+          chapsExist = false;
       }
+      return chapsExist;
     }
 }
 

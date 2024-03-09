@@ -2,7 +2,7 @@ const {addImportedChapter} = require('../controllers/utils');
 const { generateChapTitleFromFirstLine } = require('./quill-utils');
 const { hideWorking } = require('../views/working_display');
 
-function breakHeadingsIntoChapters(editorQuill, headingLevel = 1){
+function breakHeadingsIntoChapters(editorQuill, addImportedChapter, headingLevel = 1){
   var opsIn = editorQuill.getContents().ops;
   console.log(opsIn);
 

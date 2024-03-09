@@ -1,8 +1,8 @@
-const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
+const { closePopups, createButton, removeElementsByClass, generateRow } = require('../controllers/utils');
 const getCrypto = require('../controllers/crypto');
 const { prepareAndEmail } = require('../controllers/email-doc');
 
-function showEmailOptions(userSettings){
+function showEmailOptions(project, userSettings, editorQuill){
     removeElementsByClass('popup');
     var popup = document.createElement("div");
     popup.classList.add("popup");

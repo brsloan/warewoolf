@@ -3,7 +3,7 @@ const { loadErrorLog, clearErrorLog } = require('../controllers/error-log');
 const getCrypto = require('../controllers/crypto');
 const { emailFile } = require('../controllers/email-doc');
 
-function showErrorLog(){
+function showErrorLog(userSettings){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup");

@@ -1,17 +1,19 @@
 var nspell = require('nspell');
 const fs = require('fs');
-const { convertFilepath, sysDirectories } = require('../controllers/utils');
+const { convertFilepath } = require('../controllers/utils');
+const { logError } = require('./error-log');
 
-function runSpellcheck(editorQuill, startingIndex = 0, wordsToIgnore){
-    var spellchecker = loadDictionaries();
+function runSpellcheck(editorQuill, sysDirectories, startingIndex = 0, wordsToIgnore){
+    var spellchecker = loadDictionaries(sysDirectories);
     return findInvalidWord(editorQuill, spellchecker, startingIndex, wordsToIgnore)
 }
 
-function loadDictionaries(){
+function loadDictionaries(sysDirectories){
   try{
-    createPersonalDicIfNeeded();
+    createPersonalDicIfNeeded(sysDirectories);
 
-    var baseFilepath = convertFilepath(__dirname);
+    var baseFilepath = sysDirectories.app;
+    console.log('dictionary base filepath: ' + sysDirectories.app);
     var aff = fs.readFileSync(baseFilepath + '/dictionaries/en_US-large.aff', 'utf8');
     var dic = fs.readFileSync(baseFilepath + '/dictionaries/en_US-large.dic', 'utf8');
 
@@ -27,7 +29,7 @@ function loadDictionaries(){
 
 }
 
-function createPersonalDicIfNeeded(){
+function createPersonalDicIfNeeded(sysDirectories){
   try{
     let personalDicDir = convertFilepath(sysDirectories.userData) + '/dictionaries';
     if(!fs.existsSync(personalDicDir)){
@@ -83,7 +85,7 @@ function findInvalidWord(editorQuill, spellchecker, startingIndex = 0, wordsToIg
     return invalidWord;
 }
 
-function getPersonalDict(){
+function getPersonalDict(sysDirectories){
   try{
     return fs.readFileSync(convertFilepath(sysDirectories.userData) + '/dictionaries/personal.dic', 'utf8').split("\n");
   }
@@ -92,9 +94,9 @@ function getPersonalDict(){
   }
 }
 
-function addWordToPersonalDictFile(word){
+function addWordToPersonalDictFile(word, sysDirectories){
   try{
-    var personal = getPersonalDict();
+    var personal = getPersonalDict(sysDirectories);
     if(personal.indexOf(word) == -1){
         personal.push(word);
         fs.writeFileSync(convertFilepath(sysDirectories.userData) + '/dictionaries/personal.dic', personal.join("\n"), 'utf8');
