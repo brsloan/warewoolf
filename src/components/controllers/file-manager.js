@@ -109,10 +109,8 @@ function getParentDirectory(filepath){
 }
 
 function getFileList(dirPath){
-  if(dirPath == '')
-    dirPath = '/';
-  else if(dirPath == 'C:')
-    dirPath = 'C:/';
+  if(dirPath == '' || dirPath.slice(-1) == ':')
+    dirPath += '/';
 
   try {
       return fs.readdirSync(dirPath, {withFileTypes: true});
