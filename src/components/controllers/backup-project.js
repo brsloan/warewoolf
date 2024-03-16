@@ -1,10 +1,11 @@
 const archiver = require('archiver');
 const unzipper = require('unzipper');
+const fs = require('fs');
+const { logError } = require('./error-log');
 
-function backupProject(docsDir, callback){
+function backupProject(project, userSettings, docsDir, callback){
   console.log('backing up project...');
   try{
-    docsDir = convertFilepath(docsDir);
     if(userSettings.backupDirectory == null || userSettings.backupDirectory == ""){
       userSettings.backupDirectory = createBackupsDirectory(docsDir);
       userSettings.save();
@@ -14,7 +15,7 @@ function backupProject(docsDir, callback){
         fs.mkdirSync(userSettings.backupDirectory);
     }
 
-    archiveProject(userSettings.backupDirectory, function(archName){
+    archiveProject(project, userSettings.backupDirectory, function(archName){
       deleteOldBackups();
       callback(archName);
     });
@@ -55,7 +56,7 @@ function createBackupsDirectory(docsDir){
   return backupsDir;
 }
 
-function archiveProject(archiveDir, callback){
+function archiveProject(project, archiveDir, callback){
   if(project.filename != null && project.filename != ""){
     const archiveName = project.filename.replace('.woolf','') + getTimeStamp() + '.zip';
     const output = fs.createWriteStream(archiveDir + "/" + archiveName);
@@ -115,4 +116,28 @@ function unzipProject(zipPath, callback){
       logError(err);
     }
   }
+}
+
+function deleteFile(fpth){
+  try {
+    if(fs.existsSync(fpth))
+      fs.rmSync(fpth, { recursive: true, force: true });
+  }
+  catch(err){
+    logError(err);
+  }
+}
+
+function getFileList(dirPath){
+  try {
+      return fs.readdirSync(dirPath, {withFileTypes: true});
+  } catch (err) {
+      logError(err);
+  }
+}
+
+module.exports = {
+  backupProject, 
+  archiveProject,
+  unzipProject
 }

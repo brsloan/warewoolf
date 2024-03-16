@@ -1,4 +1,25 @@
 const { spawn } = require("child_process");
+const { logError } = require('./error-log');
+
+function getIpAddress(cback){
+  const hostname = spawn('hostname', ['-I']);
+
+  var responseHasData = false;
+
+  hostname.stdout.on('data', function(data){
+    responseHasData = true;
+    cback(data.toString().trim().split(' ')[0]);
+  });
+
+  hostname.stderr.on('data', function(data){
+    logError(data.toString().trim());
+  })
+
+  hostname.stdout.on('close', function(code){
+    if(!responseHasData)
+      cback('no data');
+  });  
+}
 
 function getConnectionState(cback){
   const args = ["-t", "device", "status"];
@@ -82,4 +103,14 @@ function enableWifi(cback){
 
 function connectToNewWifi(ssidString, passString, cback){
   nmcliSingle(['device','wifi','connect', ssidString, 'password', passString], cback);
+}
+
+module.exports = {
+  getConnectionState,
+  getWifiStatus,
+  getWifiNetworks,
+  disableWifi,
+  enableWifi,
+  connectToNewWifi,
+  getIpAddress
 }

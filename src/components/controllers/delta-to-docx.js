@@ -1,3 +1,9 @@
+const fs = require('fs');
+const docx = require('docx');
+const { logError } = require('./error-log');
+const { parseDelta } = require('./quill-utils');
+const { getTotalWordCount } = require('./wordcount');
+
 function saveDocx(filepath, doc){
   docx.Packer.toBuffer(doc).then((buffer) => {
     try{
@@ -16,7 +22,7 @@ function packageDocxBase64(doc, callback){
   });
 }
 
-function convertDeltaToDocx(delt, options){
+function convertDeltaToDocx(delt, options, project, userSettings){
   var parsedQuill = parseDelta(delt);
 
   var fnoteParRegx = /^\[\^\d+]:/;
@@ -130,9 +136,9 @@ function convertDeltaToDocx(delt, options){
 
   var sections = [];
   if(options && options.generateTitlePage == true)
-    sections.push(getTitlePage());
+    sections.push(getTitlePage(project, userSettings));
 
-  sections.push(getDocBody(xParagraphs));
+  sections.push(getDocBody(xParagraphs, project));
 
   const doc = new docx.Document({
     creator: project.author,
@@ -220,7 +226,7 @@ function convertRunAtttributes(attr){
   return xAttr;
 }
 
-function getDocBody(xParagraphs){
+function getDocBody(xParagraphs, project){
   return {
     properties: {
       page: {
@@ -249,10 +255,10 @@ function getDocBody(xParagraphs){
   }
 }
 
-function getTitlePage(){
+function getTitlePage(project, userSettings){
   var titleParas = [];
   titleParas.push(new docx.Paragraph({
-    text: getTitlePageFirstLine(),
+    text: getTitlePageFirstLine(project),
     style: 'address'
   }));
 
@@ -310,8 +316,8 @@ function getTitlePage(){
 
 }
 
-function getTitlePageFirstLine(){
-  var wordCount = (Math.round(getTotalWordCount()/100)*100).toString();
+function getTitlePageFirstLine(project){
+  var wordCount = (Math.round(getTotalWordCount(project)/100)*100).toString();
   if(wordCount.length > 3){
     wordCount = wordCount.slice(0,-3) + ',' + wordCount.slice(-3);
   }
@@ -327,4 +333,10 @@ function getTitlePageFirstLine(){
   lineText = project.author + lineText + wordCount;
 
   return lineText;
+}
+
+module.exports = {
+  saveDocx,
+  packageDocxBase64,
+  convertDeltaToDocx
 }

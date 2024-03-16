@@ -1,3 +1,5 @@
+const { removeElementsByClass } = require('../controllers/utils');
+
 function showWorking(status = 'Working...'){
 
     var workups = document.getElementsByClassName('working-popup');
@@ -48,3 +50,9 @@ function showWorkingAndThen(status = 'Working...', callback){
 function hideWorking(){
     removeElementsByClass('working-popup');
 }
+
+module.exports = {
+    showWorking,
+    showWorkingAndThen,
+    hideWorking
+};

@@ -1,7 +1,7 @@
 <p align="center">
 	<img src="./src/assets/logo.png" style="width: 280px"/>
 </p>
-<p align="center">v1.0.0</p>
+<p align="center">v1.1.0</p>
 <p align="center">"The only writing software I use." -Virginia Woolf</p>
 
 WareWoolf is designed for one thing: writing fiction. It is intentionally simplified: you cannot change the font, line spacing, or color. But it has everything you need to organize, edit, and revise a novel--and you don't even need a mouse.
@@ -60,6 +60,13 @@ This app was built using Electron Forge. To run it from source...
 For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.com/brsloan/warewoolf/wiki).
 
 ## Status
+
+2024-03-16: Changes made:
+* Download and install updates in-app through About screen
+  * Only checks for updates on user request.
+* File Manager filters out hidden files/directories
+* Refactored entire codebase to use proper isolated modules for maintainability
+* Bug fixes
 
 2024-03-03: We have reached version 1.0.0! All the basic features I had originally envisioned are now implemented and working. I use it daily for my own novel writing. Features added/changed since last release:
 * Built-in Wi-Fi Manager (on Linux) for use as writerDeck

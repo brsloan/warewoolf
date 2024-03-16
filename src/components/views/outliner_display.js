@@ -1,4 +1,7 @@
-function showOutliner(){
+const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
+const { countWords } = require('../controllers/wordcount');
+
+function showOutliner(project){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup", "popup-outliner");
@@ -64,3 +67,13 @@ function showOutliner(){
   document.body.appendChild(popup);
   document.querySelector('#outliner-table input').focus();
 }
+
+function convertToPlainText(delt){
+  var text = '';
+  delt.ops.forEach(op => {
+    text += op.insert;
+  });
+  return text;
+}
+
+module.exports = showOutliner;

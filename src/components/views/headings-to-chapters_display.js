@@ -1,4 +1,8 @@
-function showBreakHeadingsOptions(){
+const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
+const { showWorkingAndThen } = require('./working_display');
+const breakHeadingsIntoChapters = require('../controllers/headings-to-chapters');
+
+function showBreakHeadingsOptions(editorQuill, addImportedChapter){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup");
@@ -45,7 +49,7 @@ function showBreakHeadingsOptions(){
   breakHeadingsForm.onsubmit = function(e){
     e.preventDefault();
     showWorkingAndThen('Breaking headings into chapters...', function(){
-      breakHeadingsIntoChapters(headingSelect.value);
+      breakHeadingsIntoChapters(editorQuill, addImportedChapter, headingSelect.value);
     });
     closePopups();
   };
@@ -55,3 +59,5 @@ function showBreakHeadingsOptions(){
   document.body.appendChild(popup);
   breakHeadingsBtn.focus();
 }
+
+module.exports = showBreakHeadingsOptions;

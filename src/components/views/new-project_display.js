@@ -41,3 +41,5 @@ function requestProjectTitle(callback){
   document.body.appendChild(popup);
   titleInput.focus();
 }
+
+module.exports = requestProjectTitle;

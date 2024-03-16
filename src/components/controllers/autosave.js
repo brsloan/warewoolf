@@ -1,20 +1,21 @@
 var autosaveInterval;
 
-function initiateAutosave(){
-    if(userSettings.autosaveInterval > 0)
-      autosaveInterval = setInterval(autoSave, userSettings.autosaveInterval * 60000);
+function initiateAutosave(minutes, save){
+    if(minutes > 0)
+      autosaveInterval = setInterval(save, minutes * 60000);
 }
   
-function updateAutosave(){
+
+function updateAutosave(minutes, save){
     if(autosaveInterval == null)
-        initiateAutosave();
+        initiateAutosave(minutes, save);
     else {
         clearInterval(autosaveInterval);
-        initiateAutosave();
+        initiateAutosave(minutes, save);
     }
 }
-  
-function autoSave(){
-    console.log('autosaving...');
-    saveProject(convertFilepath(__dirname));
-}
+
+module.exports = {
+    initiateAutosave,
+    updateAutosave
+};

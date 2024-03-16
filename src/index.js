@@ -30,7 +30,7 @@ const createWindow = () => {
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
 
   // Open the DevTools.
-  //mainWindow.webContents.openDevTools();
+ // mainWindow.webContents.openDevTools();
 
   var menu = Menu.buildFromTemplate([
     {
@@ -353,7 +353,8 @@ ipcMain.on('get-directories', function(e){
     home: app.getPath('home').replaceAll('\\', '/'),
     temp: app.getPath('temp').replaceAll('\\', '/'),
     docs: app.getPath('documents').replaceAll('\\', '/'),
-    app: __dirname.replaceAll('\\', '/')
+    app: __dirname.replaceAll('\\', '/'),
+    downloads: app.getPath('downloads').replaceAll('\\', '/')
   }
 });
 

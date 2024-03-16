@@ -1,7 +1,8 @@
+ const { getTempQuill } = require('./quill-utils');
 
-function convertFirstLinesToTitles(){
+function convertFirstLinesToTitles(project){
   console.log('converting');
-  var tempQuill = getTempQuill();
+  //var tempQuill = getTempQuill();
 
   project.chapters.forEach(function(chap){
     var result = convertFirstLineToTitle(chap.contents ? chap.contents : chap.getFile());
@@ -36,4 +37,9 @@ function convertFirstLineToTitle(delt){
     delta: tempQuill.getContents()
   }
 
+}
+
+module.exports = {
+  convertFirstLinesToTitles,
+  convertFirstLineToTitle
 }

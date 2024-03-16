@@ -1,15 +1,19 @@
 var nspell = require('nspell');
+const fs = require('fs');
+const { convertFilepath } = require('../controllers/utils');
+const { logError } = require('./error-log');
 
-function runSpellcheck(startingIndex = 0, wordsToIgnore){
-    var spellchecker = loadDictionaries();
-    return findInvalidWord(spellchecker, startingIndex, wordsToIgnore)
+function runSpellcheck(editorQuill, sysDirectories, startingIndex = 0, wordsToIgnore){
+    var spellchecker = loadDictionaries(sysDirectories);
+    return findInvalidWord(editorQuill, spellchecker, startingIndex, wordsToIgnore)
 }
 
-function loadDictionaries(){
+function loadDictionaries(sysDirectories){
   try{
-    createPersonalDicIfNeeded();
+    createPersonalDicIfNeeded(sysDirectories);
 
-    var baseFilepath = convertFilepath(__dirname);
+    var baseFilepath = sysDirectories.app;
+    console.log('dictionary base filepath: ' + sysDirectories.app);
     var aff = fs.readFileSync(baseFilepath + '/dictionaries/en_US-large.aff', 'utf8');
     var dic = fs.readFileSync(baseFilepath + '/dictionaries/en_US-large.dic', 'utf8');
 
@@ -25,7 +29,7 @@ function loadDictionaries(){
 
 }
 
-function createPersonalDicIfNeeded(){
+function createPersonalDicIfNeeded(sysDirectories){
   try{
     let personalDicDir = convertFilepath(sysDirectories.userData) + '/dictionaries';
     if(!fs.existsSync(personalDicDir)){
@@ -43,7 +47,7 @@ function createPersonalDicIfNeeded(){
   }
 }
 
-function findInvalidWord(spellchecker, startingIndex = 0, wordsToIgnore = []) {
+function findInvalidWord(editorQuill, spellchecker, startingIndex = 0, wordsToIgnore = []) {
     var invalidWord = null;
 
     var text = editorQuill.getText().slice(startingIndex);
@@ -81,7 +85,7 @@ function findInvalidWord(spellchecker, startingIndex = 0, wordsToIgnore = []) {
     return invalidWord;
 }
 
-function getPersonalDict(){
+function getPersonalDict(sysDirectories){
   try{
     return fs.readFileSync(convertFilepath(sysDirectories.userData) + '/dictionaries/personal.dic', 'utf8').split("\n");
   }
@@ -90,9 +94,9 @@ function getPersonalDict(){
   }
 }
 
-function addWordToPersonalDictFile(word){
+function addWordToPersonalDictFile(word, sysDirectories){
   try{
-    var personal = getPersonalDict();
+    var personal = getPersonalDict(sysDirectories);
     if(personal.indexOf(word) == -1){
         personal.push(word);
         fs.writeFileSync(convertFilepath(sysDirectories.userData) + '/dictionaries/personal.dic', personal.join("\n"), 'utf8');
@@ -117,4 +121,10 @@ function getBeginningOfCurrentWord(text, position){
   }
 
   return position;
+}
+
+module.exports = {
+  runSpellcheck,
+  addWordToPersonalDictFile,
+  getBeginningOfCurrentWord
 }

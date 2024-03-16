@@ -1,4 +1,6 @@
-function showProperties(){
+const { closePopups, createButton, removeElementsByClass, generateRow } = require('../controllers/utils');
+
+function showProperties(project, userSettings){
     removeElementsByClass('popup');
     var popup = document.createElement("div");
     popup.classList.add("popup");
@@ -126,3 +128,5 @@ function showProperties(){
     document.body.appendChild(popup);
     titleInput.focus();
   }
+
+  module.exports = showProperties;

@@ -1,4 +1,6 @@
-function convertMarkedItalicsForAllChapters(marker){
+const { getTempQuill } = require('./quill-utils');
+
+function convertMarkedItalicsForAllChapters(project, marker){
   project.chapters.forEach(function(chap){
     var result = convertMarkedItalics(chap.contents ? chap.contents : chap.getFile(), marker);
     if(result.changed > 0){
@@ -42,4 +44,9 @@ function convertMarkedItalics(delt, marker){
     changed: counter,
     delta: tempQuill.getContents()
   }
+}
+
+module.exports = {
+  convertMarkedItalicsForAllChapters,
+  convertMarkedItalics
 }

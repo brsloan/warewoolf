@@ -1,11 +1,17 @@
 const os = require('os');
+const nodemailer = require('nodemailer');
+const { archiveProject } = require('./backup-project');
+const { compileChapterDeltas } = require('./compile');
+const { convertDeltaToDocx, packageDocxBase64 } = require('./delta-to-docx');
+const markdownFic = require('./markdownFic');
+const { logError } = require('./error-log');
 
-function prepareAndEmail(sender, pass, receiver, filetype, compileOptions, callback){
+function prepareAndEmail(project, userSettings, editorQuill, sender, pass, receiver, filetype, compileOptions, callback){
   var delt;
   var filename;
 
   if(compileOptions){
-    delt = compileChapterDeltas(compileOptions);
+    delt = compileChapterDeltas(project, compileOptions);
     let projectTitle = project.filename == "" ? "untitled" : project.filename.split('.')[0];
     if(projectTitle == "untitled" && project.title != "")
       projectTitle = project.title;
@@ -18,13 +24,14 @@ function prepareAndEmail(sender, pass, receiver, filetype, compileOptions, callb
   }
 
   if(filetype == ".docx"){
-    emailDeltaAsDocx(filename, delt, compileOptions, sender, pass, receiver, callback);
+    emailDeltaAsDocx(project, userSettings, filename, delt, compileOptions, sender, pass, receiver, callback);
   }
   else if(filetype == ".mdfc"){
     emailDeltaAsMdfc(filename, delt, sender, pass, receiver, callback);
   }
   else if(filetype == ".zip"){
-    emailAsZip(sender, pass, receiver, callback);
+    console.log('you chose to email as zip');
+    emailAsZip(project, sender, pass, receiver, callback);
   }
   else {
     //default to txt
@@ -33,8 +40,8 @@ function prepareAndEmail(sender, pass, receiver, filetype, compileOptions, callb
 
 }
 
-function emailDeltaAsDocx(filename, delt, options, sender, pass, receiver, callback){
-  var doc = convertDeltaToDocx(delt, options);
+function emailDeltaAsDocx(project, userSettings, filename, delt, options, sender, pass, receiver, callback){
+  var doc = convertDeltaToDocx(delt, options, project, userSettings);
   packageDocxBase64(doc, (docString) => {
     var attachments = [
       {
@@ -69,8 +76,9 @@ function emailDeltaAsTxt(filename, delt, sender, pass, receiver, callback){
   emailFile(sender, pass, receiver, attachments, callback);
 }
 
-function emailAsZip(sender, pass, receiver, callback){
-  archiveProject(os.tmpdir(), function(archName){
+function emailAsZip(project, sender, pass, receiver, callback){
+  console.log('about to archive project');
+  archiveProject(project, os.tmpdir(), function(archName){
     if(archName != 'error'){
       var attachments = [
         {
@@ -111,4 +119,17 @@ function emailFile(sender, pass, receiver, attachments, callback){
       callback('Email sent successfully.');
     }
   });
+}
+
+function convertToPlainText(delt){
+  var text = '';
+  delt.ops.forEach(op => {
+    text += op.insert;
+  });
+  return text;
+}
+
+module.exports = {
+  prepareAndEmail,
+  emailFile
 }

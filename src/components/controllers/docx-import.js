@@ -1,3 +1,6 @@
+var fs = require('fs');
+const unzipper = require('unzipper');
+
 function importDocx(filepath, split, cback){
   tempUnzipDocx(filepath, function(xmlDir){
 
@@ -265,4 +268,8 @@ function parseDocx(xmlStr){
   }
 
   return doc;
+}
+
+module.exports = {
+  importDocx
 }

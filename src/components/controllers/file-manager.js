@@ -1,3 +1,6 @@
+const fs = require('fs');
+const { logError } = require('./error-log');
+
 function copyFiles(filesToCopy, newLocation){
     try {
       filesToCopy.forEach((ftc, i) => {
@@ -101,14 +104,20 @@ function deleteFile(fpth){
 
 function getParentDirectory(filepath){
     var cutIndex = filepath.lastIndexOf('/');
-    return cutIndex > -1 ? filepath.slice(0,cutIndex) : filepath;
+
+    return cutIndex > 0 ? filepath.slice(0,cutIndex) : filepath;
 }
 
 function getFileList(dirPath){
+  if(dirPath == '' || dirPath.slice(-1) == ':')
+    dirPath += '/';
+
   try {
-      return fs.readdirSync(dirPath, {withFileTypes: true});
+      return fs.readdirSync(dirPath, {withFileTypes: true}).filter(function(dirent){
+        return dirent.name.charAt(0) !== '.';
+      });
   } catch (err) {
-      logErrror(err);
+      logError(err);
   }
 }
 
@@ -119,4 +128,15 @@ function thisFileExists(filepath){
   catch(err){
     logError(err);
   }
+}
+
+module.exports = {
+  copyFiles,
+  renameFiles,
+  moveFiles,
+  createNewDirectory,
+  deleteFile,
+  getParentDirectory,
+  getFileList,
+  thisFileExists
 }

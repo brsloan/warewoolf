@@ -1,3 +1,5 @@
+const { logError } = require('./error-log');
+
 function getCrypto() {
   const crypto = require('crypto');
   const algorithm = 'aes-256-ctr';
@@ -36,3 +38,5 @@ function getCrypto() {
     }
   }
 }
+
+module.exports = getCrypto;
