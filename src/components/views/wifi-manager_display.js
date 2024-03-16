@@ -1,5 +1,5 @@
 const { closePopups, createButton, removeElementsByClass, generateRow, removeOptions } = require('../controllers/utils');
-const { enableWifi, disableWifi, getWifiStatus, getWifiNetworks, getConnectionState, connectToNewWifi } = require('../controllers/wifi-manager');
+const { enableWifi, disableWifi, getWifiStatus, getWifiNetworks, getConnectionState, connectToNewWifi, getIpAddress } = require('../controllers/wifi-manager');
 
 function showWifiManager(){
 
@@ -33,6 +33,15 @@ function showWifiManager(){
     }
   }
   getWifiStatus(updateWifiStatus);
+
+  var ipLabel = document.createElement('label');
+  ipLabel.innerText = 'IP: ';
+
+  var ipDisplay = document.createElement('label');
+  ipDisplay.innerText = 'checking...';
+
+  networkTbl.appendChild(generateRow(ipLabel, ipDisplay));
+  getIpAddress(updateIpDisplay);
 
   var connectionStateLabel = document.createElement('label');
   connectionStateLabel.innerText = "State: ";
@@ -162,6 +171,10 @@ function showWifiManager(){
   function alertNewConnection(connectData){
     connectingStatus.innerText = connectData;
     getConnectionState(updateConnectionState);
+  }
+
+  function updateIpDisplay(addr){
+    ipDisplay.innerText = addr;
   }
 }
 
