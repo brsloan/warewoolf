@@ -30,6 +30,7 @@ function showInstallUpdate(filepath){
 
   var installBtn = createButton('Install Update');
   installBtn.onclick = function(){
+    installBtn.disabled = true;
     installUpdate(passInput.value, filepath, statusDisp);
   }
   popup.appendChild(installBtn);
