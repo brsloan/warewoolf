@@ -1,7 +1,7 @@
 <p align="center">
 	<img src="./src/assets/logo.png" style="width: 280px"/>
 </p>
-<p align="center">v1.X.X</p>
+<p align="center">v1.1.0</p>
 <p align="center">"The only writing software I use." -Virginia Woolf</p>
 
 WareWoolf is designed for one thing: writing fiction. It is intentionally simplified: you cannot change the font, line spacing, or color. But it has everything you need to organize, edit, and revise a novel--and you don't even need a mouse.
@@ -61,7 +61,7 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 
 ## Status
 
-2024-xx-xx: Changes made:
+2024-03-16: Changes made:
 * Download and install updates in-app through About screen
   * Only checks for updates on user request.
 * File Manager filters out hidden files/directories
