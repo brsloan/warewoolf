@@ -61,11 +61,12 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 
 ## Status
 
-2024-03-16: Changes made:
+2024-03-16: v1.1.0. Changes made:
 * Download and install updates in-app through About screen
   * Only checks for updates on user request.
 * File Manager filters out hidden files/directories
 * Refactored entire codebase to use proper isolated modules for maintainability
+* Wi-Fi Manager now shows IP Address
 * Bug fixes
 
 2024-03-03: We have reached version 1.0.0! All the basic features I had originally envisioned are now implemented and working. I use it daily for my own novel writing. Features added/changed since last release:
