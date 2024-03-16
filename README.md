@@ -61,7 +61,7 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 
 ## Status
 
-2024-03-16: Changes made:
+2024-03-16: v1.1.0. Changes made:
 * Download and install updates in-app through About screen
   * Only checks for updates on user request.
 * File Manager filters out hidden files/directories
