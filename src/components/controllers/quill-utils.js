@@ -1,6 +1,5 @@
-const Quill = require('quill');
-
 function getTempQuill(){
+  const Quill = require('quill');
   return new Quill(document.createElement('div'), {
       modules: {
           history: {
