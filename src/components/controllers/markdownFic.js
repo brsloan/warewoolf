@@ -11,16 +11,16 @@ function markdownFic(){
     let header2 = /^\#\# {0,1}([^#].+)/gm;
     let header3 = /^\#\#\# {0,1}([^#].+)/gm;
     let header4 = /^\#\#\#\# {0,1}([^#].+)/gm;
-    let centeredHeader1 = /^\[>(c)] \# {0,1}([^#].+)/gm
-    let centeredHeader2 = /^\[>(c)] \#\# {0,1}([^#].+)/gm
-    let centeredHeader3 = /^\[>(c)] \#\#\# {0,1}([^#].+)/gm
-    let centeredHeader4 = /^\[>(c)] \#\#\# {0,1}([^#].+)/gm
+    let centeredHeader1 = /^\[>c] \# {0,1}([^#].+)/gm
+    let centeredHeader2 = /^\[>c] \#\# {0,1}([^#].+)/gm
+    let centeredHeader3 = /^\[>c] \#\#\# {0,1}([^#].+)/gm
+    let centeredHeader4 = /^\[>c] \#\#\# {0,1}([^#].+)/gm
 
     let blockquote = /^>+ {0,1}(.+)/gm;
-    let alignLeft = /^\[>(l)] {0,1}(.+)/gm;
-    let alignRight = /^\[>(r)] {0,1}(.+)/gm;
-    let alignCenter = /^\[>(c)] {0,1}(.+)/gm;
-    let alignJustified = /^\[>(j)] {0,1}(.+)/gm;
+    let alignLeft = /^\[>l] {0,1}(.+)/gm;
+    let alignRight = /^\[>r] {0,1}(.+)/gm;
+    let alignCenter = /^\[>c] {0,1}(.+)/gm;
+    let alignJustified = /^\[>j] {0,1}(.+)/gm;
     let normal = /^(?!{)(.+)/gm;
     let blankLines = /(?:\r?\n){2,}/gm;
 
@@ -30,18 +30,18 @@ function markdownFic(){
     str = str.replaceAll('"','\\"');
     str = str.replaceAll('\t','\\t'); 
 
-    str = str.replace(centeredHeader1, '{"insert":"$2"},{"insert":"\\n","attributes":{"align":"center","header":1}},');
-    str = str.replace(centeredHeader2, '{"insert":"$2"},{"insert":"\\n","attributes":{"align":"center","header":2}},');
-    str = str.replace(centeredHeader3, '{"insert":"$2"},{"insert":"\\n","attributes":{"align":"center","header":3}},');
-    str = str.replace(centeredHeader4, '{"insert":"$2"},{"insert":"\\n","attributes":{"align":"center","header":4}},');
+    str = str.replace(centeredHeader1, '{"insert":"$1"},{"insert":"\\n","attributes":{"align":"center","header":1}},');
+    str = str.replace(centeredHeader2, '{"insert":"$1"},{"insert":"\\n","attributes":{"align":"center","header":2}},');
+    str = str.replace(centeredHeader3, '{"insert":"$1"},{"insert":"\\n","attributes":{"align":"center","header":3}},');
+    str = str.replace(centeredHeader4, '{"insert":"$1"},{"insert":"\\n","attributes":{"align":"center","header":4}},');
     str = str.replace(header1, '{"insert":"$1"},{"insert":"\\n","attributes":{"header":1}},');
     str = str.replace(header2, '{"insert":"$1"},{"insert":"\\n","attributes":{"header":2}},');
     str = str.replace(header3, '{"insert":"$1"},{"insert":"\\n","attributes":{"header":3}},');
     str = str.replace(header4, '{"insert":"$1"},{"insert":"\\n","attributes":{"header":4}},');
-    str = str.replace(alignLeft, '{"insert":"$2"},{"insert":"\\n","attributes":{"align":"left"}},');
-    str = str.replace(alignRight, '{"insert":"$2"},{"insert":"\\n","attributes":{"align":"right"}},');
-    str = str.replace(alignCenter, '{"insert":"$2"},{"insert":"\\n","attributes":{"align":"center"}},');
-    str = str.replace(alignJustified, '{"insert":"$2"},{"insert":"\\n","attributes":{"align":"justify"}},');
+    str = str.replace(alignLeft, '{"insert":"$1"},{"insert":"\\n","attributes":{"align":"left"}},');
+    str = str.replace(alignRight, '{"insert":"$1"},{"insert":"\\n","attributes":{"align":"right"}},');
+    str = str.replace(alignCenter, '{"insert":"$1"},{"insert":"\\n","attributes":{"align":"center"}},');
+    str = str.replace(alignJustified, '{"insert":"$1"},{"insert":"\\n","attributes":{"align":"justify"}},');
     str = str.replace(blockquote, '{"insert":"$1"},{"insert":"\\n","attributes":{"blockquote":"true"}},');
     str = str.replace(normal, '{"insert":"$1"},{"insert":"\\n"},');
     str = str.replace(blankLines, '\n{"insert":"\\n"},\n');
