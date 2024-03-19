@@ -17,7 +17,6 @@ function markdownFic(){
     let centeredHeader4 = /^\[>(c)] \#\#\# {0,1}([^#].+)/gm
 
     let blockquote = /^>+ {0,1}(.+)/gm;
-    //let alignment = /^\[>(l|r|c|j)] {0,1}(.+)/gm;
     let alignLeft = /^\[>(l)] {0,1}(.+)/gm;
     let alignRight = /^\[>(r)] {0,1}(.+)/gm;
     let alignCenter = /^\[>(c)] {0,1}(.+)/gm;
@@ -29,7 +28,7 @@ function markdownFic(){
     str = str.replaceAll('\\','\\\\');
     str = str.replaceAll('/','\\/');
     str = str.replaceAll('"','\\"');
-    str = str.replaceAll('\t','\\t'); //maybe do this after regex in case I need regex that detects tabs/whitespace
+    str = str.replaceAll('\t','\\t'); 
 
     str = str.replace(centeredHeader1, '{"insert":"$2"},{"insert":"\\n","attributes":{"align":"center","header":1}},');
     str = str.replace(centeredHeader2, '{"insert":"$2"},{"insert":"\\n","attributes":{"align":"center","header":2}},');
@@ -47,7 +46,6 @@ function markdownFic(){
     str = str.replace(normal, '{"insert":"$1"},{"insert":"\\n"},');
     str = str.replace(blankLines, '\n{"insert":"\\n"},\n');
 
-    //return formatAllInline(JSON.parse('{"ops":[' + str.trim().slice(0, -1) + ']}'));
     str = '{"ops":[' + str.trim().slice(0, -1) + ']}';
 
     //To combine styles, they must come in this order: bold, italic, underline, strike
@@ -85,8 +83,8 @@ function markdownFic(){
     str = str.replace(underline, '"},{"insert":"$1","attributes":{"underline":"true"}},{"insert":"');
     str = str.replace(strike, '"},{"insert":"$1","attributes":{"strike":"true"}},{"insert":"');
 
-    let escapedMarkersRegx = /\\\\(\*\*|\*|~~|__|#|\[>|>|\[\^)/g;
-    str = str.replace(escapedMarkersRegx, '$1');
+    let escapedMarkers = /\\\\(\*\*|\*|~~|__|#|\[>|>|\[\^)/g;
+    str = str.replace(escapedMarkers, '$1');
 
     return JSON.parse(str);
   }
