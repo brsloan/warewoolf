@@ -7,143 +7,47 @@ function markdownFic(){
   }
 
   function parseMDF(str){
-    var lines = str.split(/\r\n|\r|\n/);
+    let header1 = /^\# {0,1}([^#].+)/gm;
+    let header2 = /^\#\# {0,1}([^#].+)/gm;
+    let header3 = /^\#\#\# {0,1}([^#].+)/gm;
+    let header4 = /^\#\#\#\# {0,1}([^#].+)/gm;
+    let centeredHeader1 = /^\[>(c)] \# {0,1}([^#].+)/gm
+    let centeredHeader2 = /^\[>(c)] \#\# {0,1}([^#].+)/gm
+    let centeredHeader3 = /^\[>(c)] \#\#\# {0,1}([^#].+)/gm
+    let centeredHeader4 = /^\[>(c)] \#\#\# {0,1}([^#].+)/gm
 
-    var tempQuill = getTempQuill();
+    let blockquote = /^>+ {0,1}(.+)/gm;
+    //let alignment = /^\[>(l|r|c|j)] {0,1}(.+)/gm;
+    let alignLeft = /^\[>(l)] {0,1}(.+)/gm;
+    let alignRight = /^\[>(r)] {0,1}(.+)/gm;
+    let alignCenter = /^\[>(c)] {0,1}(.+)/gm;
+    let alignJustified = /^\[>(j)] {0,1}(.+)/gm;
+    let normal = /^(?!{)(.+)/gm;
+    let blankLines = /(?:\r?\n){2,}/gm;
 
-    lines.forEach((line, i) => {
-      var parsedLine = parseLine(line);
+    //escape JSON chars
+    str = str.replaceAll('\\','\\\\');
+    str = str.replaceAll('/','\\/');
+    str = str.replaceAll('"','\\"');
+    str = str.replaceAll('\t','\\t'); //maybe do this after regex in case I need regex that detects tabs/whitespace
 
-      if(parsedLine.formats.length == 0 || parsedLine.formats[0].name != 'footnote'){
-        var formats = {};
-        parsedLine.formats.forEach((format, i) => {
-          formats[format.name] = format.value;
-        });
+    str = str.replace(centeredHeader1, '{"insert":"$2"},{"insert":"\\n","attributes":{"align":"center","header":1}},');
+    str = str.replace(centeredHeader2, '{"insert":"$2"},{"insert":"\\n","attributes":{"align":"center","header":2}},');
+    str = str.replace(centeredHeader3, '{"insert":"$2"},{"insert":"\\n","attributes":{"align":"center","header":3}},');
+    str = str.replace(centeredHeader4, '{"insert":"$2"},{"insert":"\\n","attributes":{"align":"center","header":4}},');
+    str = str.replace(header1, '{"insert":"$1"},{"insert":"\\n","attributes":{"header":1}},');
+    str = str.replace(header2, '{"insert":"$1"},{"insert":"\\n","attributes":{"header":2}},');
+    str = str.replace(header3, '{"insert":"$1"},{"insert":"\\n","attributes":{"header":3}},');
+    str = str.replace(header4, '{"insert":"$1"},{"insert":"\\n","attributes":{"header":4}},');
+    str = str.replace(alignLeft, '{"insert":"$2"},{"insert":"\\n","attributes":{"align":"left"}},');
+    str = str.replace(alignRight, '{"insert":"$2"},{"insert":"\\n","attributes":{"align":"right"}},');
+    str = str.replace(alignCenter, '{"insert":"$2"},{"insert":"\\n","attributes":{"align":"center"}},');
+    str = str.replace(alignJustified, '{"insert":"$2"},{"insert":"\\n","attributes":{"align":"justify"}},');
+    str = str.replace(blockquote, '{"insert":"$1"},{"insert":"\\n","attributes":{"blockquote":"true"}},');
+    str = str.replace(normal, '{"insert":"$1"},{"insert":"\\n"},');
+    str = str.replace(blankLines, '\n{"insert":"\\n"},\n');
 
-        tempQuill.insertText(tempQuill.getLength() - 1, parsedLine.line, formats);
-      }
-      else {
-        tempQuill.insertText(tempQuill.getLength() - 1, parsedLine.line);
-      }
-
-    });
-
-    //Delete extra white space added after last line
-    tempQuill.deleteText(tempQuill.getLength() - 1, 2);
-
-    return formatAllInline(tempQuill.getContents());
-  }
-
-  function parseLine(line){
-    var parsedLine;
-
-    if(line.startsWith('#')){
-      //headings
-      parsedLine = parseHeader(line);
-    }
-    else if(line.startsWith('>')){
-      //blockquote
-      parsedLine = parseBlockquote(line);
-    }
-    else if(line.startsWith('[^')){
-      //footnote
-      parsedLine = parseFootnote(line);
-    }
-    else if(line.startsWith('[>')){
-      //alignment
-      parsedLine = parseAlignment(line);
-    }
-    else {
-      //normal
-      parsedLine = {
-        line: line.concat('\r'),
-        formats: []
-      }
-    }
-
-    return parsedLine;
-  }
-
-  function parseHeader(line){
-    let marker = /^\#+ {0,1}/.exec(line);
-    let parsedLine = {
-      line: line.substr(marker[0].length).concat('\r'),
-      formats: [
-        {
-          name: 'header',
-          value: marker[0].trim().length
-        }
-      ]
-    }
-    return parsedLine;
-  }
-
-  function parseBlockquote(line){
-    let marker = /^>+ {0,1}/.exec(line);
-    let parsedLine = {
-      line: line.substr(marker[0].length).concat('\r'),
-      formats: [{
-        name: 'blockquote',
-        value: true
-      }]
-    }
-    return parsedLine;
-  }
-
-  function parseFootnote(line){
-    let marker = /^\[\^(\d+)]: {0,1}/.exec(line);
-    if(marker != null)
-      var fnNum = parseInt(marker[1]);
-
-    let parsedLine = {
-      line: line.concat('\r'),
-      formats: [{
-        name: 'footnote',
-        value: fnNum
-      }]
-    };
-    return parsedLine;
-  }
-
-  function parseAlignment(line){
-    let marker = /^\[>(l|r|c|j)] {0,1}/.exec(line);
-    var alignValue;
-    if(marker != null){
-      switch(marker[1]){
-        case 'l':
-        alignValue = null;
-        break;
-        case 'r':
-        alignValue = 'right';
-        break;
-        case 'c':
-        alignValue = 'center';
-        break;
-        case 'j':
-        alignValue = 'justify';
-      }
-    }
-
-    var newLine = line.substr(marker[0].length);
-
-    let parsedLine = {
-      line: newLine,
-      formats: alignValue ? [{
-        name: 'align',
-        value: alignValue
-      }] : []
-    }
-
-    if(newLine.startsWith('#')){
-      let secondParse = parseHeader(newLine);
-      secondParse.formats = secondParse.formats.concat(parsedLine.formats);
-      parsedLine = secondParse;
-    }
-    else {
-      parsedLine.line = parsedLine.line.concat('\r');
-    }
-
-    return parsedLine;
+    return formatAllInline(JSON.parse('{"ops":[' + str.trim().slice(0, -1) + ']}'));
   }
 
   function formatAllInline(delt){
