@@ -7,7 +7,7 @@ const { generateChapTitleFromFirstLine, getTempQuill } = require('./quill-utils'
 const { convertFirstLineToTitle } = require('./convert-first-lines')
 const { convertMarkedItalics } = require('./convert-italics');
 const { convertMarkedTabs } = require('./convert-tabs');
-const markdownFic = require('./markdownFic');
+const { parseMDF } = require('./markdownFic');
 
 function initiateImport(sysDirectories, options, addImportedChapter, cback){
 
@@ -175,7 +175,7 @@ function removeChapterMarker(delt, markerRegx){
 function importMDF(filepath, callback){
   try{
     fs.readFile(filepath, 'utf8', function(err, data){
-      var delta = markdownFic().parseMDF(data);
+      var delta = parseMDF(data);
       var filename = getFilenameFromFilepath(filepath);
 
       callback([{

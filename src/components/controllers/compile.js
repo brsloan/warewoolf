@@ -1,5 +1,5 @@
 const fs = require('fs');
-const markdownFic = require('./markdownFic');
+const { convertDeltaToMDF } = require('./markdownFic');
 const Quill = require('quill');
 const { convertDeltaToDocx, saveDocx } = require('./delta-to-docx');
 const { logError } = require('./error-log');
@@ -26,7 +26,7 @@ function compileProject(project, options, filepath){
 
 function compileMDF(dir, allChaps){
   try{
-    var allText = markdownFic().convertDeltaToMDF(allChaps);
+    var allText = convertDeltaToMDF(allChaps);
     fs.writeFileSync(dir, allText);
   }
   catch(err){

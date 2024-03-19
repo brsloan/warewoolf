@@ -3,7 +3,7 @@ const nodemailer = require('nodemailer');
 const { archiveProject } = require('./backup-project');
 const { compileChapterDeltas } = require('./compile');
 const { convertDeltaToDocx, packageDocxBase64 } = require('./delta-to-docx');
-const markdownFic = require('./markdownFic');
+const { convertDeltaToMDF } = require('./markdownFic');
 const { logError } = require('./error-log');
 
 function prepareAndEmail(project, userSettings, editorQuill, sender, pass, receiver, filetype, compileOptions, callback){
@@ -58,7 +58,7 @@ function emailDeltaAsMdfc(filename, delt, sender, pass, receiver, callback){
   var attachments = [
     {
       filename: filename + '.mdfc',
-      content: markdownFic().convertDeltaToMDF(delt)
+      content: convertDeltaToMDF(delt)
     }
   ];
 

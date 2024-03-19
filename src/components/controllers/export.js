@@ -1,5 +1,5 @@
 const fs = require('fs');
-const markdownFic = require('./markdownFic');
+const { convertDeltaToMDF } = require('./markdownFic');
 const { logError } = require('./error-log');
 const { getTempQuill } = require('./quill-utils');
 const { convertDeltaToDocx, saveDocx } = require('./delta-to-docx');
@@ -33,10 +33,10 @@ function exportAsMDF(project, dir){
       var chapFile = project.chapters[i].getContentsOrFile();
       var outName = generateChapterFilename(i, project.chapters[i].title);
 
-      fs.writeFileSync(dir + outName + '.mdfc', markdownFic().convertDeltaToMDF(chapFile));
+      fs.writeFileSync(dir + outName + '.mdfc', convertDeltaToMDF(chapFile));
     }
 
-    fs.writeFileSync(dir + "notes" + ".mdfc", markdownFic().convertDeltaToMDF(project.notes));
+    fs.writeFileSync(dir + "notes" + ".mdfc", convertDeltaToMDF(project.notes));
   }
   catch(err){
     logError(err);
