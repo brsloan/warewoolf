@@ -1,20 +1,20 @@
 const { parseDelta } = require('./quill-utils');
 
 function parseMDF(str){
-  let header1 = /^\# {0,1}([^#].+)/gm;
-  let header2 = /^\#\# {0,1}([^#].+)/gm;
-  let header3 = /^\#\#\# {0,1}([^#].+)/gm;
-  let header4 = /^\#\#\#\# {0,1}([^#].+)/gm;
-  let centeredHeader1 = /^\[>c] \# {0,1}([^#].+)/gm
-  let centeredHeader2 = /^\[>c] \#\# {0,1}([^#].+)/gm
-  let centeredHeader3 = /^\[>c] \#\#\# {0,1}([^#].+)/gm
-  let centeredHeader4 = /^\[>c] \#\#\# {0,1}([^#].+)/gm
+  let header1 = /^# (.+)/gm;
+  let header2 = /^## (.+)/gm;
+  let header3 = /^### (.+)/gm;
+  let header4 = /^#### (.+)/gm;
+  let centeredHeader1 = /^\[>c] # (.+)/gm
+  let centeredHeader2 = /^\[>c] ## (.+)/gm
+  let centeredHeader3 = /^\[>c] ### (.+)/gm
+  let centeredHeader4 = /^\[>c] #### (.+)/gm
 
   let blockquote = /^>+ {0,1}(.+)/gm;
-  let alignLeft = /^\[>l] {0,1}(.+)/gm;
-  let alignRight = /^\[>r] {0,1}(.+)/gm;
-  let alignCenter = /^\[>c] {0,1}(.+)/gm;
-  let alignJustified = /^\[>j] {0,1}(.+)/gm;
+  let alignLeft = /^\[>l] (.+)/gm;
+  let alignRight = /^\[>r] (.+)/gm;
+  let alignCenter = /^\[>c] (.+)/gm;
+  let alignJustified = /^\[>j] (.+)/gm;
   let normal = /^(?!{)(.+)/gm;
   let blankLines = /(?:\r?\n){2,}/gm;
 
@@ -80,6 +80,7 @@ function parseMDF(str){
   let escapedMarkers = /\\\\(\*\*|\*|~~|__|#|\[>|>|\[\^)/g;
   str = str.replace(escapedMarkers, '$1');
 
+  console.log(str);
   return JSON.parse(str);
 }
 
@@ -90,7 +91,9 @@ function convertDeltaToMDF(delt){
   var parsedQuill = parseDelta(delt);
 
   parsedQuill.paragraphs.forEach((para, i) => {
-    mdf += getLineMarker(para.attributes);
+    
+    if(para.textRuns.length > 0)
+      mdf += getLineMarker(para.attributes);
 
     para.textRuns.forEach((run, i) => {
       run.text = escapeAnyMarkers(run.text);
