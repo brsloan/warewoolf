@@ -113,14 +113,14 @@ function markdownFic(){
 
     if(run.attributes){
       var marker = '';
-      if(run.attributes.italic)
-        marker += '*';
       if(run.attributes.bold)
         marker += '**';
-      if(run.attributes.strike)
-        marker += '~~';
+      if(run.attributes.italic)
+        marker += '*';
       if(run.attributes.underline)
         marker += '__';
+      if(run.attributes.strike)
+        marker += '~~';
 
       run.text = marker + run.text + marker.split('').reverse().join('');
     }
