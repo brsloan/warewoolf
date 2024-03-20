@@ -45,18 +45,18 @@ function parseMDF(str){
   //To combine styles, they must come in this order: bold, italic, underline, strike
   //Wish I didn't have to go through every permutation, but I can't think of a quicker way to do this with the 
   //delta data structure since it does not nest like XML.
-  let boldItalicUnderlineStrike = /(?<!\\|\\\*\*)\*\*\*__~~([^\*\*]+[^\\\*])~~__\*\*\*/g;
-  let boldItalicUnderline = /(?<!\\|\\\*\*)\*\*\*__([^\*\*]+[^\\\*])__\*\*\*/g;
-  let boldItalicStrike = /(?<!\\|\\\*\*)\*\*\*~~([^\*\*]+[^\\\*])~~\*\*\*/g;
-  let boldUnderlineStrike = /(?<!\\|\\\*\*|\*)\*\*__~~([^\*\*]+[^\\\*])~~__\*\*/g;
+  let boldItalicUnderlineStrike = /(?<!\\|\\\*\*)\*\*\*__~~([^\*\*]+)~~__\*\*\*/g;
+  let boldItalicUnderline = /(?<!\\|\\\*\*)\*\*\*__([^\*\*]+)__\*\*\*/g;
+  let boldItalicStrike = /(?<!\\|\\\*\*)\*\*\*~~([^\*\*]+)~~\*\*\*/g;
+  let boldUnderlineStrike = /(?<!\\|\\\*\*|\*)\*\*__~~([^\*\*]+)~~__\*\*/g;
   let italicUnderlineStrike = /(?<!\\|\\\*|\*)\*__~~([^\*]+[^\\])~~__\*/g;
-  let boldItalic = /(?<!\\|\\\*\*)\*\*\*([^\*\*]+[^\\\*])\*\*\*/g;
-  let boldUnderline = /(?<!\\|\\\*\*|\*)\*\*__([^\*\*]+[^\\\*])__\*\*/g;
-  let boldStrike = /(?<!\\|\\\*\*|\*)\*\*~~([^\*\*]+[^\\\*])~~\*\*/g;
+  let boldItalic = /(?<!\\|\\\*\*)\*\*\*([^\*\*]+)\*\*\*/g;
+  let boldUnderline = /(?<!\\|\\\*\*|\*)\*\*__([^\*\*]+)__\*\*/g;
+  let boldStrike = /(?<!\\|\\\*\*|\*)\*\*~~([^\*\*]+)~~\*\*/g;
   let italicUnderline = /(?<!\\|\\\*|\*)\*__([^\*]+[^\\])__\*/g;
   let italicStrike = /(?<!\\|\\\*|\*)\*~~([^\*]+[^\\])~~\*/g;
   let underlineStrike = /(?<!\\|\\__|\*)__~~([^__]+[^\\])~~__/g;
-  let bold = /(?<!\\|\\\*\*)\*\*([^\*\*]+[^\\\*])\*\*/g;
+  let bold = /(?<!\\|\\\*\*)\*\*([^\*\*]+)\*\*/g;
   let italic = /(?<!\\|\\\*)\*([^\*]+[^\\])\*/g;
   let underline = /(?<!\\|\\__)__([^__]+[^\\])__/g;
   let strike = /(?<!\\|\\~~)~~([^~~]+[^\\])~~/g;
@@ -80,7 +80,6 @@ function parseMDF(str){
   let escapedMarkers = /\\\\(\*\*|\*|~~|__|#|\[>|>|\[\^)/g;
   str = str.replace(escapedMarkers, '$1');
 
-  console.log(str);
   return JSON.parse(str);
 }
 
