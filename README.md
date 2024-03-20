@@ -61,6 +61,11 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 
 ## Status
 
+2024-xx-xx: Changes Made:
+* Completely new MarkdownFic parsing algorithm
+* Now saves documents in MarkdownFic rather than Delta JSON files. Each .pup file is just a plain text markdown file using the simple MarkdownFic markdown variant.
+  * Can still open legacy files, just will silently save over old file format with new at first save.
+
 2024-03-16: v1.1.0. Changes made:
 * Download and install updates in-app through About screen
   * Only checks for updates on user request.
