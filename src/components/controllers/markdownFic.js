@@ -49,17 +49,17 @@ function parseMDF(str){
   let boldItalicUnderline = /(?<!\\|\\\*\*)\*\*\*__([^\*\*]+)__\*\*\*/g;
   let boldItalicStrike = /(?<!\\|\\\*\*)\*\*\*~~([^\*\*]+)~~\*\*\*/g;
   let boldUnderlineStrike = /(?<!\\|\\\*\*|\*)\*\*__~~([^\*\*]+)~~__\*\*/g;
-  let italicUnderlineStrike = /(?<!\\|\\\*|\*)\*__~~([^\*]+[^\\])~~__\*/g;
+  let italicUnderlineStrike = /(?<!\\|\\\*|\*)\*__~~([^\*]+)~~__\*/g;
   let boldItalic = /(?<!\\|\\\*\*)\*\*\*([^\*\*]+)\*\*\*/g;
   let boldUnderline = /(?<!\\|\\\*\*|\*)\*\*__([^\*\*]+)__\*\*/g;
   let boldStrike = /(?<!\\|\\\*\*|\*)\*\*~~([^\*\*]+)~~\*\*/g;
-  let italicUnderline = /(?<!\\|\\\*|\*)\*__([^\*]+[^\\])__\*/g;
-  let italicStrike = /(?<!\\|\\\*|\*)\*~~([^\*]+[^\\])~~\*/g;
-  let underlineStrike = /(?<!\\|\\__|\*)__~~([^__]+[^\\])~~__/g;
+  let italicUnderline = /(?<!\\|\\\*|\*)\*__([^\*]+)__\*/g;
+  let italicStrike = /(?<!\\|\\\*|\*)\*~~([^\*]+)~~\*/g;
+  let underlineStrike = /(?<!\\|\\__|\*)__~~([^__]+)~~__/g;
   let bold = /(?<!\\|\\\*\*)\*\*([^\*\*]+)\*\*/g;
-  let italic = /(?<!\\|\\\*)\*([^\*]+[^\\])\*/g;
-  let underline = /(?<!\\|\\__)__([^__]+[^\\])__/g;
-  let strike = /(?<!\\|\\~~)~~([^~~]+[^\\])~~/g;
+  let italic = /(?<!\\|\\\*)\*([^\*]+)\*/g;
+  let underline = /(?<!\\|\\__)__([^__]+)__/g;
+  let strike = /(?<!\\|\\~~)~~([^~~]+)~~/g;
   
   str = str.replace(boldItalicUnderlineStrike, '"},{"insert":"$1","attributes":{"bold":"true","italic":"true","underline":"true","strike":"true"}},{"insert":"');
   str = str.replace(boldItalicUnderline, '"},{"insert":"$1","attributes":{"bold":"true","italic":"true","underline":"true"}},{"insert":"');
