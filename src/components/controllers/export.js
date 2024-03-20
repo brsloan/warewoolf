@@ -59,12 +59,12 @@ function exportAsText(project, dir){
   }
 }
 
-function convertToPlainText(chapFile){
-    var tempQuill = getTempQuill();
-
-    tempQuill.setContents(chapFile);
-
-    return tempQuill.getText();
+function convertToPlainText(delt){
+  var text = '';
+  delt.ops.forEach(op => {
+    text += op.insert;
+  });
+  return text;
 }
 
 function exportAsWord(project, userSettings, dir){
