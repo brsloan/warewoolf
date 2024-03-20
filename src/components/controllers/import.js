@@ -3,7 +3,7 @@ const showFileDialog = require('../views/file-dialog_display');
 const { logError } = require('./error-log');
 const { showWorking, hideWorking } = require('../views/working_display');
 const { importDocx } = require('./docx-import');
-const { generateChapTitleFromFirstLine, getTempQuill } = require('./quill-utils');
+const { generateChapTitleFromFirstLine } = require('./quill-utils');
 const { convertFirstLineToTitle } = require('./convert-first-lines')
 const { convertMarkedItalics } = require('./convert-italics');
 const { convertMarkedTabs } = require('./convert-tabs');
@@ -79,25 +79,26 @@ function importFilesAsync(filepaths, options, addImportedChapter, cback, importe
 function importPlainText(filepath, options, callback){
   try{
     fs.readFile(filepath, 'utf8', function(err, inText){
-      var tempQuill = getTempQuill();
-      tempQuill.setText(inText);
-      var newChapContents = tempQuill.getContents();
       var filename = getFilenameFromFilepath(filepath);
-
-      var packagedDeltas = [{
-        title: filename,
-        delta: newChapContents
-      }];
+      var packagedDeltas = [];
 
       if(options.splitChapters.split){
-        packagedDeltas = [];
-        var splitDeltas = splitDeltAtMarker(newChapContents, options.splitChapters.marker);
-
-        splitDeltas.forEach((delt, i) => {
+        var chapTxts = inText.split(new RegExp(options.splitChapters.marker + '\r?\n'));
+        chapTxts.forEach(function(txt, i){
           packagedDeltas.push({
-            title: generateChapTitleFromFirstLine(delt),
-            delta: delt
-          });
+            title: generateTitleFromFirstLineText(txt),
+            delta: {
+              ops:[{ insert: txt }]
+            }
+          })
+        });
+      }
+      else {
+        packagedDeltas.push({
+          title: generateTitleFromFirstLineText(inText),
+          delta: {
+            ops: [{ insert: inText }]
+          }
         });
       }
 
@@ -118,59 +119,10 @@ function importPlainText(filepath, options, callback){
   }
 }
 
-function splitDeltAtMarker(delt, marker){
-  var tempQuill = getTempQuill();
-  tempQuill.setContents(delt);
-
-  var splitMarkerRegx = new RegExp('\n{0,2}' + marker + '\n{0,2}');
-  var splitDeltas = [];
-
-  if(splitMarkerRegx.test(tempQuill.getText())){
-    var splitIndices = getRegxIndices(tempQuill.getText(), splitMarkerRegx);
-
-    splitDeltas = splitDeltaAtIndices(delt, splitIndices);
-
-    splitDeltas.forEach((delt, i) => {
-      //remove split marker
-      if(i != 0)
-        splitDeltas[i] = removeChapterMarker(delt, splitMarkerRegx);
-    });
-  }
-  else {
-    splitDeltas.push(delt);
-  }
-
-  return splitDeltas;
+function generateTitleFromFirstLineText(str){
+   const titleCharacterLimit = 100;
+  return str.split(/\r?\n/)[0].slice(0,titleCharacterLimit).replaceAll(/<|>/g,'');
 }
-
-function getRegxIndices(txt, regx){
-    let regxIndices = [];
-    let foundIndex = 0;
-    let startingIndex = 0;
-
-    while(foundIndex > -1){
-      var searchResult = regx.exec(txt);
-      foundIndex = searchResult ? txt.indexOf(searchResult[0], startingIndex) : -1;
-      if(foundIndex > -1){
-        regxIndices.push(foundIndex);
-        startingIndex = foundIndex + searchResult.length;
-      }
-    }
-
-    return regxIndices;
-}
-
-function removeChapterMarker(delt, markerRegx){
-  var tempQuill = getTempQuill();
-  tempQuill.setContents(delt);
-  var txt = tempQuill.getText();
-  tempQuill.setText(txt.replace(markerRegx, ''));
-
-  delt = tempQuill.getContents();
-
-  return delt;
-}
-
 
 function importMDF(filepath, callback){
   try{
