@@ -1,5 +1,6 @@
 const fs = require('fs');
 const { logError } = require('../controllers/error-log');
+const { parseMDF, convertDeltaToMDF } = require('../controllers/markdownFic');
 
 function newChapter(){
     return {
@@ -35,8 +36,14 @@ function newChapter(){
     function getFile(){
       try{
         var chap = this;
-
-        var chapterObj = JSON.parse(fs.readFileSync(project.directory + project.chapsDirectory + chap.filename, "utf8"));
+        
+        //Temporarily support both old chapter JSON files and new markdown with quick hacky check that could easily go wrong
+        var chapterObj;
+        var fileText = fs.readFileSync(project.directory + project.chapsDirectory + chap.filename, "utf8");
+        if(fileText[0] == '{')
+          chapterObj = JSON.parse(fileText);
+        else
+          chapterObj = parseMDF(fileText);
 
         return chapterObj;
       }
@@ -63,8 +70,8 @@ function newChapter(){
         var filename = chap.filename == undefined || chap.filename == null ? getNewFilename() : chap.filename;
 
 
-        fs.writeFileSync(project.directory + project.chapsDirectory + filename, JSON.stringify(chap.contents), "utf8");
-
+        //fs.writeFileSync(project.directory + project.chapsDirectory + filename, JSON.stringify(chap.contents), "utf8");
+        fs.writeFileSync(project.directory + project.chapsDirectory + filename, convertDeltaToMDF(chap.contents), "utf8")
 
         function getNewFilename(){
           var largestFilename = 0;
@@ -92,7 +99,8 @@ function newChapter(){
           if(chap.filename == undefined || chap.filename == null)
             chap.filename = getNewFilename();
 
-          fs.writeFileSync(project.directory + project.chapsDirectory + chap.filename, JSON.stringify(chap.contents), "utf8");
+          //fs.writeFileSync(project.directory + project.chapsDirectory + chap.filename, JSON.stringify(chap.contents), "utf8");
+          fs.writeFileSync(project.directory + project.chapsDirectory + chap.filename, convertDeltaToMDF(chap.contents), "utf8")
           chap.contents = null;
 
           function getNewFilename(){

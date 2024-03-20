@@ -1,1 +1,15 @@
-{"ops":[{"insert":"File Structure"},{"attributes":{"align":"center","header":1},"insert":"\n"},{"attributes":{"align":"center"},"insert":"\n"},{"insert":"WareWoolf saves its projects as plain text JSON files so they are both human readable and quickly parsed by Javascript. There is a primary .woolf project file, and individual .pup files for each chapter in a subdirectory.\n\n- Frankenstein.woolf\n- Frankenstein_Pups\n\t- 1.pup\n\t- 2.pup\n\t- 3.pup\n\nThe reason for doing this rather than one (more convenient) file is speed. This way, WareWoolf does not hold your entire (perhaps very long) novel in memory, but only one chapter at a time--the chapter you are viewing. That way it can run on low-powered computers like a Raspbeery Pi while still being fast and responsive.\n\nPlease note that the pup files must be kept either in a subdirectory or the same directory as the project file. If you move them, WareWoolf will prompt you to show the new location at load. (You can also change the expected chapters directory in the Properties tool under File > Properties > Advanced. This shows the relative filepath saved in the .woolf file for finding the chapters.)\n\nI say the pup files are human readable, and they are, but if you were to open one as a text file it would look strange to you because they are saved as JSON strings representing Quill Delta documents (https://quilljs.com/docs/delta/). This allows WareWoolf to interpret them very quickly using Quill, which is a free, open source technology. So even if WareWoolf disappeared overnight and you only had your project files, you could still recover your work easily.\n"}]}
+[>c] # File Structure
+
+WareWoolf saves its projects as plain text JSON files so they are both human readable and quickly parsed by Javascript. There is a primary .woolf project file, and individual .pup files for each chapter in a subdirectory.
+
+- Frankenstein.woolf
+- Frankenstein_Pups
+	- 1.pup
+	- 2.pup
+	- 3.pup
+
+The reason for doing this rather than one (more convenient) file is speed. This way, WareWoolf does not hold your entire (perhaps very long) novel in memory, but only one chapter at a time--the chapter you are viewing. That way it can run on low-powered computers like a Raspbeery Pi while still being fast and responsive.
+
+Please note that the pup files must be kept either in a subdirectory or the same directory as the project file. If you move them, WareWoolf will prompt you to show the new location at load. (You can also change the expected chapters directory in the Properties tool under File \> Properties \> Advanced. This shows the relative filepath saved in the .woolf file for finding the chapters.)
+
+I say the pup files are human readable, and they are, but if you were to open one as a text file it would look strange to you because they are saved as JSON strings representing Quill Delta documents (https://quilljs.com/docs/delta/). This allows WareWoolf to interpret them very quickly using Quill, which is a free, open source technology. So even if WareWoolf disappeared overnight and you only had your project files, you could still recover your work easily.

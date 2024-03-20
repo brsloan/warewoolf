@@ -1,1 +1,9 @@
-{"ops":[{"insert":"File Manager"},{"attributes":{"align":"center","header":1},"insert":"\n"},{"attributes":{"align":"center"},"insert":"\n"},{"insert":"WareWoolf's built-in File Manager will be of little use on desktop computers where you already have a proper file manager, but it is very handy for using WareWoolf in a writerDeck.\n\nIt works as you would generally expect a file manager to work, with copying, cutting, and pasting files via the usual Ctrl+C, Ctrl+X, and Ctrl+V shortcuts. There are buttons for creating a new folder, renaming a file, and deleting a file.\n\nIf you select multiple files to rename at once, it will append a number at the end of each filename to differentiate them. If they are of different file extensions, each file will retain its original file extension but be numbered in the same sequence.\n\nIf you select a single file to rename, you will need to include the file extension, as it will not automatically add one. So you can change \"book.md\" to \"book.txt\" or what have you.\n"}]}
+[>c] # File Manager
+
+WareWoolf's built-in File Manager will be of little use on desktop computers where you already have a proper file manager, but it is very handy for using WareWoolf in a writerDeck.
+
+It works as you would generally expect a file manager to work, with copying, cutting, and pasting files via the usual Ctrl+C, Ctrl+X, and Ctrl+V shortcuts. There are buttons for creating a new folder, renaming a file, and deleting a file.
+
+If you select multiple files to rename at once, it will append a number at the end of each filename to differentiate them. If they are of different file extensions, each file will retain its original file extension but be numbered in the same sequence.
+
+If you select a single file to rename, you will need to include the file extension, as it will not automatically add one. So you can change "book.md" to "book.txt" or what have you.
