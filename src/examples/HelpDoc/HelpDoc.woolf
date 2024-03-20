@@ -13,97 +13,97 @@
 	"chapters": [
 		{
 			"title": "WareWoolf Basics",
-			"filename": "1.pup",
+			"filename": "1.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Backup / Auto-Backup",
-			"filename": "21.pup",
+			"filename": "21.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Break Headings Into Chapters",
-			"filename": "5.pup",
+			"filename": "5.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Exporting and Compiling",
-			"filename": "6.pup",
+			"filename": "6.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "File Manager",
-			"filename": "7.pup",
+			"filename": "7.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "File Structure",
-			"filename": "8.pup",
+			"filename": "8.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Importing Plaintext Files",
-			"filename": "11.pup",
+			"filename": "11.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "MarkdownFic",
-			"filename": "22.pup",
+			"filename": "22.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Outliner",
-			"filename": "12.pup",
+			"filename": "12.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Properties",
-			"filename": "19.pup",
+			"filename": "19.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Renumber Chapters",
-			"filename": "13.pup",
+			"filename": "13.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Send Via Email Function",
-			"filename": "14.pup",
+			"filename": "14.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Shortcut Helper",
-			"filename": "15.pup",
+			"filename": "15.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Using WareWoolf For a WriterDeck",
-			"filename": "4.pup",
+			"filename": "4.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Wi-Fi Manager",
-			"filename": "20.pup",
+			"filename": "20.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Word Counts",
-			"filename": "18.pup",
+			"filename": "18.txt",
 			"filter": null,
 			"summary": null
 		}

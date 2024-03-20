@@ -37,10 +37,10 @@ function newChapter(){
       try{
         var chap = this;
         
-        //Temporarily support both old chapter JSON files and new markdown with quick hacky check that could easily go wrong
+        //Temporarily support both old chapter JSON files (.pup) and new markdown (.txt)
         var chapterObj;
         var fileText = fs.readFileSync(project.directory + project.chapsDirectory + chap.filename, "utf8");
-        if(fileText[0] == '{')
+        if(chap.filename.includes('.pup'))
           chapterObj = JSON.parse(fileText);
         else
           chapterObj = parseMDF(fileText);
@@ -82,7 +82,7 @@ function newChapter(){
               largestFilename = nameNumber;
           });
 
-          return (largestFilename + 1).toString() + ".pup";
+          return (largestFilename + 1).toString() + ".txt";
         }
       }
       catch(err){
@@ -112,7 +112,7 @@ function newChapter(){
                 largestFilename = nameNumber;
             });
 
-            return (largestFilename + 1).toString() + ".pup";
+            return (largestFilename + 1).toString() + ".txt";
           }
         }
         chap.hasUnsavedChanges = false;
