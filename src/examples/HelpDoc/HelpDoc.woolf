@@ -1,6 +1,6 @@
 {
 	"filename": "HelpDoc.woolf",
-	"chapsDirectory": "HelpDoc_pups/",
+	"chapsDirectory": "HelpDoc_chapters/",
 	"title": "helpDoc",
 	"author": "Benjamin Sloan",
 	"notes": {

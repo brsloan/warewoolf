@@ -1,6 +1,7 @@
 const fs = require('fs');
 const { logError } = require('../controllers/error-log');
 const { parseMDF, convertDeltaToMDF } = require('../controllers/markdownFic');
+const { sanitizeFilename } = require('../controllers/utils');
 
 function newChapter(){
     return {
@@ -21,8 +22,8 @@ function newChapter(){
     function deleteChapterFile(){
       var chap = this;
       try{
-        if(fs.existsSync(project.directory + chap.filename))
-          fs.unlinkSync(project.directory + chap.filename);
+        if(fs.existsSync(project.directory + project.chapsDirectory + chap.filename))
+          fs.unlinkSync(project.directory + project.chapsDirectory + chap.filename);
       }
       catch(err){
         logError(err);
@@ -66,24 +67,10 @@ function newChapter(){
     function saveCopy(){
       try{
         var chap = this;
+        chap.filename = getNewFilename(chap.title); 
+        //var filename = chap.filename == undefined || chap.filename == null ? getNewFilename(chap.title) : chap.filename;
 
-        var filename = chap.filename == undefined || chap.filename == null ? getNewFilename() : chap.filename;
-
-
-        //fs.writeFileSync(project.directory + project.chapsDirectory + filename, JSON.stringify(chap.contents), "utf8");
-        fs.writeFileSync(project.directory + project.chapsDirectory + filename, convertDeltaToMDF(chap.contents), "utf8")
-
-        function getNewFilename(){
-          var largestFilename = 0;
-
-          fs.readdirSync(project.directory + project.chapsDirectory).forEach(file => {
-            var nameNumber = parseInt(file.split(".")[0]);
-            if(nameNumber > largestFilename)
-              largestFilename = nameNumber;
-          });
-
-          return (largestFilename + 1).toString() + ".txt";
-        }
+        fs.writeFileSync(project.directory + project.chapsDirectory + chap.filename, convertDeltaToMDF(chap.contents), "utf8")
       }
       catch(err){
         logError(err);
@@ -94,26 +81,21 @@ function newChapter(){
       try{
         var chap = this;
         if(chap.contents !== null){
+          var oldFilename = chap.filename;
+          const filepathRoot = project.directory + project.chapsDirectory;
 
+          chap.filename = getNewFilename(chap.title);
 
-          if(chap.filename == undefined || chap.filename == null)
-            chap.filename = getNewFilename();
-
-          //fs.writeFileSync(project.directory + project.chapsDirectory + chap.filename, JSON.stringify(chap.contents), "utf8");
-          fs.writeFileSync(project.directory + project.chapsDirectory + chap.filename, convertDeltaToMDF(chap.contents), "utf8")
-          chap.contents = null;
-
-          function getNewFilename(){
-            var largestFilename = 0;
-
-            fs.readdirSync(project.directory + project.chapsDirectory).forEach(file => {
-              var nameNumber = parseInt(file.split(".")[0]);
-              if(nameNumber > largestFilename)
-                largestFilename = nameNumber;
+          fs.writeFileSync(filepathRoot + chap.filename, convertDeltaToMDF(chap.contents), "utf8")
+          
+          //If filename has changed and new file successfully created, delete old file
+          if(oldFilename != undefined && oldFilename != null && fs.existsSync(filepathRoot + chap.filename) && fs.existsSync(filepathRoot + oldFilename))
+            fs.unlink(filepathRoot + oldFilename, function(err){
+              if(err)
+                logError(err);
             });
-
-            return (largestFilename + 1).toString() + ".txt";
-          }
+          
+          chap.contents = null;
         }
         chap.hasUnsavedChanges = false;
       }
@@ -121,6 +103,22 @@ function newChapter(){
         logError(err);
       }
   }
+
+  function getNewFilename(title){
+    
+    const fileExt = '.txt';    
+    var copyNum = 1;
+    var filenameRoot = sanitizeFilename(title && title != '' ? title : 'untitled');
+    var filename = filenameRoot + fileExt;
+
+    while(fs.existsSync(project.directory + project.chapsDirectory + filename)){
+      copyNum++;
+      filename = filenameRoot + '_' + copyNum + fileExt;
+    }
+    
+    return filename;
+  }
+
 }
 
 module.exports = newChapter;

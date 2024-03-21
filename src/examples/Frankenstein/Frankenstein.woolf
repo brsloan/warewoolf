@@ -1,6 +1,6 @@
 {
 	"filename": "Frankenstein.woolf",
-	"chapsDirectory": "Frankenstein_pups/",
+	"chapsDirectory": "Frankenstein_chapters/",
 	"title": "Frankenstein",
 	"author": "Mary Shelley",
 	"notes": {
@@ -13,182 +13,182 @@
 	"chapters": [
 		{
 			"title": "Quick Start",
-			"filename": "29.txt",
+			"filename": "Quick Start.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Letter 1",
-			"filename": "1.txt",
+			"filename": "Letter 1.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Letter 2",
-			"filename": "2.txt",
+			"filename": "Letter 2.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Letter 3",
-			"filename": "3.txt",
+			"filename": "Letter 3.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Letter 4",
-			"filename": "4.txt",
+			"filename": "Letter 4.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 1",
-			"filename": "5.txt",
+			"filename": "Chapter 1.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 2",
-			"filename": "6.txt",
+			"filename": "Chapter 2.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 3",
-			"filename": "7.txt",
+			"filename": "Chapter 3.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 4",
-			"filename": "8.txt",
+			"filename": "Chapter 4.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 5",
-			"filename": "9.txt",
+			"filename": "Chapter 5.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 6",
-			"filename": "10.txt",
+			"filename": "Chapter 6.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 7",
-			"filename": "11.txt",
+			"filename": "Chapter 7.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 8",
-			"filename": "12.txt",
+			"filename": "Chapter 8.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 9",
-			"filename": "13.txt",
+			"filename": "Chapter 9.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 10",
-			"filename": "14.txt",
+			"filename": "Chapter 10.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 11",
-			"filename": "15.txt",
+			"filename": "Chapter 11.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 12",
-			"filename": "16.txt",
+			"filename": "Chapter 12.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 13",
-			"filename": "17.txt",
+			"filename": "Chapter 13.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 14",
-			"filename": "18.txt",
+			"filename": "Chapter 14.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 15",
-			"filename": "19.txt",
+			"filename": "Chapter 15.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 16",
-			"filename": "20.txt",
+			"filename": "Chapter 16.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 17",
-			"filename": "21.txt",
+			"filename": "Chapter 17.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 18",
-			"filename": "22.txt",
+			"filename": "Chapter 18.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 19",
-			"filename": "23.txt",
+			"filename": "Chapter 19.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 20",
-			"filename": "24.txt",
+			"filename": "Chapter 20.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 21",
-			"filename": "25.txt",
+			"filename": "Chapter 21.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 22",
-			"filename": "26.txt",
+			"filename": "Chapter 22.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 23",
-			"filename": "27.txt",
+			"filename": "Chapter 23.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 24",
-			"filename": "28.txt",
+			"filename": "Chapter 24.txt",
 			"filter": null,
 			"summary": null
 		}
 	],
 	"filters": [],
 	"trash": [],
-	"activeChapterIndex": 0,
+	"activeChapterIndex": 28,
 	"wordGoal": 0,
-	"textCursorPosition": 0
+	"textCursorPosition": 378
 }
