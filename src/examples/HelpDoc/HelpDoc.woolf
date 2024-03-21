@@ -13,97 +13,97 @@
 	"chapters": [
 		{
 			"title": "WareWoolf Basics",
-			"filename": "1.txt",
+			"filename": "WareWoolf Basics.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Backup / Auto-Backup",
-			"filename": "21.txt",
+			"filename": "Backup  Auto-Backup.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Break Headings Into Chapters",
-			"filename": "5.txt",
+			"filename": "Break Headings Into Chapters.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Exporting and Compiling",
-			"filename": "6.txt",
+			"filename": "Exporting and Compiling.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "File Manager",
-			"filename": "7.txt",
+			"filename": "File Manager.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "File Structure",
-			"filename": "8.txt",
+			"filename": "File Structure.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Importing Plaintext Files",
-			"filename": "11.txt",
+			"filename": "Importing Plaintext Files.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "MarkdownFic",
-			"filename": "22.txt",
+			"filename": "MarkdownFic.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Outliner",
-			"filename": "12.txt",
+			"filename": "Outliner.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Properties",
-			"filename": "19.txt",
+			"filename": "Properties.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Renumber Chapters",
-			"filename": "13.txt",
+			"filename": "Renumber Chapters.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Send Via Email Function",
-			"filename": "14.txt",
+			"filename": "Send Via Email Function.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Shortcut Helper",
-			"filename": "15.txt",
+			"filename": "Shortcut Helper.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Using WareWoolf For a WriterDeck",
-			"filename": "4.txt",
+			"filename": "Using WareWoolf For a WriterDeck.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Wi-Fi Manager",
-			"filename": "20.txt",
+			"filename": "Wi-Fi Manager.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Word Counts",
-			"filename": "18.txt",
+			"filename": "Word Counts.txt",
 			"filter": null,
 			"summary": null
 		}
