@@ -115,7 +115,7 @@ function newProject(){
         var filepathParts = filepath.split('/');
         var newFilename = filepathParts.pop();
         var newDirectory = filepathParts.join('/').concat("/");
-        var newSubDir = newFilename.split(".")[0].concat("_pups/");
+        var newSubDir = newFilename.split(".")[0].concat("_chapters/");
 
         //Create new directories
         if(!fs.existsSync(newDirectory))
