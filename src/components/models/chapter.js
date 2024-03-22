@@ -68,7 +68,6 @@ function newChapter(){
       try{
         var chap = this;
         chap.filename = getNewFilename(chap.title); 
-        //var filename = chap.filename == undefined || chap.filename == null ? getNewFilename(chap.title) : chap.filename;
 
         fs.writeFileSync(project.directory + project.chapsDirectory + chap.filename, convertDeltaToMDF(chap.contents), "utf8")
       }
