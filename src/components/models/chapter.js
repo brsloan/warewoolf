@@ -79,23 +79,25 @@ function newChapter(){
     function saveFile(){
       try{
         var chap = this;
-        if(chap.contents !== null){
-          var oldFilename = chap.filename;
-          const filepathRoot = project.directory + project.chapsDirectory;
+        if(chap.contents == null)
+          chap.contents = chap.getFile();
 
-          chap.filename = getNewFilename(chap.title);
+        var oldFilename = chap.filename;
+        const filepathRoot = project.directory + project.chapsDirectory;
 
-          fs.writeFileSync(filepathRoot + chap.filename, convertDeltaToMDF(chap.contents), "utf8")
-          
-          //If filename has changed and new file successfully created, delete old file
-          if(oldFilename != undefined && oldFilename != null && fs.existsSync(filepathRoot + chap.filename) && fs.existsSync(filepathRoot + oldFilename))
-            fs.unlink(filepathRoot + oldFilename, function(err){
-              if(err)
-                logError(err);
-            });
-          
-          chap.contents = null;
-        }
+        chap.filename = getNewFilename(chap.title);
+
+        fs.writeFileSync(filepathRoot + chap.filename, convertDeltaToMDF(chap.contents), "utf8")
+        
+        //If filename has changed and new file successfully created, delete old file
+        if(oldFilename != undefined && oldFilename != null && fs.existsSync(filepathRoot + chap.filename) && fs.existsSync(filepathRoot + oldFilename))
+          fs.unlink(filepathRoot + oldFilename, function(err){
+            if(err)
+              logError(err);
+          });
+        
+        chap.contents = null;
+      
         chap.hasUnsavedChanges = false;
       }
       catch(err){
