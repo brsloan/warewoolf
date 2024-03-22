@@ -78,20 +78,26 @@ function newChapter(){
 
     function saveFile(){
       try{
+        const oldVersionFlag = 'old_v_temp';
         var chap = this;
+        const filepathRoot = project.directory + project.chapsDirectory;
+
         if(chap.contents == null)
           chap.contents = chap.getFile();
 
+        //Because I'm paranoid about the tiny possibility of something going wrong between deleting old verison of file and creating new,
+        //we rename the old version with the oldVersionFlag, create new version, verify success, THEN delete old version
         var oldFilename = chap.filename;
-        const filepathRoot = project.directory + project.chapsDirectory;
+        if(oldFilename != undefined && oldFilename != null)
+          fs.renameSync(filepathRoot + oldFilename, filepathRoot + oldVersionFlag + oldFilename);
 
         chap.filename = getNewFilename(chap.title);
 
         fs.writeFileSync(filepathRoot + chap.filename, convertDeltaToMDF(chap.contents), "utf8")
         
         //If filename has changed and new file successfully created, delete old file
-        if(oldFilename != undefined && oldFilename != null && fs.existsSync(filepathRoot + chap.filename) && fs.existsSync(filepathRoot + oldFilename))
-          fs.unlink(filepathRoot + oldFilename, function(err){
+        if(oldFilename != undefined && oldFilename != null && fs.existsSync(filepathRoot + chap.filename) && fs.existsSync(filepathRoot + oldVersionFlag + oldFilename))
+          fs.unlink(filepathRoot + oldVersionFlag + oldFilename, function(err){
             if(err)
               logError(err);
           });
