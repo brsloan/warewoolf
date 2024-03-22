@@ -640,6 +640,7 @@ function changeChapterTitle(ind){
       stopDefaultPropagation(e);
       chap.title = nameBox.value;
       project.hasUnsavedChanges = true;
+      chap.hasUnsavedChanges = true;
       removeElementsByClass('name-box');
       updateFileList();
       editorQuill.focus();
