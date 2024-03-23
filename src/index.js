@@ -318,7 +318,7 @@ const createWindow = () => {
           click(item, focusWindow){
             mainWindow.webContents.send('shortcuts-clicked');
           },
-          accelerator: 'CommandOrControl+H'
+          accelerator: isMac ? 'CommandOrControl+Shift+h' : 'CommandOrControl+h'
         },
         {
           label: 'Open Help Document',
