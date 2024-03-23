@@ -826,7 +826,7 @@ function addBindingsToQuill(q){
 
 
 document.addEventListener ("keydown", function (e) {
-    if(e.ctrlKey && e.key === "ArrowLeft"){
+    if((e.ctrlKey || e.metaKey) && e.key === "ArrowLeft"){
       stopDefaultPropagation(e);
       if(document.getElementById('writing-field').classList.contains('visible')){
         removeElementsByClass('popup');
@@ -834,7 +834,7 @@ document.addEventListener ("keydown", function (e) {
         editorQuill.focus();
       }
     }
-    else if(e.ctrlKey && e.key === "ArrowRight"){
+    else if((e.ctrlKey || e.metaKey) && e.key === "ArrowRight"){
       stopDefaultPropagation(e);
       if(document.getElementById('project-notes').classList.contains('visible')){
         removeElementsByClass('popup');
@@ -848,13 +848,13 @@ document.addEventListener ("keydown", function (e) {
       disableSearchView();
       updatePanelDisplays();
     }
-    else if(e.ctrlKey && e.key === "="){
+    else if((e.ctrlKey || e.metaKey) && e.key === "="){
       increaseFontSizeSetting();
     }
-    else if(e.ctrlKey && e.key === "-"){
+    else if((e.ctrlKey || e.metaKey) && e.key === "-"){
       decreaseFontSizeSetting();
     }
-    else if(e.ctrlKey && e.altKey && e.key === "t"){
+    else if((e.ctrlKey || e.metaKey) && e.altKey && e.key === "t"){
       if(userSettings.typewriterMode){
         disableTypewriterMode(editorQuill);
         userSettings.typewriterMode = false;
@@ -871,7 +871,7 @@ document.addEventListener ("keydown", function (e) {
       stopDefaultPropagation(e);
       togglePanelDisplay(1);
     }
-    else if(e.key === "F2"){
+    else if(!e.ctrlKey && e.key === "F2"){
       stopDefaultPropagation(e);
       togglePanelDisplay(2);
     }
@@ -885,31 +885,31 @@ document.getElementById('editor-container').addEventListener('keydown', editorCo
 document.getElementById('chapter-list-sidebar').addEventListener('keydown', editorControlEvents);
 
 function editorControlEvents(e){
-  if (e.ctrlKey  && e.shiftKey && e.key === "ArrowUp") {
+  if ((e.ctrlKey || e.metaKey)  && e.shiftKey && e.key === "ArrowUp") {
     stopDefaultPropagation(e);
     moveChapUp(project.activeChapterIndex);
   }
-  else if(e.ctrlKey && e.shiftKey && e.key === "ArrowDown"){
+  else if((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "ArrowDown"){
     stopDefaultPropagation(e);
     moveChapDown(project.activeChapterIndex);
   }
-  else if(e.ctrlKey && e.shiftKey && e.key === "ArrowLeft"){
+  else if((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "ArrowLeft"){
     stopDefaultPropagation(e);
     if(document.getElementById('chapter-list-sidebar').classList.contains('visible'))
       changeChapterTitle(project.activeChapterIndex);
   }
-  else if(e.ctrlKey && e.key === "ArrowUp"){
+  else if((e.ctrlKey || e.metaKey) && e.key === "ArrowUp"){
     stopDefaultPropagation(e);
     displayPreviousChapter();
   }
-  else if(e.ctrlKey && e.key === "ArrowDown"){
+  else if((e.ctrlKey || e.metaKey) && e.key === "ArrowDown"){
     stopDefaultPropagation(e);
     displayNextChapter();
   }
-  else if(e.ctrlKey && e.key === ","){
+  else if((e.ctrlKey || e.metaKey) && e.key === ","){
     descreaseEditorWidthSetting();
   }
-  else if(e.ctrlKey && e.key === "."){
+  else if((e.ctrlKey || e.metaKey) && e.key === "."){
     increaseEditorWidthSetting();
   }
 }
