@@ -89,7 +89,9 @@ function applyUserSettings(){
 
 function updateFontSize(){
   document.documentElement.style.setProperty('--main-font-size', userSettings.fontSize + 'pt');
-  document.documentElement.style.setProperty('--dialog-font-size', (userSettings.fontSize + 2) + 'pt');
+  document.documentElement.style.setProperty('--dialog-font-size', userSettings.fontSize + 'pt');
+  document.documentElement.style.setProperty('--dialog-font-size-small', (userSettings.fontSize - 2) + 'pt');
+  document.documentElement.style.setProperty('--dialog-heading-size', (userSettings.fontSize + 2) + 'pt');
 }
 
 function updateEditorWidth(){

@@ -7,6 +7,10 @@ function promptForMissingPups(project, callback){
   var popup = document.createElement("div");
   popup.classList.add("popup");
 
+  var title = document.createElement('h1');
+  title.innerText = 'Missing Chapters';
+  popup.appendChild(title);
+
   var warningTitle = document.createElement("h1");
   warningTitle.innerText = "Oops! Some of your chapters are missing.";
   warningTitle.classList.add('warning-text');
@@ -16,15 +20,16 @@ function promptForMissingPups(project, callback){
   warning.innerText = "You may have deleted or renamed one of the individual chapter files in the chapters subdirectory, or you may have renamed the subdirectory itself. If the subdirectory is wrong, fixing that should fix your chapters.";
   popup.appendChild(warning);
 
-  var projDirLabel = document.createElement('p');
+  var projDirLabel = document.createElement('h2');
   projDirLabel.innerText = 'Project Directory: ';
   popup.appendChild(projDirLabel);
 
   var projDir = document.createElement('p');
   projDir.innerText = project.directory;
+  projDir.classList.add('popup-text-small');
   popup.appendChild(projDir);
 
-  var chapsDirLabel = document.createElement('p');
+  var chapsDirLabel = document.createElement('h2');
   chapsDirLabel.innerText = 'Expected Subdirectory:';
   popup.appendChild(chapsDirLabel);
 
@@ -89,7 +94,7 @@ function promptForMissingPups(project, callback){
 function fillMissingChapsList(project, missingChapsList, fileList, chapsDirIn){
   missingChapsList.innerHTML = '';
   var missingChaps = project.testChapsDirectory();
-  var missingChapsLabel = document.createElement('p');
+  var missingChapsLabel = document.createElement('h2');
   missingChapsLabel.innerText = "Missing Chapter Files: ";
   missingChapsList.appendChild(missingChapsLabel);
 
