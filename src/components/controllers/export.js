@@ -1,8 +1,8 @@
 const fs = require('fs');
 const { convertDeltaToMDF } = require('./markdownFic');
 const { logError } = require('./error-log');
-const { getTempQuill } = require('./quill-utils');
 const { convertDeltaToDocx, saveDocx } = require('./delta-to-docx');
+const { sanitizeFilename } = require('./utils');
 
 function exportProject(project, userSettings, options, filepath){
     //TODO: Need to create function to safely convert titles to folder/filenames
@@ -14,45 +14,49 @@ function exportProject(project, userSettings, options, filepath){
 
     switch(options.type){
         case ".txt":
-            exportAsText(project, newDir);
+            exportAsText(project, newDir, options.what);
             break;
         case ".docx":
-            exportAsWord(project, userSettings, newDir);
+            exportAsWord(project, userSettings, newDir, options.what);
             break;
         case ".mdfc":
-            exportAsMDF(project, newDir);
+            exportAsMDF(project, newDir, options.what);
             break;
         default:
             console.log("No valid filetype selected for export.");
     }
 }
 
-function exportAsMDF(project, dir){
+function exportAsMDF(project, dir, what){
   try{
-    for(let i=0; i < project.chapters.length; i++){
-      var chapFile = project.chapters[i].getContentsOrFile();
-      var outName = generateChapterFilename(i, project.chapters[i].title);
+    var chapsToExport = what == 'project' ? project.chapters : [ project.getActiveChapter() ];
+    for(let i=0; i < chapsToExport.length; i++){
+      var chapFile = chapsToExport[i].getContentsOrFile();
+      var outName = generateChapterFilename(i, chapsToExport[i].title, what);
 
       fs.writeFileSync(dir + outName + '.mdfc', convertDeltaToMDF(chapFile));
     }
 
-    fs.writeFileSync(dir + "notes" + ".mdfc", convertDeltaToMDF(project.notes));
+    if(what == 'project')
+      fs.writeFileSync(dir + "notes" + ".mdfc", convertDeltaToMDF(project.notes));
   }
   catch(err){
     logError(err);
   }
 }
 
-function exportAsText(project, dir){
+function exportAsText(project, dir, what){
   try{
-    for(i=0; i<project.chapters.length; i++){
-        var chapFile = project.chapters[i].getContentsOrFile();
-        var outName = generateChapterFilename(i, project.chapters[i].title);
+    var chapsToExport = what == 'project' ? project.chapters : [ project.getActiveChapter() ];
+    for(i=0; i<chapsToExport.length; i++){
+        var chapFile = chapsToExport[i].getContentsOrFile();
+        var outName = generateChapterFilename(i, chapsToExport[i].title, what);
 
         fs.writeFileSync(dir + outName + ".txt", convertToPlainText(chapFile));
     }
 
-    fs.writeFileSync(dir + "notes" + ".txt", convertToPlainText(project.notes));
+    if(what == 'project')
+      fs.writeFileSync(dir + "notes" + ".txt", convertToPlainText(project.notes));
   }
   catch(err){
     logError(err);
@@ -67,15 +71,17 @@ function convertToPlainText(delt){
   return text;
 }
 
-function exportAsWord(project, userSettings, dir){
-    exportChapsAsWord(project, userSettings, dir);
-    exportNotesAsWord(project, userSettings, dir);
+function exportAsWord(project, userSettings, dir, what){
+    exportChapsAsWord(project, userSettings, dir, what);
+    if(what == 'project')
+      exportNotesAsWord(project, userSettings, dir);
 }
 
-function exportChapsAsWord(project, userSettings, dir, num = 0){
-    for(let i=0; i<project.chapters.length;i++){
-      var chapFile = project.chapters[i].getContentsOrFile();
-      var outName = generateChapterFilename(i, project.chapters[i].title);
+function exportChapsAsWord(project, userSettings, dir, what){
+    var chapsToExport = what == 'project' ? project.chapters : [ project.getActiveChapter() ];
+    for(let i=0; i < chapsToExport.length;i++){
+      var chapFile = chapsToExport[i].getContentsOrFile();
+      var outName = generateChapterFilename(i, chapsToExport[i].title, what);
 
       var doc = convertDeltaToDocx(chapFile, { generateTitlePage: false }, project, userSettings);
       saveDocx(dir + outName + ".docx", doc);
@@ -89,8 +95,9 @@ function exportNotesAsWord(project, userSettings, dir){
     saveDocx(dir + "notes" + ".docx", doc);
 }
 
-function generateChapterFilename(num, title){
-    return String(num + 1).padStart(4, '0') + "_" + title.replace(/[^a-z0-9-]/gi, '_');
+function generateChapterFilename(num, title, what){
+    var prefix = what == 'project' ? String(num + 1).padStart(4, '0') + '_' : '';
+    return prefix + sanitizeFilename(title);
 }
 
 module.exports = {
