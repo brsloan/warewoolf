@@ -18,6 +18,7 @@ input, textarea, select, button {
   box-sizing: border-box;
   border-radius: 0px;
   margin-bottom: 3px;
+  margin-top: 3px;
 }
 
 .sidebar {
