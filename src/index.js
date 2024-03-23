@@ -21,7 +21,7 @@ const createWindow = () => {
       spellcheck: false,
       devTools: true
     },
-    kiosk: !isMac,
+    kiosk: isLinux,
     icon: path.join(__dirname, 'assets/icon.png')
   });
 
@@ -300,6 +300,16 @@ const createWindow = () => {
         : [])
       ]
     },
+    ...(!isLinux ? [
+      {
+        label: 'View',
+        submenu: [
+          {
+            role: 'togglefullscreen'
+          }
+        ]
+      }
+    ] : []),
     {
       label: 'Help',
       submenu: [
