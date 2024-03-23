@@ -69,6 +69,7 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 * Chapter files now saved as "[title].txt" rather than arbitrary numbers. Filename updates when you change chapter titles in WareWoolf.
 * Now supports MacOS
 * Missing Chapters tool rewritten/expanded
+* Can now toggle full screen on Windows/Mac
 
 2024-03-16: v1.1.0. Changes made:
 * Download and install updates in-app through About screen
