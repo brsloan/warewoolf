@@ -4,3 +4,4 @@ user-settings.json
 dist/
 error_log.txt
 .vscode/settings.json
+.DS_store
