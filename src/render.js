@@ -1037,9 +1037,9 @@ ipcRenderer.on('restore-chapter-clicked', function(e){
     restoreFromTrash(project.activeChapterIndex);
 });
 
-ipcRenderer.on('shortcuts-clicked', function(e){
+ipcRenderer.on('shortcuts-clicked', function(e, isMac){
   const showShortcutsHelp = require('./components/views/shortcuts-help_display');
-  showShortcutsHelp();
+  showShortcutsHelp(isMac);
 });
 
 ipcRenderer.on('outliner-clicked', function(e){
