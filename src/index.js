@@ -386,3 +386,10 @@ ipcMain.on('set-dark-mode', function(e, darkMode){
     nativeTheme.themeSource = 'light';
   }
 });
+
+ipcMain.on('show-menu', function(e){
+  app.applicationMenu.popup({
+    x: 0,
+    y: 0
+  });
+});

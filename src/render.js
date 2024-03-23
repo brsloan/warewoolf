@@ -867,7 +867,9 @@ document.addEventListener ("keydown", function (e) {
         userSettings.typewriterMode = true;
         userSettings.save();
       }
-
+    }
+    else if((e.ctrlKey || e.metaKey) && e.key === "m"){
+      ipcRenderer.send('show-menu');
     }
     else if(e.key === 'F1'){
       stopDefaultPropagation(e);
