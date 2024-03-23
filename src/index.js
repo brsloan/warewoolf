@@ -2,6 +2,7 @@ const { app, BrowserWindow, Menu, nativeTheme } = require('electron');
 const path = require('path');
 const { ipcMain } = require('electron');
 const isLinux = process.platform === "linux";
+const isMac = process.platform === "darwin";
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) { // eslint-disable-line global-require
@@ -20,7 +21,7 @@ const createWindow = () => {
       spellcheck: false,
       devTools: true
     },
-    kiosk: true,
+    kiosk: !isMac,
     icon: path.join(__dirname, 'assets/icon.png')
   });
 
@@ -33,6 +34,22 @@ const createWindow = () => {
   mainWindow.webContents.openDevTools();
 
   var menu = Menu.buildFromTemplate([
+    ...(isMac
+      ? [{
+          label: app.name,
+          submenu: [
+            { role: 'about' },
+            { type: 'separator' },
+            { role: 'services' },
+            { type: 'separator' },
+            { role: 'hide' },
+            { role: 'hideOthers' },
+            { role: 'unhide' },
+            { type: 'separator' },
+            { role: 'quit' }
+          ]
+        }]
+      : []),
     {
       label: 'File',
       submenu:[
