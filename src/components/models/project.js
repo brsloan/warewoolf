@@ -20,7 +20,8 @@ function newProject(){
         getActiveChapter: getActiveChapter,
         loadFile: loadFile,
         saveFile: saveFile,
-        saveAs: saveAs
+        saveAs: saveAs,
+        testChapsDirectory: testChapsDirectory
     };
 
     function getActiveChapter(){
@@ -193,12 +194,12 @@ function newProject(){
     }
 
     function testChapsDirectory(){
-      var chapsExist = true;
+      var missingChaps = [];
       for(let i=0;i<project.chapters.length;i++){
         if(!fs.existsSync(project.directory + project.chapsDirectory + project.chapters[i].filename))
-          chapsExist = false;
+          missingChaps.push(project.chapters[i]);
       }
-      return chapsExist;
+      return missingChaps;
     }
 }
 

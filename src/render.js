@@ -104,11 +104,16 @@ function setDarkMode(){
 
 function setProject(filepath){
   if(filepath && filepath != null){
-    var chapsExist = project.loadFile(filepath);
-    if(!chapsExist){
-      console.log('could not find first pup: ' + project.directory + project.chapsDirectory + project.chapters[0].filename);
+    var missingChaps = project.loadFile(filepath);
+    if(missingChaps.length > 0){
+      console.log('could not find all chapters.');
       const promptForMissingPups = require('./components/views/missing-pups_display');
-      promptForMissingPups(project, changeChapsDirectory);
+      promptForMissingPups(project, function(resp){
+        if(resp == 'save')
+          setProject(filepath);
+        else
+          createNewProject();
+      });
     }
     else{
       convertLegacyProject();
@@ -226,6 +231,10 @@ function updateFileList(){
 function displayChapterByIndex(ind){
   clearCurrentChapterIfUnchanged();
   ind = parseInt(ind);
+
+  if(ind > project.chapters.length + project.trash.length - 1)
+    ind = project.chapters.length + project.trash.length - 1;
+
   project.activeChapterIndex = ind;
 
   var chap;
@@ -479,10 +488,10 @@ function openAProject() {
 
   showFileDialog(options, function(filepath){
     if (filepath) {
-      var chapsExist = project.loadFile(filepath[0]);
-      if(!chapsExist){
+      var missingChaps = project.loadFile(filepath[0]);
+      if(missingChaps.length > 0){
         const promptForMissingPups = require('./components/views/missing-pups_display');
-        promptForMissingPups(project, changeChapsDirectory);
+        promptForMissingPups(project, missingChaps);
       }
       else{
         displayProject();
@@ -493,29 +502,7 @@ function openAProject() {
   });
 }
 
-function changeChapsDirectory(){
-  const options = {
-    title: 'Select one of the missing pups...',
-    defaultPath: project.directory,
-    filters: [
-      { name: '.pup files', extensions: ['pup'] }
-    ],
-    bookmarkedPaths: [sysDirectories.docs, sysDirectories.home],
-    dialogType: 'open'
-  };
 
-  showFileDialog(options, function(filepaths){
-    if (filepaths) {
-      filepath = filepaths[0].replaceAll('\\', '/');
-      var parts = filepath.split('/');
-      var subDir = parts.slice(0,parts.length - 1).join('/').concat('/').replace(project.directory, '');
-
-      project.chapsDirectory = subDir;
-      project.hasUnsavedChanges = true;
-      displayProject();
-    }
-  });
-}
 
 function clearCurrentChapterIfUnchanged(){
   var ch = project.getActiveChapter();

@@ -379,3 +379,20 @@ button, input[type=submit] {
 .updates-text {
   font-size: var(--main-font-size);
 }
+
+#missing-file-list, #subdirs-list {
+  font-size: 12pt;
+  margin: 12px;
+}
+
+.good-check {
+  color: greenyellow;
+}
+
+.bad-check {
+  color: red;
+}
+
+.unsure-check {
+  color: gold;
+}
