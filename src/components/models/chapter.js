@@ -88,7 +88,7 @@ function newChapter(){
         //Because I'm paranoid about the tiny possibility of something going wrong between deleting old verison of file and creating new,
         //we rename the old version with the oldVersionFlag, create new version, verify success, THEN delete old version
         var oldFilename = chap.filename;
-        if(oldFilename != undefined && oldFilename != null)
+        if(oldFilename != undefined && oldFilename != null && fs.existsSync(filepathRoot + oldFilename))
           fs.renameSync(filepathRoot + oldFilename, filepathRoot + oldVersionFlag + oldFilename);
 
         chap.filename = getNewFilename(chap.title);
