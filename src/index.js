@@ -12,20 +12,19 @@ if (require('electron-squirrel-startup')) { // eslint-disable-line global-requir
 const createWindow = () => {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
-    width: 800,
-    height: 600,
     autoHideMenuBar: true,
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
       spellcheck: false,
-      devTools: true
+      devTools: false
     },
     kiosk: isLinux,
+    fullscreen: true,
     icon: path.join(__dirname, 'assets/icon.png')
   });
 
-  mainWindow.maximize();
+  //mainWindow.maximize();
 
   // and load the index.html of the app.
   mainWindow.loadFile(path.join(__dirname, 'index.html'));

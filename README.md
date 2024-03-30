@@ -1,7 +1,7 @@
 <p align="center">
 	<img src="./src/assets/logo.png" style="width: 280px"/>
 </p>
-<p align="center">v1.1.0</p>
+<p align="center">v2.0.0</p>
 <p align="center">"The only writing software I use." -Virginia Woolf</p>
 
 WareWoolf is designed for one thing: writing fiction. It is intentionally simplified: you cannot change the font, line spacing, or color. But it has everything you need to organize, edit, and revise a novel--and you don't even need a mouse.
@@ -38,10 +38,11 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 * Spellcheck, but it must be run after writing (no form of auto-correct or red squiggles or godawful grammar advice).
 * Word .docx support for import/export
 * Auto-saving and auto-backup options
+* Saves chapters as .txt files with light Markdown-style formatting, so even if WareWoolf disappears you will always be able to read/edit the documents you create with it. This is also widely considered the most "archival" file format, so people will still be able to open your files in 100 years (if people still read then).
 
 ## Installation
 
-Binaries of the current release for Windows, Debian AMD64, and Debian ARM64 (Raspberry Pi) are available in the [releases page](https://github.com/brsloan/warewoolf/releases).
+Binaries of the current release for Windows, MacOS, Debian AMD64, and Debian ARM64 (Raspberry Pi) are available in the [releases page](https://github.com/brsloan/warewoolf/releases).
 
 > [!WARNING]
 > The Wi-Fi Manager uses nmcli/Network Manager, which Raspberry Pi OS does not have installed/enabled by default. You will have to install network-manager and enable it in raspi-config for this function to work. You may need to update raspi-config to be able to enable Network-Manager.
@@ -61,7 +62,7 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 
 ## Status
 
-2024-xx-xx: Changes Made:
+2024-03-29: v2.0.0! I know that's a quick version jump, but this has some fundamental changes, primarily the switch to saving chapters as plain text .txt files with MarkdownFic markdown for formatting. This is better than the previous ".pup" json files because even if you and WareWoolf both die and your tech illiterate uncle is your executor, he will still be able to open the .txt chapter files of your manuscript and publish it so that history can remember you as the genius no one recognized while you were alive. Also you can edit them in any other text editor and as long you don't change the filename WareWoolf will load them as normal. Changes Made:
 * Completely new MarkdownFic parsing algorithm (about 1000x faster)
 * Now saves chapters as plain text .txt files with MarkdownFic markup for formatting rather than Delta ".pup" JSON files. 
   * Can still open legacy files, just will silently save over old file format with new at open.
@@ -70,6 +71,8 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 * Now supports MacOS
 * Missing Chapters tool rewritten/expanded
 * Can now toggle full screen on Windows/Mac
+* Can now export single chapter or all
+* Bug fixes
 
 2024-03-16: v1.1.0. Changes made:
 * Download and install updates in-app through About screen
