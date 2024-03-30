@@ -128,17 +128,8 @@ function convertLegacyProject(){
   project.chapters.forEach(function(chap, i){
     if(chap.filename.includes('.pup')){
       chap.contents = chap.getFile();
-      var oldFilename = chap.filename;
-      chap.filename = chap.filename.replace('.pup','.txt');
       chap.saveFile();
       chap.contents = null;
-      try{
-        if(fs.existsSync(project.directory + project.chapsDirectory + oldFilename))
-          fs.unlinkSync(project.directory + project.chapsDirectory + oldFilename);
-      }
-      catch(err){
-        logError(err);
-      }
     }
   });
   project.saveFile();
