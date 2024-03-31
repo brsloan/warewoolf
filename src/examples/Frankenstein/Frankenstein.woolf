@@ -1,6 +1,6 @@
 {
 	"filename": "Frankenstein.woolf",
-	"chapsDirectory": "Frankenstein_pups/",
+	"chapsDirectory": "Frankenstein_chapters/",
 	"title": "Frankenstein",
 	"author": "Mary Shelley",
 	"notes": {
@@ -13,175 +13,175 @@
 	"chapters": [
 		{
 			"title": "Quick Start",
-			"filename": "29.pup",
+			"filename": "Quick Start.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Letter 1",
-			"filename": "1.pup",
+			"filename": "Letter 1.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Letter 2",
-			"filename": "2.pup",
+			"filename": "Letter 2.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Letter 3",
-			"filename": "3.pup",
+			"filename": "Letter 3.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Letter 4",
-			"filename": "4.pup",
+			"filename": "Letter 4.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 1",
-			"filename": "5.pup",
+			"filename": "Chapter 1.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 2",
-			"filename": "6.pup",
+			"filename": "Chapter 2.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 3",
-			"filename": "7.pup",
+			"filename": "Chapter 3.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 4",
-			"filename": "8.pup",
+			"filename": "Chapter 4.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 5",
-			"filename": "9.pup",
+			"filename": "Chapter 5.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 6",
-			"filename": "10.pup",
+			"filename": "Chapter 6.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 7",
-			"filename": "11.pup",
+			"filename": "Chapter 7.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 8",
-			"filename": "12.pup",
+			"filename": "Chapter 8.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 9",
-			"filename": "13.pup",
+			"filename": "Chapter 9.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 10",
-			"filename": "14.pup",
+			"filename": "Chapter 10.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 11",
-			"filename": "15.pup",
+			"filename": "Chapter 11.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 12",
-			"filename": "16.pup",
+			"filename": "Chapter 12.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 13",
-			"filename": "17.pup",
+			"filename": "Chapter 13.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 14",
-			"filename": "18.pup",
+			"filename": "Chapter 14.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 15",
-			"filename": "19.pup",
+			"filename": "Chapter 15.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 16",
-			"filename": "20.pup",
+			"filename": "Chapter 16.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 17",
-			"filename": "21.pup",
+			"filename": "Chapter 17.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 18",
-			"filename": "22.pup",
+			"filename": "Chapter 18.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 19",
-			"filename": "23.pup",
+			"filename": "Chapter 19.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 20",
-			"filename": "24.pup",
+			"filename": "Chapter 20.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 21",
-			"filename": "25.pup",
+			"filename": "Chapter 21.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 22",
-			"filename": "26.pup",
+			"filename": "Chapter 22.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 23",
-			"filename": "27.pup",
+			"filename": "Chapter 23.txt",
 			"filter": null,
 			"summary": null
 		},
 		{
 			"title": "Chapter 24",
-			"filename": "28.pup",
+			"filename": "Chapter 24.txt",
 			"filter": null,
 			"summary": null
 		}

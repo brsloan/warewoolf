@@ -1,0 +1,3 @@
+[>c] # Wi-Fi Manager
+
+This tool is only available in Linux. It is fairly self-explanatory. It shows the current network connection, if any, and the connection state. You can enable/disable Wi-Fi entirely using the "Enable Wi-Fi" checkmark, and for connecting to new networks, you select the one you want from the dropdown in the "New Connection" section, enter your password, and hit Connect. Simple but useful!

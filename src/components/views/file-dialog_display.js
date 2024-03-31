@@ -1,4 +1,4 @@
-const { closePopupDialogs, createButton } = require('../controllers/utils');
+const { closePopupDialogs, createButton, sanitizeFilenameWithExt } = require('../controllers/utils');
 const { getFileList, getParentDirectory } = require('../controllers/file-manager');
 
 function showFileDialog(options, callback){
@@ -138,7 +138,7 @@ function showFileDialog(options, callback){
 
     function saveSelectedFile(){
       closePopupDialogs();
-      var checkedFilename = checkFilenameForExtension(filenameIn.value, options.filters[filterSelect.value]);
+      var checkedFilename = sanitizeFilenameWithExt(checkFilenameForExtension(filenameIn.value, options.filters[filterSelect.value]));
       console.log('Inputted filename ' + filenameIn.value + ' converted to ' + checkedFilename);
       callback(currentDirDisplay.innerText + '/' + checkedFilename);
     }

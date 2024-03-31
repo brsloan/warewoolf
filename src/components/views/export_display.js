@@ -8,10 +8,37 @@ function showExportOptions(project, userSettings, sysDirectories){
     popup.classList.add("popup");
 
     var popupTitle = document.createElement('h1');
-    popupTitle.innerText = 'Export Project';
+    popupTitle.innerText = 'Export';
     popup.appendChild(popupTitle);
 
     var exportForm = document.createElement("form");
+
+    var expProjLab = document.createElement('label');
+    expProjLab.innerText = 'Project';
+    expProjLab.for = 'proj-radio';
+    exportForm.appendChild(expProjLab);
+
+    var expProjOp = document.createElement('input');
+    expProjOp.type = 'radio';
+    expProjOp.id = 'proj-radio';
+    expProjOp.name = 'export-what';
+    expProjOp.value = 'project';
+    expProjOp.checked = true;
+    exportForm.appendChild(expProjOp);
+
+    var expChapLab = document.createElement('label');
+    expChapLab.innerText = ' | Chapter';
+    expChapLab.for = 'chap-radio';
+    exportForm.appendChild(expChapLab);
+
+    var expChapOp = document.createElement('input');
+    expChapOp.type = 'radio';
+    expChapOp.id = 'chap-radio';
+    expChapOp.name = 'export-what';
+    expChapOp.value = 'chapter';
+    exportForm.appendChild(expChapOp);
+
+    exportForm.appendChild(document.createElement('br'));
 
     var typeLabel = document.createElement("label");
     typeLabel.innerText = "File Type: ";
@@ -29,6 +56,7 @@ function showExportOptions(project, userSettings, sysDirectories){
     exportForm.appendChild(typeSelect);
 
     exportForm.appendChild(document.createElement('br'));
+
   /*
     var insertHeadLabel = document.createElement("label");
     insertHeadLabel.innerText = "Insert chapter titles as headings: ";
@@ -57,7 +85,8 @@ function showExportOptions(project, userSettings, sysDirectories){
       e.preventDefault();
 
       var options = {
-        type: typeSelect.value
+        type: typeSelect.value,
+        what: expProjOp.checked ? 'project' : 'chapter'
         //insertHead: insertHeadCheck.checked
       }
       getExportFilePath(project, userSettings, options, sysDirectories, function(){

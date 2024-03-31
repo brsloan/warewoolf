@@ -1,49 +1,51 @@
 const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
 
 
-function showShortcutsHelp(){
+function showShortcutsHelp(isMac){
     removeElementsByClass('popup');
     var popup = document.createElement("div");
     popup.classList.add("popup", "popup-shortcuts");
+
+    const cmdOrCtrl = isMac ? 'Cmd' : 'Ctrl';
 
     var shortcuts = [
       {
         title: "Navigation",
         shortcuts: [
-          ['View Previous Chapter', 'Ctrl + Up'],
-          ['View Next Chapter', 'Ctrl + Down'],
-          ['Shift Focus To Editor', 'Ctrl + Left'],
-          ['Shift Focus To Notes', 'Ctrl + Right']
+          ['View Previous Chapter', cmdOrCtrl + ' + Up'],
+          ['View Next Chapter', cmdOrCtrl + ' + Down'],
+          ['Shift Focus To Editor', cmdOrCtrl + ' + Left'],
+          ['Shift Focus To Notes', cmdOrCtrl + ' + Right']
         ]
       },
       {
         title: "Alteration",
         shortcuts: [
-          ['Move Chapter Up', 'Ctrl + Shift + Up'],
-          ['Move Chapter Down', 'Ctrl + Shift + Down'],
-          ['Change Chapter Label', 'Ctrl + Shift + Left']
+          ['Move Chapter Up', cmdOrCtrl + ' + Shift + Up'],
+          ['Move Chapter Down', cmdOrCtrl + ' + Shift + Down'],
+          ['Change Chapter Label', cmdOrCtrl + ' + Shift + Left']
         ]
       },
       {
         title: "Formatting",
         shortcuts: [
-          ['Title (Heading 1, Centered)', 'Ctrl + T'],
-          ['Headings', 'Ctrl + (1-4)'],
-          ['Clear Heading', 'Ctrl + 0'],
-          ['Left Align', 'Ctrl + L'],
-          ['Right Align', 'Ctrl + R'],
-          ['Center Align', 'Ctrl + E'],
-          ['Justify Align', 'Ctrl + J'],
-          ['Strikethrough', 'Ctrl + K'],
-          ['Italics', 'Ctrl + I'],
-          ['Bold', 'Ctrl + B'],
-          ['Underline', 'Ctrl + U']
+          ['Title (Heading 1, Centered)', cmdOrCtrl + ' + T'],
+          ['Headings', cmdOrCtrl + ' + (1-4)'],
+          ['Clear Heading', cmdOrCtrl + ' + 0'],
+          ['Left Align', cmdOrCtrl + ' + L'],
+          ['Right Align', cmdOrCtrl + ' + R'],
+          ['Center Align', cmdOrCtrl + ' + E'],
+          ['Justify Align', cmdOrCtrl + ' + J'],
+          ['Strikethrough', cmdOrCtrl + ' + K'],
+          ['Italics', cmdOrCtrl + ' + I'],
+          ['Bold', cmdOrCtrl + ' + B'],
+          ['Underline', cmdOrCtrl + ' + U']
         ]
       },
       {
         title: "Tool/Menu Navigation",
         shortcuts: [
-          ['Open/Navigate File Menu', 'Alt, then arrow keys and Escape'],
+          ['Open/Navigate File Menu', isMac ? 'Cmd + M, then arrow keys and Escape' : 'Alt, then arrow keys and Escape'],
           ['Close Tool Dialog', "Escape"],
           ['Any Button With A Bold/\rUnderlined Letter', 'Alt + (that letter)'],
           ['Move Between Inputs', 'Tab']
@@ -52,12 +54,12 @@ function showShortcutsHelp(){
       {
         title: "Display",
         shortcuts: [
-          ['Adjust Editor Width', 'Ctrl + < or >'],
-          ['Adjust Font Size', 'Ctrl + - or +'],
+          ['Adjust Editor Width', cmdOrCtrl + ' + < or >'],
+          ['Adjust Font Size', cmdOrCtrl + ' + - or +'],
           ['Toggle Chapter List Display', 'F1'],
           ['Toggle Editor Display', 'F2'],
           ['Toggle Notes Display', 'F3'],
-          ['Typewriter Mode', 'Ctrl + Alt + T']
+          ['Typewriter Mode', cmdOrCtrl + ' + Alt + T']
         ]
       }
     ];

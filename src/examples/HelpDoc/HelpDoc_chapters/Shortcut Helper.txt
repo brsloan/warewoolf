@@ -1,0 +1,43 @@
+[>c] # Shortcut Helper
+
+At any time, if you press **Ctrl+H**, a popup will appear reminding you of all the shortcuts for editing text, chapters, etc. But there are not many, and you will quickly memorize the few you use often.
+
+Here is a summary:
+
+# Navigation
+ View Previous Chapter	: **Ctrl + Up**
+ View Next Chapter	: **Ctrl + Down**
+ Shift Focus To Editor	: **Ctrl + Left**
+ Shift Focus To Notes	: **Ctrl + Right**
+
+# Alteration
+ Move Chapter Up	: **Ctrl + Shift + Up**
+ Move Chapter Down	: **Ctrl + Shift + Down**
+ Change Chapter Label	: **Ctrl + Shift + Left**
+
+# Formatting
+ Title (Heading 1, Centered)	: **Ctrl + T**
+ Headings	: **Ctrl + (1-4)**
+ Clear Heading	: **Ctrl + 0**
+ Left Align	: **Ctrl + L**
+ Right Align	: **Ctrl + R**
+ Center Align	: **Ctrl + E**
+ Justify Align	: **Ctrl + J**
+ Strikethrough	: **Ctrl + K**
+ Italics	: **Ctrl + I**
+ Bold	: **Ctrl + B**
+ Underline	: **Ctrl + U**
+
+# Tool/Menu Navigation
+ Open/Navigate File Menu	: **Alt, then arrow keys and Escape**
+ Close Tool Dialog	: **Escape**
+ Any Button With A Bold/Underlined Letter	: **Alt + (that letter)**
+ Move Between Inputs	: **Tab**
+
+# Display
+ Adjust Editor Width	: **Ctrl + < or \>**
+ Adjust Font Size	: **Ctrl + - or +**
+ Toggle Chapter List Display	: **F1**
+ Toggle Editor Display	: **F2**
+ Toggle Notes Display	: **F3**
+ Typewriter Mode	: **Ctrl + Alt + T**

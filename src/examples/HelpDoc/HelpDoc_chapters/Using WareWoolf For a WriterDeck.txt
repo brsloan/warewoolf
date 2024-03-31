@@ -1,0 +1,68 @@
+[>c] # Using WareWoolf For A WriterDeck
+
+WareWoolf is designed to work on a desktop computer, but its primary purpose is for use on a writerDeck. This is why it is optimized for use without a mouse and has built-in email functions.
+
+# What is a writerDeck?
+A writerDeck is a device dedicated specifically and solely to writing. Technically, a typewriter is an analog writerDeck. But usually we mean some sort of computerized word processor, such as the Astrohaus Freewrite or the Alphasmart Neo, to name two of the most popular mass-produced versions. But these tend to be either too expensive or too limited for many writers, so many of us build our own.
+
+The term "writerDeck" comes from "cyberDeck". People argue over what counts as a cyberDeck, but in practice it basically means "a weird cobbled together computer, usually without a mouse and usually homemade, often with a retro-futuristic, cyberpunk vibe." So a writerDeck is just a cyberDeck dedicated to writing.
+
+For more on writerDecks, see www.reddit.com/r/writerDeck.
+
+# Why would anyone want one? Why not just use a computer?
+One major reason is distraction. If your writing machine is also your video watching machine, you may find it difficult to get much writing done. When you use a writerDeck, you can only do one thing: write.
+
+A second reason is pleasure. If a significant focus of your life is on writing, and much of your day is spent writing, then having a beautiful, dedicated device for doing it is very nice!
+
+A third reason is because they are fun to design and build.
+
+# How do I use WareWoolf on a Raspberry Pi for a writerDeck?
+A full explanation is too much for this help doc, but here is a general outline on how to set up a Raspberry Pi to boot directly and only into WareWoolf, with no desktop or other apps to distract:
+
+# The Basic Approach
+**OS With No Desktop** + **Display Server** + **Window Manager** + **Your App** = a single-app device.
+In this case, that means:
+[>c] Raspberry Pi OS Lite + Xorg + Matchbox + WareWoolf
+
+# The Steps
+
+## 1. Install the OS.
+With a Raspberry Pi, this is very easy using their Imager.
+
+## 2. Configure The OS
+Turn on wifi and enable SSH using raspi-config.
+
+## 3. Install Xorg
+This should be pretty easy:
+[>c] sudo apt-get install xorg
+
+## 4. Install Matchbox
+[>c] sudo apt-get install matchbox-window-manager
+
+## 5. Install WareWoolf
+This may be as easy as “sudo apt-get install warewoolf” if it's published in the correct repositories, or you can transfer the .deb file over SSH. Then install it with the above command. This step may take a while because it will also install any dependencies, and with a minimalist no-desktop OS, there won’t be much already there.
+
+## 6. Configure Xorg to Open Your App with Matchbox
+Following the instructions (https://wiki.archlinux.org/title/Xinit\#Configuration), copy default config file for customization like so:
+[>c] cp /etc/X11/xinit/xinitrc ~/.xinitrc
+Now edit the created file however you like (I use nano: “nano ~/.xinitrc”) to add this:
+		matchbox-window-manager &
+		pid=$!
+		warewoolf
+		kill pid 
+The pid/kill pid stuff makes it so when you exit your application, X will exit too, taking you back to the command line. Otherwise your app would close and you’d be left with an empty black window.
+
+Save the file and exit. You can now test your app with the command “startx”. It should open in its own solitary window in the void! No desktop! Hurray!
+
+## 7. Configure the OS to start your app on boot
+We can do this by editing the ~/.bash_profile file:  
+		if [[ -z "$DISPLAY" ]] && [[ $(tty) = /dev/tty1 ]]; then
+    		exec startx
+    		logout
+		fi
+Save and reboot. Your app should open! Close the app to get back to the command line. (If you will not be using a mouse and would like to get rid fo the pointer so it it's no visible on your screen, append " -- -nocursor" after "startx" above.
+
+## 8. Edit Your Xorg Configuration To Make Your Device Shut Down When App Is Closed
+If you’d like the computer to shut down when you exit the app instead of going back to command line, open up ~/.xinitrc like you did in step 6 and add one more line below “kill pid”:
+		shutdown -h 0
+Save and reboot. Your app will load! Exit the app. The computer shuts down! You’ve done it! (Maybe. Maybe some weird error popped up somewhere along the way and you can’t for the love of god figure it out. Welcome to tinkering with Linux.)  

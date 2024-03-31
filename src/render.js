@@ -89,7 +89,9 @@ function applyUserSettings(){
 
 function updateFontSize(){
   document.documentElement.style.setProperty('--main-font-size', userSettings.fontSize + 'pt');
-  document.documentElement.style.setProperty('--dialog-font-size', (userSettings.fontSize + 2) + 'pt');
+  document.documentElement.style.setProperty('--dialog-font-size', userSettings.fontSize + 'pt');
+  document.documentElement.style.setProperty('--dialog-font-size-small', (userSettings.fontSize - 2) + 'pt');
+  document.documentElement.style.setProperty('--dialog-heading-size', (userSettings.fontSize + 2) + 'pt');
 }
 
 function updateEditorWidth(){
@@ -104,16 +106,33 @@ function setDarkMode(){
 
 function setProject(filepath){
   if(filepath && filepath != null){
-    var chapsExist = project.loadFile(filepath);
-    if(!chapsExist){
-      console.log('could not find first pup: ' + project.directory + project.chapsDirectory + project.chapters[0].filename);
+    var missingChaps = project.loadFile(filepath);
+    if(missingChaps.length > 0){
+      console.log('could not find all chapters.');
       const promptForMissingPups = require('./components/views/missing-pups_display');
-      promptForMissingPups(project, changeChapsDirectory);
+      promptForMissingPups(project, function(resp){
+        if(resp == 'save')
+          setProject(filepath);
+        else
+          createNewProject();
+      });
     }
     else{
+      convertLegacyProject();
       displayProject();
     }
   }
+}
+
+function convertLegacyProject(){
+  project.chapters.forEach(function(chap, i){
+    if(chap.filename.includes('.pup')){
+      chap.contents = chap.getFile();
+      chap.saveFile();
+      chap.contents = null;
+    }
+  });
+  project.saveFile();
 }
 
 function displayProject(){
@@ -205,6 +224,10 @@ function updateFileList(){
 function displayChapterByIndex(ind){
   clearCurrentChapterIfUnchanged();
   ind = parseInt(ind);
+
+  if(ind > project.chapters.length + project.trash.length - 1)
+    ind = project.chapters.length + project.trash.length - 1;
+
   project.activeChapterIndex = ind;
 
   var chap;
@@ -458,10 +481,10 @@ function openAProject() {
 
   showFileDialog(options, function(filepath){
     if (filepath) {
-      var chapsExist = project.loadFile(filepath[0]);
-      if(!chapsExist){
+      var missingChaps = project.loadFile(filepath[0]);
+      if(missingChaps.length > 0){
         const promptForMissingPups = require('./components/views/missing-pups_display');
-        promptForMissingPups(project, changeChapsDirectory);
+        promptForMissingPups(project, missingChaps);
       }
       else{
         displayProject();
@@ -472,29 +495,7 @@ function openAProject() {
   });
 }
 
-function changeChapsDirectory(){
-  const options = {
-    title: 'Select one of the missing pups...',
-    defaultPath: project.directory,
-    filters: [
-      { name: '.pup files', extensions: ['pup'] }
-    ],
-    bookmarkedPaths: [sysDirectories.docs, sysDirectories.home],
-    dialogType: 'open'
-  };
 
-  showFileDialog(options, function(filepaths){
-    if (filepaths) {
-      filepath = filepaths[0].replaceAll('\\', '/');
-      var parts = filepath.split('/');
-      var subDir = parts.slice(0,parts.length - 1).join('/').concat('/').replace(project.directory, '');
-
-      project.chapsDirectory = subDir;
-      project.hasUnsavedChanges = true;
-      displayProject();
-    }
-  });
-}
 
 function clearCurrentChapterIfUnchanged(){
   var ch = project.getActiveChapter();
@@ -619,6 +620,7 @@ function changeChapterTitle(ind){
       stopDefaultPropagation(e);
       chap.title = nameBox.value;
       project.hasUnsavedChanges = true;
+      chap.hasUnsavedChanges = true;
       removeElementsByClass('name-box');
       updateFileList();
       editorQuill.focus();
@@ -817,7 +819,7 @@ function addBindingsToQuill(q){
 
 
 document.addEventListener ("keydown", function (e) {
-    if(e.ctrlKey && e.key === "ArrowLeft"){
+    if((e.ctrlKey || e.metaKey) && e.key === "ArrowLeft"){
       stopDefaultPropagation(e);
       if(document.getElementById('writing-field').classList.contains('visible')){
         removeElementsByClass('popup');
@@ -825,7 +827,7 @@ document.addEventListener ("keydown", function (e) {
         editorQuill.focus();
       }
     }
-    else if(e.ctrlKey && e.key === "ArrowRight"){
+    else if((e.ctrlKey || e.metaKey) && e.key === "ArrowRight"){
       stopDefaultPropagation(e);
       if(document.getElementById('project-notes').classList.contains('visible')){
         removeElementsByClass('popup');
@@ -839,13 +841,13 @@ document.addEventListener ("keydown", function (e) {
       disableSearchView();
       updatePanelDisplays();
     }
-    else if(e.ctrlKey && e.key === "="){
+    else if((e.ctrlKey || e.metaKey) && e.key === "="){
       increaseFontSizeSetting();
     }
-    else if(e.ctrlKey && e.key === "-"){
+    else if((e.ctrlKey || e.metaKey) && e.key === "-"){
       decreaseFontSizeSetting();
     }
-    else if(e.ctrlKey && e.altKey && e.key === "t"){
+    else if((e.ctrlKey || e.metaKey) && e.altKey && e.key === "t"){
       if(userSettings.typewriterMode){
         disableTypewriterMode(editorQuill);
         userSettings.typewriterMode = false;
@@ -856,13 +858,15 @@ document.addEventListener ("keydown", function (e) {
         userSettings.typewriterMode = true;
         userSettings.save();
       }
-
+    }
+    else if((e.ctrlKey || e.metaKey) && e.key === "m"){
+      ipcRenderer.send('show-menu');
     }
     else if(e.key === 'F1'){
       stopDefaultPropagation(e);
       togglePanelDisplay(1);
     }
-    else if(e.key === "F2"){
+    else if(!e.ctrlKey && e.key === "F2"){
       stopDefaultPropagation(e);
       togglePanelDisplay(2);
     }
@@ -876,31 +880,31 @@ document.getElementById('editor-container').addEventListener('keydown', editorCo
 document.getElementById('chapter-list-sidebar').addEventListener('keydown', editorControlEvents);
 
 function editorControlEvents(e){
-  if (e.ctrlKey  && e.shiftKey && e.key === "ArrowUp") {
+  if ((e.ctrlKey || e.metaKey)  && e.shiftKey && e.key === "ArrowUp") {
     stopDefaultPropagation(e);
     moveChapUp(project.activeChapterIndex);
   }
-  else if(e.ctrlKey && e.shiftKey && e.key === "ArrowDown"){
+  else if((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "ArrowDown"){
     stopDefaultPropagation(e);
     moveChapDown(project.activeChapterIndex);
   }
-  else if(e.ctrlKey && e.shiftKey && e.key === "ArrowLeft"){
+  else if((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "ArrowLeft"){
     stopDefaultPropagation(e);
     if(document.getElementById('chapter-list-sidebar').classList.contains('visible'))
       changeChapterTitle(project.activeChapterIndex);
   }
-  else if(e.ctrlKey && e.key === "ArrowUp"){
+  else if((e.ctrlKey || e.metaKey) && e.key === "ArrowUp"){
     stopDefaultPropagation(e);
     displayPreviousChapter();
   }
-  else if(e.ctrlKey && e.key === "ArrowDown"){
+  else if((e.ctrlKey || e.metaKey) && e.key === "ArrowDown"){
     stopDefaultPropagation(e);
     displayNextChapter();
   }
-  else if(e.ctrlKey && e.key === ","){
+  else if((e.ctrlKey || e.metaKey) && e.key === ","){
     descreaseEditorWidthSetting();
   }
-  else if(e.ctrlKey && e.key === "."){
+  else if((e.ctrlKey || e.metaKey) && e.key === "."){
     increaseEditorWidthSetting();
   }
 }
@@ -1024,9 +1028,9 @@ ipcRenderer.on('restore-chapter-clicked', function(e){
     restoreFromTrash(project.activeChapterIndex);
 });
 
-ipcRenderer.on('shortcuts-clicked', function(e){
+ipcRenderer.on('shortcuts-clicked', function(e, isMac){
   const showShortcutsHelp = require('./components/views/shortcuts-help_display');
-  showShortcutsHelp();
+  showShortcutsHelp(isMac);
 });
 
 ipcRenderer.on('outliner-clicked', function(e){

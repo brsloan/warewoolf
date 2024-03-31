@@ -1,0 +1,194 @@
+{
+	"filename": "Frankenstein.woolf",
+	"chapsDirectory": "Frankenstein_pups/",
+	"title": "Frankenstein",
+	"author": "Mary Shelley",
+	"notes": {
+		"ops": [
+			{
+				"insert": "-Make monster more verbose?\n-Should he fuck?\n"
+			}
+		]
+	},
+	"chapters": [
+		{
+			"title": "Quick Start",
+			"filename": "29.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Letter 1",
+			"filename": "1.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Letter 2",
+			"filename": "2.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Letter 3",
+			"filename": "3.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Letter 4",
+			"filename": "4.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 1",
+			"filename": "5.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 2",
+			"filename": "6.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 3",
+			"filename": "7.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 4",
+			"filename": "8.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 5",
+			"filename": "9.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 6",
+			"filename": "10.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 7",
+			"filename": "11.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 8",
+			"filename": "12.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 9",
+			"filename": "13.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 10",
+			"filename": "14.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 11",
+			"filename": "15.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 12",
+			"filename": "16.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 13",
+			"filename": "17.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 14",
+			"filename": "18.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 15",
+			"filename": "19.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 16",
+			"filename": "20.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 17",
+			"filename": "21.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 18",
+			"filename": "22.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 19",
+			"filename": "23.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 20",
+			"filename": "24.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 21",
+			"filename": "25.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 22",
+			"filename": "26.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 23",
+			"filename": "27.pup",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 24",
+			"filename": "28.pup",
+			"filter": null,
+			"summary": null
+		}
+	],
+	"filters": [],
+	"trash": [],
+	"activeChapterIndex": 0,
+	"wordGoal": 0,
+	"textCursorPosition": 0
+}

@@ -1,6 +1,8 @@
 :root {
   --main-font-size: 12pt; /*overwritten by user settings.*/
-  --dialog-font-size: 14pt; /*overwritten by user settings.*/
+  --dialog-font-size: 12pt; /*overwritten by user settings.*/
+  --dialog-font-size-small: 10pt; /*overwritten by user settings.*/
+  --dialog-heading-size: 14pt; /*overwritten by user settings.*/
   --editor-width: 50%; /*overwritten by user settings.*/
   --sidebar-width: 25%;  /*overwritten by user settings.*/
   --sidebar-width-double-view: 50%;  /*overwritten by user settings.*/
@@ -16,6 +18,7 @@ input, textarea, select, button {
   box-sizing: border-box;
   border-radius: 0px;
   margin-bottom: 3px;
+  margin-top: 3px;
 }
 
 .sidebar {
@@ -122,10 +125,14 @@ input, textarea, select, button {
   color: black;
 }
 
-.popup h1{
-  margin: 0px 0px 12px 3px;
+.popup h1 {
+  margin: 3px 0px 12px 3px;
   padding: 0px 0px 0px 0px;
-  font-size: var(--dialog-font-size);
+  font-size: var(--dialog-heading-size);
+}
+
+.popup h2 {
+  font-size: var(--dialog-heading-size);
 }
 
 .popup label{
@@ -140,7 +147,7 @@ input, textarea, select, button {
 }
 
 .popup-text-small {
-  font-size: var(--main-font-size);
+  font-size: var(--dialog-font-size-small);
 }
 
 .sublabel {
@@ -262,7 +269,7 @@ button, input[type=submit] {
   text-align: center;
   text-decoration: none;
   display: inline-block;
-  font-size: var(--main-font-size);
+  font-size: var(--dialog-font-size);
 }
 
 .visible {
@@ -329,7 +336,7 @@ button, input[type=submit] {
 .popup-dialog h3{
   margin: 0px 0px 0px 0px;
   padding: 0px 0px 0px 0px;
-  font-size: var(--dialog-font-size);
+  font-size: var(--dialog-heading-size);
 }
 
 .popup-dialog p{
@@ -340,7 +347,7 @@ button, input[type=submit] {
 }
 
 #title-input {
-  width: 50%;
+  width: 100%;
 }
 
 #address-info-input {
@@ -360,7 +367,7 @@ button, input[type=submit] {
 }
 
 .warning-text {
-  font-size: var(--main-font-size);
+  font-size: var(--dialog-font-size);
   border: 1px dashed;
   padding: 6px !important;
 }
@@ -377,5 +384,22 @@ button, input[type=submit] {
 }
 
 .updates-text {
-  font-size: var(--main-font-size);
+  font-size: var(--dialog-font-size);
+}
+
+#missing-file-list, #subdirs-list { 
+  font-size: var(--dialog-font-size);
+  margin: 12px;
+}
+
+.good-check {
+  color: greenyellow;
+}
+
+.bad-check {
+  color: red;
+}
+
+.unsure-check {
+  color: gold;
 }

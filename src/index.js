@@ -2,6 +2,7 @@ const { app, BrowserWindow, Menu, nativeTheme } = require('electron');
 const path = require('path');
 const { ipcMain } = require('electron');
 const isLinux = process.platform === "linux";
+const isMac = process.platform === "darwin";
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) { // eslint-disable-line global-require
@@ -11,8 +12,6 @@ if (require('electron-squirrel-startup')) { // eslint-disable-line global-requir
 const createWindow = () => {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
-    width: 800,
-    height: 600,
     autoHideMenuBar: true,
     webPreferences: {
       nodeIntegration: true,
@@ -20,19 +19,36 @@ const createWindow = () => {
       spellcheck: false,
       devTools: false
     },
-    kiosk: true,
+    kiosk: isLinux,
+    fullscreen: true,
     icon: path.join(__dirname, 'assets/icon.png')
   });
 
-  mainWindow.maximize();
+  //mainWindow.maximize();
 
   // and load the index.html of the app.
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
 
   // Open the DevTools.
- // mainWindow.webContents.openDevTools();
+  mainWindow.webContents.openDevTools();
 
   var menu = Menu.buildFromTemplate([
+    ...(isMac
+      ? [{
+          label: app.name,
+          submenu: [
+            { role: 'about' },
+            { type: 'separator' },
+            { role: 'services' },
+            { type: 'separator' },
+            { role: 'hide' },
+            { role: 'hideOthers' },
+            { role: 'unhide' },
+            { type: 'separator' },
+            { role: 'quit' }
+          ]
+        }]
+      : []),
     {
       label: 'File',
       submenu:[
@@ -283,15 +299,25 @@ const createWindow = () => {
         : [])
       ]
     },
+    ...(!isLinux ? [
+      {
+        label: 'View',
+        submenu: [
+          {
+            role: 'togglefullscreen'
+          }
+        ]
+      }
+    ] : []),
     {
       label: 'Help',
       submenu: [
         {
           label: 'Shortcuts...',
           click(item, focusWindow){
-            mainWindow.webContents.send('shortcuts-clicked');
+            mainWindow.webContents.send('shortcuts-clicked', isMac);
           },
-          accelerator: 'CommandOrControl+H'
+          accelerator: isMac ? 'CommandOrControl+Shift+h' : 'CommandOrControl+h'
         },
         {
           label: 'Open Help Document',
@@ -368,4 +394,11 @@ ipcMain.on('set-dark-mode', function(e, darkMode){
   else if(darkMode == 'light') {
     nativeTheme.themeSource = 'light';
   }
+});
+
+ipcMain.on('show-menu', function(e){
+  app.applicationMenu.popup({
+    x: 0,
+    y: 0
+  });
 });

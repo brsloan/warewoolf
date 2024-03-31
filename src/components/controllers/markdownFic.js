@@ -1,324 +1,163 @@
-const { getTempQuill, parseDelta } = require('./quill-utils');
+const { parseDelta } = require('./quill-utils');
 
-function markdownFic(){
-  return {
-    parseMDF: parseMDF,
-    convertDeltaToMDF: convertDeltaToMDF
-  }
+function parseMDF(str){
+  let header1 = /^# (.+)/gm;
+  let header2 = /^## (.+)/gm;
+  let header3 = /^### (.+)/gm;
+  let header4 = /^#### (.+)/gm;
+  let centeredHeader1 = /^\[>c] # (.+)/gm
+  let centeredHeader2 = /^\[>c] ## (.+)/gm
+  let centeredHeader3 = /^\[>c] ### (.+)/gm
+  let centeredHeader4 = /^\[>c] #### (.+)/gm
 
-  function parseMDF(str){
-    var lines = str.split(/\r\n|\r|\n/);
+  let blockquote = /^>+ {0,1}(.+)/gm;
+  let alignLeft = /^\[>l] (.+)/gm;
+  let alignRight = /^\[>r] (.+)/gm;
+  let alignCenter = /^\[>c] (.+)/gm;
+  let alignJustified = /^\[>j] (.+)/gm;
+  let normal = /^(?!{)(.+)/gm;
+  let blankLines = /(?:\r?\n){2,}/gm;
 
-    var tempQuill = getTempQuill();
+  //escape JSON chars
+  str = str.replaceAll('\\','\\\\');
+  str = str.replaceAll('/','\\/');
+  str = str.replaceAll('"','\\"');
+  str = str.replaceAll('\t','\\t'); 
 
-    lines.forEach((line, i) => {
-      var parsedLine = parseLine(line);
+  str = str.replace(centeredHeader1, '{"insert":"$1"},{"insert":"\\n","attributes":{"align":"center","header":1}},');
+  str = str.replace(centeredHeader2, '{"insert":"$1"},{"insert":"\\n","attributes":{"align":"center","header":2}},');
+  str = str.replace(centeredHeader3, '{"insert":"$1"},{"insert":"\\n","attributes":{"align":"center","header":3}},');
+  str = str.replace(centeredHeader4, '{"insert":"$1"},{"insert":"\\n","attributes":{"align":"center","header":4}},');
+  str = str.replace(header1, '{"insert":"$1"},{"insert":"\\n","attributes":{"header":1}},');
+  str = str.replace(header2, '{"insert":"$1"},{"insert":"\\n","attributes":{"header":2}},');
+  str = str.replace(header3, '{"insert":"$1"},{"insert":"\\n","attributes":{"header":3}},');
+  str = str.replace(header4, '{"insert":"$1"},{"insert":"\\n","attributes":{"header":4}},');
+  str = str.replace(alignLeft, '{"insert":"$1"},{"insert":"\\n","attributes":{"align":"left"}},');
+  str = str.replace(alignRight, '{"insert":"$1"},{"insert":"\\n","attributes":{"align":"right"}},');
+  str = str.replace(alignCenter, '{"insert":"$1"},{"insert":"\\n","attributes":{"align":"center"}},');
+  str = str.replace(alignJustified, '{"insert":"$1"},{"insert":"\\n","attributes":{"align":"justify"}},');
+  str = str.replace(blockquote, '{"insert":"$1"},{"insert":"\\n","attributes":{"blockquote":"true"}},');
+  str = str.replace(normal, '{"insert":"$1"},{"insert":"\\n"},');
+  str = str.replace(blankLines, '\n{"insert":"\\n"},\n');
 
-      if(parsedLine.formats.length == 0 || parsedLine.formats[0].name != 'footnote'){
-        var formats = {};
-        parsedLine.formats.forEach((format, i) => {
-          formats[format.name] = format.value;
-        });
+  str = '{"ops":[' + str.trim().slice(0, -1) + ']}';
 
-        tempQuill.insertText(tempQuill.getLength() - 1, parsedLine.line, formats);
-      }
-      else {
-        tempQuill.insertText(tempQuill.getLength() - 1, parsedLine.line);
-      }
+  //To combine styles, they must come in this order: bold, italic, underline, strike
+  //Wish I didn't have to go through every permutation, but I can't think of a quicker way to do this with the 
+  //delta data structure since it does not nest like XML.
+  let boldItalicUnderlineStrike = /(?<!\\|\\\*\*)\*\*\*__~~([^\*\*]+)~~__\*\*\*/g;
+  let boldItalicUnderline = /(?<!\\|\\\*\*)\*\*\*__([^\*\*]+)__\*\*\*/g;
+  let boldItalicStrike = /(?<!\\|\\\*\*)\*\*\*~~([^\*\*]+)~~\*\*\*/g;
+  let boldUnderlineStrike = /(?<!\\|\\\*\*|\*)\*\*__~~([^\*\*]+)~~__\*\*/g;
+  let italicUnderlineStrike = /(?<!\\|\\\*|\*)\*__~~([^\*]+)~~__\*/g;
+  let boldItalic = /(?<!\\|\\\*\*)\*\*\*([^\*\*]+)\*\*\*/g;
+  let boldUnderline = /(?<!\\|\\\*\*|\*)\*\*__([^\*\*]+)__\*\*/g;
+  let boldStrike = /(?<!\\|\\\*\*|\*)\*\*~~([^\*\*]+)~~\*\*/g;
+  let italicUnderline = /(?<!\\|\\\*|\*)\*__([^\*]+)__\*/g;
+  let italicStrike = /(?<!\\|\\\*|\*)\*~~([^\*]+)~~\*/g;
+  let underlineStrike = /(?<!\\|\\__|\*)__~~([^__]+)~~__/g;
+  let bold = /(?<!\\|\\\*\*)\*\*([^\*\*]+)\*\*/g;
+  let italic = /(?<!\\|\\\*)\*([^\*]+)\*/g;
+  let underline = /(?<!\\|\\__)__([^__]+)__/g;
+  let strike = /(?<!\\|\\~~)~~([^~~]+)~~/g;
+  
+  str = str.replace(boldItalicUnderlineStrike, '"},{"insert":"$1","attributes":{"bold":"true","italic":"true","underline":"true","strike":"true"}},{"insert":"');
+  str = str.replace(boldItalicUnderline, '"},{"insert":"$1","attributes":{"bold":"true","italic":"true","underline":"true"}},{"insert":"');
+  str = str.replace(boldItalicStrike, '"},{"insert":"$1","attributes":{"bold":"true","italic":"true","strike":"true"}},{"insert":"');
+  str = str.replace(boldUnderlineStrike, '"},{"insert":"$1","attributes":{"bold":"true","underline":"true","strike":"true"}},{"insert":"');
+  str = str.replace(italicUnderlineStrike, '"},{"insert":"$1","attributes":{"italic":"true","underline":"true","strike":"true"}},{"insert":"');
+  str = str.replace(boldItalic, '"},{"insert":"$1","attributes":{"bold":"true","italic":"true"}},{"insert":"');
+  str = str.replace(boldUnderline, '"},{"insert":"$1","attributes":{"bold":"true","underline":"true"}},{"insert":"');
+  str = str.replace(boldStrike, '"},{"insert":"$1","attributes":{"bold":"true","strike":"true"}},{"insert":"');
+  str = str.replace(italicUnderline, '"},{"insert":"$1","attributes":{"italic":"true","underline":"true"}},{"insert":"');
+  str = str.replace(italicStrike, '"},{"insert":"$1","attributes":{"italic":"true","strike":"true"}},{"insert":"');
+  str = str.replace(underlineStrike, '"},{"insert":"$1","attributes":{"underline":"true","strike":"true"}},{"insert":"');
+  str = str.replace(bold, '"},{"insert":"$1","attributes":{"bold":"true"}},{"insert":"');
+  str = str.replace(italic, '"},{"insert":"$1","attributes":{"italic":"true"}},{"insert":"');
+  str = str.replace(underline, '"},{"insert":"$1","attributes":{"underline":"true"}},{"insert":"');
+  str = str.replace(strike, '"},{"insert":"$1","attributes":{"strike":"true"}},{"insert":"');
 
-    });
+  let escapedMarkers = /\\\\(\*\*|\*|~~|__|#|\[>|>|\[\^)/g;
+  str = str.replace(escapedMarkers, '$1');
 
-    //Delete extra white space added after last line
-    tempQuill.deleteText(tempQuill.getLength() - 1, 2);
-
-    return formatAllInline(tempQuill.getContents());
-  }
-
-  function parseLine(line){
-    var parsedLine;
-
-    if(line.startsWith('#')){
-      //headings
-      parsedLine = parseHeader(line);
-    }
-    else if(line.startsWith('>')){
-      //blockquote
-      parsedLine = parseBlockquote(line);
-    }
-    else if(line.startsWith('[^')){
-      //footnote
-      parsedLine = parseFootnote(line);
-    }
-    else if(line.startsWith('[>')){
-      //alignment
-      parsedLine = parseAlignment(line);
-    }
-    else {
-      //normal
-      parsedLine = {
-        line: line.concat('\r'),
-        formats: []
-      }
-    }
-
-    return parsedLine;
-  }
-
-  function parseHeader(line){
-    let marker = /^\#+ {0,1}/.exec(line);
-    let parsedLine = {
-      line: line.substr(marker[0].length).concat('\r'),
-      formats: [
-        {
-          name: 'header',
-          value: marker[0].trim().length
-        }
-      ]
-    }
-    return parsedLine;
-  }
-
-  function parseBlockquote(line){
-    let marker = /^>+ {0,1}/.exec(line);
-    let parsedLine = {
-      line: line.substr(marker[0].length).concat('\r'),
-      formats: [{
-        name: 'blockquote',
-        value: true
-      }]
-    }
-    return parsedLine;
-  }
-
-  function parseFootnote(line){
-    let marker = /^\[\^(\d+)]: {0,1}/.exec(line);
-    if(marker != null)
-      var fnNum = parseInt(marker[1]);
-
-    let parsedLine = {
-      line: line.concat('\r'),
-      formats: [{
-        name: 'footnote',
-        value: fnNum
-      }]
-    };
-    return parsedLine;
-  }
-
-  function parseAlignment(line){
-    let marker = /^\[>(l|r|c|j)] {0,1}/.exec(line);
-    var alignValue;
-    if(marker != null){
-      switch(marker[1]){
-        case 'l':
-        alignValue = null;
-        break;
-        case 'r':
-        alignValue = 'right';
-        break;
-        case 'c':
-        alignValue = 'center';
-        break;
-        case 'j':
-        alignValue = 'justify';
-      }
-    }
-
-    var newLine = line.substr(marker[0].length);
-
-    let parsedLine = {
-      line: newLine,
-      formats: alignValue ? [{
-        name: 'align',
-        value: alignValue
-      }] : []
-    }
-
-    if(newLine.startsWith('#')){
-      let secondParse = parseHeader(newLine);
-      secondParse.formats = secondParse.formats.concat(parsedLine.formats);
-      parsedLine = secondParse;
-    }
-    else {
-      parsedLine.line = parsedLine.line.concat('\r');
-    }
-
-    return parsedLine;
-  }
-
-  function formatAllInline(delt){
-    var styleMarkers = [
-      {
-        marker: '**',
-        style: 'bold'
-      },
-      {
-        marker: '*',
-        style: 'italic'
-      },
-      {
-        marker: '~~',
-        style: 'strike'
-      },
-      {
-        marker: '__',
-        style: 'underline'
-      }
-    ];
-
-    var packagedDelta = {
-      changed: 0,
-      delta: delt
-    };
-
-    styleMarkers.forEach((marker, i) => {
-      packagedDelta = formatMarkedSegments(packagedDelta.delta, marker.marker, marker.style);
-    });
-
-
-    return clearEscapedMarkers(packagedDelta.delta);
-  }
-
-  function formatMarkedSegments(delt, marker, style){
-    var escapedMarker = marker.replace(/[|\\{}()[\]^$+*?.]/g, '\\$&');
-    //var markerRegx = new RegExp(escapedMarker + '([^' + escapedMarker + ']+)' + escapedMarker);
-    var markerRegx = new RegExp('(?<!\\\\|\\\\' + escapedMarker + ')' + escapedMarker + '([^' + escapedMarker + ']+[^\\\\])' + escapedMarker);
-
-    var tempQuill = getTempQuill();
-    tempQuill.setContents(delt);
-    var text = tempQuill.getText();
-
-    var foundIndex = 0;
-    var startingIndex = 0;
-    var matchResult;
-    var markedText = "";
-    var counter = 0;
-
-    while(foundIndex > -1){
-        matchResult = text.match(markerRegx);
-        foundIndex = matchResult ? matchResult.index : -1;
-
-        if(foundIndex > -1){
-            counter++;
-            tempQuill.formatText(foundIndex, matchResult[0].length, style, true);
-
-            //delete second marker first
-            tempQuill.deleteText(matchResult.index + marker.length + matchResult[1].length,
-              marker.length);
-            //delete first marker
-            tempQuill.deleteText(matchResult.index, marker.length);
-
-            startingIndex = foundIndex + matchResult[1].length;
-            text = tempQuill.getText();
-        }
-    }
-
-    return {
-      changed: counter,
-      delta: tempQuill.getContents()
-    }
-  }
-
-  function clearEscapedMarkers(delt){
-    //Removes the backslash from markers that have been skipped for being escaped
-    var markers = ['**', '*', '~~', '__', '#', '>', '[^', '[>'];
-    var escapedMarkersRegx = /\\(\*\*|\*|~~|__|#|\[>|>|\[\^)/;
-
-    var tempQuill = getTempQuill();
-    tempQuill.setContents(delt);
-    var text = tempQuill.getText();
-
-    var foundIndex = 0;
-    var startingIndex = 0;
-    var matchResult;
-    var markedText = "";
-
-    while(foundIndex > -1){
-      matchResult = text.match(escapedMarkersRegx);
-      foundIndex = matchResult ? matchResult.index : -1;
-
-      if(foundIndex > -1){
-        tempQuill.deleteText(foundIndex, 1);
-
-        startingIndex = foundIndex + matchResult[1].length;
-        text = tempQuill.getText();
-      }
-    }
-
-
-    return tempQuill.getContents();
-  }
-
-
-  function convertDeltaToMDF(delt){
-    var mdf = '';
-
-    var parsedQuill = parseDelta(delt);
-
-    parsedQuill.paragraphs.forEach((para, i) => {
-      mdf += getLineMarker(para.attributes);
-
-      para.textRuns.forEach((run, i) => {
-        run.text = escapeAnyMarkers(run.text);
-        mdf += getMarkedTextFromRun(run);
-      });
-
-      mdf += '\r\n';
-    });
-
-    return mdf;
-  }
-
-  function getMarkedTextFromRun(run){
-
-    if(run.attributes){
-      var marker = '';
-      if(run.attributes.italic)
-        marker += '*';
-      if(run.attributes.bold)
-        marker += '**';
-      if(run.attributes.strike)
-        marker += '~~';
-      if(run.attributes.underline)
-        marker += '__';
-
-      run.text = marker + run.text + marker.split('').reverse().join('');
-    }
-
-    return run.text;
-  }
-
-  function getLineMarker(attr){
-    var marker = '';
-
-    if(attr){
-      if(attr.align){
-        if(attr.align == 'center')
-          marker = '[>c] ';
-        else if(attr.align == 'right')
-          marker = '[>r] ';
-        else if(attr.align == 'justify')
-          marker = '[>j] '
-      }
-      if(attr.header){
-        for(let i=0; i < attr.header; i++){
-          marker+= '#';
-        }
-        marker += ' ';
-      }
-      if(attr.blockquote)
-        marker = '> ';
-    }
-
-    return marker;
-  };
-
-  function escapeAnyMarkers(text){
-    var escapedMarkersRegx = /(\*\*|\*|~~|__|#|\[>|>|\[\^)/g;
-
-    return text.replace(escapedMarkersRegx, '\\$1');
-  }
-
+  return JSON.parse(str);
 }
 
-module.exports = markdownFic;
+
+function convertDeltaToMDF(delt){
+  var mdf = '';
+
+  var parsedQuill = parseDelta(delt);
+
+  parsedQuill.paragraphs.forEach((para, i) => {
+    
+    if(para.textRuns.length > 0)
+      mdf += getLineMarker(para.attributes);
+
+    para.textRuns.forEach((run, i) => {
+      run.text = escapeAnyMarkers(run.text);
+      mdf += getMarkedTextFromRun(run);
+    });
+
+    mdf += '\r\n';
+  });
+
+  return mdf;
+}
+
+function getMarkedTextFromRun(run){
+
+  if(run.attributes){
+    var marker = '';
+    if(run.attributes.bold)
+      marker += '**';
+    if(run.attributes.italic)
+      marker += '*';
+    if(run.attributes.underline)
+      marker += '__';
+    if(run.attributes.strike)
+      marker += '~~';
+
+    run.text = marker + run.text + marker.split('').reverse().join('');
+  }
+
+  return run.text;
+}
+
+function getLineMarker(attr){
+  var marker = '';
+
+  if(attr){
+    if(attr.align){
+      if(attr.align == 'center')
+        marker = '[>c] ';
+      else if(attr.align == 'right')
+        marker = '[>r] ';
+      else if(attr.align == 'justify')
+        marker = '[>j] '
+    }
+    if(attr.header){
+      for(let i=0; i < attr.header; i++){
+        marker+= '#';
+      }
+      marker += ' ';
+    }
+    if(attr.blockquote)
+      marker = '> ';
+  }
+
+  return marker;
+};
+
+function escapeAnyMarkers(text){
+  var escapedMarkersRegx = /(\*\*|\*|~~|__|#|\[>|>|\[\^)/g;
+
+  return text.replace(escapedMarkersRegx, '\\$1');
+}
+
+
+
+module.exports = {
+  parseMDF,
+  convertDeltaToMDF
+};
