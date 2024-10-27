@@ -55,4 +55,18 @@
     color: gold;
   }
 
+  .corkboard-card {
+    background-color: white;
+    border: 1px solid black;
+  }
+
+  .corkboard-card-horiz {
+    border: 1px solid black;
+    background-color: white;
+  }
+
+  .card-num-label {
+    color: black;
+  }
+
 }

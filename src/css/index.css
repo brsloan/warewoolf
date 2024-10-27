@@ -404,11 +404,9 @@ button, input[type=submit] {
   color: gold;
 }
 
-
 #corkboard {
   display: block;
   width: 100%;
-  background-color: tan;
 }
 
 .corkboard-column {
@@ -419,7 +417,6 @@ button, input[type=submit] {
 
 .corkboard-column-horiz {
   display: block;
-
 }
 
 .corkboard-card {
@@ -427,8 +424,6 @@ button, input[type=submit] {
   position: relative;
   width: 95%;
   height: 6em;
-  border: 1px solid black;
-  background-color: white;
   margin: 6px;
 }
 
@@ -440,8 +435,6 @@ button, input[type=submit] {
   display: inline-block;
   width: 12em;
   height: 6em;
-  border: 1px solid black;
-  background-color: white;
   margin: 6px;
 }
 
@@ -453,7 +446,6 @@ button, input[type=submit] {
   display: inline;
   font-size: 12pt;
   margin-left: 3px;
-  color: black;
 }
 
 .card-label {
@@ -464,7 +456,6 @@ button, input[type=submit] {
   width: 95%;
   height: 5em;
  }
-
 
  .card-checkmark {
   display: none;

@@ -47,4 +47,24 @@
 .ql-editor.ql-blank::before{
     color: #abb2bf;
   }
+
+  .corkboard-card {
+    background-color: #191a26;
+    border: 1px solid gray;
+  }
+
+  .corkboard-card-horiz {
+    border: 1px solid gray;
+    background-color: #191a26;
+  }
+
+  .card-num-label {
+    color: white;
+  }
+
+  .corkboard-card input, .corkboard-card textarea {
+    background-color: #191a26;
+    color: white;
+  }
+
 }
