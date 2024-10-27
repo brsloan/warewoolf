@@ -1,4 +1,7 @@
 const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
+const getCardsFromFile = require('../controllers/corkboard');
+
+var loadedCards = [];
 
 function showCorkboard(project){
     removeElementsByClass('popup');
@@ -11,9 +14,9 @@ function showCorkboard(project){
 
     document.body.appendChild(popup);
 
+    loadedCards = getCardsFromFile(project.directory + project.chapsDirectory);
     fillCorkboard(10, 4);
     assignLoadedCards();
-  
 }
 
 /*Controls to add:
@@ -30,6 +33,7 @@ X Checkmark cards as written
 - Button to Sort blanks to end?
 */
 
+/*
 var loadedCards = [
     {
       label: "JOE",
@@ -61,7 +65,7 @@ var loadedCards = [
       descr: "????",
       checked: false
     }
-  ];
+  ];*/
   
   function assignLoadedCards() {
     for (i = 0; i < loadedCards.length; i++) {

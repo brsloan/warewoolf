@@ -1,8 +1,8 @@
-# Letter 1
+# [x] Letter 1
 
 Walton writes about prep for trip to Russia.
 
-# Letter 2
+# [2] [x] Letter 2
 
 Walton writes from ship.
 

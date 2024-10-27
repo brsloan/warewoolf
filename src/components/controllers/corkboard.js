@@ -6,8 +6,10 @@ function getCardsFromFile(chaptersPath){
     console.log('get cards from file...');
     const cardsFilepath = chaptersPath + cardsFilename;
     try {
-        var cardsString = fs.readFileSync(cardsFilepath, "utf8");
-        return parseCardsString(cardsString);
+        if(fs.existsSync(cardsFilepath)){
+            var cardsString = fs.readFileSync(cardsFilepath, "utf8");
+            return parseCardsString(cardsString);
+        }  
     }
     catch(err){
         logError(err);
@@ -22,6 +24,7 @@ function parseCardsString(str){
     let label = /^# (.+)\n\n/gm;
     let blankLines = /(?:\r?\n){2,}/gm;
     let colorNum = /^\[(\d)\] /; 
+    let checkMarker = /^\[[xX]\] /; 
 
 
     //escape JSON chars
@@ -46,11 +49,19 @@ function parseCardsString(str){
         else {
             rawCards[i].color = 0;
         }
+        var check = rawCards[i].label.match(checkMarker);
+        if(check){
+            rawCards[i].label = rawCards[i].label.replace(checkMarker, '');
+            rawCards[i].checked = true;
+        }
+        else {
+            rawCards[i].checked = false;
+        }
+
+        rawCards[i].descr = rawCards[i].descr.trim();
     }
 
-    console.log(rawCards);
-
-    return JSON.parse(str);
+    return rawCards;
 }
 
 module.exports = getCardsFromFile;
