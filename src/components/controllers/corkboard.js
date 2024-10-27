@@ -17,12 +17,14 @@ function getCardsFromFile(chaptersPath){
 }
 
 function parseCardsString(str){
-    //Cards saved as one markdown file with labels as headings and descriptions as pargraphs. Colors can be indicated immediately after heading marker
-    //in this way: "# [1] Label Text". Number corresponds to preset color, 0=default, which doesn't have to be included.
+    //Cards saved as one markdown file with labels as headings and descriptions as pargraphs. Colors can be indicated 
+    //immediately after heading marker and checkmarks directly after that
+    //in this way: "# [1] [x] Label Text". Number corresponds to preset color, 0=default, which doesn't have to be included.
+    //The bracketed X indicates the card is checked off.
 
     let firstLabel = /^# (.+)\n\n/;
     let label = /^# (.+)\n\n/gm;
-    let blankLines = /(?:\r?\n){2,}/gm;
+    let newLines = /\r|\n/gm;
     let colorNum = /^\[(\d)\] /; 
     let checkMarker = /^\[[xX]\] /; 
 
@@ -35,7 +37,7 @@ function parseCardsString(str){
 
     str = str.replace(firstLabel, '[{"label":"$1", "descr":"');
     str = str.replace(label, '"}, {"label":"$1", "descr":"');
-    str = str.replace(blankLines, '\\n');
+    str = str.replace(newLines, '\\n');
     str = str + '"}]';
 
     var rawCards = JSON.parse(str);

@@ -15,8 +15,20 @@ function showCorkboard(project){
     document.body.appendChild(popup);
 
     loadedCards = getCardsFromFile(project.directory + project.chapsDirectory);
+    if(!loadedCards)
+      loadedCards = generateStarterCard();
     fillCorkboard(10, 4);
     assignLoadedCards();
+    focusCard(1);
+}
+
+function generateStarterCard(){
+  return [{
+    label: '',
+    descr: '',
+    color: 0,
+    checked: false
+  }];
 }
 
 /*Controls to add:
