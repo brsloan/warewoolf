@@ -1108,6 +1108,11 @@ ipcRenderer.on('settings-clicked', function(e){
   });
 });
 
+ipcRenderer.on('corkboard-clicked', function(e){
+  const showCorkboard = require('./components/views/corkboard_display');
+  showCorkboard(project);
+})
+
 //**** utils ***/
 
 

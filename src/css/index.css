@@ -193,7 +193,7 @@ input, textarea, select, button {
   min-width: 166px;
 }
 
-.popup-outliner {
+.popup-outliner, .popup-corkboard {
   width: 100%;
   height: 100%;
   overflow-y: scroll;
@@ -402,4 +402,82 @@ button, input[type=submit] {
 
 .unsure-check {
   color: gold;
+}
+
+
+#corkboard {
+  display: block;
+  width: 100%;
+  background-color: tan;
+}
+
+.corkboard-column {
+  display: block;
+  width: 25%;
+  float: left;
+}
+
+.corkboard-column-horiz {
+  display: block;
+
+}
+
+.corkboard-card {
+  display: block;
+  position: relative;
+  width: 95%;
+  height: 6em;
+  border: 1px solid black;
+  background-color: white;
+  margin: 6px;
+}
+
+.corkboard-card-unused {
+  opacity: 0.5;
+}
+
+.corkboard-card-horiz {
+  display: inline-block;
+  width: 12em;
+  height: 6em;
+  border: 1px solid black;
+  background-color: white;
+  margin: 6px;
+}
+
+.corkboard-card textarea {
+  resize: none;
+}
+
+.card-num-label {
+  display: inline;
+  font-size: 12pt;
+  margin-left: 3px;
+  color: black;
+}
+
+.card-label {
+  width: 80%;
+}
+
+.card-description {
+  width: 95%;
+  height: 5em;
+ }
+
+
+ .card-checkmark {
+  display: none;
+  position: absolute;
+  bottom: 5px;
+  right: 12px;
+  transform: rotate(45deg);
+  height: 25px;
+  width: 12px;
+  border-bottom: 7px solid #78b13f;
+  border-right: 7px solid #78b13f;
+}
+
+.card-checkmark-checked {
+display: block;
 }
