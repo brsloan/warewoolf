@@ -3,13 +3,24 @@ const { logError } = require('../controllers/error-log');
 const cardsFilename = 'project_corkboard.txt';
 
 function getCardsFromFile(chaptersPath){
-    console.log('get cards from file...');
     const cardsFilepath = chaptersPath + cardsFilename;
     try {
         if(fs.existsSync(cardsFilepath)){
             var cardsString = fs.readFileSync(cardsFilepath, "utf8");
             return parseCardsString(cardsString);
         }  
+    }
+    catch(err){
+        logError(err);
+    }
+}
+
+function saveCards(cards, chaptersPath){
+    const cardsFilepath = chaptersPath + cardsFilename;
+    var fileString = generateCardsString(cards);
+
+    try {
+        fs.writeFileSync(cardsFilepath, fileString, "utf8");
     }
     catch(err){
         logError(err);
@@ -66,4 +77,23 @@ function parseCardsString(str){
     return rawCards;
 }
 
-module.exports = getCardsFromFile;
+function generateCardsString(cards){
+    var cardsString = '';
+
+    for(i=0;i<cards.length;i++){
+        let card = cards[i];
+
+        cardsString += '# ';
+        if(card.color != 0)
+            cardsString += '[' + card.color + '] ';
+        if(card.checked == true)
+            cardsString += '[x] ';
+        cardsString += card.label + '\n\n';
+
+        cardsString += card.descr + '\n\n';
+    }
+    
+    return cardsString.trim();
+}
+
+module.exports = { getCardsFromFile, saveCards };

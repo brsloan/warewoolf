@@ -1,5 +1,5 @@
 const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
-const getCardsFromFile = require('../controllers/corkboard');
+const { getCardsFromFile, saveCards } = require('../controllers/corkboard');
 
 var loadedCards = [];
 
@@ -237,6 +237,11 @@ var loadedCards = [
       loadedCards[thisIndex].checked = !loadedCards[thisIndex].checked;
       resetCorkboard();
       focusCard(thisIndex + 1);
+    }
+    else if((e.ctrlKey || e.metaKey) && (e.key === "s")){
+      console.log('save cards clicked...');
+      stopDefaultPropagation(e);
+      saveCards(loadedCards, project.directory + project.chapsDirectory);
     }
   }
   
