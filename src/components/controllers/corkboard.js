@@ -1,4 +1,3 @@
-const newCard = require('../models/corkboard-card');
 const fs = require('fs');
 const { logError } = require('../controllers/error-log');
 const cardsFilename = 'project_corkboard.txt';
