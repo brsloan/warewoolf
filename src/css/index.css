@@ -6,6 +6,7 @@
   --editor-width: 50%; /*overwritten by user settings.*/
   --sidebar-width: 25%;  /*overwritten by user settings.*/
   --sidebar-width-double-view: 50%;  /*overwritten by user settings.*/
+  --corkboard-column-width: 25%; /*overwritten by user settings*/
 }
 
 body {
@@ -411,7 +412,7 @@ button, input[type=submit] {
 
 .corkboard-column {
   display: block;
-  width: 25%;
+  width: var(--corkboard-column-width);
   float: left;
 }
 

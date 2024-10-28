@@ -16,6 +16,7 @@ X Checkmark cards as written
 */
 
 var loadedCards = [];
+var numColumns = 4;
 
 function showCorkboard(project){
     removeElementsByClass('popup');
@@ -31,7 +32,7 @@ function showCorkboard(project){
     loadedCards = getCardsFromFile(project.directory + project.chapsDirectory);
     if(!loadedCards)
       loadedCards = generateStarterCard();
-    fillCorkboard(4);
+    fillCorkboard(numColumns);
     assignLoadedCards();
     focusCard(1);
 }
@@ -82,6 +83,7 @@ function generateStarterCard(){
     var cardCounter = 1;
 
     var cardsPerCo = Math.ceil(loadedCards.length / numCols);
+    document.documentElement.style.setProperty('--corkboard-column-width', (1 / numCols * 100) + '%');
   
     for (i = 0; i < numCols; i++) {
       var col = document.createElement("div");
@@ -97,7 +99,7 @@ function generateStarterCard(){
   }
   
   function resetCorkboard(){
-    fillCorkboard(4);
+    fillCorkboard(numColumns);
     assignLoadedCards();
   }
   
@@ -216,6 +218,21 @@ function generateStarterCard(){
     else if((e.ctrlKey || e.metaKey) && (e.key === "s")){
       stopDefaultPropagation(e);
       saveCards(loadedCards, project.directory + project.chapsDirectory);
+    }
+    else if((e.ctrlKey || e.metaKey) && (e.key === ",")){
+      stopDefaultPropagation(e);
+      var thisIndex = parseInt(this.dataset.index);
+      if(numColumns > 1)
+        numColumns--;
+      resetCorkboard();
+      focusCard(thisIndex + 1);
+    }
+    else if((e.ctrlKey || e.metaKey) && (e.key === ".")){
+      stopDefaultPropagation(e);
+      var thisIndex = parseInt(this.dataset.index);
+      numColumns++;
+      resetCorkboard();
+      focusCard(thisIndex + 1);
     }
   }
   
