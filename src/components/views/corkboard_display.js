@@ -2,17 +2,17 @@ const { closePopups, createButton, removeElementsByClass } = require('../control
 const { getCardsFromFile, saveCards } = require('../controllers/corkboard');
 
 /*Controls to add:
-- Text size
-- # of Columns
-- # of cards per column
-- view all cards
+- Text size (CTRL + -)
+- # of Columns (CTRL < >)
+- view all cards ?
 - Vert or Horiz sequence
 X Add/remove cards
 X Rearrange cards
 - Change card colors
 X Checkmark cards as written
 - # cards total and # displayed
-- Button to Sort blanks to end?
+- Override escape for this screen and flag unsaved changes
+- Override ctrl H for special help screen?
 */
 
 var loadedCards = [];
@@ -31,7 +31,7 @@ function showCorkboard(project){
     loadedCards = getCardsFromFile(project.directory + project.chapsDirectory);
     if(!loadedCards)
       loadedCards = generateStarterCard();
-    fillCorkboard(10, 4);
+    fillCorkboard(4);
     assignLoadedCards();
     focusCard(1);
 }
@@ -76,10 +76,12 @@ function generateStarterCard(){
     }
   }
   
-  function fillCorkboard(cardsPerCo, numCols) {
+  function fillCorkboard(numCols) {
     var corkboard = document.getElementById("corkboard");
     corkboard.innerHTML = "";
     var cardCounter = 1;
+
+    var cardsPerCo = Math.ceil(loadedCards.length / numCols);
   
     for (i = 0; i < numCols; i++) {
       var col = document.createElement("div");
@@ -95,7 +97,7 @@ function generateStarterCard(){
   }
   
   function resetCorkboard(){
-    fillCorkboard(10, 4);
+    fillCorkboard(4);
     assignLoadedCards();
   }
   
@@ -148,7 +150,7 @@ function generateStarterCard(){
     else if((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "ArrowDown"){
       stopDefaultPropagation(e);
       moveCardDown(this);
-      assignLoadedCards();
+      resetCorkboard();
       focusCard(parseInt(this.dataset.index) + 2);
     }
     else if((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "ArrowRight"){
@@ -171,7 +173,7 @@ function generateStarterCard(){
       stopDefaultPropagation(e);
       if(parseInt(this.dataset.index) == loadedCards.length - 1){
         insertBlankCard(parseInt(this.dataset.index) + 2);
-        assignLoadedCards();
+        resetCorkboard();
       }
       focusCard(parseInt(this.dataset.index) + 2);
     }
