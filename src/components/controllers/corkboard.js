@@ -33,8 +33,8 @@ function parseCardsString(str){
     //in this way: "# [1] [x] Label Text". Number corresponds to preset color, 0=default, which doesn't have to be included.
     //The bracketed X indicates the card is checked off.
 
-    let firstLabel = /^# (.+)\n\n/;
-    let label = /^# (.+)\n\n/gm;
+    let firstLabel = /^# (.*)\n\n/;
+    let label = /^# (.*)\n\n/gm;
     let newLines = /\r|\n/gm;
     let colorNum = /^\[(\d)\] /; 
     let checkMarker = /^\[[xX]\] /; 
@@ -80,11 +80,13 @@ function parseCardsString(str){
 function generateCardsString(cards){
     var cardsString = '';
 
+    console.log(cards);
+
     for(i=0;i<cards.length;i++){
         let card = cards[i];
 
         cardsString += '# ';
-        if(card.color != 0)
+        if(card.color && card.color != 0)
             cardsString += '[' + card.color + '] ';
         if(card.checked == true)
             cardsString += '[x] ';

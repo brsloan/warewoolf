@@ -1,6 +1,20 @@
 const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
 const { getCardsFromFile, saveCards } = require('../controllers/corkboard');
 
+/*Controls to add:
+- Text size
+- # of Columns
+- # of cards per column
+- view all cards
+- Vert or Horiz sequence
+X Add/remove cards
+X Rearrange cards
+- Change card colors
+X Checkmark cards as written
+- # cards total and # displayed
+- Button to Sort blanks to end?
+*/
+
 var loadedCards = [];
 
 function showCorkboard(project){
@@ -31,54 +45,6 @@ function generateStarterCard(){
   }];
 }
 
-/*Controls to add:
-- Text size
-- # of Columns
-- # of cards per column
-- view all cards
-- Vert or Horiz sequence
-X Add/remove cards
-X Rearrange cards
-- Change card colors
-X Checkmark cards as written
-- # cards total and # displayed
-- Button to Sort blanks to end?
-*/
-
-/*
-var loadedCards = [
-    {
-      label: "JOE",
-      descr: "He's born.", 
-      checked: true
-    },
-    {
-      label: "ERIN",
-      descr: "She buys a flashlight.",
-      checked: true
-    },
-    {
-      label: "JOE",
-      descr: "He grows up.",
-      checked: false
-    },
-    {
-      label: "ERIN",
-      descr: "She goes home to her dark house.",
-      checked: false
-    },
-    {
-      label: "",
-      descr: "",
-      checked: true
-    },
-    {
-      label: "Jack??",
-      descr: "????",
-      checked: false
-    }
-  ];*/
-  
   function assignLoadedCards() {
     for (i = 0; i < loadedCards.length; i++) {
       var matchingCard = document.getElementById('card' + (i +1));
@@ -89,10 +55,18 @@ var loadedCards = [
         var thisCardLabel = document.getElementById("card-label" + (i + 1));
         thisCardLabel.value = loadedCards[i].label;
         thisCardLabel.disabled = false;
+        thisCardLabel.dataset.cardIndex = i;
+        thisCardLabel.addEventListener('keyup', function(e){
+          loadedCards[parseInt(this.dataset.cardIndex)].label = this.value;
+        });
       
         var thisCardDescr = document.getElementById("card-descr" + (i + 1));
         thisCardDescr.value = loadedCards[i].descr;
         thisCardDescr.disabled = false;
+        thisCardDescr.dataset.cardIndex = i;
+        thisCardDescr.addEventListener('keyup', function(e){
+          loadedCards[parseInt(this.dataset.cardIndex)].descr = this.value;
+        });
       
         if(loadedCards[i].checked == true){
           var thisCardCheckmark = document.getElementById("card-checkmark" + (i + 1));
@@ -124,7 +98,6 @@ var loadedCards = [
     fillCorkboard(10, 4);
     assignLoadedCards();
   }
-  
   
   function createCardSpot(num, xcor, ycor) {
     var card = document.createElement("div");
@@ -239,7 +212,6 @@ var loadedCards = [
       focusCard(thisIndex + 1);
     }
     else if((e.ctrlKey || e.metaKey) && (e.key === "s")){
-      console.log('save cards clicked...');
       stopDefaultPropagation(e);
       saveCards(loadedCards, project.directory + project.chapsDirectory);
     }
