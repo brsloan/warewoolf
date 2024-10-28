@@ -93,7 +93,7 @@ function generateCardsString(cards){
         cardsString += card.descr + '\n\n';
     }
     
-    return cardsString.trim();
+    return cardsString;
 }
 
 module.exports = { getCardsFromFile, saveCards };
