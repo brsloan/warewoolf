@@ -7,16 +7,15 @@ X # of Columns (CTRL < >)
 - Vert or Horiz sequence
 X Add/remove cards
 X Rearrange cards
-- Change card colors
+X Change card colors
 X Checkmark cards as written
 - Override escape for this screen and flag unsaved changes
 - Override ctrl H for special help screen?
 - ADD CORKBOARD FILE TO BACKUP/EXPORT
-- Remember # cols in user settings and project settings
+X Remember # cols in project settings
 */
 
 var loadedCards = [];
-var numColumns = 4;
 
 function showCorkboard(project){
     removeElementsByClass('popup');
@@ -32,7 +31,7 @@ function showCorkboard(project){
     loadedCards = getCardsFromFile(project.directory + project.chapsDirectory);
     if(!loadedCards)
       loadedCards = generateStarterCard();
-    fillCorkboard(numColumns);
+    fillCorkboard(project.corkboardColumns);
     assignLoadedCards();
     focusCard(1);
 }
@@ -103,7 +102,7 @@ function generateStarterCard(){
   }
   
   function resetCorkboard(){
-    fillCorkboard(numColumns);
+    fillCorkboard(project.corkboardColumns);
     assignLoadedCards();
   }
   
@@ -222,19 +221,20 @@ function generateStarterCard(){
     else if((e.ctrlKey || e.metaKey) && (e.key === "s")){
       stopDefaultPropagation(e);
       saveCards(loadedCards, project.directory + project.chapsDirectory);
+      project.saveFile();
     }
     else if((e.ctrlKey || e.metaKey) && (e.key === ",")){
       stopDefaultPropagation(e);
       var thisIndex = parseInt(this.dataset.index);
-      if(numColumns > 1)
-        numColumns--;
+      if(project.corkboardColumns > 1)
+        project.corkboardColumns--;
       resetCorkboard();
       focusCard(thisIndex + 1);
     }
     else if((e.ctrlKey || e.metaKey) && (e.key === ".")){
       stopDefaultPropagation(e);
       var thisIndex = parseInt(this.dataset.index);
-      numColumns++;
+      project.corkboardColumns++;
       resetCorkboard();
       focusCard(thisIndex + 1);
     }
