@@ -11,7 +11,6 @@ X Change card colors
 X Checkmark cards as written
 - Override escape for this screen and flag unsaved changes
 - Override ctrl H for special help screen?
-- ADD CORKBOARD FILE TO BACKUP/EXPORT
 X Remember # cols in project settings
 */
 
