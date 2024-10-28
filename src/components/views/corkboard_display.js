@@ -3,16 +3,16 @@ const { getCardsFromFile, saveCards } = require('../controllers/corkboard');
 
 /*Controls to add:
 - Text size (CTRL + -)
-- # of Columns (CTRL < >)
-- view all cards ?
+X # of Columns (CTRL < >)
 - Vert or Horiz sequence
 X Add/remove cards
 X Rearrange cards
 - Change card colors
 X Checkmark cards as written
-- # cards total and # displayed
 - Override escape for this screen and flag unsaved changes
 - Override ctrl H for special help screen?
+- ADD CORKBOARD FILE TO BACKUP/EXPORT
+- Remember # cols in user settings and project settings
 */
 
 var loadedCards = [];
@@ -72,6 +72,10 @@ function generateStarterCard(){
         if(loadedCards[i].checked == true){
           var thisCardCheckmark = document.getElementById("card-checkmark" + (i + 1));
           thisCardCheckmark.classList.add('card-checkmark-checked');  
+        }
+
+        if(loadedCards[i].color && loadedCards[i].color != 0){
+          matchingCard.classList.add('corkboard-color' + loadedCards[i].color); 
         }
       }
     }
@@ -233,6 +237,16 @@ function generateStarterCard(){
       numColumns++;
       resetCorkboard();
       focusCard(thisIndex + 1);
+    }
+    else if((e.ctrlKey || e.metaKey) && isFinite(e.key) && e.key !== " "){
+      stopDefaultPropagation(e);
+      var thisIndex = parseInt(this.dataset.index);
+      loadedCards[thisIndex].color = e.key;
+      for(i=1;i<10;i++){
+        this.classList.remove('corkboard-color' + i);
+      }
+      if(e.key > 0)
+        this.classList.add('corkboard-color' + e.key);      
     }
   }
   

@@ -67,4 +67,37 @@
     color: white;
   }
 
+  .corkboard-color1 {
+    background-color: #ed553b;
+  }
+
+  .corkboard-color2 {
+    background-color: #20639b;
+  }
+
+  .corkboard-color3 {
+    background-color: #3caea3;
+  }
+
+  .corkboard-color4 {
+    background-color: #f6d55c;
+  }
+
+  .corkboard-color5 {
+    background-color: #8b3bed;
+  }
+
+  .corkboard-color6 {
+    background-color: #ed3bed;
+  }
+  .corkboard-color7 {
+    background-color: #ed733b;
+  }
+  .corkboard-color8 {
+    background-color: #3bedbe;
+  }
+  .corkboard-color9 {
+    background-color: #3b94ed;
+  }
+
 }
