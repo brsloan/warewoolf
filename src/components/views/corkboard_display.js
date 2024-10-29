@@ -175,11 +175,9 @@ function generateStarterCard(){
     }
     else if((e.ctrlKey || e.metaKey) && e.key === "ArrowDown"){
       stopDefaultPropagation(e);
-      if(parseInt(this.dataset.index) == loadedCards.length - 1){
-        insertBlankCard(parseInt(this.dataset.index) + 2);
-        resetCorkboard();
-      }
-      focusCard(parseInt(this.dataset.index) + 2);
+      var thisIndex = parseInt(this.dataset.index);
+      if(thisIndex < loadedCards.length - 1)
+        focusCard(parseInt(this.dataset.index) + 2);
     }
     else if((e.ctrlKey || e.metaKey) && e.key === "ArrowRight"){
       stopDefaultPropagation(e);
@@ -197,9 +195,9 @@ function generateStarterCard(){
     }
       else if((e.ctrlKey || e.metaKey) && e.key === "i"){
         stopDefaultPropagation(e);
-        insertBlankCard(parseInt(this.dataset.index));
+        insertBlankCard(parseInt(this.dataset.index) + 1);
         resetCorkboard();
-        focusCard(parseInt(this.dataset.index) + 1);
+        focusCard(parseInt(this.dataset.index) + 2);
     }
       else if((e.ctrlKey || e.metaKey) && (e.key === "Delete" || e.key === "Backspace")){
         stopDefaultPropagation(e);
