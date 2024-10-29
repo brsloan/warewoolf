@@ -82,6 +82,9 @@ function generateStarterCard(){
   function fillCorkboard(numCols) {
     var corkboard = document.getElementById("corkboard");
     corkboard.innerHTML = "";
+
+    corkboard.appendChild(getTitleBar());
+
     var cardCounter = 1;
 
     var cardsPerCo = Math.ceil(loadedCards.length / numCols);
@@ -377,5 +380,14 @@ function generateStarterCard(){
     }
   }
 
+  function getTitleBar(){
+    var titleBar = document.createElement('div');
+    titleBar.id = 'corkboard-title-bar';
+    var corkboardTitle = document.createElement('h2');
+    corkboardTitle.innerText = 'Corkboard';
+    titleBar.appendChild(corkboardTitle);
+
+    return titleBar;
+  }
 
 module.exports = showCorkboard;

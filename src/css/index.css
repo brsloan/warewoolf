@@ -414,12 +414,21 @@ button, input[type=submit] {
 #corkboard {
   display: block;
   width: 100%;
+  overflow-y: scroll;
+  height: 100%;
+}
+
+#corkboard-title-bar {
+  display: block;
+  width: 100%;
+  text-align: center;
 }
 
 .corkboard-column {
   display: block;
   width: var(--corkboard-column-width);
   float: left;
+  border-bottom: 6px solid red;
 }
 
 .corkboard-column-horiz {
