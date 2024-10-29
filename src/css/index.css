@@ -433,6 +433,9 @@ button, input[type=submit] {
 
 .corkboard-column-horiz {
   display: block;
+  width: auto;
+  float: none;
+  border-bottom: 1px dashed gray;
 }
 
 .corkboard-card {
@@ -449,6 +452,7 @@ button, input[type=submit] {
 
 .corkboard-card-horiz {
   display: inline-block;
+  position: relative;
   width: 12em;
   height: 6em;
   margin: 6px;

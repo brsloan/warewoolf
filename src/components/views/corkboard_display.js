@@ -15,6 +15,7 @@ X Remember # cols in project settings
 */
 
 var loadedCards = [];
+var horizMode = true;
 
 function showCorkboard(project){
     removeElementsByClass('popup');
@@ -92,7 +93,10 @@ function generateStarterCard(){
   
     for (i = 0; i < numCols; i++) {
       var col = document.createElement("div");
+
       col.classList.add("corkboard-column");
+      if(horizMode)
+        col.classList.add("corkboard-column-horiz");
   
       for (r = 0; r < cardsPerCo; r++) {
         col.appendChild(createCardSpot(cardCounter, i, r));
@@ -112,6 +116,8 @@ function generateStarterCard(){
     var card = document.createElement("div");
     card.id = "card" + num;
     card.classList.add("corkboard-card");
+    if(horizMode)
+      card.classList.add("corkboard-card-horiz");
   
     var label = document.createElement("input");
     label.type = "text";
@@ -248,6 +254,15 @@ function generateStarterCard(){
       if(e.key > 0)
         this.classList.add('corkboard-color' + e.key);      
     }
+    else if((e.ctrlKey || e.metaKey) && (e.key === "\\")){
+      stopDefaultPropagation(e);
+      toggleHorizMode();
+      resetCorkboard();
+    }
+  }
+
+  function toggleHorizMode(){
+    horizMode = !horizMode;
   }
   
   function stopDefaultPropagation(keyEvent) {
