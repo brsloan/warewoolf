@@ -426,7 +426,9 @@ button, input[type=submit] {
 
 .corkboard-column {
   display: block;
-  border-bottom: 1px dashed gray;
+  border-bottom: 3px dashed gray;
+  margin-bottom: 6px;
+  padding-bottom: 6px;
 }
 
 .corkboard-card {
