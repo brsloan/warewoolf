@@ -265,7 +265,6 @@ function getBelowCardNum(currentCard){
 function getCardsPerRow(){
   var colWidth = document.getElementsByClassName('corkboard-column')[0].clientWidth;
   var cardWidth = getElementWidthWithMargin(document.getElementsByClassName('corkboard-card')[0]);
-  console.log(colWidth + '/' + cardWidth + ' = ' + Math.floor(colWidth/cardWidth) + 'cards per row');
   return Math.floor(colWidth/cardWidth);
 }
 
