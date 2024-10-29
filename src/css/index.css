@@ -426,36 +426,19 @@ button, input[type=submit] {
 
 .corkboard-column {
   display: block;
-  width: var(--corkboard-column-width);
-  float: left;
-  border-bottom: 6px solid red;
-}
-
-.corkboard-column-horiz {
-  display: block;
-  width: auto;
-  float: none;
   border-bottom: 1px dashed gray;
 }
 
 .corkboard-card {
-  display: block;
+  display: inline-block;
   position: relative;
-  width: 95%;
+  width: 12em;
   height: 6em;
   margin: 6px;
 }
 
 .corkboard-card-unused {
   opacity: 0.5;
-}
-
-.corkboard-card-horiz {
-  display: inline-block;
-  position: relative;
-  width: 12em;
-  height: 6em;
-  margin: 6px;
 }
 
 .corkboard-card textarea {

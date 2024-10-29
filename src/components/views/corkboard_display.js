@@ -15,7 +15,6 @@ X Remember # cols in project settings
 */
 
 var loadedCards = [];
-var horizMode = true;
 
 function showCorkboard(project){
     removeElementsByClass('popup');
@@ -31,8 +30,10 @@ function showCorkboard(project){
     loadedCards = getCardsFromFile(project.directory + project.chapsDirectory);
     if(!loadedCards)
       loadedCards = generateStarterCard();
+
     fillCorkboard(project.corkboardColumns);
     assignLoadedCards();
+
     focusCard(1);
 }
 
@@ -45,364 +46,326 @@ function generateStarterCard(){
   }];
 }
 
-  function assignLoadedCards() {
-    for (i = 0; i < loadedCards.length; i++) {
-      var matchingCard = document.getElementById('card' + (i +1));
-      
-      if(matchingCard){
-        matchingCard.classList.remove('corkboard-card-unused');
-        
-        var thisCardLabel = document.getElementById("card-label" + (i + 1));
-        thisCardLabel.value = loadedCards[i].label;
-        thisCardLabel.disabled = false;
-        thisCardLabel.dataset.cardIndex = i;
-        thisCardLabel.addEventListener('keyup', function(e){
-          loadedCards[parseInt(this.dataset.cardIndex)].label = this.value;
-        });
-      
-        var thisCardDescr = document.getElementById("card-descr" + (i + 1));
-        thisCardDescr.value = loadedCards[i].descr;
-        thisCardDescr.disabled = false;
-        thisCardDescr.dataset.cardIndex = i;
-        thisCardDescr.addEventListener('keyup', function(e){
-          loadedCards[parseInt(this.dataset.cardIndex)].descr = this.value;
-        });
-      
-        if(loadedCards[i].checked == true){
-          var thisCardCheckmark = document.getElementById("card-checkmark" + (i + 1));
-          thisCardCheckmark.classList.add('card-checkmark-checked');  
-        }
+function resetCorkboard(){
+  fillCorkboard(project.corkboardColumns);
+  assignLoadedCards();
+}
 
-        if(loadedCards[i].color && loadedCards[i].color != 0){
-          matchingCard.classList.add('corkboard-color' + loadedCards[i].color); 
-        }
+function fillCorkboard(numCols) {
+  var corkboard = document.getElementById("corkboard");
+  corkboard.innerHTML = "";
+
+  corkboard.appendChild(getTitleBar());
+
+  var cardCounter = 1;
+
+  var cardsPerCo = Math.ceil(loadedCards.length / numCols);
+  
+  for (i = 0; i < numCols; i++) {
+    var col = document.createElement("div");
+
+    col.classList.add("corkboard-column");
+
+    for (r = 0; r < cardsPerCo; r++) {
+      col.appendChild(createCardSpot(cardCounter, i, r));
+      cardCounter++;
+    }
+
+    corkboard.appendChild(col);
+  }
+}
+
+function getTitleBar(){
+  var titleBar = document.createElement('div');
+  titleBar.id = 'corkboard-title-bar';
+  var corkboardTitle = document.createElement('h2');
+  corkboardTitle.innerText = 'Corkboard';
+  titleBar.appendChild(corkboardTitle);
+
+  return titleBar;
+}
+
+function createCardSpot(num, owningCol, posInCol) {
+  var card = document.createElement("div");
+  card.id = "card" + num;
+  card.classList.add("corkboard-card");
+
+  var label = document.createElement("input");
+  label.type = "text";
+  label.classList.add("card-label");
+  label.id = "card-label" + num;
+  label.disabled = true;
+
+  card.appendChild(label);
+
+  var numLabel = document.createElement("h2");
+  numLabel.innerText = num;
+  numLabel.classList.add("card-num-label");
+  card.appendChild(numLabel);
+
+  var descr = document.createElement("textarea");
+  descr.classList.add("card-description");
+  descr.id = "card-descr" + num;
+  descr.disabled = true;
+
+  card.appendChild(descr);
+  
+  card.dataset.index = num - 1;
+  card.dataset.owningCol = owningCol;
+  card.dataset.posInCol = posInCol;
+  card.addEventListener('keydown', cardCntrlEvents);
+  card.classList.add('corkboard-card-unused');
+  
+  var checkmark = document.createElement('div');
+  checkmark.id = "card-checkmark" + num;
+  checkmark.classList.add('card-checkmark');
+  card.appendChild(checkmark);
+
+  return card;
+}
+
+function assignLoadedCards() {
+  for (i = 0; i < loadedCards.length; i++) {
+    var matchingCard = document.getElementById('card' + (i +1));
+    
+    if(matchingCard){
+      matchingCard.classList.remove('corkboard-card-unused');
+      
+      var thisCardLabel = document.getElementById("card-label" + (i + 1));
+      thisCardLabel.value = loadedCards[i].label;
+      thisCardLabel.disabled = false;
+      thisCardLabel.dataset.cardIndex = i;
+      thisCardLabel.addEventListener('keyup', function(e){
+        loadedCards[parseInt(this.dataset.cardIndex)].label = this.value;
+      });
+    
+      var thisCardDescr = document.getElementById("card-descr" + (i + 1));
+      thisCardDescr.value = loadedCards[i].descr;
+      thisCardDescr.disabled = false;
+      thisCardDescr.dataset.cardIndex = i;
+      thisCardDescr.addEventListener('keyup', function(e){
+        loadedCards[parseInt(this.dataset.cardIndex)].descr = this.value;
+      });
+    
+      if(loadedCards[i].checked == true){
+        var thisCardCheckmark = document.getElementById("card-checkmark" + (i + 1));
+        thisCardCheckmark.classList.add('card-checkmark-checked');  
+      }
+
+      if(loadedCards[i].color && loadedCards[i].color != 0){
+        matchingCard.classList.add('corkboard-color' + loadedCards[i].color); 
       }
     }
   }
+}
   
-  function fillCorkboard(numCols) {
-    var corkboard = document.getElementById("corkboard");
-    corkboard.innerHTML = "";
+function focusCard(num){
+  if(num > 0){
+   var card = document.getElementById("card-label" + num);
+   if(card)
+     card.focus();
+  }
+}  
 
-    corkboard.appendChild(getTitleBar());
-
-    var cardCounter = 1;
-
-    var cardsPerCo = Math.ceil(loadedCards.length / numCols);
-    document.documentElement.style.setProperty('--corkboard-column-width', (1 / numCols * 100) + '%');
+function insertBlankCard(ind){
+  var blankCard = { label: '', descr: '' };
   
-    for (i = 0; i < numCols; i++) {
-      var col = document.createElement("div");
+  loadedCards.splice(ind, 0, blankCard);
+}
 
-      col.classList.add("corkboard-column");
-      if(horizMode)
-        col.classList.add("corkboard-column-horiz");
+function moveCardLeft(card){
+  if(card.dataset.index && card.dataset.index != '0'){
+    var oldCardIndex = parseInt(card.dataset.index);
+    var newCardIndex = oldCardIndex - 1;
   
-      for (r = 0; r < cardsPerCo; r++) {
-        col.appendChild(createCardSpot(cardCounter, i, r));
-        cardCounter++;
-      }
+    loadedCards.splice(newCardIndex, 0, loadedCards.splice(oldCardIndex, 1)[0]);
+  }
+}
+
+function moveCardRight(card){
+  if(card.dataset.index){
+    var oldCardIndex = parseInt(card.dataset.index);
+    var newCardIndex = oldCardIndex + 1;
+    
+    if(oldCardIndex != loadedCards.length - 1)
+      loadedCards.splice(newCardIndex, 0, loadedCards.splice(oldCardIndex, 1)[0]);
+    else {
+      insertBlankCard(oldCardIndex);
+    }
+      
+  }
+}
   
-      corkboard.appendChild(col);
+function moveCardUp(card){
+  var newCardNumber = getAboveCardNum(card);
+  var newCardIndex = newCardNumber - 1;
+  var oldCardIndex = parseInt(card.dataset.index);
+
+  if(oldCardIndex != 0)
+    loadedCards.splice(newCardIndex, 0, loadedCards.splice(oldCardIndex, 1)[0]);
+
+  return newCardNumber;
+}
+
+function moveCardDown(card){
+  var newCardNumber = getBelowCardNum(card);
+  var newCardIndex = newCardNumber - 1;
+  var oldCardIndex = parseInt(card.dataset.index);
+
+  if(oldCardIndex != loadedCards.length - 1)
+    loadedCards.splice(newCardIndex, 0, loadedCards.splice(oldCardIndex, 1)[0]);
+
+  return newCardNumber;
+}
+
+function getAboveCardNum(currentCard){
+  var thisIndex = parseInt(currentCard.dataset.index);
+  var cardsPerRow = getCardsPerRow();
+  var cardsPerGroup = Math.ceil(loadedCards.length / project.corkboardColumns);
+  var cardsBefore = parseInt(currentCard.dataset.posInCol);
+  var aboveCardNum = thisIndex + 1;//Default to current card num
+
+  if(cardsBefore >= cardsPerRow)
+    aboveCardNum = thisIndex + 1 - cardsPerRow;
+  else{
+    var numInLastRow = cardsPerGroup - (cardsPerRow * Math.floor(cardsPerGroup / cardsPerRow));
+
+    if(cardsBefore >= numInLastRow)
+      aboveCardNum = thisIndex + 1 - cardsPerRow - numInLastRow;
+    else {
+      aboveCardNum = thisIndex + 1 - numInLastRow;
     }
   }
   
-  function resetCorkboard(){
-    fillCorkboard(project.corkboardColumns);
-    assignLoadedCards();
-  }
-  
-  function createCardSpot(num, xcor, ycor) {
-    var card = document.createElement("div");
-    card.id = "card" + num;
-    card.classList.add("corkboard-card");
-    if(horizMode)
-      card.classList.add("corkboard-card-horiz");
-  
-    var label = document.createElement("input");
-    label.type = "text";
-    label.classList.add("card-label");
-    label.id = "card-label" + num;
-    label.disabled = true;
-  
-    card.appendChild(label);
-  
-    var numLabel = document.createElement("h2");
-    numLabel.innerText = num;
-    numLabel.classList.add("card-num-label");
-    card.appendChild(numLabel);
-  
-    var descr = document.createElement("textarea");
-    descr.classList.add("card-description");
-    descr.id = "card-descr" + num;
-    descr.disabled = true;
-  
-    card.appendChild(descr);
-    
-    card.dataset.index = num - 1;
-    card.dataset.xcor = xcor;
-    card.dataset.ycor = ycor;
-    card.addEventListener('keydown', cardCntrlEvents);
-    card.classList.add('corkboard-card-unused');
-    
-    var checkmark = document.createElement('div');
-    checkmark.id = "card-checkmark" + num;
-    checkmark.classList.add('card-checkmark');
-    card.appendChild(checkmark);
-  
-    return card;
-  }
-  
-  function cardCntrlEvents(e) {
-    if ((e.ctrlKey || e.metaKey)  && e.shiftKey && e.key === "ArrowUp")   {
-      stopDefaultPropagation(e);
-      moveCardUp(this);
-      assignLoadedCards();
-      focusCard(parseInt(this.dataset.index));
+  return aboveCardNum > 0 ? aboveCardNum : thisIndex + 1;
+}
+
+function getBelowCardNum(currentCard){
+  var thisIndex = parseInt(currentCard.dataset.index);
+  var cardsPerRow = getCardsPerRow();
+  var cardsPerGroup = Math.ceil(loadedCards.length / project.corkboardColumns);
+  var cardsLeft = cardsPerGroup - parseInt(currentCard.dataset.posInCol) - 1;
+  var belowCardNum = thisIndex + 1;//Default to current card num
+
+  if(cardsLeft >= cardsPerRow)
+    belowCardNum = thisIndex + 1 + cardsPerRow;
+  else {
+    var numInLastRow = cardsPerGroup - (cardsPerRow * Math.floor(cardsPerGroup / cardsPerRow));
+    if(cardsLeft >= numInLastRow){
+      belowCardNum = thisIndex + 1 + cardsPerRow + numInLastRow;
     }
-    else if((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "ArrowDown"){
+    else {
+      belowCardNum = thisIndex + 1 + numInLastRow;
+    }
+  }
+    
+  return belowCardNum <= loadedCards.length ? belowCardNum : thisIndex + 1;
+}
+
+function getCardsPerRow(){
+  var colWidth = document.getElementsByClassName('corkboard-column')[0].clientWidth;
+  var cardWidth = document.getElementsByClassName('corkboard-card')[0].offsetWidth;
+  return Math.floor(colWidth/cardWidth);
+}
+
+function cardCntrlEvents(e) {
+  if ((e.ctrlKey || e.metaKey)  && e.shiftKey && e.key === "ArrowUp")   {
+    stopDefaultPropagation(e);
+    var newCardNum = moveCardUp(this);
+    resetCorkboard();
+    focusCard(newCardNum);
+  }
+  else if((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "ArrowDown"){
+    stopDefaultPropagation(e);
+    var newCardNum = moveCardDown(this);
+    resetCorkboard();
+    focusCard(newCardNum);
+  }
+  else if((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "ArrowRight"){
+    stopDefaultPropagation(e);
+    moveCardRight(this);
+    resetCorkboard();
+    focusCard(parseInt(this.dataset.index) + 2);
+  }
+  else if((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "ArrowLeft"){
+    stopDefaultPropagation(e);
+    moveCardLeft(this);
+    resetCorkboard();
+    focusCard(parseInt(this.dataset.index));
+  }
+  else if((e.ctrlKey || e.metaKey) && e.key === "ArrowUp"){
+    stopDefaultPropagation(e);
+    focusCard(getAboveCardNum(this));
+  }
+  else if((e.ctrlKey || e.metaKey) && e.key === "ArrowDown"){
+    stopDefaultPropagation(e);
+    focusCard(getBelowCardNum(this));
+  }
+  else if((e.ctrlKey || e.metaKey) && e.key === "ArrowRight"){
+    stopDefaultPropagation(e);
+    focusCard(parseInt(this.dataset.index) + 2);
+  }
+    else if((e.ctrlKey || e.metaKey) && e.key === "ArrowLeft"){
+    stopDefaultPropagation(e);
+    focusCard(parseInt(this.dataset.index));
+  }
+    else if((e.ctrlKey || e.metaKey) && e.key === "i"){
       stopDefaultPropagation(e);
-      moveCardDown(this);
+      insertBlankCard(parseInt(this.dataset.index) + 1);
       resetCorkboard();
       focusCard(parseInt(this.dataset.index) + 2);
-    }
-    else if((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "ArrowRight"){
-      stopDefaultPropagation(e);
-      var newCardNum = moveCardRight(this);
-      assignLoadedCards();
-      focusCard(newCardNum);
-    }
-    else if((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "ArrowLeft"){
-      stopDefaultPropagation(e);
-      var newCardNum = moveCardLeft(this);
-      assignLoadedCards();
-      focusCard(newCardNum);
-    }
-    else if((e.ctrlKey || e.metaKey) && e.key === "ArrowUp"){
-      stopDefaultPropagation(e);
-      focusCard(parseInt(this.dataset.index));
-    }
-    else if((e.ctrlKey || e.metaKey) && e.key === "ArrowDown"){
+  }
+    else if((e.ctrlKey || e.metaKey) && (e.key === "Delete" || e.key === "Backspace")){
       stopDefaultPropagation(e);
       var thisIndex = parseInt(this.dataset.index);
-      if(thisIndex < loadedCards.length - 1)
-        focusCard(parseInt(this.dataset.index) + 2);
-    }
-    else if((e.ctrlKey || e.metaKey) && e.key === "ArrowRight"){
-      stopDefaultPropagation(e);
-      var newCardNum = getRightCardNum(this);
-      while(newCardNum > loadedCards.length){
-          insertBlankCard(loadedCards.length);
-      }
-      resetCorkboard();
-      focusCard(newCardNum);
-    }
-      else if((e.ctrlKey || e.metaKey) && e.key === "ArrowLeft"){
-      stopDefaultPropagation(e);
-      var newCardNum = getLeftCardNum(this);
-      focusCard(newCardNum);
-    }
-      else if((e.ctrlKey || e.metaKey) && e.key === "i"){
-        stopDefaultPropagation(e);
-        insertBlankCard(parseInt(this.dataset.index) + 1);
+      if(loadedCards.length > 1){
+        loadedCards.splice(thisIndex, 1);
         resetCorkboard();
-        focusCard(parseInt(this.dataset.index) + 2);
-    }
-      else if((e.ctrlKey || e.metaKey) && (e.key === "Delete" || e.key === "Backspace")){
-        stopDefaultPropagation(e);
-        var thisIndex = parseInt(this.dataset.index);
-        if(loadedCards.length > 1){
-          loadedCards.splice(thisIndex, 1);
-          resetCorkboard();
-          focusCard(thisIndex < loadedCards.length ? thisIndex + 1 : thisIndex);  
-        }
-    }
-    else if((e.ctrlKey || e.metaKey) && (e.key === "Enter")){
-      stopDefaultPropagation(e);
-      var thisIndex = parseInt(this.dataset.index);
-      loadedCards[thisIndex].checked = !loadedCards[thisIndex].checked;
-      resetCorkboard();
-      focusCard(thisIndex + 1);
-    }
-    else if((e.ctrlKey || e.metaKey) && (e.key === "s")){
-      stopDefaultPropagation(e);
-      saveCards(loadedCards, project.directory + project.chapsDirectory);
-      project.saveFile();
-    }
-    else if((e.ctrlKey || e.metaKey) && (e.key === ",")){
-      stopDefaultPropagation(e);
-      var thisIndex = parseInt(this.dataset.index);
-      if(project.corkboardColumns > 1)
-        project.corkboardColumns--;
-      resetCorkboard();
-      focusCard(thisIndex + 1);
-    }
-    else if((e.ctrlKey || e.metaKey) && (e.key === ".")){
-      stopDefaultPropagation(e);
-      var thisIndex = parseInt(this.dataset.index);
-      project.corkboardColumns++;
-      resetCorkboard();
-      focusCard(thisIndex + 1);
-    }
-    else if((e.ctrlKey || e.metaKey) && isFinite(e.key) && e.key !== " "){
-      stopDefaultPropagation(e);
-      var thisIndex = parseInt(this.dataset.index);
-      loadedCards[thisIndex].color = e.key;
-      for(i=1;i<10;i++){
-        this.classList.remove('corkboard-color' + i);
+        focusCard(thisIndex < loadedCards.length ? thisIndex + 1 : thisIndex);  
       }
-      if(e.key > 0)
-        this.classList.add('corkboard-color' + e.key);      
-    }
-    else if((e.ctrlKey || e.metaKey) && (e.key === "\\")){
-      stopDefaultPropagation(e);
-      toggleHorizMode();
-      resetCorkboard();
-    }
   }
+  else if((e.ctrlKey || e.metaKey) && (e.key === "Enter")){
+    stopDefaultPropagation(e);
+    var thisIndex = parseInt(this.dataset.index);
+    loadedCards[thisIndex].checked = !loadedCards[thisIndex].checked;
+    resetCorkboard();
+    focusCard(thisIndex + 1);
+  }
+  else if((e.ctrlKey || e.metaKey) && (e.key === "s")){
+    stopDefaultPropagation(e);
+    saveCards(loadedCards, project.directory + project.chapsDirectory);
+    project.saveFile();
+  }
+  else if((e.ctrlKey || e.metaKey) && (e.key === ",")){
+    stopDefaultPropagation(e);
+    var thisIndex = parseInt(this.dataset.index);
+    if(project.corkboardColumns > 1)
+      project.corkboardColumns--;
+    resetCorkboard();
+    focusCard(thisIndex + 1);
+  }
+  else if((e.ctrlKey || e.metaKey) && (e.key === ".")){
+    stopDefaultPropagation(e);
+    var thisIndex = parseInt(this.dataset.index);
+    project.corkboardColumns++;
+    resetCorkboard();
+    focusCard(thisIndex + 1);
+  }
+  else if((e.ctrlKey || e.metaKey) && isFinite(e.key) && e.key !== " "){
+    stopDefaultPropagation(e);
+    var thisIndex = parseInt(this.dataset.index);
+    loadedCards[thisIndex].color = e.key;
+    for(i=1;i<10;i++){
+      this.classList.remove('corkboard-color' + i);
+    }
+    if(e.key > 0)
+      this.classList.add('corkboard-color' + e.key);      
+  }
+}
 
-  function toggleHorizMode(){
-    horizMode = !horizMode;
-  }
-  
-  function stopDefaultPropagation(keyEvent) {
-    keyEvent.preventDefault();
-    keyEvent.stopPropagation();
-  }
-  
-  function moveCardUp(card){
-    if(card.dataset.index && card.dataset.index != '0'){
-      var oldCardIndex = parseInt(card.dataset.index);
-      var newCardIndex = oldCardIndex - 1;
-    
-      loadedCards.splice(newCardIndex, 0, loadedCards.splice(oldCardIndex, 1)[0]);
-    }
-  }
-  
-  function moveCardDown(card){
-    if(card.dataset.index){
-      var oldCardIndex = parseInt(card.dataset.index);
-      var newCardIndex = oldCardIndex + 1;
-      
-      if(oldCardIndex != loadedCards.length - 1)
-        loadedCards.splice(newCardIndex, 0, loadedCards.splice(oldCardIndex, 1)[0]);
-      else {
-        insertBlankCard(oldCardIndex);
-      }
-        
-    }
-  }
-  
-  function getRightCardNum(card){
-    if (card.dataset.index){
-      var currentXCor = parseInt(card.dataset.xcor);
-      var currentYCor = parseInt(card.dataset.ycor);
-      var oldCardIndex = parseInt(card.dataset.index);
-      var newCardSpace = document.querySelector('[data-xcor="' + (currentXCor + 1) + '"][data-ycor="' + currentYCor + '"]');
-    
-      //Default to returning current card number in case there is no column to right
-      var newCardNumReturn = parseInt(card.dataset.index) + 1;
-      
-      if(newCardSpace){
-        var newCardIndex = parseInt(newCardSpace.dataset.index);
-        
-        newCardNumReturn = newCardIndex + 1;
-      }
-      
-      return newCardNumReturn;
-    }
-  }
-  
-  function getLeftCardNum(card){
-    if (card.dataset.index){
-      var currentXCor = parseInt(card.dataset.xcor);
-      var currentYCor = parseInt(card.dataset.ycor);
-      var oldCardIndex = parseInt(card.dataset.index);
-      var newCardSpace = document.querySelector('[data-xcor="' + (currentXCor - 1) + '"][data-ycor="' + currentYCor + '"]');
-    
-      //Default to returning current card number in case there is no column to right
-      var newCardNumReturn = parseInt(card.dataset.index) + 1;
-      
-      if(newCardSpace){
-        var newCardIndex = parseInt(newCardSpace.dataset.index);
-        
-        newCardNumReturn = newCardIndex + 1;
-      }
-      
-      return newCardNumReturn;
-    }
-  }
-  
-  function moveCardRight(card){
-    if (card.dataset.index){
-      var currentXCor = parseInt(card.dataset.xcor);
-      var currentYCor = parseInt(card.dataset.ycor);
-      var oldCardIndex = parseInt(card.dataset.index);
-      var newCardSpace = document.querySelector('[data-xcor="' + (currentXCor + 1) + '"][data-ycor="' + currentYCor + '"]');
-      
-      //Default to returning current card number in case there is no column to right
-      var newCardNumReturn = parseInt(card.dataset.index) + 1;
-      
-      if(newCardSpace){
-        var newCardIndex = parseInt(newCardSpace.dataset.index);
-      
-        while(newCardIndex > loadedCards.length - 1){
-          insertBlankCard(loadedCards.length);
-        }
-      
-        loadedCards.splice(newCardIndex, 0, loadedCards.splice(oldCardIndex, 1)[0]);
-        
-        newCardNumReturn = newCardIndex + 1;
-      }
-      
-      return newCardNumReturn;
-    }
-  };
-  
-  function moveCardLeft(card){
-    if (card.dataset.index){
-      var currentXCor = parseInt(card.dataset.xcor);
-      var currentYCor = parseInt(card.dataset.ycor);
-      var oldCardIndex = parseInt(card.dataset.index);
-      var newCardSpace = document.querySelector('[data-xcor="' + (currentXCor - 1) + '"][data-ycor="' + currentYCor + '"]');
-     
-      //Default to returning current card number in case there is no column to left
-      var newCardNumReturn = parseInt(card.dataset.index) + 1;
-      
-      if(newCardSpace){
-        var newCardIndex = parseInt(newCardSpace.dataset.index);
-      
-        loadedCards.splice(newCardIndex, 0, loadedCards.splice(oldCardIndex, 1)[0]);
-        
-        newCardNumReturn = newCardIndex + 1;
-      }
-      
-      return newCardNumReturn;
-    }
-  };
-  
-  function insertBlankCard(ind){
-    var blankCard = { label: '', descr: '' };
-    
-    loadedCards.splice(ind, 0, blankCard);
-  }
-  
-  function focusCard(num){
-    if(num > 0){
-     var card = document.getElementById("card-label" + num);
-     if(card)
-       card.focus();
-    }
-  }
-
-  function getTitleBar(){
-    var titleBar = document.createElement('div');
-    titleBar.id = 'corkboard-title-bar';
-    var corkboardTitle = document.createElement('h2');
-    corkboardTitle.innerText = 'Corkboard';
-    titleBar.appendChild(corkboardTitle);
-
-    return titleBar;
-  }
+function stopDefaultPropagation(keyEvent) {
+  keyEvent.preventDefault();
+  keyEvent.stopPropagation();
+}
 
 module.exports = showCorkboard;
