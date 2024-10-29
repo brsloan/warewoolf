@@ -264,8 +264,18 @@ function getBelowCardNum(currentCard){
 
 function getCardsPerRow(){
   var colWidth = document.getElementsByClassName('corkboard-column')[0].clientWidth;
-  var cardWidth = document.getElementsByClassName('corkboard-card')[0].offsetWidth;
+  var cardWidth = getElementWidthWithMargin(document.getElementsByClassName('corkboard-card')[0]);
+  console.log(colWidth + '/' + cardWidth + ' = ' + Math.floor(colWidth/cardWidth) + 'cards per row');
   return Math.floor(colWidth/cardWidth);
+}
+
+function getElementWidthWithMargin(element) {
+  const styles = getComputedStyle(element);
+  const width = element.offsetWidth;
+  const marginLeft = parseInt(styles.marginLeft, 10) || 0;
+  const marginRight = parseInt(styles.marginRight, 10) || 0;
+
+  return width + marginLeft + marginRight;
 }
 
 function cardCntrlEvents(e) {
