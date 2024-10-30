@@ -1,20 +1,21 @@
 const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
 const { getCardsFromFile, saveCards } = require('../controllers/corkboard');
+const isMac = process.platform === "darwin";
 
 /*Controls to add:
 - Text size (CTRL + -)
 X # of Columns (CTRL < >)
-- Vert or Horiz sequence
 X Add/remove cards
 X Rearrange cards
 X Change card colors
 X Checkmark cards as written
-- Override escape for this screen and flag unsaved changes
-- Override ctrl H for special help screen?
+X Override escape for this screen and flag unsaved changes
+X Override ctrl H for special help screen?
 X Remember # cols in project settings
 */
 
 var loadedCards = [];
+var unsavedChanges = false;
 
 function showCorkboard(project){
     removeElementsByClass('popup');
@@ -34,6 +35,7 @@ function showCorkboard(project){
     fillCorkboard(project.corkboardColumns);
     assignLoadedCards();
 
+    popup.addEventListener('keydown', boardCntrlEvents);
     focusCard(1);
 }
 
@@ -82,6 +84,10 @@ function getTitleBar(){
   corkboardTitle.innerText = 'Corkboard';
   titleBar.appendChild(corkboardTitle);
 
+  var helpReminder = document.createElement('p');
+  helpReminder.innerText = "For Help Press " + (isMac ? "Cmd + Shift + H" : "Cntrl + H");
+  titleBar.appendChild(helpReminder);
+
   return titleBar;
 }
 
@@ -95,6 +101,7 @@ function createCardSpot(num, owningCol, posInCol) {
   label.classList.add("card-label");
   label.id = "card-label" + num;
   label.disabled = true;
+  label.onchange = markUnsavedChanges;  
 
   card.appendChild(label);
 
@@ -107,6 +114,7 @@ function createCardSpot(num, owningCol, posInCol) {
   descr.classList.add("card-description");
   descr.id = "card-descr" + num;
   descr.disabled = true;
+  descr.onchange = markUnsavedChanges;
 
   card.appendChild(descr);
   
@@ -277,30 +285,55 @@ function getElementWidthWithMargin(element) {
   return width + marginLeft + marginRight;
 }
 
+function boardCntrlEvents(e){
+  if((e.ctrlKey || e.metaKey) && (e.key === "s")){
+    stopDefaultPropagation(e);
+    saveCards(loadedCards, project.directory + project.chapsDirectory);
+    project.saveFile();
+    unmarkUnsavedChanges();
+  }
+  else if(e.key === "Escape"){
+    stopDefaultPropagation(e);
+    if(unsavedChanges == true){
+      promptToSave();
+    }
+    else
+      closePopups();
+  }
+  else if(((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "h") || (e.ctrlKey && e.key == "h")){
+    stopDefaultPropagation(e);
+    showHelp();
+  }
+}
+
 function cardCntrlEvents(e) {
   if ((e.ctrlKey || e.metaKey)  && e.shiftKey && e.key === "ArrowUp")   {
     stopDefaultPropagation(e);
     var newCardNum = moveCardUp(this);
     resetCorkboard();
     focusCard(newCardNum);
+    markUnsavedChanges();
   }
   else if((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "ArrowDown"){
     stopDefaultPropagation(e);
     var newCardNum = moveCardDown(this);
     resetCorkboard();
     focusCard(newCardNum);
+    markUnsavedChanges();
   }
   else if((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "ArrowRight"){
     stopDefaultPropagation(e);
     moveCardRight(this);
     resetCorkboard();
     focusCard(parseInt(this.dataset.index) + 2);
+    markUnsavedChanges();
   }
   else if((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "ArrowLeft"){
     stopDefaultPropagation(e);
     moveCardLeft(this);
     resetCorkboard();
     focusCard(parseInt(this.dataset.index));
+    markUnsavedChanges();
   }
   else if((e.ctrlKey || e.metaKey) && e.key === "ArrowUp"){
     stopDefaultPropagation(e);
@@ -323,6 +356,7 @@ function cardCntrlEvents(e) {
       insertBlankCard(parseInt(this.dataset.index) + 1);
       resetCorkboard();
       focusCard(parseInt(this.dataset.index) + 2);
+      markUnsavedChanges();
   }
     else if((e.ctrlKey || e.metaKey) && (e.key === "Delete" || e.key === "Backspace")){
       stopDefaultPropagation(e);
@@ -331,6 +365,7 @@ function cardCntrlEvents(e) {
         loadedCards.splice(thisIndex, 1);
         resetCorkboard();
         focusCard(thisIndex < loadedCards.length ? thisIndex + 1 : thisIndex);  
+        markUnsavedChanges();
       }
   }
   else if((e.ctrlKey || e.metaKey) && (e.key === "Enter")){
@@ -339,11 +374,7 @@ function cardCntrlEvents(e) {
     loadedCards[thisIndex].checked = !loadedCards[thisIndex].checked;
     resetCorkboard();
     focusCard(thisIndex + 1);
-  }
-  else if((e.ctrlKey || e.metaKey) && (e.key === "s")){
-    stopDefaultPropagation(e);
-    saveCards(loadedCards, project.directory + project.chapsDirectory);
-    project.saveFile();
+    markUnsavedChanges();
   }
   else if((e.ctrlKey || e.metaKey) && (e.key === ",")){
     stopDefaultPropagation(e);
@@ -352,6 +383,7 @@ function cardCntrlEvents(e) {
       project.corkboardColumns--;
     resetCorkboard();
     focusCard(thisIndex + 1);
+    markUnsavedChanges();
   }
   else if((e.ctrlKey || e.metaKey) && (e.key === ".")){
     stopDefaultPropagation(e);
@@ -359,6 +391,7 @@ function cardCntrlEvents(e) {
     project.corkboardColumns++;
     resetCorkboard();
     focusCard(thisIndex + 1);
+    markUnsavedChanges();
   }
   else if((e.ctrlKey || e.metaKey) && isFinite(e.key) && e.key !== " "){
     stopDefaultPropagation(e);
@@ -368,13 +401,149 @@ function cardCntrlEvents(e) {
       this.classList.remove('corkboard-color' + i);
     }
     if(e.key > 0)
-      this.classList.add('corkboard-color' + e.key);      
+      this.classList.add('corkboard-color' + e.key);     
+    
+    markUnsavedChanges();
   }
 }
 
 function stopDefaultPropagation(keyEvent) {
   keyEvent.preventDefault();
   keyEvent.stopPropagation();
+}
+
+function markUnsavedChanges(e){
+  unsavedChanges = true;
+}
+
+function unmarkUnsavedChanges(){
+  unsavedChanges = false;
+}
+
+function promptToSave(){
+  let popup = document.createElement("div");
+  popup.classList.add("popup-dialog");
+
+  var warning = document.createElement('h1');
+  warning.innerText = "WARNING:";
+  popup.appendChild(warning);
+
+  var subWarning = document.createElement('p');
+  subWarning.innerText = 'You have unsaved changes. Would you like to save first?';
+  subWarning.classList.add('warning-text');
+  popup.appendChild(subWarning);
+
+  var save = createButton("Save");
+  save.onclick = function(){
+    saveCards(loadedCards, project.directory + project.chapsDirectory);
+    project.saveFile();
+    unsavedChanges = false;
+    closePopups();
+  };
+  popup.appendChild(save);
+
+  var quit = createButton("Continue Without Saving");
+  quit.onclick = function(){
+    closePopups();
+  };
+  popup.appendChild(quit);
+
+  var cancel = createButton("Cancel");
+  cancel.onclick = function(){
+    removeElementsByClass('popup-dialog');
+    focusCard(1);
+  };
+  popup.appendChild(cancel);
+
+  document.getElementById('corkboard').appendChild(popup);
+  save.focus();
+}
+
+function showHelp(){
+    var popup = document.createElement("div");
+    popup.classList.add("popup-dialog", "popup-shortcuts");
+
+    const cmdOrCtrl = isMac ? 'Cmd' : 'Ctrl';
+
+    var shortcuts = [
+      {
+        title: "Navigation",
+        shortcuts: [
+          ['Move Between Cards', cmdOrCtrl + ' + Arrows']
+        ]
+      },
+      {
+        title: "Alteration",
+        shortcuts: [
+          ['Move Selected Card', cmdOrCtrl + ' + Shift + Arrows'],
+          ['Insert Card', cmdOrCtrl + ' + I'],
+          ['Delete Card', cmdOrCtrl + ' + Delete/Backspace'],
+          ['Mark Card Finished', cmdOrCtrl + ' + Enter'],
+          ['Color Card', cmdOrCtrl + ' + [1-9]'],
+          ['Clear Color', cmdOrCtrl + ' + 0']
+        ]
+      },
+      {
+        title: "Presentation",
+        shortcuts: [
+          ['Add Board Divisions', cmdOrCtrl + ' + >'],
+          ['Remove Board Divisions', cmdOrCtrl + ' + <']
+        ]
+      },
+      {
+        title: "Most Important",
+        shortcuts: [
+          ['Save Changes', cmdOrCtrl + ' + S'],
+          ['Close Corkboard', "Escape"]
+        ]
+      }
+    ];
+
+    shortcuts.forEach(function(short){
+      var title = document.createElement('h2');
+      title.innerText = short.title;
+      popup.appendChild(title);
+
+      var shortcutsTable = document.createElement('table');
+      shortcutsTable.classList.add('shortcuts-table');
+
+      short.shortcuts.forEach(function(cut){
+        var row = document.createElement('tr');
+
+        var shortLabel = document.createElement('td');
+        shortLabel.innerText = cut[0];
+        row.appendChild(shortLabel);
+
+        var shortKeys = document.createElement('td');
+        shortKeys.innerText = cut[1];
+        row.appendChild(shortKeys);
+
+        shortcutsTable.appendChild(row);
+      });
+
+      popup.appendChild(shortcutsTable);
+    });
+
+    popup.appendChild(document.createElement('br'));
+
+    var closeBtn = createButton("Close");
+    closeBtn.onclick = function(){
+      removeElementsByClass('popup-dialog');
+      focusCard(1);
+    };
+    popup.appendChild(closeBtn);
+
+    popup.addEventListener('keydown', function(e){
+      if(e.key == "Escape"){
+        stopDefaultPropagation(e);
+        removeElementsByClass('popup-dialog');
+        focusCard(1);
+      }
+    });
+
+    document.body.appendChild(popup);
+    closeBtn.focus();
+    popup.scrollTop = 0;
 }
 
 module.exports = showCorkboard;
