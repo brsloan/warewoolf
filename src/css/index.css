@@ -434,9 +434,9 @@ button, input[type=submit] {
 .corkboard-card {
   display: inline-block;
   position: relative;
-  width: 12em;
-  height: 6em;
+  width: 15em;
   margin: 6px;
+  font-size: var(--dialog-font-size-small);
 }
 
 .corkboard-card-unused {
@@ -449,17 +449,20 @@ button, input[type=submit] {
 
 .card-num-label {
   display: inline;
-  font-size: 12pt;
+  font-size: var(--dialog-font-size-small);
   margin-left: 3px;
 }
 
 .card-label {
   width: 80%;
+  font-size: var(--dialog-font-size-small);
 }
 
 .card-description {
   width: 95%;
   height: 5em;
+  font-size: var(--dialog-font-size-small);
+  margin: 0px;
  }
 
  .card-checkmark {

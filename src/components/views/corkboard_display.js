@@ -2,18 +2,6 @@ const { closePopups, createButton, removeElementsByClass } = require('../control
 const { getCardsFromFile, saveCards } = require('../controllers/corkboard');
 const isMac = process.platform === "darwin";
 
-/*Controls to add:
-- Text size (CTRL + -)
-X # of Columns (CTRL < >)
-X Add/remove cards
-X Rearrange cards
-X Change card colors
-X Checkmark cards as written
-X Override escape for this screen and flag unsaved changes
-X Override ctrl H for special help screen?
-X Remember # cols in project settings
-*/
-
 var loadedCards = [];
 var unsavedChanges = false;
 
@@ -487,7 +475,8 @@ function showHelp(){
         title: "Presentation",
         shortcuts: [
           ['Add Board Divisions', cmdOrCtrl + ' + >'],
-          ['Remove Board Divisions', cmdOrCtrl + ' + <']
+          ['Remove Board Divisions', cmdOrCtrl + ' + <'],
+          ['Change Card Size', cmdOrCtrl + ' and - or +']
         ]
       },
       {
