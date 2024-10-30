@@ -17,6 +17,7 @@ function newProject(){
         wordGoal: 0,
         hasUnsavedChanges: false,
         textCursorPosition: 0,
+        corkboardColumns: 4,
         getActiveChapter: getActiveChapter,
         loadFile: loadFile,
         saveFile: saveFile,

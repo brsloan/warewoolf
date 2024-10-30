@@ -17,7 +17,7 @@ const createWindow = () => {
       nodeIntegration: true,
       contextIsolation: false,
       spellcheck: false,
-      devTools: false
+      devTools: true
     },
     kiosk: isLinux,
     fullscreen: true,
@@ -253,6 +253,12 @@ const createWindow = () => {
             mainWindow.webContents.send('outliner-clicked');
           },
           accelerator: 'CommandOrControl+O',
+        },
+        {
+          label: 'Corkboard',
+          click(item, focusWindow){
+            mainWindow.webContents.send('corkboard-clicked');
+          }
         },
         { type: 'separator' },
         {
