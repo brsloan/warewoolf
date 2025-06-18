@@ -1,10 +1,11 @@
 const fs = require('fs');
+const logLocation = 'error_log.txt';
 
 function logError(e){
     console.log(e);
     let time = new Date().toLocaleString();
     try{
-      fs.appendFile('error_log.txt', time + '\n' + e.stack + '\n', function(err){
+      fs.appendFile(logLocation, time + '\n' + e.stack + '\n', function(err){
         if(err)
           console.log('error logging: ' + err);
       });
@@ -15,7 +16,6 @@ function logError(e){
   }
 
   function loadErrorLog(){
-    var logLocation = 'error_log.txt';
     var logText = '';
   
     try {
@@ -31,7 +31,6 @@ function logError(e){
   }
   
   function clearErrorLog(){
-    var logLocation = 'error_log.txt';
     try {
       if(fs.existsSync(logLocation)){
         fs.writeFileSync(logLocation, '', 'utf8')
