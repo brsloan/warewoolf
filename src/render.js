@@ -13,7 +13,7 @@ const {
   createButton,
   disableSearchView
 } = require('./components/controllers/utils');
-
+const fileRequestedOnOpen = ipcRenderer.sendSync('get-file-requested');
 
 var editorQuill = new Quill('#editor-container', {
   modules: {
@@ -51,8 +51,11 @@ function initialize(){
 function loadInitialProject(){
   //Load last project opened, or if none logged, load example project, and if example gone, create new project
   const defaultProject = sysDirectories.app + "/examples/Frankenstein/Frankenstein.woolf";
-
-  if(userSettings.lastProject != null && fs.existsSync(userSettings.lastProject))
+  if(fileRequestedOnOpen != null){
+    setProject(fileRequestedOnOpen);
+    userSettings.lastProject = fileRequestedOnOpen;
+  }
+  else if(userSettings.lastProject != null && fs.existsSync(userSettings.lastProject))
     setProject(userSettings.lastProject);
   else if(fs.existsSync(defaultProject)){
     setProject(defaultProject);
@@ -1111,7 +1114,23 @@ ipcRenderer.on('settings-clicked', function(e){
 ipcRenderer.on('corkboard-clicked', function(e){
   const showCorkboard = require('./components/views/corkboard_display');
   showCorkboard(project);
-})
+});
+
+ipcRenderer.on('open-file-system-trigerred', function(event, fPath){
+  if (fPath) {
+    var missingChaps = project.loadFile(fPath);
+    if(missingChaps.length > 0){
+      const promptForMissingPups = require('./components/views/missing-pups_display');
+      promptForMissingPups(project, missingChaps);
+    }
+    else{
+      displayProject();
+    }
+    userSettings.lastProject = fPath;
+    userSettings.save();
+  }
+
+});
 
 //**** utils ***/
 

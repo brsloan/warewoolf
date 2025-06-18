@@ -3,11 +3,17 @@ const path = require('path');
 const { ipcMain } = require('electron');
 const isLinux = process.platform === "linux";
 const isMac = process.platform === "darwin";
+var fileRequestedOnOpen = null;
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) { // eslint-disable-line global-require
   app.quit();
 }
+
+app.on('open-file', (event, fPath) => {
+  event.preventDefault();
+  fileRequestedOnOpen = fPath;
+});
 
 const createWindow = () => {
   // Create the browser window.
@@ -25,6 +31,11 @@ const createWindow = () => {
   });
 
   //mainWindow.maximize();
+
+  app.on('open-file', (event, fPath) => {
+    event.preventDefault();
+    mainWindow.webContents.send('open-file-system-trigerred', fPath);
+  });
 
   // and load the index.html of the app.
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
@@ -388,6 +399,10 @@ ipcMain.on('get-directories', function(e){
     app: __dirname.replaceAll('\\', '/'),
     downloads: app.getPath('downloads').replaceAll('\\', '/')
   }
+});
+
+ipcMain.on('get-file-requested', function(e){
+  e.returnValue = fileRequestedOnOpen;
 });
 
 ipcMain.on('set-dark-mode', function(e, darkMode){
