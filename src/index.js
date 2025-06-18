@@ -34,7 +34,7 @@ const createWindow = () => {
 
   app.on('open-file', (event, fPath) => {
     event.preventDefault();
-    mainWindow.webContents.send('open-file-system-trigerred', fPath);
+    mainWindow.webContents.send('file-opened-from-outside-warewoolf', fPath);
   });
 
   // and load the index.html of the app.
@@ -401,7 +401,7 @@ ipcMain.on('get-directories', function(e){
   }
 });
 
-ipcMain.on('get-file-requested', function(e){
+ipcMain.on('get-file-requested-on-open', function(e){
   e.returnValue = fileRequestedOnOpen;
 });
 

@@ -13,7 +13,7 @@ const {
   createButton,
   disableSearchView
 } = require('./components/controllers/utils');
-const fileRequestedOnOpen = ipcRenderer.sendSync('get-file-requested');
+const fileRequestedOnOpen = ipcRenderer.sendSync('get-file-requested-on-open');
 
 var editorQuill = new Quill('#editor-container', {
   modules: {
@@ -49,8 +49,9 @@ function initialize(){
 }
 
 function loadInitialProject(){
-  //Load last project opened, or if none logged, load example project, and if example gone, create new project
+  //Load requested project, last project opened, or if none logged, load example project, and if example gone, create new project
   const defaultProject = sysDirectories.app + "/examples/Frankenstein/Frankenstein.woolf";
+
   if(fileRequestedOnOpen != null){
     setProject(fileRequestedOnOpen);
     userSettings.lastProject = fileRequestedOnOpen;
@@ -1116,7 +1117,7 @@ ipcRenderer.on('corkboard-clicked', function(e){
   showCorkboard(project);
 });
 
-ipcRenderer.on('open-file-system-trigerred', function(event, fPath){
+ipcRenderer.on('file-opened-from-outside-warewoolf', function(event, fPath){
   if (fPath) {
     var missingChaps = project.loadFile(fPath);
     if(missingChaps.length > 0){
