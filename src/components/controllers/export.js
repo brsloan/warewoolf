@@ -27,9 +27,30 @@ function exportProject(project, userSettings, options, filepath){
         case ".md":
             exportAsMd(project, newDir, options.what);
             break;
+        case ".html":
+            exportAsHtml(project, newDir, options.what);
+            break;
         default:
             console.log("No valid filetype selected for export.");
     }
+}
+
+function exportAsHtml(project, dir, what){
+  try{
+    var chapsToExport = what == 'project' ? project.chapters : [ project.getActiveChapter() ];
+    for(let i=0; i < chapsToExport.length; i++){
+      var chapFile = chapsToExport[i].getContentsOrFile();
+      var outName = generateChapterFilename(i, chapsToExport[i].title, what);
+
+      fs.writeFileSync(dir + outName + '.html', convertMdfcToHtmlPage(convertDeltaToMDF(chapFile), project.title + ": " + chapsToExport[i].title));
+    }
+
+    if(what == 'project')
+      fs.writeFileSync(dir + "notes" + ".html", convertMdfcToHtmlPage(convertDeltaToMDF(project.notes), project.title + ": " + 'Notes'));
+  }
+  catch(err){
+    logError(err);
+  }
 }
 
 function exportAsMd(project, dir, what){
@@ -39,11 +60,11 @@ function exportAsMd(project, dir, what){
       var chapFile = chapsToExport[i].getContentsOrFile();
       var outName = generateChapterFilename(i, chapsToExport[i].title, what);
 
-      fs.writeFileSync(dir + outName + '.mdfc', convertMdfcToMd(convertDeltaToMDF(chapFile)));
+      fs.writeFileSync(dir + outName + '.md', convertMdfcToMd(convertDeltaToMDF(chapFile)));
     }
 
     if(what == 'project')
-      fs.writeFileSync(dir + "notes" + ".mdfc", convertMdfcToMd(convertDeltaToMDF(project.notes)));
+      fs.writeFileSync(dir + "notes" + ".md", convertMdfcToMd(convertDeltaToMDF(project.notes)));
   }
   catch(err){
     logError(err);
