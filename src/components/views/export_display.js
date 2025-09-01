@@ -46,7 +46,7 @@ function showExportOptions(project, userSettings, sysDirectories){
     exportForm.appendChild(typeLabel);
 
     var typeSelect = document.createElement("select");
-    const typeOptions = [".docx", ".txt", ".mdfc"];
+    const typeOptions = [".docx", ".txt", ".mdfc", ".md"];
     typeOptions.forEach(function(op){
       var txtOp = document.createElement("option");
       txtOp.value = op;

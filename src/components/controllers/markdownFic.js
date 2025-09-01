@@ -83,7 +83,6 @@ function parseMDF(str){
   return JSON.parse(str);
 }
 
-
 function convertDeltaToMDF(delt){
   var mdf = '';
 
@@ -154,8 +153,6 @@ function escapeAnyMarkers(text){
 
   return text.replace(escapedMarkersRegx, '\\$1');
 }
-
-
 
 module.exports = {
   parseMDF,
