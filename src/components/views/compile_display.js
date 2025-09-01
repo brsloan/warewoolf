@@ -21,7 +21,7 @@ function showCompileOptions(project, sysDirectories, userSettings){
     typeLabel.for = "filetype-select";
 
     var typeSelect = document.createElement("select");
-    const typeOptions = [".docx", ".txt", ".mdfc"];
+    const typeOptions = [".docx", ".txt", ".mdfc", ".md", ".html"];
     typeOptions.forEach(function(op){
       var txtOp = document.createElement("option");
       txtOp.value = op;
