@@ -104,6 +104,9 @@ function showCompileOptions(project, sysDirectories, userSettings){
       });
     };
 
+    if(userSettings.compileType != '.docx')
+      titlePageCheck.disabled = true;
+    
     popup.appendChild(compileForm);
     document.body.appendChild(popup);
     typeSelect.focus();
