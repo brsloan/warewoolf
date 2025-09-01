@@ -21,7 +21,7 @@ function showCompileOptions(project, sysDirectories, userSettings){
     typeLabel.for = "filetype-select";
 
     var typeSelect = document.createElement("select");
-    const typeOptions = [".docx", ".txt", ".mdfc"];
+    const typeOptions = [".docx", ".txt", ".mdfc", ".md", ".html"];
     typeOptions.forEach(function(op){
       var txtOp = document.createElement("option");
       txtOp.value = op;
@@ -77,7 +77,7 @@ function showCompileOptions(project, sysDirectories, userSettings){
     compileForm.appendChild(cancelBtn);
 
     typeSelect.onchange = function(){
-      if(typeSelect.value != '.docx')
+      if(typeSelect.value != '.docx' && typeSelect.value != '.html')
         titlePageCheck.disabled = true;
       else {
         titlePageCheck.disabled = false;
@@ -103,6 +103,9 @@ function showCompileOptions(project, sysDirectories, userSettings){
         popup.remove();
       });
     };
+
+    if(userSettings.compileType != '.docx' && userSettings.compileType != '.html')
+      titlePageCheck.disabled = true;
 
     popup.appendChild(compileForm);
     document.body.appendChild(popup);

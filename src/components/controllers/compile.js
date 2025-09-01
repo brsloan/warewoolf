@@ -3,6 +3,8 @@ const { convertDeltaToMDF } = require('./markdownFic');
 const Quill = require('quill');
 const { convertDeltaToDocx, saveDocx } = require('./delta-to-docx');
 const { logError } = require('./error-log');
+const { convertMdfcToHtmlPage } = require('./mdfc-to-html');
+const { convertMdfcToMd } = require('./mdfc-to-md');
 
 function compileProject(project, options, filepath){
     console.log(options);
@@ -19,9 +21,35 @@ function compileProject(project, options, filepath){
         case ".mdfc":
             compileMDF(filepath, allChaps);
             break;
+        case ".md":
+            compileMd(filepath, allChaps);
+            break;
+        case ".html":
+            compileHtml(filepath, allChaps, project.title, project.author, options.generateTitlePage);
+            break;
         default:
             console.log("No valid filetype selected for compile.");
     }
+}
+
+function compileHtml(dir, allChaps, title, author, insertTitle){
+  try{
+    var allText = convertMdfcToHtmlPage(convertDeltaToMDF(allChaps), title, author, insertTitle);
+    fs.writeFileSync(dir, allText);
+  }
+  catch(err){
+    logError(err);
+  }
+}
+
+function compileMd(dir, allChaps){
+  try{
+    var allText = convertMdfcToMd(convertDeltaToMDF(allChaps));
+    fs.writeFileSync(dir, allText);
+  }
+  catch(err){
+    logError(err);
+  }
 }
 
 function compileMDF(dir, allChaps){
