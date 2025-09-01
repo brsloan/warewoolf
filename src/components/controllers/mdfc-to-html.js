@@ -115,10 +115,19 @@ function consolidateMultiParaFootnotes(text, allMarkers){
     return text;
 }
 
-function convertMdfcToHtmlPage(text, title){
+function convertMdfcToHtmlPage(text, title, author = null, insertTitle = false){
+    var titleElements = '';
+    if(insertTitle){
+        titleElements = '<h1 class="center">' + title + '<h1>';
+        if(author)
+            titleElements += '<h2 class="center">by ' + author + '</h2>';
+        titleElements += '<br>';
+    }
+        
+
     var htmlTemplate = getHtmlTemplate();
     htmlTemplate = htmlTemplate.replace('<!-- title -->', title);
-    htmlTemplate = htmlTemplate.replace('<!-- page content -->', convertMdfcToHtml(text));
+    htmlTemplate = htmlTemplate.replace('<!-- page content -->', titleElements + convertMdfcToHtml(text));
   
     return htmlTemplate;
   }

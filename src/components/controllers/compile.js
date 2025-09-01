@@ -25,16 +25,16 @@ function compileProject(project, options, filepath){
             compileMd(filepath, allChaps);
             break;
         case ".html":
-            compileHtml(filepath, allChaps, project.title);
+            compileHtml(filepath, allChaps, project.title, project.author, options.generateTitlePage);
             break;
         default:
             console.log("No valid filetype selected for compile.");
     }
 }
 
-function compileHtml(dir, allChaps){
+function compileHtml(dir, allChaps, title, author, insertTitle){
   try{
-    var allText = convertMdfcToHtmlPage(convertDeltaToMDF(allChaps), project.title);
+    var allText = convertMdfcToHtmlPage(convertDeltaToMDF(allChaps), title, author, insertTitle);
     fs.writeFileSync(dir, allText);
   }
   catch(err){

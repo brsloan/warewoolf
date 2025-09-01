@@ -77,7 +77,7 @@ function showCompileOptions(project, sysDirectories, userSettings){
     compileForm.appendChild(cancelBtn);
 
     typeSelect.onchange = function(){
-      if(typeSelect.value != '.docx')
+      if(typeSelect.value != '.docx' && typeSelect.value != '.html')
         titlePageCheck.disabled = true;
       else {
         titlePageCheck.disabled = false;
@@ -104,9 +104,9 @@ function showCompileOptions(project, sysDirectories, userSettings){
       });
     };
 
-    if(userSettings.compileType != '.docx')
+    if(userSettings.compileType != '.docx' && userSettings.compileType != '.html')
       titlePageCheck.disabled = true;
-    
+
     popup.appendChild(compileForm);
     document.body.appendChild(popup);
     typeSelect.focus();
