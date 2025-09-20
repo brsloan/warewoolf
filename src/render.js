@@ -13,7 +13,6 @@ const {
   createButton,
   disableSearchView
 } = require('./components/controllers/utils');
-const { logError } = require('./components/controllers/error-log');
 const fileRequestedOnOpen = ipcRenderer.sendSync('get-file-requested-on-open');
 
 var editorQuill = new Quill('#editor-container', {
@@ -53,16 +52,10 @@ function loadInitialProject(){
   //Load requested project, last project opened, or if none logged, load example project, and if example gone, create new project
   const defaultProject = sysDirectories.app + "/examples/Frankenstein/Frankenstein.woolf";
 
-console.log('file requested: ' + fileRequestedOnOpen);
+  console.log('file requested: ' + fileRequestedOnOpen);
   if(fileRequestedOnOpen != null && fs.existsSync(fileRequestedOnOpen)){
-    try{
-      setProject(fileRequestedOnOpen);
-      userSettings.lastProject = fileRequestedOnOpen;
-    }
-    catch(err){
-      logError(err);
-      setProject(defaultProject);
-    }
+    setProject(fileRequestedOnOpen);
+    userSettings.lastProject = fileRequestedOnOpen;
   }
   else if(userSettings.lastProject != null && fs.existsSync(userSettings.lastProject))
     setProject(userSettings.lastProject);
