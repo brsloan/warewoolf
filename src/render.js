@@ -14,6 +14,7 @@ const {
   disableSearchView
 } = require('./components/controllers/utils');
 const fileRequestedOnOpen = ipcRenderer.sendSync('get-file-requested-on-open');
+const { showBattery, removeBattery } = require('./components/views/battery_display');
 
 var editorQuill = new Quill('#editor-container', {
   modules: {
@@ -45,7 +46,7 @@ function initialize(){
   setUpQuills();
   applyUserSettings();
   loadInitialProject();
-
+  showBattery();
 }
 
 function loadInitialProject(){
