@@ -13,7 +13,9 @@ if (require('electron-squirrel-startup')) { // eslint-disable-line global-requir
 //Detect file to be opened on non-mac
 if(!isMac){
   //File passed as argument but index differs in development vs production environments
-  fileRequestedOnOpen = app.isPackaged ? process.argv[1] : process.argv[2];
+  var relativePath = app.isPackaged ? process.argv[1] : process.argv[2];
+  if(relativePath)
+    fileRequestedOnOpen = path.resolve(relativePath);
 }
 //Detect file to be open on mac
 app.on('open-file', (event, fPath) => {
