@@ -165,6 +165,7 @@ function showEmailOptions(project, userSettings, editorQuill){
       if(rememberPassCheck.checked){
         userSettings.senderPass = crypt.encrypt(senderPassInput.value);
       }
+      userSettings.compileType = typeSelect.value;
       userSettings.save();
 
       let compileOptions = null;
