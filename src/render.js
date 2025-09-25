@@ -46,7 +46,6 @@ function initialize(){
   setUpQuills();
   applyUserSettings();
   loadInitialProject();
-  showBattery();
 }
 
 function loadInitialProject(){
@@ -91,6 +90,8 @@ function applyUserSettings(){
   updatePanelDisplays();
   autosaver.initiateAutosave(userSettings.autosaveIntMinutes, saveProject);
   setDarkMode();
+  if(userSettings.showBattery && process.platform == 'linux')
+    showBattery();
 }
 
 function updateFontSize(){
