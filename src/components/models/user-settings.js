@@ -25,7 +25,7 @@ function getUserSettings(userSettingsFilepath){
     backupsToKeep: 10,
     autosaveIntMinutes: 0,
     darkMode: 'system',
-    showBattery: true,
+    showBattery: false,
     save: save,
     load: load,
     getSettingsFilepath: getSettingsFilepath
