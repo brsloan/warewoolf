@@ -52,7 +52,6 @@ function loadInitialProject(){
   //Load requested project, last project opened, or if none logged, load example project, and if example gone, create new project
   const defaultProject = sysDirectories.app + "/examples/Frankenstein/Frankenstein.woolf";
 
-  console.log('file requested: ' + fileRequestedOnOpen);
   if(fileRequestedOnOpen != null && fs.existsSync(fileRequestedOnOpen)){
     setProject(fileRequestedOnOpen);
     userSettings.lastProject = fileRequestedOnOpen;
