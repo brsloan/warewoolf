@@ -65,6 +65,7 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 2025-XX-XX: v2.x.x! Changes made:
 * Corkboard feature for pre-planning/outlining novels. Displays as color-coded digital index cards but saves as plain text "project_corkboard.txt" markdown document, so can be edited/prewritten in other apps.
 * Export/Compile as standard Markdown or HTML
+* Can now open .woolf files directly (user must set WareWoolf to default program in Windows, but it is automatic on MacOS)
 
 2024-03-30: v2.0.0! I know that's a quick version jump, but this has some fundamental changes, primarily the switch to saving chapters as plain text .txt files with MarkdownFic markdown for formatting. This is better than the previous ".pup" json files because even if you and WareWoolf both die and your tech illiterate uncle is your executor, he will still be able to open the .txt chapter files of your manuscript and publish it so that history can remember you as the genius no one recognized while you were alive. Also you can edit them in any other text editor and as long you don't change the filename WareWoolf will load them as normal. Changes Made:
 * Completely new MarkdownFic parsing algorithm (about 1000x faster)
