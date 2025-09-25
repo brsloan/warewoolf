@@ -25,12 +25,11 @@ function getUserSettings(userSettingsFilepath){
     backupsToKeep: 10,
     autosaveIntMinutes: 0,
     darkMode: 'system',
+    showBattery: false,
     save: save,
     load: load,
     getSettingsFilepath: getSettingsFilepath
   };
-
-//  const userSettingsFilepath = "user-settings.json";
 
   function save(){
     var settings = this;

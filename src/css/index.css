@@ -480,3 +480,20 @@ button, input[type=submit] {
 .card-checkmark-checked {
 display: block;
 }
+
+#battery-block {
+  display: block;
+  position: absolute;
+  bottom: 5px;
+  right: 12px;
+  font-size: 10pt;
+  border: 1px solid gray;
+  line-height: 0px;
+  padding-left: 0.25em;
+  padding-right: 0.25em;
+}
+
+.battery-emergency {
+  background-color: red;
+  color: white;
+}

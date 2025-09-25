@@ -14,6 +14,7 @@ const {
   disableSearchView
 } = require('./components/controllers/utils');
 const fileRequestedOnOpen = ipcRenderer.sendSync('get-file-requested-on-open');
+const { showBattery, removeBattery } = require('./components/views/battery_display');
 
 var editorQuill = new Quill('#editor-container', {
   modules: {
@@ -45,7 +46,6 @@ function initialize(){
   setUpQuills();
   applyUserSettings();
   loadInitialProject();
-
 }
 
 function loadInitialProject(){
@@ -90,6 +90,8 @@ function applyUserSettings(){
   updatePanelDisplays();
   autosaver.initiateAutosave(userSettings.autosaveIntMinutes, saveProject);
   setDarkMode();
+  if(userSettings.showBattery && process.platform == 'linux')
+    showBattery();
 }
 
 function updateFontSize(){
