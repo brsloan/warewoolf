@@ -913,6 +913,37 @@ function editorControlEvents(e){
   else if((e.ctrlKey || e.metaKey) && e.key === "."){
     increaseEditorWidthSetting();
   }
+  else if(e.key === "PageDown"){
+    stopDefaultPropagation(e);
+    goPageDown(editorQuill);
+  }
+}
+
+function goPageDown(quillObj){
+  var selectedRange = quillObj.getSelection();
+
+  if(selectedRange){
+    var startingScrolltop = 0 + quillObj.root.scrollTop;
+    var destinationY = quillObj.root.clientHeight;
+    var textIndex = selectedRange.index + 1;
+
+    var found = false;
+    
+    while(!found){
+      var bounds = quillObj.selection.getBounds(textIndex, 1);
+
+      if(bounds.y >= destinationY){
+        found = true;
+        quillObj.setSelection(textIndex);
+        quillObj.root.scrollTop = startingScrolltop + bounds.y - bounds.height;
+      }
+      else if(bounds == undefined || bounds.y == undefined){
+        found = true;
+        quillObj.setSelection(textIndex - 1);
+      }
+      textIndex += 1;
+    }
+  }
 }
 
 function stopDefaultPropagation(keyEvent){
