@@ -6,6 +6,8 @@ You create cards on a digital corkboard, each representing a chapter or scene. E
 
 When you save your corkboard, it saves as a plain text document in the same directory as your chapters, which can double as an outline even without the corkboard. That also means you can write an outline in any text editor, and if you follow the simple markdown structure required, you can paste it into your corkboard file and it will automatically render as a visual corkboard in WareWoolf.
 
+(FUN FACT: This is also available as an independent, online tool at https://brsloan.github.io/markdown-corkboard/).
+
 ## What is this special Markdown document structure?
 
 You can use the Corkboard without worrying about the text document it generates at all, but if you want to know how it works or write/edit it directly, it is very simple.
