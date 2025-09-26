@@ -24,7 +24,9 @@ function showCorkboard(project){
     assignLoadedCards();
 
     popup.addEventListener('keydown', boardCntrlEvents);
-    focusCard(1);
+
+    let lastChecked = loadedCards.findLastIndex(x => x.checked);
+    focusCard(lastChecked > -1 ? lastChecked + 1 : 1);
 }
 
 function generateStarterCard(){
@@ -339,7 +341,7 @@ function cardCntrlEvents(e) {
     stopDefaultPropagation(e);
     focusCard(parseInt(this.dataset.index));
   }
-    else if((e.ctrlKey || e.metaKey) && e.key === "i"){
+    else if((e.ctrlKey || e.metaKey) && (e.key === "i" || e.key === "n")){
       stopDefaultPropagation(e);
       insertBlankCard(parseInt(this.dataset.index) + 1);
       resetCorkboard();
