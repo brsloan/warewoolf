@@ -22,15 +22,15 @@ When you choose a tool from the File Menu, it will pop up with a tool menu dialo
 These all live under "File" in the File Menu. Please note that "Export" exports separate files for each chapter, while "Compile" saves one file with all chapters compiled together.
 
 ### Compile/Export options
-Currently you can compile/export your work in plain text, MarkdownFic, or .docx, with some helpful options regarding headings and chapter breaks.
+Currently you can compile/export your work in plain text, .docx, MarkdownFic, Markdown, or HTML, with some helpful options regarding headings and chapter breaks.
 
 ## WareWoolf's File Format
-WareWoolf saves its projects as plain text JSON files so they are both human readable and quickly parsed by Javascript. There is a primary .woolf project file, and individual .pup files for each chapter in a subdirectory.
+WareWoolf saves its chapters as plain text files with light markup. There is a primary .woolf project file (which is just a JSON file that carries project metadata), and individual .txt files for each chapter in a subdirectory.
 	Frankenstein.woolf
-	Frankenstein_Pups
-		1.pup
-		2.pup
-		3.pup
+	Frankenstein_Chapters
+		Chapter 1.txt
+		Chapter 2.txt
+		Chapter 3.txt
 
 The reason for doing this rather than one (more convenient) file is speed. This way, WareWoolf does not hold your entire (perhaps very long) novel in memory, but only one chapter at a time--the chapter you are viewing. 
 

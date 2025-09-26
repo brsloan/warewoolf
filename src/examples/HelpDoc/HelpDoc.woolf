@@ -24,8 +24,20 @@
 			"summary": null
 		},
 		{
+			"title": "Battery Display",
+			"filename": "Battery Display.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
 			"title": "Break Headings Into Chapters",
 			"filename": "Break Headings Into Chapters.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Corkboard",
+			"filename": "Corkboard.txt",
 			"filter": null,
 			"summary": null
 		},
@@ -110,7 +122,8 @@
 	],
 	"filters": [],
 	"trash": [],
-	"activeChapterIndex": 0,
+	"activeChapterIndex": 2,
 	"wordGoal": "0",
-	"textCursorPosition": 0
+	"textCursorPosition": 290,
+	"corkboardColumns": 4
 }

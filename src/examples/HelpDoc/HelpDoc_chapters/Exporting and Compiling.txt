@@ -3,7 +3,7 @@
 WareWoolf uses "Export" to mean exporting each chapter and your notes individually as their own files, while "Compile" exports everything joined together in one file.
 
 # Export Options
-There are three file formats currently supported for export: .docx, .txt, and .mdfc (which is the extension for MarkupFic text files).
+There are several file formats currently supported for export: .docx, .txt, .mdfc (which is the extension for MarkupFic text files), .md (normal Markdown), and .html.
 
 # Compile Options
 In addition to filetype, you can choose whether to insert a string between each chapter (useful if you want to mark chapter breaks in plaintext file) and you can have WareWoolf insert your Chapter Titles as headings. ("Chapter Titles" here means the label you gave your chapters in the list on the left in WareWoolf, not any titles you may have written within each chapter itself. So if, like me, you are in the habit of writing "Chapter One" at the beginning of each chapter, there would be no need to use this function.)
