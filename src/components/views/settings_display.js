@@ -1,4 +1,5 @@
 const { closePopups, createButton, removeElementsByClass, convertFilepath, generateRow } = require('../controllers/utils');
+const { showBattery, removeBattery } = require('./battery_display');
 
 function showSettings(userSettings, autosaver, sysDirectories, callback){
   removeElementsByClass('popup');
@@ -164,6 +165,27 @@ function showSettings(userSettings, autosaver, sysDirectories, callback){
 
   settingsForm.appendChild(appearanceSet);
 
+  var batterySet = document.createElement('fieldset');
+  var battLegend = document.createElement('legend');
+  battLegend.innerText = 'Battery';
+  batterySet.appendChild(battLegend);
+
+  var batteryDisplayLabel = document.createElement('label');
+  batteryDisplayLabel.innerText = 'Display Battery Charge ';
+  batteryDisplayLabel.for = 'battery-display-check';
+  batterySet.appendChild(batteryDisplayLabel);
+
+  var batteryDisplayCheck = document.createElement('input');
+  batteryDisplayCheck.type = 'checkbox';
+  batteryDisplayCheck.id = 'battery-display-check';
+  batteryDisplayCheck.name = 'battery-display-check';
+  batteryDisplayCheck.checked = userSettings.showBattery;
+  batterySet.appendChild(batteryDisplayCheck);
+
+  if(process.platform == 'linux'){
+    settingsForm.appendChild(batterySet);
+  }
+
   popup.appendChild(settingsForm);
 
   var saveBtn = createButton("Save");
@@ -177,6 +199,16 @@ function showSettings(userSettings, autosaver, sysDirectories, callback){
     userSettings.darkMode = document.querySelector('input[type=radio][name=dark-mode]:checked').value;
     userSettings.defaultAuthor = defAuthIn.value;
     userSettings.addressInfo = addressIn.value;
+    if(process.platform == 'linux'){
+      if(userSettings.showBattery && batteryDisplayCheck.checked == false){
+        userSettings.showBattery = batteryDisplayCheck.checked;
+        removeBattery();
+      }
+      else if(userSettings.showBattery == false && batteryDisplayCheck.checked == true){
+        userSettings.showBattery = batteryDisplayCheck.checked;
+        showBattery();
+      }
+    }
 
     userSettings.save();
     autosaver.updateAutosave(userSettings.autosaveIntMinutes, saveProject);

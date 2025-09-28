@@ -7,7 +7,7 @@ A writerDeck is a device dedicated specifically and solely to writing. Technical
 
 The term "writerDeck" comes from "cyberDeck". People argue over what counts as a cyberDeck, but in practice it basically means "a weird cobbled together computer, usually without a mouse and usually homemade, often with a retro-futuristic, cyberpunk vibe." So a writerDeck is just a cyberDeck dedicated to writing.
 
-For more on writerDecks, see www.reddit.com/r/writerDeck.
+For more on writerDecks, see www.writerdeck.org.
 
 # Why would anyone want one? Why not just use a computer?
 One major reason is distraction. If your writing machine is also your video watching machine, you may find it difficult to get much writing done. When you use a writerDeck, you can only do one thing: write.

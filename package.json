@@ -1,7 +1,7 @@
 {
   "name": "warewoolf",
   "productName": "warewoolf",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "A simple novel writing system designed to be usable without a mouse.",
   "main": "src/index.js",
   "scripts": {
@@ -28,7 +28,8 @@
   "config": {
     "forge": {
       "packagerConfig": {
-        "icon": "src/assets/icon"
+        "icon": "src/assets/icon",
+        "extendInfo": "src/plist/Info.plist"
       },
       "makers": [
         {

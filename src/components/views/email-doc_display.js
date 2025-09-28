@@ -125,7 +125,7 @@ function showEmailOptions(project, userSettings, editorQuill){
     attachSet.appendChild(typeLabel);
 
     var typeSelect = document.createElement("select");
-    const typeOptions = [".docx", ".txt", ".mdfc"];
+    const typeOptions = [".docx", ".txt", ".md", ".html", ".mdfc"];
     typeOptions.forEach(function(op){
       var txtOp = document.createElement("option");
       txtOp.value = op;
@@ -165,6 +165,7 @@ function showEmailOptions(project, userSettings, editorQuill){
       if(rememberPassCheck.checked){
         userSettings.senderPass = crypt.encrypt(senderPassInput.value);
       }
+      userSettings.compileType = typeSelect.value;
       userSettings.save();
 
       let compileOptions = null;

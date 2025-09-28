@@ -1,0 +1,8 @@
+[>c] # Battery Display
+
+If you are using Linux and would like to display how much charge your battery has, open File \> Settings and check "Display Battery Charge". It will appear in the lower-right corner in a gray box.
+
+If you reach less than 10%, this box will fill with bright red as a warning.
+
+## Why Would I Need This?
+You probably don't. It's for use in writerDecks, where you would not have any other software running to show you your battery charge. If you're using it on desktop, you'll obviously already have this in your taskbar.

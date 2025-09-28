@@ -1,0 +1,114 @@
+# [1] [x] Letter 1
+
+Walton writes to sister about prep for trip to North Pole.
+
+# [1] [x] Letter 2
+
+Walton writes of loneliness.
+
+# [1] [x] Letter 3
+
+W writes again from ship.
+
+# [1] [x] Letter 4
+
+W tells of seeing the mosnter, then saving Dr. Frankenstein from the ice.
+
+# [2] [x] Dr F: Childhood
+
+Frankenstein tells of his childhood and the adoption of Elizabeth.
+
+This is a multiline card.
+
+# [2] [x] Dr F: Childhood 2
+
+Tells of early interest in science, alchemy
+
+# [2] [x] Dr F: University
+
+Mother dies, studies science at university
+
+# [2] [x] Dr F: Creating Life
+
+Mastering studies, starts to make a human
+
+# [2] [x] Dr F: Creature Lives
+
+The monster comes to life, but is hideous. F flees, creature disappears
+
+# [2] [x] Dr F: Letter from E
+
+Gets letter from Elizabeth, plans to go home
+
+# [2] [x] Dr F: Brother killed
+
+Brother killed by creature but nanny blamed, F too scared to tell
+
+# [2] [x] Dr F: Nanny killed
+
+Nanny executed for murder, F overwhelmed with guilt
+
+# [2] [x] Dr F: Considers suicide
+
+F considers suicide, decides against it.
+
+# [2] [x] Dr F: Meets Creature
+
+On mountain walk, beset by creature who demands to talk.
+
+# [3] [x] Creature: Survival
+
+C tells of how he initially figured out how to live
+
+# [3] [x] Creature: Language
+
+Spies on family to learn language, secretly brings them wood
+
+# [3] [x] Creature: Masters language
+
+Family teaching language to each other, so he learns
+
+# [3] [x] Creature: Family Story
+
+Learns family was respected but now in exile after prison plot
+
+# [3] [x] Creature: Books
+
+Discovers books, reads F's journal, tries to meet family, rejected
+
+# [3] [x] Creature: Revenge
+
+Saves girl from drowning but shot, enraged, kills F's brother & frames nanny. Demands wife
+
+# [2] [x] Dr. F: Agrees
+
+F resists but then agrees to make a companion for the creature.
+
+# [2] [x] Dr. F: Second Thoughts
+
+F changes mind about companion, goes traveling
+
+# [2] [x] Dr. F: Making Companion
+
+Changes mind again and begins making companion
+
+# [2] [x] Dr. F: Abandons Project
+
+He destroys companion parts. Creature pledges revenge at wedding.
+
+# [2] [x] Dr. F: Prison
+
+F imprisoned on suspicion of murder of his friend. But eventually released.
+
+# [2] [x] Dr. F: Marriage
+
+F Plans decides to marry E, but worries about monster's promise.
+
+# [2] [x] Dr. F: Wife dead
+
+Monster kills F's wife. F swears revenge.
+
+# [2] [x] Dr. F: To The Ice
+
+F tracks monster to icy north, where he is picked up by ship and tells story.
+

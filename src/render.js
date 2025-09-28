@@ -13,7 +13,8 @@ const {
   createButton,
   disableSearchView
 } = require('./components/controllers/utils');
-
+const fileRequestedOnOpen = ipcRenderer.sendSync('get-file-requested-on-open');
+const { showBattery, removeBattery } = require('./components/views/battery_display');
 
 var editorQuill = new Quill('#editor-container', {
   modules: {
@@ -45,14 +46,17 @@ function initialize(){
   setUpQuills();
   applyUserSettings();
   loadInitialProject();
-
 }
 
 function loadInitialProject(){
-  //Load last project opened, or if none logged, load example project, and if example gone, create new project
+  //Load requested project, last project opened, or if none logged, load example project, and if example gone, create new project
   const defaultProject = sysDirectories.app + "/examples/Frankenstein/Frankenstein.woolf";
 
-  if(userSettings.lastProject != null && fs.existsSync(userSettings.lastProject))
+  if(fileRequestedOnOpen != null && fs.existsSync(fileRequestedOnOpen)){
+    setProject(fileRequestedOnOpen);
+    userSettings.lastProject = fileRequestedOnOpen;
+  }
+  else if(userSettings.lastProject != null && fs.existsSync(userSettings.lastProject))
     setProject(userSettings.lastProject);
   else if(fs.existsSync(defaultProject)){
     setProject(defaultProject);
@@ -85,6 +89,8 @@ function applyUserSettings(){
   updatePanelDisplays();
   autosaver.initiateAutosave(userSettings.autosaveIntMinutes, saveProject);
   setDarkMode();
+  if(userSettings.showBattery && process.platform == 'linux')
+    showBattery();
 }
 
 function updateFontSize(){
@@ -907,6 +913,37 @@ function editorControlEvents(e){
   else if((e.ctrlKey || e.metaKey) && e.key === "."){
     increaseEditorWidthSetting();
   }
+  else if(e.key === "PageDown"){
+    stopDefaultPropagation(e);
+    goPageDown(editorQuill);
+  }
+}
+
+function goPageDown(quillObj){
+  var selectedRange = quillObj.getSelection();
+
+  if(selectedRange){
+    var startingScrolltop = 0 + quillObj.root.scrollTop;
+    var destinationY = quillObj.root.clientHeight;
+    var textIndex = selectedRange.index + 1;
+
+    var found = false;
+    
+    while(!found){
+      var bounds = quillObj.selection.getBounds(textIndex, 1);
+
+      if(bounds.y >= destinationY){
+        found = true;
+        quillObj.setSelection(textIndex);
+        quillObj.root.scrollTop = startingScrolltop + bounds.y - bounds.height;
+      }
+      else if(bounds == undefined || bounds.y == undefined){
+        found = true;
+        quillObj.setSelection(textIndex - 1);
+      }
+      textIndex += 1;
+    }
+  }
 }
 
 function stopDefaultPropagation(keyEvent){
@@ -1106,6 +1143,27 @@ ipcRenderer.on('settings-clicked', function(e){
   showSettings(userSettings, autosaver, sysDirectories, function(){
     setDarkMode();
   });
+});
+
+ipcRenderer.on('corkboard-clicked', function(e){
+  const showCorkboard = require('./components/views/corkboard_display');
+  showCorkboard(project);
+});
+
+ipcRenderer.on('file-opened-from-outside-warewoolf', function(event, fPath){
+  if (fPath) {
+    var missingChaps = project.loadFile(fPath);
+    if(missingChaps.length > 0){
+      const promptForMissingPups = require('./components/views/missing-pups_display');
+      promptForMissingPups(project, missingChaps);
+    }
+    else{
+      displayProject();
+    }
+    userSettings.lastProject = fPath;
+    userSettings.save();
+  }
+
 });
 
 //**** utils ***/

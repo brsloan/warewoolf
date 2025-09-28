@@ -1,4 +1,5 @@
 const fs = require('fs');
+const { logError } = require('../controllers/error-log');
 
 function getUserSettings(userSettingsFilepath){
   return {
@@ -24,12 +25,11 @@ function getUserSettings(userSettingsFilepath){
     backupsToKeep: 10,
     autosaveIntMinutes: 0,
     darkMode: 'system',
+    showBattery: false,
     save: save,
     load: load,
     getSettingsFilepath: getSettingsFilepath
   };
-
-//  const userSettingsFilepath = "user-settings.json";
 
   function save(){
     var settings = this;

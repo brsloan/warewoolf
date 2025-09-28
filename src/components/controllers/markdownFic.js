@@ -9,6 +9,10 @@ function parseMDF(str){
   let centeredHeader2 = /^\[>c] ## (.+)/gm
   let centeredHeader3 = /^\[>c] ### (.+)/gm
   let centeredHeader4 = /^\[>c] #### (.+)/gm
+  let rightHeader1 = /^\[>r] # (.+)/gm
+  let rightHeader2 = /^\[>r] ## (.+)/gm
+  let rightHeader3 = /^\[>r] ### (.+)/gm
+  let rightHeader4 = /^\[>r] #### (.+)/gm
 
   let blockquote = /^>+ {0,1}(.+)/gm;
   let alignLeft = /^\[>l] (.+)/gm;
@@ -28,6 +32,10 @@ function parseMDF(str){
   str = str.replace(centeredHeader2, '{"insert":"$1"},{"insert":"\\n","attributes":{"align":"center","header":2}},');
   str = str.replace(centeredHeader3, '{"insert":"$1"},{"insert":"\\n","attributes":{"align":"center","header":3}},');
   str = str.replace(centeredHeader4, '{"insert":"$1"},{"insert":"\\n","attributes":{"align":"center","header":4}},');
+   str = str.replace(rightHeader1, '{"insert":"$1"},{"insert":"\\n","attributes":{"align":"right","header":1}},');
+  str = str.replace(rightHeader2, '{"insert":"$1"},{"insert":"\\n","attributes":{"align":"right","header":2}},');
+  str = str.replace(rightHeader3, '{"insert":"$1"},{"insert":"\\n","attributes":{"align":"right","header":3}},');
+  str = str.replace(rightHeader4, '{"insert":"$1"},{"insert":"\\n","attributes":{"align":"right","header":4}},');
   str = str.replace(header1, '{"insert":"$1"},{"insert":"\\n","attributes":{"header":1}},');
   str = str.replace(header2, '{"insert":"$1"},{"insert":"\\n","attributes":{"header":2}},');
   str = str.replace(header3, '{"insert":"$1"},{"insert":"\\n","attributes":{"header":3}},');
@@ -82,7 +90,6 @@ function parseMDF(str){
 
   return JSON.parse(str);
 }
-
 
 function convertDeltaToMDF(delt){
   var mdf = '';
@@ -154,8 +161,6 @@ function escapeAnyMarkers(text){
 
   return text.replace(escapedMarkersRegx, '\\$1');
 }
-
-
 
 module.exports = {
   parseMDF,

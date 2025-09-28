@@ -190,5 +190,6 @@
 	"trash": [],
 	"activeChapterIndex": 0,
 	"wordGoal": 0,
-	"textCursorPosition": 0
+	"textCursorPosition": 0,
+	"corkboardColumns": 4
 }

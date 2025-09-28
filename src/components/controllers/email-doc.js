@@ -5,6 +5,8 @@ const { compileChapterDeltas } = require('./compile');
 const { convertDeltaToDocx, packageDocxBase64 } = require('./delta-to-docx');
 const { convertDeltaToMDF } = require('./markdownFic');
 const { logError } = require('./error-log');
+const { convertMdfcToMd } = require('./mdfc-to-md');
+const { convertMdfcToHtmlPage } = require('./mdfc-to-html');
 
 function prepareAndEmail(project, userSettings, editorQuill, sender, pass, receiver, filetype, compileOptions, callback){
   var delt;
@@ -30,8 +32,13 @@ function prepareAndEmail(project, userSettings, editorQuill, sender, pass, recei
     emailDeltaAsMdfc(filename, delt, sender, pass, receiver, callback);
   }
   else if(filetype == ".zip"){
-    console.log('you chose to email as zip');
     emailAsZip(project, sender, pass, receiver, callback);
+  }
+  else if(filetype == '.md'){
+    emailDeltaAsMd(filename, delt, sender, pass, receiver, callback);
+  }
+  else if(filetype == '.html'){
+    emailDeltaAsHtml(filename, project, compileOptions, delt, sender, pass, receiver, callback);
   }
   else {
     //default to txt
@@ -52,6 +59,31 @@ function emailDeltaAsDocx(project, userSettings, filename, delt, options, sender
     ]
     emailFile(sender, pass, receiver, attachments, callback);
   });
+}
+
+function emailDeltaAsMd(filename, delt, sender, pass, receiver, callback){
+  var attachments = [
+    {
+      filename: filename + '.md',
+      content: convertMdfcToMd(convertDeltaToMDF(delt)) 
+    }
+  ];
+
+  emailFile(sender, pass, receiver, attachments, callback);
+}
+
+function emailDeltaAsHtml(filename, project, compileOptions, delt, sender, pass, receiver, callback){
+  var generateTitle = compileOptions ? compileOptions.generateTitlePage : false;
+  var title = compileOptions ? project.title : project.chapters[project.activeChapterIndex].title;
+  
+  var attachments = [
+    {
+      filename: filename + '.html',
+      content: convertMdfcToHtmlPage(convertDeltaToMDF(delt), title, project.author, generateTitle) 
+    }
+  ];
+
+  emailFile(sender, pass, receiver, attachments, callback);
 }
 
 function emailDeltaAsMdfc(filename, delt, sender, pass, receiver, callback){
