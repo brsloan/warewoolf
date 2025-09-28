@@ -1,7 +1,7 @@
 <p align="center">
 	<img src="./src/assets/logo.png" style="width: 280px"/>
 </p>
-<p align="center">v2.0.0</p>
+<p align="center">v2.1.0</p>
 <p align="center">"The only writing software I use." -Virginia Woolf</p>
 
 WareWoolf is designed for one thing: writing fiction. It is intentionally simplified: you cannot change the font, line spacing, or color. But it has everything you need to organize, edit, and revise a novel--and you don't even need a mouse.
@@ -10,7 +10,7 @@ It is composed of three simple text-based panels with no icons: Chapters, Editor
 
 That's it. There is no toolbar with twenty buttons cluttering the screen. There isn't even a file menu unless you summon it by pressing Alt. All formatting is done with shortcuts. (But don't worry, there aren't many to memorize, and you can always press **CTRL** + **H** to show them all in the Shortcut Helper. It's not like you do a lot of formatting when writing fiction anyway.)
 
-What it does have is an array of tools for importing plaintext and docx files and converting them into proper manuscript format, as well as features such as self-emailing drafts at the press of a button, a built-in file manager, and a wi-fi manager for easy use in standalone writing devices ("writerDecks") without access to any other software.
+What it does have is an array of tools for importing plaintext and docx files and converting them into proper manuscript format, as well as features such as self-emailing drafts at the press of a button, a built-in file manager, a wi-fi manager, and a battery monitor for easy use in standalone writing devices ("writerDecks") without access to any other software.
 
 Dark Mode:
 ![screenshot of dark mode of program described](src/assets/screenshot_darkmode.png?raw=true "WareWoolf")
@@ -31,14 +31,17 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 * Send Via Email: Email drafts of individual chapters or the entire manuscript to yourself at the press of a button.
 * Built In File Manager: Rename, delete, copy, move, and organize files within WareWoolf (for use in a writerDeck).
 * Built In Wi-Fi Manager: turn wi-fi on/off, connect to new networks, etc. (Linux only, for use in a writerDeck).
+* Built In Battery Monitor: display battery percentage (Linux only, for use in a writerDeck)
 * Word Counts / Goal: See total count, chapter count, session count, and set a goal to see a progress bar showing how close you are to completion.
 * Each chapter is saved as an individual file only loaded when you are working on that chapter. This keeps very long novels from slowing the application at all, even with low-memory computers such as a Raspberry Pi.
-* Outliner (very simple as is, but plan to improve drastically)
+* Outliner.
+* Corkboard that saves as a markdown file that doubles as an outline.
 * Adjust width of text editor and how large text is displayed.
 * Spellcheck, but it must be run after writing (no form of auto-correct or red squiggles or godawful grammar advice).
 * Word .docx support for import/export
 * Auto-saving and auto-backup options
 * Saves chapters as .txt files with light Markdown-style formatting, so even if WareWoolf disappears you will always be able to read/edit the documents you create with it. This is also widely considered the most "archival" file format, so people will still be able to open your files in 100 years (if people still read then).
+* Export as plain text, markdownFic, standard markdown, docx, or HTML 
 
 ## Installation
 
@@ -62,7 +65,7 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 
 ## Status
 
-2025-XX-XX: v2.1.0! Changes made:
+2025-09-28: v2.1.0! Changes made:
 * Corkboard feature for pre-planning/outlining novels. Displays as color-coded digital index cards but saves as plain text "project_corkboard.txt" markdown document, so can be edited/prewritten in other apps.
 * Export/Compile as standard Markdown or HTML
 * Can now open .woolf files directly (user must set WareWoolf to default program in Windows, but it is automatic on MacOS)
