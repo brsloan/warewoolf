@@ -1,10 +1,11 @@
 const fs = require('fs');
-const { logError } = require('./error-log');
 const archiver = require('archiver');
+const { logError } = require('./error-log');
 const { sanitizeFilename } = require('./utils');
 
-
 function htmlChaptersToEpub(title, author, htmlChapters, saveDir, callback){
+    //htmlChapters should be an array of objects with a title property and an html property
+
     const uuid = crypto.randomUUID();
 
     const epubName = sanitizeFilename(title) + '.epub';
@@ -53,8 +54,6 @@ function htmlChaptersToEpub(title, author, htmlChapters, saveDir, callback){
     archive.append(getCss(), {name: contentDir + 'CSS/template.css'});
 
     archive.finalize();
-
-
 };
 
 function getMimetype(){
@@ -121,9 +120,9 @@ function getTocNcx(title, htmlChapters, uuid){
 	'</docTitle>' +
 	'<navMap>';
 
-    for(i=1;i<htmlChapters.length;i++){
+    for(i=1;i<htmlChapters.length + 1;i++){
         ncx += '<navPoint id="chapter_' + i + '" playOrder="' + i + '">' +
-	'		<navLabel><text>Chapter ' + i + '</text></navLabel>' +
+	'		<navLabel><text>' + htmlChapters[i - 1].title + '</text></navLabel>' +
 	'		<content src="chapter_' + i + '.xhtml" />' +
 	'	</navPoint>';
     }
@@ -146,8 +145,8 @@ function getTocXhtml(htmlChapters){
 	'        <h1 class="frontmatter">Table of Contents</h1>' +
 	'        <ol class="contents">';
 
-    for(i=1;i<htmlChapters.length;i++){
-        xhtml += '<li><a href="chapter_' + i + '.xhtml">Chapter ' + i + '</a></li>'
+    for(i=1;i<htmlChapters.length + 1;i++){
+        xhtml += '<li><a href="chapter_' + i + '.xhtml">' + htmlChapters[i - 1].title + '</a></li>'
     }
 
     xhtml += '</ol>' +
@@ -165,11 +164,11 @@ function getChapterXhtmlPages(htmlChapters){
         pages.push('<?xml version="1.0" encoding="utf-8"?>' +
         '<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">' +
         '<head>' +
-        '<title>chapter_' + (i + 1) + '.xhtml</title>' +
+        '<title>chapter_' + (i + 1) + '.xhtml</title>' + //change to actual title???
         '<link href="CSS/template.css" rel="stylesheet" type="text/css" />' +
         '</head>' +
         '<body>' +
-        chap +
+        chap.html +
         '</body>' +
         '</html> ')
     });

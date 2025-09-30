@@ -58,7 +58,10 @@ function testEpub(){
   var htmlChaps = [];
 
   project.chapters.forEach(function(chap){
-    htmlChaps.push(convertMdfcToHtml(convertDeltaToMDF(chap.getContentsOrFile())))
+    htmlChaps.push({
+      title: chap.title,
+      html: convertMdfcToHtml(convertDeltaToMDF(chap.getContentsOrFile()))
+    })
   })
 
   htmlChaptersToEpub(project.title, project.author, htmlChaps, sysDirectories.docs, function(resp){
