@@ -71,20 +71,25 @@ function getContainerXml(){
 }
 
 function getContentOpf(title, author, htmlChapters, uuid){
+    const now = new Date();
+    const isoFormattedDate = now.toISOString();
+    const formattedWithoutMilliseconds = isoFormattedDate.slice(0, 19) + 'Z';
+
     var opf = '<?xml version="1.0" encoding="UTF-8" ?>' +
 	'<package xmlns="http://www.idpf.org/2007/opf" xmlns:dc="http://purl.org/dc/elements/1.1/" unique-identifier="db-id" version="3.0">' +
 	'' +
 	'	<metadata>' +
 	'	    <dc:title id="t1">' + title + '</dc:title>' +
-	'	    <dc:creator opf:role="aut">' + author + '</dc:creator>' +
+	'	    <dc:creator id="creator">' + author + '</dc:creator>' +
     '       <dc:identifier id="db-id">' + uuid + '</dc:identifier>' + 
+    '       <meta property="dcterms:modified">' + formattedWithoutMilliseconds + '</meta>' + 
 	'	    <dc:language>en</dc:language>' +
 	'	</metadata>';
 
     opf += '<manifest>' +
 	'	    <item id="toc" properties="nav" href="toc.xhtml" media-type="application/xhtml+xml" />' +
 	'	    <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml" />' +
-	'	    <item id="template_css" href="template.css" media-type="text/css" />';
+	'	    <item id="template_css" href="CSS/template.css" media-type="text/css" />';
 
     for(i=1;i<htmlChapters.length + 1;i++){
          opf += '<item id="chapter_' + i + '" href="chapter_' + i + '.xhtml" media-type="application/xhtml+xml" />';
@@ -117,7 +122,7 @@ function getTocNcx(title, htmlChapters, uuid){
 	'<navMap>';
 
     for(i=1;i<htmlChapters.length;i++){
-        ncx += '<navPoint id="chapter_' + i + '" playOrder=' + i + '>' +
+        ncx += '<navPoint id="chapter_' + i + '" playOrder="' + i + '">' +
 	'		<navLabel><text>Chapter ' + i + '</text></navLabel>' +
 	'		<content src="chapter_' + i + '.xhtml" />' +
 	'	</navPoint>';
