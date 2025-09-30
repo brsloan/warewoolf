@@ -177,7 +177,8 @@ function getChapterXhtmlPages(htmlChapters){
 }
 
 function getCss(){
-    return "      h1 {" +
+    return ".contents { list-style-type: none; } " + 
+      "      h1 {" +
       "        white-space: pre-wrap;" +
       "      }" +
       "    p {" +
