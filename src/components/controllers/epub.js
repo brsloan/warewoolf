@@ -10,7 +10,7 @@ function htmlChaptersToEpub(title, author, htmlChapters, saveDir, callback){
     const epubName = sanitizeFilename(title) + '.epub';
     const output = fs.createWriteStream(saveDir + "/" + epubName);
     const archive = archiver('zip', {
-        store: true
+        zlib: { level: 9 }
     });
 
      archive.on('warning', function(err) {
