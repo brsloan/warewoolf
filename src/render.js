@@ -64,7 +64,7 @@ function testEpub(){
     })
   })
 
-  htmlChaptersToEpub(project.title, project.author, htmlChaps, sysDirectories.docs, function(resp){
+  htmlChaptersToEpub(project.title, project.author, htmlChaps, sysDirectories.docs, true, function(resp){
     console.log('Conversion done: ' + resp);
   })
 }

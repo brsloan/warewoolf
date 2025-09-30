@@ -3,8 +3,14 @@ const archiver = require('archiver');
 const { logError } = require('./error-log');
 const { sanitizeFilename } = require('./utils');
 
-function htmlChaptersToEpub(title, author, htmlChapters, saveDir, callback){
+function htmlChaptersToEpub(title, author, htmlChapters, saveDir, insertTitlePage, callback){
     //htmlChapters should be an array of objects with a title property and an html property
+    if(insertTitlePage){
+        htmlChapters.unshift({
+            title: 'Title Page',
+            html: getTitlePageBody(title, author)
+        });
+    }
 
     const uuid = crypto.randomUUID();
 
@@ -164,7 +170,7 @@ function getChapterXhtmlPages(htmlChapters){
         pages.push('<?xml version="1.0" encoding="utf-8"?>' +
         '<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">' +
         '<head>' +
-        '<title>chapter_' + (i + 1) + '.xhtml</title>' + //change to actual title???
+        '<title>chapter_' + (i + 1) + '.xhtml</title>' +
         '<link href="CSS/template.css" rel="stylesheet" type="text/css" />' +
         '</head>' +
         '<body>' +
@@ -176,8 +182,14 @@ function getChapterXhtmlPages(htmlChapters){
     return pages;
 }
 
+function getTitlePageBody(title, author){
+    return '<h1 class="center title">' + title + '</h1>' +
+        '<h2 class="center">by ' + author + '</h2>';
+}
+
 function getCss(){
     return ".contents { list-style-type: none; } " + 
+        ".title { margin-top: 33% }" + 
       "      h1 {" +
       "        white-space: pre-wrap;" +
       "      }" +
