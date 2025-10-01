@@ -16,11 +16,6 @@ const {
 const fileRequestedOnOpen = ipcRenderer.sendSync('get-file-requested-on-open');
 const { showBattery, removeBattery } = require('./components/views/battery_display');
 
-//TEMP TESTING
-const { htmlChaptersToEpub } = require('./components/controllers/epub');
-const { convertMdfcToHtml } = require('./components/controllers/mdfc-to-html');
-const { convertDeltaToMDF } = require('./components/controllers/markdownFic');
-
 var editorQuill = new Quill('#editor-container', {
   modules: {
     history: {
@@ -51,22 +46,6 @@ function initialize(){
   setUpQuills();
   applyUserSettings();
   loadInitialProject();
-  testEpub();
-}
-
-function testEpub(){
-  var htmlChaps = [];
-
-  project.chapters.forEach(function(chap){
-    htmlChaps.push({
-      title: chap.title,
-      html: convertMdfcToHtml(convertDeltaToMDF(chap.getContentsOrFile()))
-    })
-  })
-
-  htmlChaptersToEpub(project.title, project.author, htmlChaps, sysDirectories.docs, true, function(resp){
-    console.log('Conversion done: ' + resp);
-  })
 }
 
 function loadInitialProject(){

@@ -3,7 +3,7 @@ const archiver = require('archiver');
 const { logError } = require('./error-log');
 const { sanitizeFilename } = require('./utils');
 
-function htmlChaptersToEpub(title, author, htmlChapters, saveDir, insertTitlePage, callback){
+function htmlChaptersToEpub(title, author, htmlChapters, filepath, insertTitlePage, callback){
     //htmlChapters should be an array of objects with a title property and an html property
     if(insertTitlePage){
         htmlChapters.unshift({
@@ -14,8 +14,10 @@ function htmlChaptersToEpub(title, author, htmlChapters, saveDir, insertTitlePag
 
     const uuid = crypto.randomUUID();
 
-    const epubName = sanitizeFilename(title) + '.epub';
-    const output = fs.createWriteStream(saveDir + "/" + epubName);
+   // const epubName = sanitizeFilename(title) + '.epub';
+    //const output = fs.createWriteStream(saveDir + "/" + epubName);
+    //filepath includes name/extension
+    const output = fs.createWriteStream(filepath);
     const archive = archiver('zip', {
         zlib: { level: 9 }
     });
@@ -34,7 +36,7 @@ function htmlChaptersToEpub(title, author, htmlChapters, saveDir, insertTitlePag
     });
 
     archive.on('finish', function(){
-      callback(epubName);
+      callback(filepath);
     })
 
     archive.pipe(output);
