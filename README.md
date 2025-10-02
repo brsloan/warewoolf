@@ -65,6 +65,9 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 
 ## Status
 
+2025-xx-xx: vX.X.X. Changes made:
+* .epub export/compile. Meant for quickly generating .epub ebook files for sharing with first readers, etc.
+
 2025-09-28: v2.1.0! Changes made:
 * Corkboard feature for pre-planning/outlining novels. Displays as color-coded digital index cards but saves as plain text "project_corkboard.txt" markdown document, so can be edited/prewritten in other apps.
 * Export/Compile as standard Markdown or HTML
