@@ -125,7 +125,7 @@ function showEmailOptions(project, userSettings, editorQuill){
     attachSet.appendChild(typeLabel);
 
     var typeSelect = document.createElement("select");
-    const typeOptions = [".docx", ".txt", ".md", ".html", ".mdfc"];
+    const typeOptions = [".docx", ".txt", ".md", ".html", ".epub", ".mdfc"];
     typeOptions.forEach(function(op){
       var txtOp = document.createElement("option");
       txtOp.value = op;
