@@ -3,8 +3,9 @@ const { convertDeltaToMDF } = require('./markdownFic');
 const { logError } = require('./error-log');
 const { convertDeltaToDocx, saveDocx } = require('./delta-to-docx');
 const { sanitizeFilename } = require('./utils');
-const { convertMdfcToHtmlPage } = require('./mdfc-to-html');
+const { convertMdfcToHtmlPage, convertMdfcToHtml } = require('./mdfc-to-html');
 const { convertMdfcToMd } = require('./mdfc-to-md');
+const { htmlChaptersToEpub } = require('./epub');
 
 function exportProject(project, userSettings, options, filepath){
     //TODO: Need to create function to safely convert titles to folder/filenames
@@ -30,9 +31,47 @@ function exportProject(project, userSettings, options, filepath){
         case ".html":
             exportAsHtml(project, newDir, options.what);
             break;
+        case ".epub":
+            exportAsEpub(project, userSettings, newDir, options.what);
+            break;
         default:
             console.log("No valid filetype selected for export.");
     }
+}
+
+function exportAsEpub(project, userSettings, dir, what){
+  try{
+    var chapsToExport = what == 'project' ? project.chapters : [ project.getActiveChapter() ];
+    for(let i=0;i<chapsToExport.length;i++){
+      console.log('in loop ' + i + 'of ' + chapsToExport.length);
+      var chapFile = chapsToExport[i].getContentsOrFile();
+      var outName = generateChapterFilename(i, chapsToExport[i].title, what);
+
+      var htmlChap = {
+        title: chapsToExport[i].title,
+        html: convertMdfcToHtml(convertDeltaToMDF(chapFile))
+      }
+
+      htmlChaptersToEpub(project.title + ': ' + chapsToExport[i].title, project.author, [htmlChap], dir + outName + '.epub', userSettings.compileGenTitlePage, function(resp){
+        console.log('epub exported: ' + resp);
+      });
+    }
+
+    if(what == 'project'){
+      var htmlChap = {
+        title: 'Notes',
+        html: convertMdfcToHtml(convertDeltaToMDF(project.notes))
+      }
+
+      htmlChaptersToEpub('Notes', project.author, [htmlChap], dir + 'notes.epub', userSettings.compileGenTitlePage, function(resp){
+        console.log('epub exported: ' + resp);
+      });
+    }
+
+  }
+  catch(err){
+    logError(err);
+  }
 }
 
 function exportAsHtml(project, dir, what){
