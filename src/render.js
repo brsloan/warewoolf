@@ -746,7 +746,6 @@ function changeChapterTitle(ind){
 
 }
 
-//TK detect when splitting ref and do that
 function splitChapter(){
   var selection = editorQuill.getSelection(true);
   if(selection){
@@ -810,17 +809,22 @@ function alertBackupResult(msg){
   console.log(msg);
 }
 
-//TK detect when index is in Reference and add there instead
 function addImportedChapter(chapDelta, title){
   var newChap = newChapter();
   newChap.hasUnsavedChanges = true;
   newChap.contents = chapDelta;
   newChap.title = title;
 
-  project.chapters.splice(project.activeChapterIndex + 1, 0, newChap);
+  if(indexIsReference(project.activeChapterIndex)){
+    project.reference.splice(project.activeChapterIndex - project.chapters.length + 1, 0, newChap);
+  }
+  else{
+    project.chapters.splice(project.activeChapterIndex + 1, 0, newChap);
+  }
+  
   updateFileList();
-  var thisIndex = project.chapters.indexOf(newChap);
-  displayChapterByIndex(thisIndex);
+  //var thisIndex = project.chapters.indexOf(newChap);
+  displayChapterByIndex(project.activeChapterIndex + 1);
 }
 
 ///////////////////////////////////////////////////////////////////
