@@ -581,17 +581,36 @@ function clearCurrentChapterIfUnchanged(){
   }
 };
 
-//TK: make move ref to trash too
 function moveToTrash(ind){
   if(indexIsTrash(ind) == false){
     project.hasUnsavedChanges = true;
-    var toTrash = project.chapters.splice(ind, 1)[0];
-    project.trash.push(toTrash);
+    var isReference = indexIsReference(ind);
+    var isChap = !isReference;
+    var isLastChap = ind == project.chapters.length - 1;
+    var isLastRef = ind == project.chapters.length + project.reference.length - 1;
 
+    if(isReference){
+      let toTrash = project.reference.splice(ind - project.chapters.length, 1)[0];
+      project.trash.push(toTrash);
+    }
+    else{
+      let toTrash = project.chapters.splice(ind, 1)[0];
+      project.trash.push(toTrash);
+    }
+    
+    //If deleting currently selected chapter, select next chapter if there is one, or the previous chapter if not.
     if(ind == project.activeChapterIndex){
-      if(project.chapters.length > 0){
+      //If deleting a chapter and there are chapters left
+      if(isChap && project.chapters.length > 0){
         var newInd = ind < project.chapters.length || ind == 0 ? ind : ind - 1;
         displayChapterByIndex(newInd);
+      }
+      else if(isReference && project.reference.length > 0){
+        var newInd = ind < project.chapters.length + project.reference.length || ind - project.chapters.length == 0 ? ind : ind - 1;
+        displayChapterByIndex(newInd);
+      }
+      else if(isReference && project.reference.length < 1 && project.chapters.length > 0){
+        displayChapterByIndex(project.chapters.length - 1);
       }
       else{
         displayChapterByIndex(0)
