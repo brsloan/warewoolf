@@ -161,6 +161,7 @@ function updateFileList(){
 
   clearList();
   generateChapterList();
+  generateReferenceList();
   generateTrashList();
 
   function clearList() {
@@ -196,12 +197,12 @@ function updateFileList(){
     });
   }
 
-  function generateTrashList() {
-    var trashList = document.getElementById("trash-list");
-    while (trashList.hasChildNodes()) {
-      trashList.removeChild(trashList.firstChild);
+  function generateReferenceList(){
+    var referenceList = document.getElementById('reference-list');
+    while(referenceList.hasChildNodes()){
+      referenceList.removeChild(referenceList.firstChild);
     }
-    project.trash.forEach(function (chap, chapIndex) {
+    project.reference.forEach(function(chap, chapIndex){
       var listChap = document.createElement("li");
       listChap.innerHTML = chap.title;
       listChap.dataset.chapIndex = project.chapters.length + chapIndex;
@@ -212,6 +213,35 @@ function updateFileList(){
         changeChapterTitle(this.dataset.chapIndex);
       };
       if (chapIndex + project.chapters.length == project.activeChapterIndex)
+        listChap.classList.add("activeChapter");
+      if (chap.hasUnsavedChanges == true)
+        listChap.innerHTML += "*";
+      referenceList.appendChild(listChap);
+    });
+
+    var refHeader = document.getElementById('reference-header');
+    if(project.reference.length > 0 )
+      refHeader.classList.remove('trash-header-empty');
+    else
+      refHeader.classList.add('trash-header-empty');
+  }
+
+  function generateTrashList() {
+    var trashList = document.getElementById("trash-list");
+    while (trashList.hasChildNodes()) {
+      trashList.removeChild(trashList.firstChild);
+    }
+    project.trash.forEach(function (chap, chapIndex) {
+      var listChap = document.createElement("li");
+      listChap.innerHTML = chap.title;
+      listChap.dataset.chapIndex = project.chapters.length + project.reference.length + chapIndex;
+      listChap.onclick = function () {
+        displayChapterByIndex(this.dataset.chapIndex);
+      };
+      listChap.ondblclick = function () {
+        changeChapterTitle(this.dataset.chapIndex);
+      };
+      if (chapIndex + project.chapters.length + project.reference.length == project.activeChapterIndex)
         listChap.classList.add("activeChapter");
       if (chap.hasUnsavedChanges == true)
         listChap.innerHTML += "*";
@@ -231,8 +261,9 @@ function displayChapterByIndex(ind){
   clearCurrentChapterIfUnchanged();
   ind = parseInt(ind);
 
-  if(ind > project.chapters.length + project.trash.length - 1)
-    ind = project.chapters.length + project.trash.length - 1;
+  //If trying to go beyond last chapter, stay on last chapter
+  if(ind > project.chapters.length + project.reference.length + project.trash.length - 1)
+    ind = project.chapters.length + project.reference.length + project.trash.length - 1;
 
   project.activeChapterIndex = ind;
 
@@ -240,8 +271,11 @@ function displayChapterByIndex(ind){
   if(ind < project.chapters.length){
     chap = project.chapters[ind];
   }
+  else if(ind < project.chapters.length + project.reference.length){
+    chap = project.reference[ind - project.chapters.length]
+  }
   else {
-    chap = project.trash[ind - project.chapters.length];
+    chap = project.trash[ind - project.reference.length - project.chapters.length];
   }
 
   var contents;
@@ -352,7 +386,7 @@ function displayPreviousChapter(){
 }
 
 function displayNextChapter(){
-  if(project.activeChapterIndex < project.chapters.length - 1 + project.trash.length){
+  if(project.activeChapterIndex < project.chapters.length - 1 + project.trash.length + project.reference.length){
     displayChapterByIndex(project.activeChapterIndex + 1);
     editorQuill.setSelection(0);
     project.textCursorPosition = 0;
@@ -367,12 +401,24 @@ function moveChapUp(chapInd){
     project.chapters.splice(chapInd - 1, 0, chap);
     project.activeChapterIndex--;
   }
-  else if(chapInd > project.chapters.length){
+  else if(chapInd == project.chapters.length && project.reference.length > 0){
     project.hasUnsavedChanges = true;
-    var trashChap = project.trash.splice(chapInd - project.chapters.length, 1)[0];
-    project.trash.splice(chapInd - project.chapters.length - 1, 0, trashChap);
+    var refChap = project.reference.splice(chapInd - project.chapters.length, 1)[0];
+    project.chapters.splice(project.chapters.length,0,refChap); 
+  }
+  else if(chapInd > project.chapters.length && chapInd < project.chapters.length + project.reference.length){
+    project.hasUnsavedChanges = true;
+    var refChap = project.reference.splice(chapInd - project.chapters.length, 1)[0];
+    project.reference.splice(chapInd - project.chapters.length - 1, 0, refChap);
     project.activeChapterIndex--;
   }
+  else if(chapInd > project.chapters.length + project.reference.length){
+    project.hasUnsavedChanges = true;
+    var trashChap = project.trash.splice(chapInd - project.chapters.length - project.reference.length, 1)[0];
+    project.trash.splice(chapInd - project.chapters.length - project.reference.length - 1, 0, trashChap);
+    project.activeChapterIndex--;
+  }
+
   updateFileList();
 }
 
@@ -383,12 +429,24 @@ function moveChapDown(chapInd){
     project.chapters.splice(chapInd + 1, 0, chap);
     project.activeChapterIndex++;
   }
-  else if(chapInd > project.chapters.length - 1 && chapInd < project.chapters.length + project.trash.length - 1){
+  else if(chapInd == project.chapters.length - 1){
     project.hasUnsavedChanges = true;
-    var trashChap = project.trash.splice(chapInd - project.chapters.length, 1)[0];
-    project.trash.splice(chapInd - project.chapters.length + 1, 0, trashChap);
+    var chap = project.chapters.splice(chapInd, 1)[0];
+    project.reference.splice(0,0,chap);
+  }
+  else if(chapInd > project.chapters.length - 1 && chapInd < project.chapters.length + project.reference.length - 1){
+    project.hasUnsavedChanges = true;
+    var refChap = project.reference.splice(chapInd - project.chapters.length, 1)[0];
+    project.reference.splice(chapInd - project.chapters.length + 1, 0, refChap);
     project.activeChapterIndex++;
   }
+  else if(chapInd > project.chapters.length + project.reference.length - 1 && chapInd < project.chapters.length + project.reference.length + project.trash.length - 1){
+    project.hasUnsavedChanges = true;
+    var trashChap = project.trash.splice(chapInd - project.chapters.length - project.reference.length, 1)[0];
+    project.trash.splice(chapInd - project.chapters.length - project.reference.length + 1, 0, trashChap);
+    project.activeChapterIndex++;
+  }
+  
   updateFileList();
 }
 
@@ -407,6 +465,7 @@ function createNewProject(){
 }
 
 function addNewChapter(){
+  //TK need to change to add new chap in Reference if there
   var newChap = newChapter();
   newChap.hasUnsavedChanges = true;
   newChap.contents = {"ops":[{"insert":"\n"}]};
@@ -510,6 +569,7 @@ function clearCurrentChapterIfUnchanged(){
   }
 };
 
+//TK: make move ref to trash too
 function moveToTrash(ind){
   if(indexIsTrash(ind) == false){
     project.hasUnsavedChanges = true;
@@ -597,7 +657,11 @@ function verifyToDelete(ind){
 }
 
 function indexIsTrash(ind){
-  return ind > project.chapters.length - 1;
+  return ind > project.chapters.length + project.reference.length - 1;
+}
+
+function indexIsReference(ind){
+  return ind > project.chapters.length + 1 && ind < project.chapters.length + project.reference.length;
 }
 
 function restoreFromTrash(ind){
@@ -612,7 +676,9 @@ function restoreFromTrash(ind){
 function changeChapterTitle(ind){
   var chap;
   if(indexIsTrash(ind))
-    chap = project.trash[ind - project.chapters.length];
+    chap = project.trash[ind - project.chapters.length - project.reference.length];
+  else if(indexIsReference(ind))
+    chap = project.reference[ind - project.chapters.length];
   else
     chap = project.chapters[ind];
 
@@ -649,6 +715,7 @@ function changeChapterTitle(ind){
 
 }
 
+//TK detect when splitting ref and do that
 function splitChapter(){
   var selection = editorQuill.getSelection(true);
   if(selection){
@@ -712,6 +779,7 @@ function alertBackupResult(msg){
   console.log(msg);
 }
 
+//TK detect when index is in Reference and add there instead
 function addImportedChapter(chapDelta, title){
   var newChap = newChapter();
   newChap.hasUnsavedChanges = true;

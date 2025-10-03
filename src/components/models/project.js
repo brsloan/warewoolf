@@ -11,6 +11,7 @@ function newProject(){
         author: "",
         notes: {},
         chapters: [],
+        reference: [],
         filters: [],
         trash: [],
         activeChapterIndex: 0,
@@ -29,8 +30,10 @@ function newProject(){
       var chap;
         if(this.activeChapterIndex < this.chapters.length)
             chap =  this.chapters[this.activeChapterIndex];
+        else if(this.activeChapterIndex < this.chapters.length + this.reference.length)
+            chap = this.reference[this.activeChapterIndex - this.chapters.length];
         else
-            chap = this.trash[this.activeChapterIndex - this.chapters.length];
+            chap = this.trash[this.activeChapterIndex - this.chapters.length - this.reference.length];
         return chap;
     }
 
@@ -54,6 +57,11 @@ function newProject(){
         });
         this.chapters = chaps;
 
+        var refChaps = [];
+        this.reference.forEach(function(rf){
+          refChaps.push(newChapter().parseChapter(rf));
+        })
+        this.reference = refChaps;
 
         var trashChaps = [];
         this.trash.forEach(function (tr) {
@@ -77,6 +85,10 @@ function newProject(){
           proj.chapters.forEach(function(chap){
             if(chap.hasUnsavedChanges)
               chap.saveFile();
+          });
+          proj.reference.forEach(function(rf){
+            if(rf.hasUnsavedChanges)
+              rf.saveFile();
           });
           proj.trash.forEach(function(tr){
             if(tr.hasUnsavedChanges)
@@ -135,6 +147,15 @@ function newProject(){
               chap.filename = newChapFilename;
           }
         });
+        proj.reference.forEach(function(chap){
+          if(chap.filename != null){
+            var newChapFilename =  chap.filename.split("/").pop();
+            fs.copyFileSync(proj.directory + proj.chapsDirectory + chap.filename,
+              newDirectory + newSubDir + newChapFilename);
+            if(useSaveCopy == false)
+              chap.filename = newChapFilename;
+          }
+        })
         proj.trash.forEach(function(chap){
           if(chap.filename != null){
             var newChapFilename = chap.filename.split("/").pop();
@@ -163,6 +184,14 @@ function newProject(){
               chap.saveCopy();
             else
               chap.saveFile();
+          }
+        });
+        proj.reference.forEach(function(rf){
+          if(rf.hasUnsavedChanges){
+            if(useSaveCopy)
+              rf.saveCopy();
+            else
+              rf.saveFile();
           }
         });
         proj.trash.forEach(function(tr){
