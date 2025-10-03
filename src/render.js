@@ -200,7 +200,12 @@ function updateFileList(){
   function generateReferenceList(){
     var referenceList = document.getElementById('reference-list');
     while(referenceList.hasChildNodes()){
-      referenceList.removeChild(referenceList.firstChild);
+      try{
+        referenceList.removeChild(referenceList.firstChild);
+      }
+      catch(err){
+        console.log(err);
+      }
     }
     project.reference.forEach(function(chap, chapIndex){
       var listChap = document.createElement("li");
@@ -465,17 +470,24 @@ function createNewProject(){
 }
 
 function addNewChapter(){
-  //TK need to change to add new chap in Reference if there
-  var newChap = newChapter();
-  newChap.hasUnsavedChanges = true;
-  newChap.contents = {"ops":[{"insert":"\n"}]};
-  project.chapters.splice(project.activeChapterIndex + 1, 0, newChap);
-  project.hasUnsavedChanges = true;
-  updateFileList();
-  var thisIndex = project.chapters.indexOf(newChap);
-  displayChapterByIndex(thisIndex);
-  editorQuill.enable();
-  changeChapterTitle(thisIndex);
+  //If not trash selected
+  if(project.activeChapterIndex < project.chapters.length + project.reference.length){
+    var newChap = newChapter();
+    newChap.hasUnsavedChanges = true;
+    newChap.contents = {"ops":[{"insert":"\n"}]};
+    if(project.activeChapterIndex < project.chapters.length)
+      project.chapters.splice(project.activeChapterIndex + 1, 0, newChap);
+    else
+      project.reference.splice(project.activeChapterIndex - project.chapters.length + 1, 0, newChap);
+    
+    project.hasUnsavedChanges = true;
+    updateFileList();
+    //var thisIndex = project.chapters.indexOf(newChap);
+    var thisIndex = project.activeChapterIndex + 1;
+    displayChapterByIndex(thisIndex);
+    editorQuill.enable();
+    changeChapterTitle(thisIndex);
+  }
 }
 
 function saveProject(){
@@ -661,7 +673,7 @@ function indexIsTrash(ind){
 }
 
 function indexIsReference(ind){
-  return ind > project.chapters.length + 1 && ind < project.chapters.length + project.reference.length;
+  return ind > project.chapters.length - 1 && ind < project.chapters.length + project.reference.length;
 }
 
 function restoreFromTrash(ind){
