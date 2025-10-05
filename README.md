@@ -67,6 +67,7 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 
 2025-xx-xx: vX.X.X. Changes made:
 * .epub export/compile. Meant for quickly generating .epub ebook files for sharing with first readers, etc.
+* "Reference" function lets you keep non-compiling documents in your project for planning, notes, etc. Move any chapter to end of chapter list, then move down one more space, and it will shift into "Reference" section and no longer count toward word count or be included in compile. Can move back into compiling chapters in same way (moveing up).
 
 2025-09-28: v2.1.0! Changes made:
 * Corkboard feature for pre-planning/outlining novels. Displays as color-coded digital index cards but saves as plain text "project_corkboard.txt" markdown document, so can be edited/prewritten in other apps.
