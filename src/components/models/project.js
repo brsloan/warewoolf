@@ -1,7 +1,7 @@
 const fs = require('fs');
 const newChapter = require('./chapter');
 const { logError } = require('../controllers/error-log');
-const defaultProjectNotesName = 'project_.txt';
+const defaultProjectNotesName = 'project_.txt'; //Will have default notes prepend ('-notes_') as well (added by Chapter object's save function)
 
 function newProject(){
     return {
