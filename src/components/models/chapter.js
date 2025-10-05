@@ -2,6 +2,7 @@ const fs = require('fs');
 const { logError } = require('../controllers/error-log');
 const { parseMDF, convertDeltaToMDF } = require('../controllers/markdownFic');
 const { sanitizeFilename } = require('../controllers/utils');
+const notesNamePrepend = '-notes_';
 
 function newChapter(){
     return {
@@ -11,12 +12,16 @@ function newChapter(){
       contents: null,
       summary: null,
       hasUnsavedChanges: null,
+      notes: null,
       deleteFile: deleteChapterFile,
       parseChapter: parseChapter,
       getFile: getFile,
       saveFile: saveFile,
       saveCopy: saveCopy,
-      getContentsOrFile: getContentsOrFile
+      getContentsOrFile: getContentsOrFile,
+      getNotesFile: getNotesFile,
+      getNotesContentOrFile: getNotesContentOrFile,
+      saveNotesFile: saveNotesFile
     };
 
     function deleteChapterFile(){
@@ -63,6 +68,16 @@ function newChapter(){
       return cont;
     }
 
+    function getNotesContentOrFile(){
+      var chap = this;
+
+      var notes = chap.notes ? chap.notes : null;
+      if(notes == null && chap.filename != null)
+        notes = chap.getNotesFile();
+
+      return notes;
+    }
+
 
     function saveCopy(){
       try{
@@ -101,6 +116,13 @@ function newChapter(){
             if(err)
               logError(err);
           });
+
+        //If filename has changed and notes exist, rename notes to match
+        if(oldFilename != undefined && oldFilename != null && oldFilename != chap.filename){
+          if(fs.existsSync(filepathRoot + notesNamePrepend + oldFilename)){
+            fs.renameSync(filepathRoot + notesNamePrepend + oldFilename, filepathRoot + notesNamePrepend + chap.filename);
+          }
+        }
         
         chap.contents = null;
       
@@ -109,7 +131,44 @@ function newChapter(){
       catch(err){
         logError(err);
       }
-  }
+    }
+
+    function getNotesFile(){
+      try{
+        var chap = this;
+        var fullNotesPath = project.directory + project.chapsDirectory + notesNamePrepend + chap.filename;
+
+        var fileText = null;
+        if(fs.existsSync(fullNotesPath)){
+          fileText = fs.readFileSync(fullNotesPath, "utf8");
+        }
+        
+
+        return fileText ? parseMDF(fileText) : null;
+      }
+      catch(err){
+        logError(err);
+      }
+    }
+
+    function saveNotesFile(){
+      try{
+        var chap = this;
+        const filepathRoot = project.directory + project.chapsDirectory;
+
+        if(chap.notes == null)
+          chap.notes = chap.getNotesFile();
+
+        if(chap.notes != null)
+          fs.writeFileSync(filepathRoot + notesNamePrepend + chap.filename, convertDeltaToMDF(chap.notes), "utf8")
+        
+        chap.notes = null;
+      }
+      catch(err){
+        logError(err);
+      }
+    }
+    
 
   function getNewFilename(title){
     
