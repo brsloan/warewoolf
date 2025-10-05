@@ -131,6 +131,14 @@ function setProject(filepath){
 }
 
 function convertLegacyProject(){
+
+  //Convert legacy notes from v2.1 and before
+  if(project.notes){
+    project.notesChap.notes = project.notes;
+    project.notesChap.saveNotesFile();
+  }
+
+  //Convert legacy chapters from v1.1 and before
   project.chapters.forEach(function(chap, i){
     if(chap.filename.includes('.pup')){
       chap.contents = chap.getFile();
