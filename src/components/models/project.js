@@ -1,7 +1,7 @@
 const fs = require('fs');
 const newChapter = require('./chapter');
 const { logError } = require('../controllers/error-log');
-const defaultProjectNotesName = 'project_';
+const defaultProjectNotesName = 'project_.txt';
 
 function newProject(){
     return {
