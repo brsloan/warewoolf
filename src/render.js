@@ -144,7 +144,7 @@ function convertLegacyProject(){
 function displayProject(){
   updateFileList();
   updateTitleBar();
-  displayNotes();
+  refreshNotesDisplay();
   displayInitialChapter();
   setWordCountOnLoad();
   editorQuill.focus();
@@ -291,12 +291,13 @@ function displayChapterByIndex(ind){
      contents = chap.getFile();
   }
 
+  var correctNotesChap = userSettings.displayChapNotes ? chap : project.notesChap;
   var notes;
-  if(chap.notes != undefined && chap.notes != null){
-    notes = chap.notes;
+  if(correctNotesChap.notes != undefined && correctNotesChap.notes != null){
+    notes = correctNotesChap.notes;
   }
   else {
-    let savedNotes = chap.getNotesFile();
+    let savedNotes = correctNotesChap.getNotesFile();
     notes = savedNotes ? savedNotes : getEmptyDelta();
   }
 
@@ -309,14 +310,24 @@ function updateTitleBar(){
   document.title = "Warewoolf - " + (project.filename != "" ? project.filename : "unsaved project");
 }
 
-function displayNotes(){
+function refreshNotesDisplay(){
+  var notesHeader = document.getElementById('notes-header');
+
   if(userSettings.displayChapNotes){
-    let savedNotes = project.getActiveChapter().getNotesFile();
+    let savedNotes = project.getActiveChapter().getNotesContentOrFile();
     var currentNotes = savedNotes ? savedNotes : getEmptyDelta();
     notesQuill.setContents(currentNotes);
+
+    notesHeader.innerText = 'Chapter Notes';
   }
-  else
-    notesQuill.setContents(project.notes, 'api');
+  else{
+    let savedNotes = project.notesChap.getNotesContentOrFile();
+    var currentNotes = savedNotes ? savedNotes : getEmptyDelta();
+    notesQuill.setContents(currentNotes, 'api');
+
+    notesHeader.innerText = 'Project Notes';
+  }
+    
 }
 
 function getEmptyDelta(){
@@ -494,7 +505,7 @@ function addNewChapter(){
   if(project.activeChapterIndex < project.chapters.length + project.reference.length){
     var newChap = newChapter();
     newChap.hasUnsavedChanges = true;
-    newChap.contents = {"ops":[{"insert":"\n"}]};
+    newChap.contents = getEmptyDelta();
     if(project.activeChapterIndex < project.chapters.length)
       project.chapters.splice(project.activeChapterIndex + 1, 0, newChap);
     else
@@ -874,7 +885,8 @@ notesQuill.on('text-change', function(delta, oldDelta, source){
       chap.hasUnsavedChanges = true;
     }
     else {
-      project.notes = notesQuill.getContents();
+      project.notesChap.notes = notesQuill.getContents();
+      project.notesChap.hasUnsavedChanges = true;
     }
     
     project.hasUnsavedChanges = true;
@@ -1008,11 +1020,21 @@ document.addEventListener ("keydown", function (e) {
       stopDefaultPropagation(e);
       togglePanelDisplay(2);
     }
+    else if((e.ctrlKey || e.metaKey) && e.key === "F3"){
+      stopDefaultPropagation(e);
+      toggleChapterNotes();
+    }
     else if(e.key ==="F3"){
       stopDefaultPropagation(e);
       togglePanelDisplay(3);
     }
 } );
+
+function toggleChapterNotes(){
+  userSettings.displayChapNotes = !userSettings.displayChapNotes;
+  userSettings.save();
+  refreshNotesDisplay();
+}
 
 document.getElementById('editor-container').addEventListener('keydown', editorControlEvents);
 document.getElementById('chapter-list-sidebar').addEventListener('keydown', editorControlEvents);

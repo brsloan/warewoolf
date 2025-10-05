@@ -1,6 +1,7 @@
 const fs = require('fs');
 const newChapter = require('./chapter');
 const { logError } = require('../controllers/error-log');
+const defaultProjectNotesName = 'project_';
 
 function newProject(){
     return {
@@ -9,7 +10,7 @@ function newProject(){
         chapsDirectory: "",
         title: "",
         author: "",
-        notes: {},
+        notesChap: {}, //notesChap is a chapter file for which we never use chapter content but only chapter notes (in order to save project-wide notes)
         chapters: [],
         reference: [],
         filters: [],
@@ -69,6 +70,10 @@ function newProject(){
         });
         this.trash = trashChaps;
 
+        var notesChap = newChapter();
+        notesChap.filename = defaultProjectNotesName;
+        this.notesChap = notesChap;
+
         this.hasUnsavedChanges = false;
         return testChapsDirectory();
       }
@@ -95,6 +100,8 @@ function newProject(){
               tr.saveFile();
           });
 
+          if(proj.notesChap.hasUnsavedChanges)
+            proj.notesChap.saveNotesFile();
 
           var fileString = stringifyProject(proj);
 
@@ -117,6 +124,7 @@ function newProject(){
         else if (k == "directory") return undefined;
         else if (k == "wordCountOnLoad") return undefined;
         else if (k == "notes") return undefined;
+        else if (k == "notesChap") return undefined;
         else return v;
       }, '\t');
     }
