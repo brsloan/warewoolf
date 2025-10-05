@@ -291,7 +291,17 @@ function displayChapterByIndex(ind){
      contents = chap.getFile();
   }
 
+  var notes;
+  if(chap.notes != undefined && chap.notes != null){
+    notes = chap.notes;
+  }
+  else {
+    let savedNotes = chap.getNotesFile();
+    notes = savedNotes ? savedNotes : getEmptyDelta();
+  }
+
   editorQuill.setContents(contents, 'api');
+  notesQuill.setContents(notes, 'api');
   updateFileList();
 }
 
@@ -300,7 +310,17 @@ function updateTitleBar(){
 }
 
 function displayNotes(){
-  notesQuill.setContents(project.notes, 'api');
+  if(userSettings.displayChapNotes){
+    let savedNotes = project.getActiveChapter().getNotesFile();
+    var currentNotes = savedNotes ? savedNotes : getEmptyDelta();
+    notesQuill.setContents(currentNotes);
+  }
+  else
+    notesQuill.setContents(project.notes, 'api');
+}
+
+function getEmptyDelta(){
+  return {"ops":[{"insert":"\n"}]};
 }
 
 function displayInitialChapter(){
@@ -578,6 +598,7 @@ function clearCurrentChapterIfUnchanged(){
   var ch = project.getActiveChapter();
   if(ch && (ch.hasUnsavedChanges == undefined || ch.hasUnsavedChanges == false)){
     ch.contents = null;
+    ch.notes = null;
   }
 };
 
@@ -847,7 +868,15 @@ editorQuill.on('selection-change', function(range, oldRange, source){
 
 notesQuill.on('text-change', function(delta, oldDelta, source){
   if(source == 'user'){
-    project.notes = notesQuill.getContents();
+    if(userSettings.displayChapNotes){
+      var chap = project.getActiveChapter();
+      chap.notes = notesQuill.getContents();
+      chap.hasUnsavedChanges = true;
+    }
+    else {
+      project.notes = notesQuill.getContents();
+    }
+    
     project.hasUnsavedChanges = true;
   }
 });

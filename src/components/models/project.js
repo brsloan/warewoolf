@@ -116,6 +116,7 @@ function newProject(){
         //else if (k == "filename") return undefined;
         else if (k == "directory") return undefined;
         else if (k == "wordCountOnLoad") return undefined;
+        else if (k == "notes") return undefined;
         else return v;
       }, '\t');
     }

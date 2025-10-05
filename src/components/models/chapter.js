@@ -127,6 +127,9 @@ function newChapter(){
         chap.contents = null;
       
         chap.hasUnsavedChanges = false;
+        if(chap.notes != null){
+          chap.saveNotesFile();
+        }
       }
       catch(err){
         logError(err);
