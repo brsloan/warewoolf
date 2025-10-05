@@ -41,11 +41,15 @@ function exportProject(project, userSettings, options, filepath){
 
 function exportAsEpub(project, userSettings, dir, what){
   try{
-    var chapsToExport = what == 'project' ? project.chapters : [ project.getActiveChapter() ];
+    var chapsToExport = what == 'project' ? project.chapters.concat(project.reference) : [ project.getActiveChapter() ];
     for(let i=0;i<chapsToExport.length;i++){
       console.log('in loop ' + i + 'of ' + chapsToExport.length);
       var chapFile = chapsToExport[i].getContentsOrFile();
-      var outName = generateChapterFilename(i, chapsToExport[i].title, what);
+      var chapNumber = i < project.chapters.length ? i : i - project.chapters.length;
+      var outName = generateChapterFilename(chapNumber, chapsToExport[i].title, what);
+
+      if(i > project.chapters.length - 1)
+        outName = '-ref_' + outName;
 
       var htmlChap = {
         title: chapsToExport[i].title,
@@ -76,10 +80,14 @@ function exportAsEpub(project, userSettings, dir, what){
 
 function exportAsHtml(project, dir, what){
   try{
-    var chapsToExport = what == 'project' ? project.chapters : [ project.getActiveChapter() ];
+    var chapsToExport = what == 'project' ? project.chapters.concat(project.reference) : [ project.getActiveChapter() ];
     for(let i=0; i < chapsToExport.length; i++){
       var chapFile = chapsToExport[i].getContentsOrFile();
-      var outName = generateChapterFilename(i, chapsToExport[i].title, what);
+      var chapNumber = i < project.chapters.length ? i : i - project.chapters.length;
+      var outName = generateChapterFilename(chapNumber, chapsToExport[i].title, what);
+
+      if(i > project.chapters.length - 1)
+        outName = '-ref_' + outName;
 
       fs.writeFileSync(dir + outName + '.html', convertMdfcToHtmlPage(convertDeltaToMDF(chapFile), project.title + ": " + chapsToExport[i].title));
     }
@@ -94,10 +102,14 @@ function exportAsHtml(project, dir, what){
 
 function exportAsMd(project, dir, what){
   try{
-    var chapsToExport = what == 'project' ? project.chapters : [ project.getActiveChapter() ];
+    var chapsToExport = what == 'project' ? project.chapters.concat(project.reference) : [ project.getActiveChapter() ];
     for(let i=0; i < chapsToExport.length; i++){
       var chapFile = chapsToExport[i].getContentsOrFile();
-      var outName = generateChapterFilename(i, chapsToExport[i].title, what);
+      var chapNumber = i < project.chapters.length ? i : i - project.chapters.length;
+      var outName = generateChapterFilename(chapNumber, chapsToExport[i].title, what);
+
+      if(i > project.chapters.length - 1)
+        outName = '-ref_' + outName;
 
       fs.writeFileSync(dir + outName + '.md', convertMdfcToMd(convertDeltaToMDF(chapFile)));
     }
@@ -112,10 +124,14 @@ function exportAsMd(project, dir, what){
 
 function exportAsMDF(project, dir, what){
   try{
-    var chapsToExport = what == 'project' ? project.chapters : [ project.getActiveChapter() ];
+    var chapsToExport = what == 'project' ? project.chapters.concat(project.reference) : [ project.getActiveChapter() ];
     for(let i=0; i < chapsToExport.length; i++){
       var chapFile = chapsToExport[i].getContentsOrFile();
-      var outName = generateChapterFilename(i, chapsToExport[i].title, what);
+      var chapNumber = i < project.chapters.length ? i : i - project.chapters.length;
+      var outName = generateChapterFilename(chapNumber, chapsToExport[i].title, what);
+
+      if(i > project.chapters.length - 1)
+        outName = '-ref_' + outName;
 
       fs.writeFileSync(dir + outName + '.mdfc', convertDeltaToMDF(chapFile));
     }
@@ -130,11 +146,15 @@ function exportAsMDF(project, dir, what){
 
 function exportAsText(project, dir, what){
   try{
-    var chapsToExport = what == 'project' ? project.chapters : [ project.getActiveChapter() ];
+    var chapsToExport = what == 'project' ? project.chapters.concat(project.reference) : [ project.getActiveChapter() ];
     for(i=0; i<chapsToExport.length; i++){
         var chapFile = chapsToExport[i].getContentsOrFile();
-        var outName = generateChapterFilename(i, chapsToExport[i].title, what);
+        var chapNumber = i < project.chapters.length ? i : i - project.chapters.length;
+        var outName = generateChapterFilename(chapNumber, chapsToExport[i].title, what);
 
+        if(i > project.chapters.length - 1)
+          outName = '-ref_' + outName;
+       
         fs.writeFileSync(dir + outName + ".txt", convertToPlainText(chapFile));
     }
 
@@ -161,10 +181,14 @@ function exportAsWord(project, userSettings, dir, what){
 }
 
 function exportChapsAsWord(project, userSettings, dir, what){
-    var chapsToExport = what == 'project' ? project.chapters : [ project.getActiveChapter() ];
+    var chapsToExport = what == 'project' ? project.chapters.concat(project.reference) : [ project.getActiveChapter() ];
     for(let i=0; i < chapsToExport.length;i++){
       var chapFile = chapsToExport[i].getContentsOrFile();
-      var outName = generateChapterFilename(i, chapsToExport[i].title, what);
+      var chapNumber = i < project.chapters.length ? i : i - project.chapters.length;
+      var outName = generateChapterFilename(chapNumber, chapsToExport[i].title, what);
+
+      if(i > project.chapters.length - 1)
+        outName = '-ref_' + outName;
 
       var doc = convertDeltaToDocx(chapFile, { generateTitlePage: false }, project, userSettings);
       saveDocx(dir + outName + ".docx", doc);
