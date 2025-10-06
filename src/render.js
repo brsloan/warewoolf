@@ -1046,6 +1046,7 @@ function toggleChapterNotes(){
 
 document.getElementById('editor-container').addEventListener('keydown', editorControlEvents);
 document.getElementById('chapter-list-sidebar').addEventListener('keydown', editorControlEvents);
+document.getElementById('notes-editor').addEventListener('keydown', editorControlEvents);
 
 function editorControlEvents(e){
   if ((e.ctrlKey || e.metaKey)  && e.shiftKey && e.key === "ArrowUp") {
@@ -1064,10 +1065,14 @@ function editorControlEvents(e){
   else if((e.ctrlKey || e.metaKey) && e.key === "ArrowUp"){
     stopDefaultPropagation(e);
     displayPreviousChapter();
+    if(e.currentTarget.id == 'notes-editor')
+      notesQuill.focus();
   }
   else if((e.ctrlKey || e.metaKey) && e.key === "ArrowDown"){
     stopDefaultPropagation(e);
     displayNextChapter();
+    if(e.currentTarget.id == 'notes-editor')
+      notesQuill.focus();
   }
   else if((e.ctrlKey || e.metaKey) && e.key === ","){
     descreaseEditorWidthSetting();
@@ -1077,7 +1082,10 @@ function editorControlEvents(e){
   }
   else if(e.key === "PageDown"){
     stopDefaultPropagation(e);
-    goPageDown(editorQuill);
+    if(e.currentTarget.id == 'notes-editor')
+      goPageDown(notesQuill)
+    else
+      goPageDown(editorQuill);
   }
 }
 
