@@ -250,14 +250,19 @@ function exportChapsAsWord(project, userSettings, dir, what){
       saveDocx(dir + outName + ".docx", doc);
 
       var chapNotesDelta = chapsToExport[i].getNotesContentOrFile();
+      if(chapNotesDelta){
+        var doc = convertDeltaToDocx(chapNotesDelta, { generateTitlePage: false }, project, userSettings);
+        saveDocx(dir + notesNamePrepend + outName + ".docx", doc);
+      }
     }
 }
 
 function exportNotesAsWord(project, userSettings, dir){
-    var chapFile = project.notes;
-
-    var doc = convertDeltaToDocx(chapFile, { generateTitlePage: false }, project, userSettings);
-    saveDocx(dir + "notes" + ".docx", doc);
+    var chapFile = project.notesChap.getNotesContentOrFile();
+    if(chapFile){
+      var doc = convertDeltaToDocx(chapFile, { generateTitlePage: false }, project, userSettings);
+      saveDocx(dir + notesNamePrepend + "project_" + ".docx", doc);
+    }
 }
 
 function generateChapterFilename(num, title, what){
