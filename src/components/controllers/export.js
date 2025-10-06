@@ -6,6 +6,7 @@ const { sanitizeFilename } = require('./utils');
 const { convertMdfcToHtmlPage, convertMdfcToHtml } = require('./mdfc-to-html');
 const { convertMdfcToMd } = require('./mdfc-to-md');
 const { htmlChaptersToEpub } = require('./epub');
+const notesNamePrepend = '-notes_';
 
 function exportProject(project, userSettings, options, filepath){
     //TODO: Need to create function to safely convert titles to folder/filenames
@@ -43,7 +44,6 @@ function exportAsEpub(project, userSettings, dir, what){
   try{
     var chapsToExport = what == 'project' ? project.chapters.concat(project.reference) : [ project.getActiveChapter() ];
     for(let i=0;i<chapsToExport.length;i++){
-      console.log('in loop ' + i + 'of ' + chapsToExport.length);
       var chapFile = chapsToExport[i].getContentsOrFile();
       var chapNumber = i < project.chapters.length ? i : i - project.chapters.length;
       var outName = generateChapterFilename(chapNumber, chapsToExport[i].title, what);
@@ -59,23 +59,47 @@ function exportAsEpub(project, userSettings, dir, what){
       htmlChaptersToEpub(project.title + ': ' + chapsToExport[i].title, project.author, [htmlChap], dir + outName + '.epub', userSettings.compileGenTitlePage, function(resp){
         console.log('epub exported: ' + resp);
       });
+
+      var chapNotesDelta = chapsToExport[i].getNotesContentOrFile();
+
+      if(chapNotesDelta){
+        var htmlChapNotes = {
+          title: chapsToExport[i].title + ' Notes',
+          html: convertMdfcToHtml(convertDeltaToMDF(chapNotesDelta))
+        }
+        htmlChaptersToEpub(project.title + ': ' + chapsToExport[i].title + ' Notes', project.author, [htmlChapNotes], dir + notesNamePrepend + outName + '.epub', userSettings.compileGenTitlePage, function(resp){
+          console.log('epub exported: ' + resp);
+        });
+  
+      }
     }
 
     if(what == 'project'){
-      var htmlChap = {
-        title: 'Notes',
-        html: convertMdfcToHtml(convertDeltaToMDF(project.notes))
-      }
+      var projectNotesDelta = project.notesChap.getNotesContentOrFile();
+      if(projectNotesDelta){
+        var htmlChap = {
+          title: 'Project Notes',
+          html: convertMdfcToHtml(convertDeltaToMDF(projectNotesDelta))
+        }
 
-      htmlChaptersToEpub('Notes', project.author, [htmlChap], dir + 'notes.epub', userSettings.compileGenTitlePage, function(resp){
-        console.log('epub exported: ' + resp);
-      });
+        htmlChaptersToEpub('Project Notes', project.author, [htmlChap], dir + notesNamePrepend + 'project_.epub', userSettings.compileGenTitlePage, function(resp){
+          console.log('epub exported: ' + resp);
+        });
+      }
     }
 
   }
   catch(err){
     logError(err);
   }
+}
+
+function getAllChapNotes(proj){
+  return proj.chapters.map(function(chap){
+    return chap.getNotesContentOrFile();
+  }).filter(function(note){
+    return note != null;
+  });
 }
 
 function exportAsHtml(project, dir, what){
@@ -90,10 +114,18 @@ function exportAsHtml(project, dir, what){
         outName = '-ref_' + outName;
 
       fs.writeFileSync(dir + outName + '.html', convertMdfcToHtmlPage(convertDeltaToMDF(chapFile), project.title + ": " + chapsToExport[i].title));
+
+      var chapNotesDelta = chapsToExport[i].getNotesContentOrFile();
+      if(chapNotesDelta){
+        fs.writeFileSync(dir + notesNamePrepend + outName + '.html', convertMdfcToHtmlPage(convertDeltaToMDF(chapNotesDelta), project.title + ": " + chapsToExport[i].title + ' Notes'));  
+      }
     }
 
-    if(what == 'project')
-      fs.writeFileSync(dir + "notes" + ".html", convertMdfcToHtmlPage(convertDeltaToMDF(project.notes), project.title + ": " + 'Notes'));
+    if(what == 'project'){
+      var projectNotesDelta = project.notesChap.getNotesContentOrFile();
+      if(projectNotesDelta)
+        fs.writeFileSync(dir + notesNamePrepend + "project_" + ".html", convertMdfcToHtmlPage(convertDeltaToMDF(projectNotesDelta), project.title + ": " + 'Notes'));
+    }
   }
   catch(err){
     logError(err);
@@ -112,10 +144,18 @@ function exportAsMd(project, dir, what){
         outName = '-ref_' + outName;
 
       fs.writeFileSync(dir + outName + '.md', convertMdfcToMd(convertDeltaToMDF(chapFile)));
+
+      var chapNotesDelta = chapsToExport[i].getNotesContentOrFile();
+      if(chapNotesDelta)
+        fs.writeFileSync(dir + notesNamePrepend + outName + '.md', convertMdfcToMd(convertDeltaToMDF(chapNotesDelta)));
     }
 
-    if(what == 'project')
-      fs.writeFileSync(dir + "notes" + ".md", convertMdfcToMd(convertDeltaToMDF(project.notes)));
+    if(what == 'project'){
+      var projectNotesDelta = project.notesChap.getNotesContentOrFile();
+      if(projectNotesDelta)
+        fs.writeFileSync(dir + notesNamePrepend + "project_" + ".md", convertMdfcToMd(convertDeltaToMDF(projectNotesDelta)));
+    }
+      
   }
   catch(err){
     logError(err);
@@ -134,10 +174,19 @@ function exportAsMDF(project, dir, what){
         outName = '-ref_' + outName;
 
       fs.writeFileSync(dir + outName + '.mdfc', convertDeltaToMDF(chapFile));
+
+      var chapNotesDelta = chapsToExport[i].getNotesContentOrFile();
+      if(chapNotesDelta){
+        fs.writeFileSync(dir + notesNamePrepend + outName + '.mdfc', convertDeltaToMDF(chapNotesDelta));
+      }
     }
 
-    if(what == 'project')
-      fs.writeFileSync(dir + "notes" + ".mdfc", convertDeltaToMDF(project.notes));
+    if(what == 'project'){
+      var projectNotesDelta = project.notesChap.getNotesContentOrFile();
+      if(projectNotesDelta)
+        fs.writeFileSync(dir + notesNamePrepend + "project_" + ".mdfc", convertDeltaToMDF(projectNotesDelta));
+    }
+      
   }
   catch(err){
     logError(err);
@@ -156,10 +205,17 @@ function exportAsText(project, dir, what){
           outName = '-ref_' + outName;
        
         fs.writeFileSync(dir + outName + ".txt", convertToPlainText(chapFile));
+
+        var chapNotesDelta = chapsToExport[i].getNotesContentOrFile();
+        if(chapNotesDelta)
+          fs.writeFileSync(dir + notesNamePrepend + outName + ".txt", convertToPlainText(chapNotesDelta));
     }
 
-    if(what == 'project')
-      fs.writeFileSync(dir + "notes" + ".txt", convertToPlainText(project.notes));
+    if(what == 'project'){
+      var projectNotesDelta = project.notesChap.getNotesContentOrFile();
+      if(projectNotesDelta)
+         fs.writeFileSync(dir + notesNamePrepend + "project_" + ".txt", convertToPlainText(projectNotesDelta));
+    }
   }
   catch(err){
     logError(err);
@@ -192,14 +248,21 @@ function exportChapsAsWord(project, userSettings, dir, what){
 
       var doc = convertDeltaToDocx(chapFile, { generateTitlePage: false }, project, userSettings);
       saveDocx(dir + outName + ".docx", doc);
+
+      var chapNotesDelta = chapsToExport[i].getNotesContentOrFile();
+      if(chapNotesDelta){
+        var doc = convertDeltaToDocx(chapNotesDelta, { generateTitlePage: false }, project, userSettings);
+        saveDocx(dir + notesNamePrepend + outName + ".docx", doc);
+      }
     }
 }
 
 function exportNotesAsWord(project, userSettings, dir){
-    var chapFile = project.notes;
-
-    var doc = convertDeltaToDocx(chapFile, { generateTitlePage: false }, project, userSettings);
-    saveDocx(dir + "notes" + ".docx", doc);
+    var chapFile = project.notesChap.getNotesContentOrFile();
+    if(chapFile){
+      var doc = convertDeltaToDocx(chapFile, { generateTitlePage: false }, project, userSettings);
+      saveDocx(dir + notesNamePrepend + "project_" + ".docx", doc);
+    }
 }
 
 function generateChapterFilename(num, title, what){

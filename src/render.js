@@ -131,6 +131,14 @@ function setProject(filepath){
 }
 
 function convertLegacyProject(){
+
+  //Convert legacy notes from v2.1 and before
+  if(project.notes){
+    project.notesChap.notes = project.notes;
+    project.notesChap.saveNotesFile();
+  }
+
+  //Convert legacy chapters from v1.1 and before
   project.chapters.forEach(function(chap, i){
     if(chap.filename.includes('.pup')){
       chap.contents = chap.getFile();
@@ -144,7 +152,7 @@ function convertLegacyProject(){
 function displayProject(){
   updateFileList();
   updateTitleBar();
-  displayNotes();
+  refreshNotesDisplay();
   displayInitialChapter();
   setWordCountOnLoad();
   editorQuill.focus();
@@ -291,7 +299,18 @@ function displayChapterByIndex(ind){
      contents = chap.getFile();
   }
 
+  var correctNotesChap = userSettings.displayChapNotes ? chap : project.notesChap;
+  var notes;
+  if(correctNotesChap.notes != undefined && correctNotesChap.notes != null){
+    notes = correctNotesChap.notes;
+  }
+  else {
+    let savedNotes = correctNotesChap.getNotesFile();
+    notes = savedNotes ? savedNotes : getEmptyDelta();
+  }
+
   editorQuill.setContents(contents, 'api');
+  notesQuill.setContents(notes, 'api');
   updateFileList();
 }
 
@@ -299,8 +318,28 @@ function updateTitleBar(){
   document.title = "Warewoolf - " + (project.filename != "" ? project.filename : "unsaved project");
 }
 
-function displayNotes(){
-  notesQuill.setContents(project.notes, 'api');
+function refreshNotesDisplay(){
+  var notesHeader = document.getElementById('notes-header');
+
+  if(userSettings.displayChapNotes){
+    let savedNotes = project.getActiveChapter().getNotesContentOrFile();
+    var currentNotes = savedNotes ? savedNotes : getEmptyDelta();
+    notesQuill.setContents(currentNotes);
+
+    notesHeader.innerText = 'Chapter Notes';
+  }
+  else{
+    let savedNotes = project.notesChap.getNotesContentOrFile();
+    var currentNotes = savedNotes ? savedNotes : getEmptyDelta();
+    notesQuill.setContents(currentNotes, 'api');
+
+    notesHeader.innerText = 'Project Notes';
+  }
+    
+}
+
+function getEmptyDelta(){
+  return {"ops":[{"insert":"\n"}]};
 }
 
 function displayInitialChapter(){
@@ -474,7 +513,7 @@ function addNewChapter(){
   if(project.activeChapterIndex < project.chapters.length + project.reference.length){
     var newChap = newChapter();
     newChap.hasUnsavedChanges = true;
-    newChap.contents = {"ops":[{"insert":"\n"}]};
+    newChap.contents = getEmptyDelta();
     if(project.activeChapterIndex < project.chapters.length)
       project.chapters.splice(project.activeChapterIndex + 1, 0, newChap);
     else
@@ -578,6 +617,7 @@ function clearCurrentChapterIfUnchanged(){
   var ch = project.getActiveChapter();
   if(ch && (ch.hasUnsavedChanges == undefined || ch.hasUnsavedChanges == false)){
     ch.contents = null;
+    ch.notes = null;
   }
 };
 
@@ -847,7 +887,16 @@ editorQuill.on('selection-change', function(range, oldRange, source){
 
 notesQuill.on('text-change', function(delta, oldDelta, source){
   if(source == 'user'){
-    project.notes = notesQuill.getContents();
+    if(userSettings.displayChapNotes){
+      var chap = project.getActiveChapter();
+      chap.notes = notesQuill.getContents();
+      chap.hasUnsavedChanges = true;
+    }
+    else {
+      project.notesChap.notes = notesQuill.getContents();
+      project.notesChap.hasUnsavedChanges = true;
+    }
+    
     project.hasUnsavedChanges = true;
   }
 });
@@ -979,14 +1028,25 @@ document.addEventListener ("keydown", function (e) {
       stopDefaultPropagation(e);
       togglePanelDisplay(2);
     }
+    else if((e.ctrlKey || e.metaKey) && e.key === "F3"){
+      stopDefaultPropagation(e);
+      toggleChapterNotes();
+    }
     else if(e.key ==="F3"){
       stopDefaultPropagation(e);
       togglePanelDisplay(3);
     }
 } );
 
+function toggleChapterNotes(){
+  userSettings.displayChapNotes = !userSettings.displayChapNotes;
+  userSettings.save();
+  refreshNotesDisplay();
+}
+
 document.getElementById('editor-container').addEventListener('keydown', editorControlEvents);
 document.getElementById('chapter-list-sidebar').addEventListener('keydown', editorControlEvents);
+document.getElementById('notes-editor').addEventListener('keydown', editorControlEvents);
 
 function editorControlEvents(e){
   if ((e.ctrlKey || e.metaKey)  && e.shiftKey && e.key === "ArrowUp") {
@@ -1005,10 +1065,14 @@ function editorControlEvents(e){
   else if((e.ctrlKey || e.metaKey) && e.key === "ArrowUp"){
     stopDefaultPropagation(e);
     displayPreviousChapter();
+    if(e.currentTarget.id == 'notes-editor')
+      notesQuill.focus();
   }
   else if((e.ctrlKey || e.metaKey) && e.key === "ArrowDown"){
     stopDefaultPropagation(e);
     displayNextChapter();
+    if(e.currentTarget.id == 'notes-editor')
+      notesQuill.focus();
   }
   else if((e.ctrlKey || e.metaKey) && e.key === ","){
     descreaseEditorWidthSetting();
@@ -1018,7 +1082,10 @@ function editorControlEvents(e){
   }
   else if(e.key === "PageDown"){
     stopDefaultPropagation(e);
-    goPageDown(editorQuill);
+    if(e.currentTarget.id == 'notes-editor')
+      goPageDown(notesQuill)
+    else
+      goPageDown(editorQuill);
   }
 }
 

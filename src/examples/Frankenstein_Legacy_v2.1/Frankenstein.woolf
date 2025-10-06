@@ -3,6 +3,13 @@
 	"chapsDirectory": "Frankenstein_chapters/",
 	"title": "Frankenstein",
 	"author": "Mary Shelley",
+	"notes": {
+		"ops": [
+			{
+				"insert": "-Make monster more verbose?\n-Should he fuck?\n"
+			}
+		]
+	},
 	"chapters": [
 		{
 			"title": "Quick Start",
@@ -175,14 +182,6 @@
 		{
 			"title": "Chapter 24",
 			"filename": "Chapter 24.txt",
-			"filter": null,
-			"summary": null
-		}
-	],
-	"reference": [
-		{
-			"title": "Locations",
-			"filename": "Locations.txt",
 			"filter": null,
 			"summary": null
 		}
