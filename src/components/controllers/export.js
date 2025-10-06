@@ -174,10 +174,19 @@ function exportAsMDF(project, dir, what){
         outName = '-ref_' + outName;
 
       fs.writeFileSync(dir + outName + '.mdfc', convertDeltaToMDF(chapFile));
+
+      var chapNotesDelta = chapsToExport[i].getNotesContentOrFile();
+      if(chapNotesDelta){
+        fs.writeFileSync(dir + notesNamePrepend + outName + '.mdfc', convertDeltaToMDF(chapNotesDelta));
+      }
     }
 
-    if(what == 'project')
-      fs.writeFileSync(dir + "notes" + ".mdfc", convertDeltaToMDF(project.notes));
+    if(what == 'project'){
+      var projectNotesDelta = project.notesChap.getNotesContentOrFile();
+      if(projectNotesDelta)
+        fs.writeFileSync(dir + notesNamePrepend + "project_" + ".mdfc", convertDeltaToMDF(projectNotesDelta));
+    }
+      
   }
   catch(err){
     logError(err);
@@ -196,6 +205,8 @@ function exportAsText(project, dir, what){
           outName = '-ref_' + outName;
        
         fs.writeFileSync(dir + outName + ".txt", convertToPlainText(chapFile));
+
+        var chapNotesDelta = chapsToExport[i].getNotesContentOrFile();
     }
 
     if(what == 'project')
@@ -232,6 +243,8 @@ function exportChapsAsWord(project, userSettings, dir, what){
 
       var doc = convertDeltaToDocx(chapFile, { generateTitlePage: false }, project, userSettings);
       saveDocx(dir + outName + ".docx", doc);
+
+      var chapNotesDelta = chapsToExport[i].getNotesContentOrFile();
     }
 }
 
