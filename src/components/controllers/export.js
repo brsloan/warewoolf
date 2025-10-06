@@ -114,10 +114,18 @@ function exportAsHtml(project, dir, what){
         outName = '-ref_' + outName;
 
       fs.writeFileSync(dir + outName + '.html', convertMdfcToHtmlPage(convertDeltaToMDF(chapFile), project.title + ": " + chapsToExport[i].title));
+
+      var chapNotesDelta = chapsToExport[i].getNotesContentOrFile();
+      if(chapNotesDelta){
+        fs.writeFileSync(dir + notesNamePrepend + outName + '.html', convertMdfcToHtmlPage(convertDeltaToMDF(chapNotesDelta), project.title + ": " + chapsToExport[i].title + ' Notes'));  
+      }
     }
 
-    if(what == 'project')
-      fs.writeFileSync(dir + "notes" + ".html", convertMdfcToHtmlPage(convertDeltaToMDF(project.notes), project.title + ": " + 'Notes'));
+    if(what == 'project'){
+      var projectNotesDelta = project.notesChap.getNotesContentOrFile();
+      if(projectNotesDelta)
+        fs.writeFileSync(dir + notesNamePrepend + "project_" + ".html", convertMdfcToHtmlPage(convertDeltaToMDF(projectNotesDelta), project.title + ": " + 'Notes'));
+    }
   }
   catch(err){
     logError(err);
