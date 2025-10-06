@@ -6,6 +6,7 @@ const { sanitizeFilename } = require('./utils');
 const { convertMdfcToHtmlPage, convertMdfcToHtml } = require('./mdfc-to-html');
 const { convertMdfcToMd } = require('./mdfc-to-md');
 const { htmlChaptersToEpub } = require('./epub');
+const notesNamePrepend = '-notes_';
 
 function exportProject(project, userSettings, options, filepath){
     //TODO: Need to create function to safely convert titles to folder/filenames
@@ -43,7 +44,6 @@ function exportAsEpub(project, userSettings, dir, what){
   try{
     var chapsToExport = what == 'project' ? project.chapters.concat(project.reference) : [ project.getActiveChapter() ];
     for(let i=0;i<chapsToExport.length;i++){
-      console.log('in loop ' + i + 'of ' + chapsToExport.length);
       var chapFile = chapsToExport[i].getContentsOrFile();
       var chapNumber = i < project.chapters.length ? i : i - project.chapters.length;
       var outName = generateChapterFilename(chapNumber, chapsToExport[i].title, what);
@@ -59,23 +59,47 @@ function exportAsEpub(project, userSettings, dir, what){
       htmlChaptersToEpub(project.title + ': ' + chapsToExport[i].title, project.author, [htmlChap], dir + outName + '.epub', userSettings.compileGenTitlePage, function(resp){
         console.log('epub exported: ' + resp);
       });
+
+      var chapNotesDelta = chapsToExport[i].getNotesContentOrFile();
+
+      if(chapNotesDelta){
+        var htmlChapNotes = {
+          title: chapsToExport[i].title + ' Notes',
+          html: convertMdfcToHtml(convertDeltaToMDF(chapNotesDelta))
+        }
+        htmlChaptersToEpub(project.title + ': ' + chapsToExport[i].title + ' Notes', project.author, [htmlChapNotes], dir + notesNamePrepend + outName + '.epub', userSettings.compileGenTitlePage, function(resp){
+          console.log('epub exported: ' + resp);
+        });
+  
+      }
     }
 
     if(what == 'project'){
-      var htmlChap = {
-        title: 'Notes',
-        html: convertMdfcToHtml(convertDeltaToMDF(project.notes))
-      }
+      var projectNotesDelta = project.notesChap.getNotesContentOrFile();
+      if(projectNotesDelta){
+        var htmlChap = {
+          title: 'Project Notes',
+          html: convertMdfcToHtml(convertDeltaToMDF(projectNotesDelta))
+        }
 
-      htmlChaptersToEpub('Notes', project.author, [htmlChap], dir + 'notes.epub', userSettings.compileGenTitlePage, function(resp){
-        console.log('epub exported: ' + resp);
-      });
+        htmlChaptersToEpub('Project Notes', project.author, [htmlChap], dir + notesNamePrepend + 'project_.epub', userSettings.compileGenTitlePage, function(resp){
+          console.log('epub exported: ' + resp);
+        });
+      }
     }
 
   }
   catch(err){
     logError(err);
   }
+}
+
+function getAllChapNotes(proj){
+  return proj.chapters.map(function(chap){
+    return chap.getNotesContentOrFile();
+  }).filter(function(note){
+    return note != null;
+  });
 }
 
 function exportAsHtml(project, dir, what){
