@@ -207,10 +207,15 @@ function exportAsText(project, dir, what){
         fs.writeFileSync(dir + outName + ".txt", convertToPlainText(chapFile));
 
         var chapNotesDelta = chapsToExport[i].getNotesContentOrFile();
+        if(chapNotesDelta)
+          fs.writeFileSync(dir + notesNamePrepend + outName + ".txt", convertToPlainText(chapNotesDelta));
     }
 
-    if(what == 'project')
-      fs.writeFileSync(dir + "notes" + ".txt", convertToPlainText(project.notes));
+    if(what == 'project'){
+      var projectNotesDelta = project.notesChap.getNotesContentOrFile();
+      if(projectNotesDelta)
+         fs.writeFileSync(dir + notesNamePrepend + "project_" + ".txt", convertToPlainText(projectNotesDelta));
+    }
   }
   catch(err){
     logError(err);
