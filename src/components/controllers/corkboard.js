@@ -39,13 +39,14 @@ function parseCardsString(str){
     let colorNum = /^\[(\d)\] /; 
     let checkMarker = /^\[[xX]\] /; 
 
+    str = convertWindowsToLinuxLineEndings(str);
 
     //escape JSON chars
     str = str.replaceAll('\\','\\\\');
     str = str.replaceAll('/','\\/');
     str = str.replaceAll('"','\\"');
     str = str.replaceAll('\t','\\t'); 
-
+ 
     str = str.replace(firstLabel, '[{"label":"$1", "descr":"');
     str = str.replace(label, '"}, {"label":"$1", "descr":"');
     str = str.replace(newLines, '\\n');
@@ -94,6 +95,11 @@ function generateCardsString(cards){
     }
     
     return cardsString;
+}
+
+function convertWindowsToLinuxLineEndings(text) {
+  // Replace all occurrences of '\r\n' with '\n'
+  return text.replace(/\r\n/g, '\n');
 }
 
 module.exports = { getCardsFromFile, saveCards };
