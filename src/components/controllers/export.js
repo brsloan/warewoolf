@@ -144,10 +144,18 @@ function exportAsMd(project, dir, what){
         outName = '-ref_' + outName;
 
       fs.writeFileSync(dir + outName + '.md', convertMdfcToMd(convertDeltaToMDF(chapFile)));
+
+      var chapNotesDelta = chapsToExport[i].getNotesContentOrFile();
+      if(chapNotesDelta)
+        fs.writeFileSync(dir + notesNamePrepend + outName + '.md', convertMdfcToMd(convertDeltaToMDF(chapNotesDelta)));
     }
 
-    if(what == 'project')
-      fs.writeFileSync(dir + "notes" + ".md", convertMdfcToMd(convertDeltaToMDF(project.notes)));
+    if(what == 'project'){
+      var projectNotesDelta = project.notesChap.getNotesContentOrFile();
+      if(projectNotesDelta)
+        fs.writeFileSync(dir + notesNamePrepend + "project_" + ".md", convertMdfcToMd(convertDeltaToMDF(projectNotesDelta)));
+    }
+      
   }
   catch(err){
     logError(err);
