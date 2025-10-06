@@ -179,7 +179,14 @@
 			"summary": null
 		}
 	],
-	"reference": [],
+	"reference": [
+		{
+			"title": "Locations",
+			"filename": "Locations.txt",
+			"filter": null,
+			"summary": null
+		}
+	],
 	"filters": [],
 	"trash": [],
 	"activeChapterIndex": 0,
