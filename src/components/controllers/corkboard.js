@@ -2,6 +2,16 @@ const fs = require('fs');
 const { logError } = require('../controllers/error-log');
 const cardsFilename = 'project_corkboard.txt';
 
+function getCorkboardForExport(chaptersPath, options){
+    var returnText = getCorkboardAsMd(chaptersPath);
+    if(options.type == '.docx'){
+        //Remove extra blank lines after headings
+        var headingsWithExtraBlank = /^(# .*\n)\n/gm;
+        returnText = returnText.replace(headingsWithExtraBlank,'$1');
+    }
+    return returnText;
+}
+
 function getCorkboardAsMd(chaptersPath){
     return getCardsFile(chaptersPath, cardStringToMd);
 }
@@ -121,4 +131,4 @@ function convertWindowsToLinuxLineEndings(text) {
   return text.replace(/\r\n/g, '\n');
 }
 
-module.exports = { getCardsFromFile, saveCards, getCorkboardAsMd };
+module.exports = { getCardsFromFile, saveCards, getCorkboardForExport };

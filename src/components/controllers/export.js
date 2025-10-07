@@ -6,7 +6,7 @@ const { sanitizeFilename } = require('./utils');
 const { convertMdfcToHtmlPage, convertMdfcToHtml } = require('./mdfc-to-html');
 const { convertMdfcToMd } = require('./mdfc-to-md');
 const { htmlChaptersToEpub } = require('./epub');
-const { getCorkboardAsMd } = require('./corkboard');
+const { getCorkboardForExport } = require('./corkboard');
 const notesNamePrepend = '-notes_';
 
 function exportProject(project, userSettings, options, filepath){
@@ -38,7 +38,7 @@ function exportProject(project, userSettings, options, filepath){
       var projectNotesDelta = project.notesChap.getNotesContentOrFile();
       if(projectNotesDelta)
         exportChapter(project, 'Project Notes', project.author, projectNotesDelta, dir + notesNamePrepend + 'project_', userSettings, options);
-      var corkboardMd = getCorkboardAsMd(project.directory + project.chapsDirectory);
+      var corkboardMd = getCorkboardForExport(project.directory + project.chapsDirectory, options);
       if(corkboardMd){
         //Override heading styles for just this document since it is not a chapter
         options.styleHeadingAsChapter = false;
