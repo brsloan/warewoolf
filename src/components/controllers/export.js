@@ -49,22 +49,22 @@ function exportProject(project, userSettings, options, filepath){
 function exportChapter(project, chapterTitle, author, chapDelta, filepathNameNoExt, userSettings, options){
   switch(options.type){
         case ".txt":
-            exportChapAsText(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, userSettings.generateTitlePage);
+            exportChapAsText(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.compileGenTitlePage);
             break;
         case ".docx":
-            exportChapAsDocx(project, userSettings, chapDelta, filepathNameNoExt, userSettings.generateTitlePage);
+            exportChapAsDocx(project, userSettings, chapDelta, filepathNameNoExt, options.compileGenTitlePage);
             break;
         case ".mdfc":
-            exportChapAsMdf(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, userSettings.generateTitlePage);
+            exportChapAsMdf(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.compileGenTitlePage);
             break;
         case ".md":
-            exportChapAsMd(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, userSettings.generateTitlePage);
+            exportChapAsMd(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.compileGenTitlePage);
             break;
         case ".html":
-            exportChapAsHtml(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, userSettings.generateTitlePage);
+            exportChapAsHtml(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.compileGenTitlePage);
             break;
         case ".epub":
-            exportChapAsEpub(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, userSettings.generateTitlePage);
+            exportChapAsEpub(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.compileGenTitlePage);
             break;
         default:
             console.log("No valid filetype selected for export.");
