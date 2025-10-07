@@ -124,7 +124,7 @@ function compileChapterDeltas(project, options){
 
 
 function compileDocx(filepath, delt, options) {
-  var doc = convertDeltaToDocx(delt, options, project, userSettings);
+  var doc = convertDeltaToDocx(delt, options, project, userSettings.addressInfo);
   saveDocx(filepath, doc);
 }
 

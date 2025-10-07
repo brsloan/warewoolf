@@ -22,7 +22,7 @@ function packageDocxBase64(doc, callback){
   });
 }
 
-function convertDeltaToDocx(delt, options, project, userSettings){
+function convertDeltaToDocx(delt, options, project, addressInfo){
   var parsedQuill = parseDelta(delt);
 
   var fnoteParRegx = /^\[\^\d+]:/;
@@ -136,7 +136,7 @@ function convertDeltaToDocx(delt, options, project, userSettings){
 
   var sections = [];
   if(options && options.generateTitlePage == true)
-    sections.push(getTitlePage(project, userSettings));
+    sections.push(getTitlePage(project, addressInfo));
 
   sections.push(getDocBody(xParagraphs, project));
 
@@ -255,14 +255,14 @@ function getDocBody(xParagraphs, project){
   }
 }
 
-function getTitlePage(project, userSettings){
+function getTitlePage(project, addressInfo){
   var titleParas = [];
   titleParas.push(new docx.Paragraph({
     text: getTitlePageFirstLine(project),
     style: 'address'
   }));
 
-  var addressLines = userSettings.addressInfo.split('\n');
+  var addressLines = addressInfo.split('\n');
   addressLines.forEach((line, i) => {
     titleParas.push(new docx.Paragraph({
       text: line,

@@ -52,7 +52,7 @@ function prepareAndEmail(project, userSettings, editorQuill, sender, pass, recei
 }
 
 function emailDeltaAsDocx(project, userSettings, filename, delt, options, sender, pass, receiver, callback){
-  var doc = convertDeltaToDocx(delt, options, project, userSettings);
+  var doc = convertDeltaToDocx(delt, options, project, userSettings.addressInfo);
   packageDocxBase64(doc, (docString) => {
     var attachments = [
       {

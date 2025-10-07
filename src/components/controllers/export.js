@@ -79,7 +79,7 @@ function exportChapAsText(projectTitle, chapTitle, author, chapDelta, filepathNa
 }
 
 function exportChapAsDocx(project, userSettings, chapDelta, filepathNameNoExt, generateTitlePage){
-  var doc = convertDeltaToDocx(chapDelta, { generateTitlePage: generateTitlePage }, project, userSettings);
+  var doc = convertDeltaToDocx(chapDelta, { generateTitlePage: generateTitlePage }, project, userSettings.addressInfo);
   saveDocx(filepathNameNoExt + ".docx", doc);
 }
 
