@@ -266,6 +266,8 @@ function updateFileList(){
       trashHeader.classList.add('trash-header-empty');
   }
 
+  scrollChapterListToActiveChapter();
+
 }
 
 function displayChapterByIndex(ind){
@@ -827,7 +829,7 @@ function decreaseFontSizeSetting(){
 function scrollChapterListToActiveChapter(){
   document.getElementById('chapter-list-sidebar')
   .scrollTop = document.querySelector('.activeChapter')
-  .offsetTop;
+  .offsetTop - (document.getElementById('chapters-header').offsetHeight * 3);
 }
 
 function openHelpDoc(){
