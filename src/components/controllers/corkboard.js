@@ -2,6 +2,32 @@ const fs = require('fs');
 const { logError } = require('../controllers/error-log');
 const cardsFilename = 'project_corkboard.txt';
 
+function getCorkboardAsMd(chaptersPath){
+    const cardsFilepath = chaptersPath + cardsFilename;
+    console.log('getting corkboard at' + cardsFilepath);
+    try {
+        if(fs.existsSync(cardsFilepath)){
+            var cardsString = fs.readFileSync(cardsFilepath, "utf8");
+            return cardStringToMd(cardsString);
+        }  
+    }
+    catch(err){
+        logError(err);
+    }
+}
+
+function cardStringToMd(str){
+    console.log("converting corkboard");
+    str = convertWindowsToLinuxLineEndings(str);
+    let colorNums = /^# \[(\d)\] (\[[xX]\] )?/gm; 
+    let checkMarkers = /^# \[[xX]\] /gm; 
+
+    str = str.replace(colorNums,'# ');
+    str = str.replace(checkMarkers, '# ');
+
+    return str;
+}
+
 function getCardsFromFile(chaptersPath){
     const cardsFilepath = chaptersPath + cardsFilename;
     try {
@@ -102,4 +128,4 @@ function convertWindowsToLinuxLineEndings(text) {
   return text.replace(/\r\n/g, '\n');
 }
 
-module.exports = { getCardsFromFile, saveCards };
+module.exports = { getCardsFromFile, saveCards, getCorkboardAsMd };
