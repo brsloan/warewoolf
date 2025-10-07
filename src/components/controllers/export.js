@@ -55,7 +55,7 @@ function exportChapter(project, chapterTitle, author, chapDelta, filepathNameNoE
             exportChapAsText(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.compileGenTitlePage);
             break;
         case ".docx":
-            exportChapAsDocx(project, userSettings, chapDelta, filepathNameNoExt, options.compileGenTitlePage);
+            exportChapAsDocx(project, userSettings.addressInfo, chapDelta, filepathNameNoExt, options.compileGenTitlePage);
             break;
         case ".mdfc":
             exportChapAsMdf(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.compileGenTitlePage);
@@ -78,8 +78,8 @@ function exportChapAsText(projectTitle, chapTitle, author, chapDelta, filepathNa
   fs.writeFileSync(filepathNameNoExt + ".txt", convertToPlainText(chapDelta));
 }
 
-function exportChapAsDocx(project, userSettings, chapDelta, filepathNameNoExt, generateTitlePage){
-  var doc = convertDeltaToDocx(chapDelta, { generateTitlePage: generateTitlePage }, project, userSettings.addressInfo);
+function exportChapAsDocx(project, addressInfo, chapDelta, filepathNameNoExt, generateTitlePage){
+  var doc = convertDeltaToDocx(chapDelta, { generateTitlePage: generateTitlePage }, project, addressInfo);
   saveDocx(filepathNameNoExt + ".docx", doc);
 }
 
