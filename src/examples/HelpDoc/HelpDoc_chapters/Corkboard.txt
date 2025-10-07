@@ -49,7 +49,7 @@ Move Between Cards - **Cmd/Ctrl + Arrows**
 
 ### Alteration
 Move Selected Card - **Cmd/Ctrl + Shift + Arrows**
-Insert Card - **Cmd/Ctrl + I**
+Insert Card - **Cmd/Ctrl + I or Cmd/Ctrl + N**
 Delete Card - **Cmd/Ctrl + Delete/Backspace**
 Mark Card Finished - **Cmd/Ctrl + Enter**
 Color Card - **Cmd/Ctrl + [1-9]**
