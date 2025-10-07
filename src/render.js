@@ -6,8 +6,6 @@ const getUserSettings = require('./components/models/user-settings');
 const newChapter = require('./components/models/chapter');
 const newProject = require('./components/models/project');
 const autosaver = require('./components/controllers/autosave');
-const { backupProject } = require('./components/controllers/backup-project');
-const showFileDialog = require('./components/views/file-dialog_display');
 const {
   removeElementsByClass,
   createButton,
@@ -551,6 +549,7 @@ function saveProjectAs() {
     dialogType: 'save'
   };
 
+  const showFileDialog = require('./components/views/file-dialog_display');
   showFileDialog(options, function(filepath){
     if (filepath){
       filepath = project.saveAs(filepath);
@@ -574,6 +573,7 @@ function saveProjectCopy() {
     dialogType: 'save'
   };
 
+  const showFileDialog = require('./components/views/file-dialog_display');
   showFileDialog(options, function(filepath){
     if (filepath){
       project.saveAs(filepath, true);
@@ -595,6 +595,7 @@ function openAProject() {
     dialogType: 'open'
   };
 
+  const showFileDialog = require('./components/views/file-dialog_display');
   showFileDialog(options, function(filepath){
     if (filepath) {
       var missingChaps = project.loadFile(filepath[0]);
@@ -837,6 +838,7 @@ function openHelpDoc(){
 
 function exitApp(){
   if(userSettings.autoBackup == true && project.filename != ''){
+    const { backupProject } = require('./components/controllers/backup-project');
     backupProject(project, userSettings, sysDirectories.docs, function(msg){
       ipcRenderer.send('exit-app-confirmed');
     });
@@ -1305,6 +1307,7 @@ ipcRenderer.on('wifi-manager-clicked', function(e){
 });
 
 ipcRenderer.on('save-backup-clicked', function(e){
+  const { backupProject } = require('./components/controllers/backup-project');
   backupProject(project, userSettings, sysDirectories.docs, alertBackupResult);
 });
 
