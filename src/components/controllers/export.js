@@ -39,8 +39,11 @@ function exportProject(project, userSettings, options, filepath){
       if(projectNotesDelta)
         exportChapter(project, 'Project Notes', project.author, projectNotesDelta, dir + notesNamePrepend + 'project_', userSettings, options);
       var corkboardMd = getCorkboardAsMd(project.directory + project.chapsDirectory);
-      if(corkboardMd)
+      if(corkboardMd){
+        //Override heading styles for just this document since it is not a chapter
+        options.styleHeadingAsChapter = false;
         exportChapter(project, 'Project Corkboard', project.author, parseMDF(corkboardMd), dir + notesNamePrepend + 'corkboard', userSettings, options);
+      }
     }
 
   }
@@ -55,7 +58,7 @@ function exportChapter(project, chapterTitle, author, chapDelta, filepathNameNoE
             exportChapAsText(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.compileGenTitlePage);
             break;
         case ".docx":
-            exportChapAsDocx(project, userSettings.addressInfo, chapDelta, filepathNameNoExt, options.compileGenTitlePage);
+            exportChapAsDocx(project, userSettings.addressInfo, chapDelta, filepathNameNoExt, options);
             break;
         case ".mdfc":
             exportChapAsMdf(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.compileGenTitlePage);
@@ -78,8 +81,8 @@ function exportChapAsText(projectTitle, chapTitle, author, chapDelta, filepathNa
   fs.writeFileSync(filepathNameNoExt + ".txt", convertToPlainText(chapDelta));
 }
 
-function exportChapAsDocx(project, addressInfo, chapDelta, filepathNameNoExt, generateTitlePage){
-  var doc = convertDeltaToDocx(chapDelta, { generateTitlePage: generateTitlePage }, project, addressInfo);
+function exportChapAsDocx(project, addressInfo, chapDelta, filepathNameNoExt, options){
+  var doc = convertDeltaToDocx(chapDelta, options, project, addressInfo);
   saveDocx(filepathNameNoExt + ".docx", doc);
 }
 

@@ -97,7 +97,8 @@ function showCompileOptions(project, sysDirectories, userSettings){
         type: typeSelect.value,
         insertStrng: insertStrInput.value,
         insertHead: insertHeadCheck.checked,
-        generateTitlePage: titlePageCheck.checked
+        generateTitlePage: titlePageCheck.checked,
+        styleHeadingAsChapter: true
       }
       getCompileFilepath(options, sysDirectories, function(){
         popup.remove();

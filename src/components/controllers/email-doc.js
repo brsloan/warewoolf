@@ -13,7 +13,7 @@ function prepareAndEmail(project, userSettings, editorQuill, sender, pass, recei
   var delt;
   var filename;
 
-  if(compileOptions){
+  if(compileOptions.compile){
     delt = compileChapterDeltas(project, compileOptions);
     let projectTitle = project.filename == "" ? "untitled" : project.filename.split('.')[0];
     if(projectTitle == "untitled" && project.title != "")
@@ -136,7 +136,7 @@ function emailAsEpub(filename, project, compileOptions, delt, sender, pass, rece
   console.log('filepath: ' + filePath);
   var htmlChapters = [];
 
-  if(compileOptions){
+  if(compileOptions.compile){
     project.chapters.forEach(function(chap){
       htmlChapters.push({
         title: chap.title,

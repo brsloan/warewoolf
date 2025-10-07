@@ -86,7 +86,9 @@ function showExportOptions(project, userSettings, sysDirectories){
 
       var options = {
         type: typeSelect.value,
-        what: expProjOp.checked ? 'project' : 'chapter'
+        what: expProjOp.checked ? 'project' : 'chapter',
+        styleHeadingAsChapter: true,
+        generateTitlePage: false
         //insertHead: insertHeadCheck.checked
       }
       getExportFilePath(project, userSettings, options, sysDirectories, function(){

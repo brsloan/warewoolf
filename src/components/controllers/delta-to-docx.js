@@ -23,6 +23,11 @@ function packageDocxBase64(doc, callback){
 }
 
 function convertDeltaToDocx(delt, options, project, addressInfo){
+  if(options == null){
+    options = {
+      styleHeadingAsChapter: false
+    }
+  }
   var parsedQuill = parseDelta(delt);
 
   var fnoteParRegx = /^\[\^\d+]:/;
@@ -144,22 +149,7 @@ function convertDeltaToDocx(delt, options, project, addressInfo){
     creator: project.author,
     title: project.title,
     styles: {
-      default: {
-        heading1: {
-                run: {
-                    size: 32,
-                    bold: true,
-                    color: "000000",
-                },
-                paragraph: {
-                    spacing: {
-                        before: 1200,
-                        after: 1200,
-                    },
-                    pageBreakBefore: true,
-                },
-            },
-      },
+      default: options.styleHeadingAsChapter ? getChapterHeadingStyle() : {},
       paragraphStyles: [
         {
           name: 'Normal',
@@ -333,6 +323,25 @@ function getTitlePageFirstLine(project){
   lineText = project.author + lineText + wordCount;
 
   return lineText;
+}
+
+function getChapterHeadingStyle(){
+  return {
+        heading1: {
+                run: {
+                    size: 32,
+                    bold: true,
+                    color: "000000",
+                },
+                paragraph: {
+                    spacing: {
+                        before: 1200,
+                        after: 1200,
+                    },
+                    pageBreakBefore: true,
+                },
+            },
+      }
 }
 
 module.exports = {
