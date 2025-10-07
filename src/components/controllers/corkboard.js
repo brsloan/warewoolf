@@ -3,21 +3,10 @@ const { logError } = require('../controllers/error-log');
 const cardsFilename = 'project_corkboard.txt';
 
 function getCorkboardAsMd(chaptersPath){
-    const cardsFilepath = chaptersPath + cardsFilename;
-    console.log('getting corkboard at' + cardsFilepath);
-    try {
-        if(fs.existsSync(cardsFilepath)){
-            var cardsString = fs.readFileSync(cardsFilepath, "utf8");
-            return cardStringToMd(cardsString);
-        }  
-    }
-    catch(err){
-        logError(err);
-    }
+    return getCardsFile(chaptersPath, cardStringToMd);
 }
 
 function cardStringToMd(str){
-    console.log("converting corkboard");
     str = convertWindowsToLinuxLineEndings(str);
     let colorNums = /^# \[(\d)\] (\[[xX]\] )?/gm; 
     let checkMarkers = /^# \[[xX]\] /gm; 
@@ -29,16 +18,20 @@ function cardStringToMd(str){
 }
 
 function getCardsFromFile(chaptersPath){
+    return getCardsFile(chaptersPath, parseCardsString);
+}
+
+function getCardsFile(chaptersPath, processFunction){
     const cardsFilepath = chaptersPath + cardsFilename;
-    try {
-        if(fs.existsSync(cardsFilepath)){
-            var cardsString = fs.readFileSync(cardsFilepath, "utf8");
-            return parseCardsString(cardsString);
-        }  
-    }
-    catch(err){
-        logError(err);
-    }
+        try {
+            if(fs.existsSync(cardsFilepath)){
+                var cardsString = fs.readFileSync(cardsFilepath, "utf8");
+                return processFunction(cardsString);
+            }  
+        }
+        catch(err){
+            logError(err);
+        }
 }
 
 function saveCards(cards, chaptersPath){
