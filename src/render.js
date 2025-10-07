@@ -715,6 +715,7 @@ function verifyToDelete(ind){
     var yesButton = createButton("Yes");
     yesButton.onclick = function(){
       deleteChapter(ind);
+      editorQuill.focus();
       popup.remove();
     }
     var noButton = createButton("No");
