@@ -3,13 +3,6 @@
 	"chapsDirectory": "HelpDoc_chapters/",
 	"title": "helpDoc",
 	"author": "Benjamin Sloan",
-	"notes": {
-		"ops": [
-			{
-				"insert": "\n"
-			}
-		]
-	},
 	"chapters": [
 		{
 			"title": "WareWoolf Basics",
@@ -120,10 +113,18 @@
 			"summary": null
 		}
 	],
+	"reference": [
+		{
+			"title": "Locations",
+			"filename": "Locations.txt",
+			"filter": null,
+			"summary": null
+		}
+	],
 	"filters": [],
 	"trash": [],
-	"activeChapterIndex": 0,
+	"activeChapterIndex": 7,
 	"wordGoal": "0",
-	"textCursorPosition": 0,
+	"textCursorPosition": 1475,
 	"corkboardColumns": 4
 }
