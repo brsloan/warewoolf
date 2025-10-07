@@ -244,7 +244,7 @@ function updateFileList(){
     }
     project.trash.forEach(function (chap, chapIndex) {
       var listChap = document.createElement("li");
-      listChap.innerHTML = chap.title;
+      listChap.innerHTML = chap.title != '' ? chap.title : '(untitled)';
       listChap.dataset.chapIndex = project.chapters.length + project.reference.length + chapIndex;
       listChap.onclick = function () {
         displayChapterByIndex(this.dataset.chapIndex);
