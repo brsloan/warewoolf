@@ -31,7 +31,7 @@ const createWindow = () => {
       nodeIntegration: true,
       contextIsolation: false,
       spellcheck: false,
-      devTools: true
+      devTools: !app.isPackaged
     },
     kiosk: isLinux,
     fullscreen: true,
