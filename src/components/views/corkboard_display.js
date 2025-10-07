@@ -25,8 +25,9 @@ function showCorkboard(project){
 
     popup.addEventListener('keydown', boardCntrlEvents);
 
+    //Focus on last checked card if there is one, unless all have been checked, in which case focus on the first
     let lastChecked = loadedCards.findLastIndex(x => x.checked);
-    focusCard(lastChecked > -1 ? lastChecked + 1 : 1);
+    focusCard(lastChecked > -1 && lastChecked < loadedCards.length - 1 ? lastChecked + 1 : 1);
 }
 
 function generateStarterCard(){
@@ -75,7 +76,7 @@ function getTitleBar(){
   titleBar.appendChild(corkboardTitle);
 
   var helpReminder = document.createElement('p');
-  helpReminder.innerText = "For Help Press " + (isMac ? "Cmd + Shift + H" : "Cntrl + H");
+  helpReminder.innerText = "For Help Press " + (isMac ? "Cmd + Shift + H" : "Ctrl + H");
   titleBar.appendChild(helpReminder);
 
   return titleBar;
