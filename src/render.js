@@ -155,6 +155,7 @@ function displayProject(){
   setWordCountOnLoad();
   editorQuill.focus();
   editorQuill.setSelection(project.textCursorPosition);
+  scrollChapterListToActiveChapter();
 }
 
 function setWordCountOnLoad(){
@@ -265,9 +266,6 @@ function updateFileList(){
     else
       trashHeader.classList.add('trash-header-empty');
   }
-
-  scrollChapterListToActiveChapter();
-
 }
 
 function displayChapterByIndex(ind){
