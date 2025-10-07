@@ -10,8 +10,7 @@ const notesNamePrepend = '-notes_';
 
 function exportProject(project, userSettings, options, filepath){
   try{
-    //TODO: Need to create function to safely convert titles to folder/filenames
-    var dirName = project.title.length > 0 ? project.title.replace(/[^a-z0-9]/gi, '_') : 'exports';
+    var dirName = project.title.length > 0 ? sanitizeFilename(project.title) : 'exports';
     var dir = filepath.concat("/").concat(dirName).concat("/");
 
     if(!fs.existsSync(dir))
