@@ -21,7 +21,7 @@ function showCompileOptions(project, sysDirectories, userSettings){
     typeLabel.for = "filetype-select";
 
     var typeSelect = document.createElement("select");
-    const typeOptions = [".docx", ".txt", ".mdfc", ".md", ".html"];
+    const typeOptions = [".docx", ".txt", ".mdfc", ".md", ".html", ".epub"];
     typeOptions.forEach(function(op){
       var txtOp = document.createElement("option");
       txtOp.value = op;
@@ -77,7 +77,7 @@ function showCompileOptions(project, sysDirectories, userSettings){
     compileForm.appendChild(cancelBtn);
 
     typeSelect.onchange = function(){
-      if(typeSelect.value != '.docx' && typeSelect.value != '.html')
+      if(typeSelect.value != '.docx' && typeSelect.value != '.html' && typeSelect.value != '.epub')
         titlePageCheck.disabled = true;
       else {
         titlePageCheck.disabled = false;
@@ -97,14 +97,15 @@ function showCompileOptions(project, sysDirectories, userSettings){
         type: typeSelect.value,
         insertStrng: insertStrInput.value,
         insertHead: insertHeadCheck.checked,
-        generateTitlePage: titlePageCheck.checked
+        generateTitlePage: titlePageCheck.checked,
+        styleHeadingAsChapter: true
       }
       getCompileFilepath(options, sysDirectories, function(){
         popup.remove();
       });
     };
 
-    if(userSettings.compileType != '.docx' && userSettings.compileType != '.html')
+    if(userSettings.compileType != '.docx' && userSettings.compileType != '.html' && userSettings.compileType != '.epub')
       titlePageCheck.disabled = true;
 
     popup.appendChild(compileForm);

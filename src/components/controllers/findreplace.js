@@ -81,6 +81,11 @@ function replaceAllInAllChapters(project, oldStr, newStr, caseSensitive){
     numReplaced += changed;
   });
 
+  project.reference.forEach(function(chap){
+    var changed = replaceAllInChapter(oldStr, newStr, caseSensitive, chap);
+    numReplaced += changed;
+  });
+
   return numReplaced;
 }
 

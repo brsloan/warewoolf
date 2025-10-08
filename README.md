@@ -1,7 +1,7 @@
 <p align="center">
 	<img src="./src/assets/logo.png" style="width: 280px"/>
 </p>
-<p align="center">v2.1.0</p>
+<p align="center">v2.2.0</p>
 <p align="center">"The only writing software I use." -Virginia Woolf</p>
 
 WareWoolf is designed for one thing: writing fiction. It is intentionally simplified: you cannot change the font, line spacing, or color. But it has everything you need to organize, edit, and revise a novel--and you don't even need a mouse.
@@ -15,7 +15,9 @@ What it does have is an array of tools for importing plaintext and docx files an
 Dark Mode:
 ![screenshot of dark mode of program described](src/assets/screenshot_darkmode.png?raw=true "WareWoolf")
 Light Mode:
- ![screenshot of program described](src/assets/screenshot_lightmode.png?raw=true "WareWoolf")
+![screenshot of program described](src/assets/screenshot_lightmode.png?raw=true "WareWoolf")
+Corkboard:
+![screenshot of program described](src/assets/screenshot_corkboard.png?raw=true "WareWoolf")
 
 For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.com/brsloan/warewoolf/wiki).
 
@@ -28,6 +30,8 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
    * Detect custom strings marking chapter breaks or break text into chapters at each heading, etc.
 * Easily re-order chapters and automatically re-number them in headings after doing so ("Chapter One," "Chapter Two," etc.)
 * Compile chapters into single manuscript or export into individual files for each chapter
+* Keep notes on each chapter and project as a whole
+* "Reference" section of chapters list holds documents you don't want included in compile or word counts. Keep character lists, location info, etc.
 * Send Via Email: Email drafts of individual chapters or the entire manuscript to yourself at the press of a button.
 * Built In File Manager: Rename, delete, copy, move, and organize files within WareWoolf (for use in a writerDeck).
 * Built In Wi-Fi Manager: turn wi-fi on/off, connect to new networks, etc. (Linux only, for use in a writerDeck).
@@ -41,7 +45,7 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 * Word .docx support for import/export
 * Auto-saving and auto-backup options
 * Saves chapters as .txt files with light Markdown-style formatting, so even if WareWoolf disappears you will always be able to read/edit the documents you create with it. This is also widely considered the most "archival" file format, so people will still be able to open your files in 100 years (if people still read then).
-* Export as plain text, markdownFic, standard markdown, docx, or HTML 
+* Export as plain text, markdownFic, standard markdown, docx, HTML, or .epub 
 
 ## Installation
 
@@ -64,6 +68,14 @@ This app was built using Electron Forge. To run it from source...
 For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.com/brsloan/warewoolf/wiki).
 
 ## Status
+
+2025-10-07: v2.2.0. Changes made:
+* .epub export/compile. Meant for quickly generating .epub ebook files for sharing with first readers, etc.
+* "Reference" function lets you keep non-compiling documents in your project for planning, notes, etc. Move any chapter to end of chapter list, then move down one more space, and it will shift into "Reference" section and no longer count toward word count or be included in compile. Can move back into compiling chapters in same way (moving up).
+* Chapter Notes added. Notes panel can be toggled between the old Project Notes, which stays the same as you change chapters, and the new Chapter Notes, which are attached to each individual chapter and update as you cycle through.
+* Project/Chapter Notes now save as separate .txt files just like the chapters do.
+* Corkboard exports with rest of project
+* Various bug fixes, including that corkboard feature was broken in Windows (oops) and now works.
 
 2025-09-28: v2.1.0! Changes made:
 * Corkboard feature for pre-planning/outlining novels. Displays as color-coded digital index cards but saves as plain text "project_corkboard.txt" markdown document, so can be edited/prewritten in other apps.

@@ -6,13 +6,14 @@ const { convertDeltaToDocx, packageDocxBase64 } = require('./delta-to-docx');
 const { convertDeltaToMDF } = require('./markdownFic');
 const { logError } = require('./error-log');
 const { convertMdfcToMd } = require('./mdfc-to-md');
-const { convertMdfcToHtmlPage } = require('./mdfc-to-html');
+const { convertMdfcToHtmlPage, convertMdfcToHtml } = require('./mdfc-to-html');
+const { htmlChaptersToEpub } = require('./epub');
 
 function prepareAndEmail(project, userSettings, editorQuill, sender, pass, receiver, filetype, compileOptions, callback){
   var delt;
   var filename;
 
-  if(compileOptions){
+  if(compileOptions.compile){
     delt = compileChapterDeltas(project, compileOptions);
     let projectTitle = project.filename == "" ? "untitled" : project.filename.split('.')[0];
     if(projectTitle == "untitled" && project.title != "")
@@ -40,6 +41,9 @@ function prepareAndEmail(project, userSettings, editorQuill, sender, pass, recei
   else if(filetype == '.html'){
     emailDeltaAsHtml(filename, project, compileOptions, delt, sender, pass, receiver, callback);
   }
+  else if(filetype == '.epub'){
+    emailAsEpub(filename, project, compileOptions, delt, sender, pass, receiver, callback);
+  }
   else {
     //default to txt
     emailDeltaAsTxt(filename, delt, sender, pass, receiver, callback);
@@ -48,7 +52,7 @@ function prepareAndEmail(project, userSettings, editorQuill, sender, pass, recei
 }
 
 function emailDeltaAsDocx(project, userSettings, filename, delt, options, sender, pass, receiver, callback){
-  var doc = convertDeltaToDocx(delt, options, project, userSettings);
+  var doc = convertDeltaToDocx(delt, options, project, userSettings.addressInfo);
   packageDocxBase64(doc, (docString) => {
     var attachments = [
       {
@@ -116,6 +120,43 @@ function emailAsZip(project, sender, pass, receiver, callback){
         {
           filename: archName,
           path: os.tmpdir() + '/' + archName,
+          contentType: 'application/javascript'
+        }
+      ];
+
+      emailFile(sender, pass, receiver, attachments, callback);
+    }
+  });
+}
+
+function emailAsEpub(filename, project, compileOptions, delt, sender, pass, receiver, callback){
+  var generateTitle = compileOptions ? compileOptions.generateTitlePage : false;
+  var title = compileOptions ? project.title : project.chapters[project.activeChapterIndex].title;
+  var filePath = os.tmpdir() + '/' + filename + '.epub';
+  console.log('filepath: ' + filePath);
+  var htmlChapters = [];
+
+  if(compileOptions.compile){
+    project.chapters.forEach(function(chap){
+      htmlChapters.push({
+        title: chap.title,
+        html: convertMdfcToHtml(convertDeltaToMDF(chap.getContentsOrFile()))
+      })
+    });
+  }
+  else{
+    htmlChapters.push({
+      title: title,
+      html: convertMdfcToHtml(convertDeltaToMDF(delt))
+    });
+  }
+  
+  htmlChaptersToEpub(title, project.author, htmlChapters, filePath, generateTitle, function(generatedFilepath){
+    if(generatedFilepath != 'error'){
+      var attachments = [
+        {
+          filename: filename + '.epub',
+          path: generatedFilepath,
           contentType: 'application/javascript'
         }
       ];

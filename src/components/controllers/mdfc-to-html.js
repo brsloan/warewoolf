@@ -42,7 +42,7 @@ function convertMdfcToHtml(str){
     str = str.replace(alignJustified, '<p class="justified">$1</p>');
     str = str.replace(blockquote, '<blockquote>$1</blockquote>');
     str = str.replace(normal, '<p>$1</p>');
-    str = str.replace(blankLines, '<br>');
+    str = str.replace(blankLines, '<br/>');
   
     let bold = /(?<!\\|\\\*\*)\*\*([^\*\*]+)\*\*/g;
     let italic = /(?<!\\|\\\*)\*([^\*]+)\*/g;
@@ -121,7 +121,7 @@ function convertMdfcToHtmlPage(text, title, author = null, insertTitle = false){
         titleElements = '<h1 class="center">' + title + '<h1>';
         if(author)
             titleElements += '<h2 class="center">by ' + author + '</h2>';
-        titleElements += '<br>';
+        titleElements += '<br/>';
     }
         
 

@@ -6,15 +6,13 @@ const getUserSettings = require('./components/models/user-settings');
 const newChapter = require('./components/models/chapter');
 const newProject = require('./components/models/project');
 const autosaver = require('./components/controllers/autosave');
-const { backupProject } = require('./components/controllers/backup-project');
-const showFileDialog = require('./components/views/file-dialog_display');
 const {
   removeElementsByClass,
   createButton,
   disableSearchView
 } = require('./components/controllers/utils');
 const fileRequestedOnOpen = ipcRenderer.sendSync('get-file-requested-on-open');
-const { showBattery, removeBattery } = require('./components/views/battery_display');
+const { showBattery } = require('./components/views/battery_display');
 
 var editorQuill = new Quill('#editor-container', {
   modules: {
@@ -131,6 +129,14 @@ function setProject(filepath){
 }
 
 function convertLegacyProject(){
+
+  //Convert legacy notes from v2.1 and before
+  if(project.notes){
+    project.notesChap.notes = project.notes;
+    project.notesChap.saveNotesFile();
+  }
+
+  //Convert legacy chapters from v1.1 and before
   project.chapters.forEach(function(chap, i){
     if(chap.filename.includes('.pup')){
       chap.contents = chap.getFile();
@@ -144,11 +150,12 @@ function convertLegacyProject(){
 function displayProject(){
   updateFileList();
   updateTitleBar();
-  displayNotes();
+  refreshNotesDisplay();
   displayInitialChapter();
   setWordCountOnLoad();
   editorQuill.focus();
   editorQuill.setSelection(project.textCursorPosition);
+  scrollChapterListToActiveChapter();
 }
 
 function setWordCountOnLoad(){
@@ -161,6 +168,7 @@ function updateFileList(){
 
   clearList();
   generateChapterList();
+  generateReferenceList();
   generateTrashList();
 
   function clearList() {
@@ -196,14 +204,19 @@ function updateFileList(){
     });
   }
 
-  function generateTrashList() {
-    var trashList = document.getElementById("trash-list");
-    while (trashList.hasChildNodes()) {
-      trashList.removeChild(trashList.firstChild);
+  function generateReferenceList(){
+    var referenceList = document.getElementById('reference-list');
+    while(referenceList.hasChildNodes()){
+      try{
+        referenceList.removeChild(referenceList.firstChild);
+      }
+      catch(err){
+        console.log(err);
+      }
     }
-    project.trash.forEach(function (chap, chapIndex) {
+    project.reference.forEach(function(chap, chapIndex){
       var listChap = document.createElement("li");
-      listChap.innerHTML = chap.title;
+      listChap.innerHTML = chap.title != '' ? chap.title : '(untitled)';
       listChap.dataset.chapIndex = project.chapters.length + chapIndex;
       listChap.onclick = function () {
         displayChapterByIndex(this.dataset.chapIndex);
@@ -212,6 +225,35 @@ function updateFileList(){
         changeChapterTitle(this.dataset.chapIndex);
       };
       if (chapIndex + project.chapters.length == project.activeChapterIndex)
+        listChap.classList.add("activeChapter");
+      if (chap.hasUnsavedChanges == true)
+        listChap.innerHTML += "*";
+      referenceList.appendChild(listChap);
+    });
+
+    var refHeader = document.getElementById('reference-header');
+    if(project.reference.length > 0 )
+      refHeader.classList.remove('trash-header-empty');
+    else
+      refHeader.classList.add('trash-header-empty');
+  }
+
+  function generateTrashList() {
+    var trashList = document.getElementById("trash-list");
+    while (trashList.hasChildNodes()) {
+      trashList.removeChild(trashList.firstChild);
+    }
+    project.trash.forEach(function (chap, chapIndex) {
+      var listChap = document.createElement("li");
+      listChap.innerHTML = chap.title != '' ? chap.title : '(untitled)';
+      listChap.dataset.chapIndex = project.chapters.length + project.reference.length + chapIndex;
+      listChap.onclick = function () {
+        displayChapterByIndex(this.dataset.chapIndex);
+      };
+      listChap.ondblclick = function () {
+        changeChapterTitle(this.dataset.chapIndex);
+      };
+      if (chapIndex + project.chapters.length + project.reference.length == project.activeChapterIndex)
         listChap.classList.add("activeChapter");
       if (chap.hasUnsavedChanges == true)
         listChap.innerHTML += "*";
@@ -224,15 +266,15 @@ function updateFileList(){
     else
       trashHeader.classList.add('trash-header-empty');
   }
-
 }
 
 function displayChapterByIndex(ind){
   clearCurrentChapterIfUnchanged();
   ind = parseInt(ind);
 
-  if(ind > project.chapters.length + project.trash.length - 1)
-    ind = project.chapters.length + project.trash.length - 1;
+  //If trying to go beyond last chapter, stay on last chapter
+  if(ind > project.chapters.length + project.reference.length + project.trash.length - 1)
+    ind = project.chapters.length + project.reference.length + project.trash.length - 1;
 
   project.activeChapterIndex = ind;
 
@@ -240,8 +282,11 @@ function displayChapterByIndex(ind){
   if(ind < project.chapters.length){
     chap = project.chapters[ind];
   }
+  else if(ind < project.chapters.length + project.reference.length){
+    chap = project.reference[ind - project.chapters.length]
+  }
   else {
-    chap = project.trash[ind - project.chapters.length];
+    chap = project.trash[ind - project.reference.length - project.chapters.length];
   }
 
   var contents;
@@ -252,7 +297,18 @@ function displayChapterByIndex(ind){
      contents = chap.getFile();
   }
 
+  var correctNotesChap = userSettings.displayChapNotes ? chap : project.notesChap;
+  var notes;
+  if(correctNotesChap.notes != undefined && correctNotesChap.notes != null){
+    notes = correctNotesChap.notes;
+  }
+  else {
+    let savedNotes = correctNotesChap.getNotesFile();
+    notes = savedNotes ? savedNotes : getEmptyDelta();
+  }
+
   editorQuill.setContents(contents, 'api');
+  notesQuill.setContents(notes, 'api');
   updateFileList();
 }
 
@@ -260,8 +316,28 @@ function updateTitleBar(){
   document.title = "Warewoolf - " + (project.filename != "" ? project.filename : "unsaved project");
 }
 
-function displayNotes(){
-  notesQuill.setContents(project.notes, 'api');
+function refreshNotesDisplay(){
+  var notesHeader = document.getElementById('notes-header');
+
+  if(userSettings.displayChapNotes){
+    let savedNotes = project.getActiveChapter().getNotesContentOrFile();
+    var currentNotes = savedNotes ? savedNotes : getEmptyDelta();
+    notesQuill.setContents(currentNotes);
+
+    notesHeader.innerText = 'Chapter Notes';
+  }
+  else{
+    let savedNotes = project.notesChap.getNotesContentOrFile();
+    var currentNotes = savedNotes ? savedNotes : getEmptyDelta();
+    notesQuill.setContents(currentNotes, 'api');
+
+    notesHeader.innerText = 'Project Notes';
+  }
+    
+}
+
+function getEmptyDelta(){
+  return {"ops":[{"insert":"\n"}]};
 }
 
 function displayInitialChapter(){
@@ -352,7 +428,7 @@ function displayPreviousChapter(){
 }
 
 function displayNextChapter(){
-  if(project.activeChapterIndex < project.chapters.length - 1 + project.trash.length){
+  if(project.activeChapterIndex < project.chapters.length - 1 + project.trash.length + project.reference.length){
     displayChapterByIndex(project.activeChapterIndex + 1);
     editorQuill.setSelection(0);
     project.textCursorPosition = 0;
@@ -367,12 +443,24 @@ function moveChapUp(chapInd){
     project.chapters.splice(chapInd - 1, 0, chap);
     project.activeChapterIndex--;
   }
-  else if(chapInd > project.chapters.length){
+  else if(chapInd == project.chapters.length && project.reference.length > 0){
     project.hasUnsavedChanges = true;
-    var trashChap = project.trash.splice(chapInd - project.chapters.length, 1)[0];
-    project.trash.splice(chapInd - project.chapters.length - 1, 0, trashChap);
+    var refChap = project.reference.splice(chapInd - project.chapters.length, 1)[0];
+    project.chapters.splice(project.chapters.length,0,refChap); 
+  }
+  else if(chapInd > project.chapters.length && chapInd < project.chapters.length + project.reference.length){
+    project.hasUnsavedChanges = true;
+    var refChap = project.reference.splice(chapInd - project.chapters.length, 1)[0];
+    project.reference.splice(chapInd - project.chapters.length - 1, 0, refChap);
     project.activeChapterIndex--;
   }
+  else if(chapInd > project.chapters.length + project.reference.length){
+    project.hasUnsavedChanges = true;
+    var trashChap = project.trash.splice(chapInd - project.chapters.length - project.reference.length, 1)[0];
+    project.trash.splice(chapInd - project.chapters.length - project.reference.length - 1, 0, trashChap);
+    project.activeChapterIndex--;
+  }
+
   updateFileList();
 }
 
@@ -383,12 +471,24 @@ function moveChapDown(chapInd){
     project.chapters.splice(chapInd + 1, 0, chap);
     project.activeChapterIndex++;
   }
-  else if(chapInd > project.chapters.length - 1 && chapInd < project.chapters.length + project.trash.length - 1){
+  else if(chapInd == project.chapters.length - 1){
     project.hasUnsavedChanges = true;
-    var trashChap = project.trash.splice(chapInd - project.chapters.length, 1)[0];
-    project.trash.splice(chapInd - project.chapters.length + 1, 0, trashChap);
+    var chap = project.chapters.splice(chapInd, 1)[0];
+    project.reference.splice(0,0,chap);
+  }
+  else if(chapInd > project.chapters.length - 1 && chapInd < project.chapters.length + project.reference.length - 1){
+    project.hasUnsavedChanges = true;
+    var refChap = project.reference.splice(chapInd - project.chapters.length, 1)[0];
+    project.reference.splice(chapInd - project.chapters.length + 1, 0, refChap);
     project.activeChapterIndex++;
   }
+  else if(chapInd > project.chapters.length + project.reference.length - 1 && chapInd < project.chapters.length + project.reference.length + project.trash.length - 1){
+    project.hasUnsavedChanges = true;
+    var trashChap = project.trash.splice(chapInd - project.chapters.length - project.reference.length, 1)[0];
+    project.trash.splice(chapInd - project.chapters.length - project.reference.length + 1, 0, trashChap);
+    project.activeChapterIndex++;
+  }
+  
   updateFileList();
 }
 
@@ -407,16 +507,24 @@ function createNewProject(){
 }
 
 function addNewChapter(){
-  var newChap = newChapter();
-  newChap.hasUnsavedChanges = true;
-  newChap.contents = {"ops":[{"insert":"\n"}]};
-  project.chapters.splice(project.activeChapterIndex + 1, 0, newChap);
-  project.hasUnsavedChanges = true;
-  updateFileList();
-  var thisIndex = project.chapters.indexOf(newChap);
-  displayChapterByIndex(thisIndex);
-  editorQuill.enable();
-  changeChapterTitle(thisIndex);
+  //If not trash selected
+  if(project.activeChapterIndex < project.chapters.length + project.reference.length){
+    var newChap = newChapter();
+    newChap.hasUnsavedChanges = true;
+    newChap.contents = getEmptyDelta();
+    if(project.activeChapterIndex < project.chapters.length)
+      project.chapters.splice(project.activeChapterIndex + 1, 0, newChap);
+    else
+      project.reference.splice(project.activeChapterIndex - project.chapters.length + 1, 0, newChap);
+    
+    project.hasUnsavedChanges = true;
+    updateFileList();
+    //var thisIndex = project.chapters.indexOf(newChap);
+    var thisIndex = project.activeChapterIndex + 1;
+    displayChapterByIndex(thisIndex);
+    editorQuill.enable();
+    changeChapterTitle(thisIndex);
+  }
 }
 
 function saveProject(){
@@ -441,6 +549,7 @@ function saveProjectAs() {
     dialogType: 'save'
   };
 
+  const showFileDialog = require('./components/views/file-dialog_display');
   showFileDialog(options, function(filepath){
     if (filepath){
       filepath = project.saveAs(filepath);
@@ -464,6 +573,7 @@ function saveProjectCopy() {
     dialogType: 'save'
   };
 
+  const showFileDialog = require('./components/views/file-dialog_display');
   showFileDialog(options, function(filepath){
     if (filepath){
       project.saveAs(filepath, true);
@@ -485,6 +595,7 @@ function openAProject() {
     dialogType: 'open'
   };
 
+  const showFileDialog = require('./components/views/file-dialog_display');
   showFileDialog(options, function(filepath){
     if (filepath) {
       var missingChaps = project.loadFile(filepath[0]);
@@ -507,19 +618,40 @@ function clearCurrentChapterIfUnchanged(){
   var ch = project.getActiveChapter();
   if(ch && (ch.hasUnsavedChanges == undefined || ch.hasUnsavedChanges == false)){
     ch.contents = null;
+    ch.notes = null;
   }
 };
 
 function moveToTrash(ind){
   if(indexIsTrash(ind) == false){
     project.hasUnsavedChanges = true;
-    var toTrash = project.chapters.splice(ind, 1)[0];
-    project.trash.push(toTrash);
+    var isReference = indexIsReference(ind);
+    var isChap = !isReference;
+    var isLastChap = ind == project.chapters.length - 1;
+    var isLastRef = ind == project.chapters.length + project.reference.length - 1;
 
+    if(isReference){
+      let toTrash = project.reference.splice(ind - project.chapters.length, 1)[0];
+      project.trash.push(toTrash);
+    }
+    else{
+      let toTrash = project.chapters.splice(ind, 1)[0];
+      project.trash.push(toTrash);
+    }
+    
+    //If deleting currently selected chapter, select next chapter if there is one, or the previous chapter if not.
     if(ind == project.activeChapterIndex){
-      if(project.chapters.length > 0){
+      //If deleting a chapter and there are chapters left
+      if(isChap && project.chapters.length > 0){
         var newInd = ind < project.chapters.length || ind == 0 ? ind : ind - 1;
         displayChapterByIndex(newInd);
+      }
+      else if(isReference && project.reference.length > 0){
+        var newInd = ind < project.chapters.length + project.reference.length || ind - project.chapters.length == 0 ? ind : ind - 1;
+        displayChapterByIndex(newInd);
+      }
+      else if(isReference && project.reference.length < 1 && project.chapters.length > 0){
+        displayChapterByIndex(project.chapters.length - 1);
       }
       else{
         displayChapterByIndex(0)
@@ -583,6 +715,7 @@ function verifyToDelete(ind){
     var yesButton = createButton("Yes");
     yesButton.onclick = function(){
       deleteChapter(ind);
+      editorQuill.focus();
       popup.remove();
     }
     var noButton = createButton("No");
@@ -597,7 +730,11 @@ function verifyToDelete(ind){
 }
 
 function indexIsTrash(ind){
-  return ind > project.chapters.length - 1;
+  return ind > project.chapters.length + project.reference.length - 1;
+}
+
+function indexIsReference(ind){
+  return ind > project.chapters.length - 1 && ind < project.chapters.length + project.reference.length;
 }
 
 function restoreFromTrash(ind){
@@ -612,7 +749,9 @@ function restoreFromTrash(ind){
 function changeChapterTitle(ind){
   var chap;
   if(indexIsTrash(ind))
-    chap = project.trash[ind - project.chapters.length];
+    chap = project.trash[ind - project.chapters.length - project.reference.length];
+  else if(indexIsReference(ind))
+    chap = project.reference[ind - project.chapters.length];
   else
     chap = project.chapters[ind];
 
@@ -689,7 +828,7 @@ function decreaseFontSizeSetting(){
 function scrollChapterListToActiveChapter(){
   document.getElementById('chapter-list-sidebar')
   .scrollTop = document.querySelector('.activeChapter')
-  .offsetTop;
+  .offsetTop - (document.getElementById('chapters-header').offsetHeight * 3);
 }
 
 function openHelpDoc(){
@@ -700,6 +839,7 @@ function openHelpDoc(){
 
 function exitApp(){
   if(userSettings.autoBackup == true && project.filename != ''){
+    const { backupProject } = require('./components/controllers/backup-project');
     backupProject(project, userSettings, sysDirectories.docs, function(msg){
       ipcRenderer.send('exit-app-confirmed');
     });
@@ -718,10 +858,16 @@ function addImportedChapter(chapDelta, title){
   newChap.contents = chapDelta;
   newChap.title = title;
 
-  project.chapters.splice(project.activeChapterIndex + 1, 0, newChap);
+  if(indexIsReference(project.activeChapterIndex)){
+    project.reference.splice(project.activeChapterIndex - project.chapters.length + 1, 0, newChap);
+  }
+  else{
+    project.chapters.splice(project.activeChapterIndex + 1, 0, newChap);
+  }
+  
   updateFileList();
-  var thisIndex = project.chapters.indexOf(newChap);
-  displayChapterByIndex(thisIndex);
+  //var thisIndex = project.chapters.indexOf(newChap);
+  displayChapterByIndex(project.activeChapterIndex + 1);
 }
 
 ///////////////////////////////////////////////////////////////////
@@ -744,7 +890,16 @@ editorQuill.on('selection-change', function(range, oldRange, source){
 
 notesQuill.on('text-change', function(delta, oldDelta, source){
   if(source == 'user'){
-    project.notes = notesQuill.getContents();
+    if(userSettings.displayChapNotes){
+      var chap = project.getActiveChapter();
+      chap.notes = notesQuill.getContents();
+      chap.hasUnsavedChanges = true;
+    }
+    else {
+      project.notesChap.notes = notesQuill.getContents();
+      project.notesChap.hasUnsavedChanges = true;
+    }
+    
     project.hasUnsavedChanges = true;
   }
 });
@@ -876,14 +1031,25 @@ document.addEventListener ("keydown", function (e) {
       stopDefaultPropagation(e);
       togglePanelDisplay(2);
     }
+    else if((e.ctrlKey || e.metaKey) && e.key === "F3"){
+      stopDefaultPropagation(e);
+      toggleChapterNotes();
+    }
     else if(e.key ==="F3"){
       stopDefaultPropagation(e);
       togglePanelDisplay(3);
     }
 } );
 
+function toggleChapterNotes(){
+  userSettings.displayChapNotes = !userSettings.displayChapNotes;
+  userSettings.save();
+  refreshNotesDisplay();
+}
+
 document.getElementById('editor-container').addEventListener('keydown', editorControlEvents);
 document.getElementById('chapter-list-sidebar').addEventListener('keydown', editorControlEvents);
+document.getElementById('notes-editor').addEventListener('keydown', editorControlEvents);
 
 function editorControlEvents(e){
   if ((e.ctrlKey || e.metaKey)  && e.shiftKey && e.key === "ArrowUp") {
@@ -902,10 +1068,14 @@ function editorControlEvents(e){
   else if((e.ctrlKey || e.metaKey) && e.key === "ArrowUp"){
     stopDefaultPropagation(e);
     displayPreviousChapter();
+    if(e.currentTarget.id == 'notes-editor')
+      notesQuill.focus();
   }
   else if((e.ctrlKey || e.metaKey) && e.key === "ArrowDown"){
     stopDefaultPropagation(e);
     displayNextChapter();
+    if(e.currentTarget.id == 'notes-editor')
+      notesQuill.focus();
   }
   else if((e.ctrlKey || e.metaKey) && e.key === ","){
     descreaseEditorWidthSetting();
@@ -915,7 +1085,10 @@ function editorControlEvents(e){
   }
   else if(e.key === "PageDown"){
     stopDefaultPropagation(e);
-    goPageDown(editorQuill);
+    if(e.currentTarget.id == 'notes-editor')
+      goPageDown(notesQuill)
+    else
+      goPageDown(editorQuill);
   }
 }
 
@@ -1135,6 +1308,7 @@ ipcRenderer.on('wifi-manager-clicked', function(e){
 });
 
 ipcRenderer.on('save-backup-clicked', function(e){
+  const { backupProject } = require('./components/controllers/backup-project');
   backupProject(project, userSettings, sysDirectories.docs, alertBackupResult);
 });
 

@@ -2,17 +2,46 @@ const fs = require('fs');
 const { logError } = require('../controllers/error-log');
 const cardsFilename = 'project_corkboard.txt';
 
+function getCorkboardForExport(chaptersPath, options){
+    var returnText = getCorkboardAsMd(chaptersPath);
+    if(options.type == '.docx'){
+        //Remove extra blank lines after headings
+        var headingsWithExtraBlank = /^(# .*\n)\n/gm;
+        returnText = returnText.replace(headingsWithExtraBlank,'$1');
+    }
+    return returnText;
+}
+
+function getCorkboardAsMd(chaptersPath){
+    return getCardsFile(chaptersPath, cardStringToMd);
+}
+
+function cardStringToMd(str){
+    str = convertWindowsToLinuxLineEndings(str);
+    let colorNums = /^# \[(\d)\] (\[[xX]\] )?/gm; 
+    let checkMarkers = /^# \[[xX]\] /gm; 
+
+    str = str.replace(colorNums,'# ');
+    str = str.replace(checkMarkers, '# ');
+
+    return str;
+}
+
 function getCardsFromFile(chaptersPath){
+    return getCardsFile(chaptersPath, parseCardsString);
+}
+
+function getCardsFile(chaptersPath, processFunction){
     const cardsFilepath = chaptersPath + cardsFilename;
-    try {
-        if(fs.existsSync(cardsFilepath)){
-            var cardsString = fs.readFileSync(cardsFilepath, "utf8");
-            return parseCardsString(cardsString);
-        }  
-    }
-    catch(err){
-        logError(err);
-    }
+        try {
+            if(fs.existsSync(cardsFilepath)){
+                var cardsString = fs.readFileSync(cardsFilepath, "utf8");
+                return processFunction(cardsString);
+            }  
+        }
+        catch(err){
+            logError(err);
+        }
 }
 
 function saveCards(cards, chaptersPath){
@@ -39,13 +68,14 @@ function parseCardsString(str){
     let colorNum = /^\[(\d)\] /; 
     let checkMarker = /^\[[xX]\] /; 
 
+    str = convertWindowsToLinuxLineEndings(str);
 
     //escape JSON chars
     str = str.replaceAll('\\','\\\\');
     str = str.replaceAll('/','\\/');
     str = str.replaceAll('"','\\"');
     str = str.replaceAll('\t','\\t'); 
-
+ 
     str = str.replace(firstLabel, '[{"label":"$1", "descr":"');
     str = str.replace(label, '"}, {"label":"$1", "descr":"');
     str = str.replace(newLines, '\\n');
@@ -96,4 +126,9 @@ function generateCardsString(cards){
     return cardsString;
 }
 
-module.exports = { getCardsFromFile, saveCards };
+function convertWindowsToLinuxLineEndings(text) {
+  // Replace all occurrences of '\r\n' with '\n'
+  return text.replace(/\r\n/g, '\n');
+}
+
+module.exports = { getCardsFromFile, saveCards, getCorkboardForExport };

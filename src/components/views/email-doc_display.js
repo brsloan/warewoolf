@@ -125,7 +125,7 @@ function showEmailOptions(project, userSettings, editorQuill){
     attachSet.appendChild(typeLabel);
 
     var typeSelect = document.createElement("select");
-    const typeOptions = [".docx", ".txt", ".md", ".html", ".mdfc"];
+    const typeOptions = [".docx", ".txt", ".md", ".html", ".epub", ".mdfc"];
     typeOptions.forEach(function(op){
       var txtOp = document.createElement("option");
       txtOp.value = op;
@@ -168,15 +168,14 @@ function showEmailOptions(project, userSettings, editorQuill){
       userSettings.compileType = typeSelect.value;
       userSettings.save();
 
-      let compileOptions = null;
-      if(compiledRadio.checked){
-        compileOptions = {
+      let compileOptions = {
           type: typeSelect.value,
           insertStrng: userSettings.compileChapMark,
           insertHead: userSettings.compileInsertHeaders,
-          generateTitlePage: userSettings.compileGenTitlePage
+          generateTitlePage: userSettings.compileGenTitlePage && compiledRadio.checked,
+          styleHeadingAsChapter: true,
+          compile: compiledRadio.checked
         }
-      }
 
       prepareAndEmail(project, userSettings, editorQuill, senderEmailInput.value,
         senderPassInput.value,

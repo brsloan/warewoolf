@@ -26,6 +26,7 @@ function getUserSettings(userSettingsFilepath){
     autosaveIntMinutes: 0,
     darkMode: 'system',
     showBattery: false,
+    displayChapNotes: true,
     save: save,
     load: load,
     getSettingsFilepath: getSettingsFilepath

@@ -179,9 +179,9 @@ function fillFileList(project, fileList, chapsDirIn){
 
       let fileExpected = document.createElement('label');
       fileList.appendChild(fileExpected);
-      if(project.chapters.map(function(chap){
+      if(project.chapters.concat(project.reference).map(function(chap){
         return chap.filename;
-      }).includes(file.name)){
+      }).includes(file.name) || file.name == 'project_corkboard.txt'){
         fileExpected.innerText = ' ✔';
         fileExpected.classList.add('good-check');
       }

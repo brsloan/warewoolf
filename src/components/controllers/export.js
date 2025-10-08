@@ -1,110 +1,112 @@
 const fs = require('fs');
-const { convertDeltaToMDF } = require('./markdownFic');
+const { convertDeltaToMDF, parseMDF } = require('./markdownFic');
 const { logError } = require('./error-log');
 const { convertDeltaToDocx, saveDocx } = require('./delta-to-docx');
 const { sanitizeFilename } = require('./utils');
-const { convertMdfcToHtmlPage } = require('./mdfc-to-html');
+const { convertMdfcToHtmlPage, convertMdfcToHtml } = require('./mdfc-to-html');
 const { convertMdfcToMd } = require('./mdfc-to-md');
+const { htmlChaptersToEpub } = require('./epub');
+const { getCorkboardForExport } = require('./corkboard');
+const notesNamePrepend = '-notes_';
 
 function exportProject(project, userSettings, options, filepath){
-    //TODO: Need to create function to safely convert titles to folder/filenames
-    var dirName = project.title.length > 0 ? project.title.replace(/[^a-z0-9]/gi, '_') : 'exports';
-    var newDir = filepath.concat("/").concat(dirName).concat("/");
+  try{
+    var dirName = project.title.length > 0 ? sanitizeFilename(project.title) : 'exports';
+    var dir = filepath.concat("/").concat(dirName).concat("/");
 
-    if(!fs.existsSync(newDir))
-        fs.mkdirSync(newDir);
+    if(!fs.existsSync(dir))
+        fs.mkdirSync(dir);
 
-    switch(options.type){
+    var chapsToExport = options.what == 'project' ? project.chapters.concat(project.reference) : [ project.getActiveChapter() ];
+    for(let i=0;i<chapsToExport.length;i++){
+      var chapFile = chapsToExport[i].getContentsOrFile();
+      var chapNumber = i < project.chapters.length ? i : i - project.chapters.length;
+      var outName = generateChapterFilename(chapNumber, chapsToExport[i].title, options.what);
+
+      if(i > project.chapters.length - 1)
+        outName = '-ref_' + outName;
+
+      exportChapter(project, chapsToExport[i].title, project.author, chapFile, dir + outName, userSettings, options);
+
+      var chapNotesDelta = chapsToExport[i].getNotesContentOrFile();
+
+      if(chapNotesDelta)
+        exportChapter(project, chapsToExport[i].title + ' Notes', project.author, chapNotesDelta, dir + notesNamePrepend + outName, userSettings, options); 
+    }
+
+    if(options.what == 'project'){
+      var projectNotesDelta = project.notesChap.getNotesContentOrFile();
+      if(projectNotesDelta)
+        exportChapter(project, 'Project Notes', project.author, projectNotesDelta, dir + notesNamePrepend + 'project_', userSettings, options);
+      var corkboardMd = getCorkboardForExport(project.directory + project.chapsDirectory, options);
+      if(corkboardMd){
+        //Override heading styles for just this document since it is not a chapter
+        options.styleHeadingAsChapter = false;
+        exportChapter(project, 'Project Corkboard', project.author, parseMDF(corkboardMd), dir + notesNamePrepend + 'corkboard', userSettings, options);
+      }
+    }
+
+  }
+  catch(err){
+    logError(err);
+  }  
+}
+
+function exportChapter(project, chapterTitle, author, chapDelta, filepathNameNoExt, userSettings, options){
+  switch(options.type){
         case ".txt":
-            exportAsText(project, newDir, options.what);
+            exportChapAsText(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.compileGenTitlePage);
             break;
         case ".docx":
-            exportAsWord(project, userSettings, newDir, options.what);
+            exportChapAsDocx(project, userSettings.addressInfo, chapDelta, filepathNameNoExt, options);
             break;
         case ".mdfc":
-            exportAsMDF(project, newDir, options.what);
+            exportChapAsMdf(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.compileGenTitlePage);
             break;
         case ".md":
-            exportAsMd(project, newDir, options.what);
+            exportChapAsMd(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.compileGenTitlePage);
             break;
         case ".html":
-            exportAsHtml(project, newDir, options.what);
+            exportChapAsHtml(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.compileGenTitlePage);
+            break;
+        case ".epub":
+            exportChapAsEpub(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.compileGenTitlePage);
             break;
         default:
             console.log("No valid filetype selected for export.");
     }
 }
 
-function exportAsHtml(project, dir, what){
-  try{
-    var chapsToExport = what == 'project' ? project.chapters : [ project.getActiveChapter() ];
-    for(let i=0; i < chapsToExport.length; i++){
-      var chapFile = chapsToExport[i].getContentsOrFile();
-      var outName = generateChapterFilename(i, chapsToExport[i].title, what);
-
-      fs.writeFileSync(dir + outName + '.html', convertMdfcToHtmlPage(convertDeltaToMDF(chapFile), project.title + ": " + chapsToExport[i].title));
-    }
-
-    if(what == 'project')
-      fs.writeFileSync(dir + "notes" + ".html", convertMdfcToHtmlPage(convertDeltaToMDF(project.notes), project.title + ": " + 'Notes'));
-  }
-  catch(err){
-    logError(err);
-  }
+function exportChapAsText(projectTitle, chapTitle, author, chapDelta, filepathNameNoExt, generateTitlePage){
+  fs.writeFileSync(filepathNameNoExt + ".txt", convertToPlainText(chapDelta));
 }
 
-function exportAsMd(project, dir, what){
-  try{
-    var chapsToExport = what == 'project' ? project.chapters : [ project.getActiveChapter() ];
-    for(let i=0; i < chapsToExport.length; i++){
-      var chapFile = chapsToExport[i].getContentsOrFile();
-      var outName = generateChapterFilename(i, chapsToExport[i].title, what);
-
-      fs.writeFileSync(dir + outName + '.md', convertMdfcToMd(convertDeltaToMDF(chapFile)));
-    }
-
-    if(what == 'project')
-      fs.writeFileSync(dir + "notes" + ".md", convertMdfcToMd(convertDeltaToMDF(project.notes)));
-  }
-  catch(err){
-    logError(err);
-  }
+function exportChapAsDocx(project, addressInfo, chapDelta, filepathNameNoExt, options){
+  var doc = convertDeltaToDocx(chapDelta, options, project, addressInfo);
+  saveDocx(filepathNameNoExt + ".docx", doc);
 }
 
-function exportAsMDF(project, dir, what){
-  try{
-    var chapsToExport = what == 'project' ? project.chapters : [ project.getActiveChapter() ];
-    for(let i=0; i < chapsToExport.length; i++){
-      var chapFile = chapsToExport[i].getContentsOrFile();
-      var outName = generateChapterFilename(i, chapsToExport[i].title, what);
-
-      fs.writeFileSync(dir + outName + '.mdfc', convertDeltaToMDF(chapFile));
-    }
-
-    if(what == 'project')
-      fs.writeFileSync(dir + "notes" + ".mdfc", convertDeltaToMDF(project.notes));
-  }
-  catch(err){
-    logError(err);
-  }
+function exportChapAsMdf(projectTitle, chapTitle, author, chapDelta, filepathNameNoExt, generateTitlePage){
+  fs.writeFileSync(filepathNameNoExt + '.mdfc', convertDeltaToMDF(chapDelta));
 }
 
-function exportAsText(project, dir, what){
-  try{
-    var chapsToExport = what == 'project' ? project.chapters : [ project.getActiveChapter() ];
-    for(i=0; i<chapsToExport.length; i++){
-        var chapFile = chapsToExport[i].getContentsOrFile();
-        var outName = generateChapterFilename(i, chapsToExport[i].title, what);
+function exportChapAsMd(projectTitle, chapTitle, author, chapDelta, filepathNameNoExt, generateTitlePage){
+  fs.writeFileSync(filepathNameNoExt + '.md', convertMdfcToMd(convertDeltaToMDF(chapDelta)));
+}
 
-        fs.writeFileSync(dir + outName + ".txt", convertToPlainText(chapFile));
-    }
+function exportChapAsHtml(projectTitle, chapTitle, author, chapDelta, filepathNameNoExt, generateTitlePage){
+  fs.writeFileSync(filepathNameNoExt + '.html', convertMdfcToHtmlPage(convertDeltaToMDF(chapDelta), projectTitle + ": " + chapTitle, author, generateTitlePage));
+}
 
-    if(what == 'project')
-      fs.writeFileSync(dir + "notes" + ".txt", convertToPlainText(project.notes));
-  }
-  catch(err){
-    logError(err);
-  }
+function exportChapAsEpub(projectTitle, chapTitle, author, chapDelta, filepathNameNoExt, generateTitlePage){
+  var htmlChap = {
+        title: chapTitle,
+        html: convertMdfcToHtml(convertDeltaToMDF(chapDelta))
+      }
+
+  htmlChaptersToEpub(projectTitle + ': ' + chapTitle, author, [htmlChap], filepathNameNoExt + '.epub', generateTitlePage, function(resp){
+    console.log('epub exported: ' + resp);
+  });
 }
 
 function convertToPlainText(delt){
@@ -113,30 +115,6 @@ function convertToPlainText(delt){
     text += op.insert;
   });
   return text;
-}
-
-function exportAsWord(project, userSettings, dir, what){
-    exportChapsAsWord(project, userSettings, dir, what);
-    if(what == 'project')
-      exportNotesAsWord(project, userSettings, dir);
-}
-
-function exportChapsAsWord(project, userSettings, dir, what){
-    var chapsToExport = what == 'project' ? project.chapters : [ project.getActiveChapter() ];
-    for(let i=0; i < chapsToExport.length;i++){
-      var chapFile = chapsToExport[i].getContentsOrFile();
-      var outName = generateChapterFilename(i, chapsToExport[i].title, what);
-
-      var doc = convertDeltaToDocx(chapFile, { generateTitlePage: false }, project, userSettings);
-      saveDocx(dir + outName + ".docx", doc);
-    }
-}
-
-function exportNotesAsWord(project, userSettings, dir){
-    var chapFile = project.notes;
-
-    var doc = convertDeltaToDocx(chapFile, { generateTitlePage: false }, project, userSettings);
-    saveDocx(dir + "notes" + ".docx", doc);
 }
 
 function generateChapterFilename(num, title, what){

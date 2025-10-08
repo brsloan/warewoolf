@@ -3,13 +3,6 @@
 	"chapsDirectory": "HelpDoc_chapters/",
 	"title": "helpDoc",
 	"author": "Benjamin Sloan",
-	"notes": {
-		"ops": [
-			{
-				"insert": "\n"
-			}
-		]
-	},
 	"chapters": [
 		{
 			"title": "WareWoolf Basics",
@@ -116,6 +109,14 @@
 		{
 			"title": "Word Counts",
 			"filename": "Word Counts.txt",
+			"filter": null,
+			"summary": null
+		}
+	],
+	"reference": [
+		{
+			"title": "Locations",
+			"filename": "Locations.txt",
 			"filter": null,
 			"summary": null
 		}

@@ -1,6 +1,7 @@
 const fs = require('fs');
 const newChapter = require('./chapter');
 const { logError } = require('../controllers/error-log');
+const defaultProjectNotesName = 'project_.txt'; //Will have default notes prepend ('-notes_') as well (added by Chapter object's save function)
 
 function newProject(){
     return {
@@ -9,8 +10,9 @@ function newProject(){
         chapsDirectory: "",
         title: "",
         author: "",
-        notes: {},
+        notesChap: {}, //notesChap is a chapter file for which we never use chapter content but only chapter notes (in order to save project-wide notes)
         chapters: [],
+        reference: [],
         filters: [],
         trash: [],
         activeChapterIndex: 0,
@@ -29,8 +31,10 @@ function newProject(){
       var chap;
         if(this.activeChapterIndex < this.chapters.length)
             chap =  this.chapters[this.activeChapterIndex];
+        else if(this.activeChapterIndex < this.chapters.length + this.reference.length)
+            chap = this.reference[this.activeChapterIndex - this.chapters.length];
         else
-            chap = this.trash[this.activeChapterIndex - this.chapters.length];
+            chap = this.trash[this.activeChapterIndex - this.chapters.length - this.reference.length];
         return chap;
     }
 
@@ -54,12 +58,21 @@ function newProject(){
         });
         this.chapters = chaps;
 
+        var refChaps = [];
+        this.reference.forEach(function(rf){
+          refChaps.push(newChapter().parseChapter(rf));
+        })
+        this.reference = refChaps;
 
         var trashChaps = [];
         this.trash.forEach(function (tr) {
           trashChaps.push(newChapter().parseChapter(tr));
         });
         this.trash = trashChaps;
+
+        var notesChap = newChapter();
+        notesChap.filename = defaultProjectNotesName;
+        this.notesChap = notesChap;
 
         this.hasUnsavedChanges = false;
         return testChapsDirectory();
@@ -78,11 +91,17 @@ function newProject(){
             if(chap.hasUnsavedChanges)
               chap.saveFile();
           });
+          proj.reference.forEach(function(rf){
+            if(rf.hasUnsavedChanges)
+              rf.saveFile();
+          });
           proj.trash.forEach(function(tr){
             if(tr.hasUnsavedChanges)
               tr.saveFile();
           });
 
+          if(proj.notesChap.hasUnsavedChanges)
+            proj.notesChap.saveNotesFile();
 
           var fileString = stringifyProject(proj);
 
@@ -104,6 +123,8 @@ function newProject(){
         //else if (k == "filename") return undefined;
         else if (k == "directory") return undefined;
         else if (k == "wordCountOnLoad") return undefined;
+        else if (k == "notes") return undefined;
+        else if (k == "notesChap") return undefined;
         else return v;
       }, '\t');
     }
@@ -135,6 +156,15 @@ function newProject(){
               chap.filename = newChapFilename;
           }
         });
+        proj.reference.forEach(function(chap){
+          if(chap.filename != null){
+            var newChapFilename =  chap.filename.split("/").pop();
+            fs.copyFileSync(proj.directory + proj.chapsDirectory + chap.filename,
+              newDirectory + newSubDir + newChapFilename);
+            if(useSaveCopy == false)
+              chap.filename = newChapFilename;
+          }
+        })
         proj.trash.forEach(function(chap){
           if(chap.filename != null){
             var newChapFilename = chap.filename.split("/").pop();
@@ -163,6 +193,14 @@ function newProject(){
               chap.saveCopy();
             else
               chap.saveFile();
+          }
+        });
+        proj.reference.forEach(function(rf){
+          if(rf.hasUnsavedChanges){
+            if(useSaveCopy)
+              rf.saveCopy();
+            else
+              rf.saveFile();
           }
         });
         proj.trash.forEach(function(tr){
