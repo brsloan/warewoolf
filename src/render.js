@@ -442,6 +442,22 @@ function displayNextChapter(){
 
 }
 
+function chapIndexIs(ind){
+  return {
+    //Second part of chapter "or" statement is to catch when the very first chapter is added to a new project
+    chapter: ind < project.chapters.length || (project.chapters.length == 0 && project.reference.length == 0 && project.trash.length == 0), 
+    firstChapter: ind == 0,
+    lastChapter: ind == project.chapters.length - 1,
+    reference: ind > project.chapters.length - 1 && ind < project.chapters.length + project.reference.length && project.reference.length > 0,
+    firstReference: ind == project.chapters.length && project.reference.length > 0,
+    lastReference: ind == project.chapters.length + project.reference.length - 1 && project.reference.length > 0,
+    trash: ind > project.chapters.length + project.reference.length - 1 && project.trash.length > 0,
+    firstTrash: ind == project.chapters.length + project.reference.length,
+    lastTrash: ind == project.chapters.length + project.reference.length + project.trash.length - 1 && project.trash.length > 0,
+    lastAll: ind == project.chapters.length + project.reference.length + project.trash.length - 1
+  }
+}
+
 function moveChapUp(chapInd){
   var indexIs = chapIndexIs(chapInd);
   if(indexIs.chapter && !indexIs.firstChapter){
@@ -729,22 +745,6 @@ function verifyToDelete(ind){
     popup.appendChild(noButton);
     document.body.appendChild(popup);
     yesButton.focus();
-  }
-}
-
-function chapIndexIs(ind){
-  return {
-    //Second part of chapter "or" statement is to catch when the very first chapter is added to a new project
-    chapter: ind < project.chapters.length || (project.chapters.length == 0 && project.reference.length == 0 && project.trash.length == 0), 
-    firstChapter: ind == 0,
-    lastChapter: ind == project.chapters.length - 1,
-    reference: ind > project.chapters.length - 1 && ind < project.chapters.length + project.reference.length && project.reference.length > 0,
-    firstReference: ind == project.chapters.length && project.reference.length > 0,
-    lastReference: ind == project.chapters.length + project.reference.length - 1 && project.reference.length > 0,
-    trash: ind > project.chapters.length + project.reference.length - 1 && project.trash.length > 0,
-    firstTrash: ind == project.chapters.length + project.reference.length,
-    lastTrash: ind == project.chapters.length + project.reference.length + project.trash.length - 1 && project.trash.length > 0,
-    lastAll: ind == project.chapters.length + project.reference.length + project.trash.length - 1
   }
 }
 
