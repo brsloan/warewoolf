@@ -1,5 +1,4 @@
 const archiver = require('archiver');
-const unzipper = require('unzipper');
 const fs = require('fs');
 const { logError } = require('./error-log');
 
@@ -111,19 +110,6 @@ function getTimeStamp(){
   }
 }
 
-function unzipProject(zipPath, callback){
-  if(zipPath.includes('.zip')){
-    try{
-      fs.createReadStream(zipPath)
-      .pipe(unzipper.Extract({ path: zipPath.replace('.zip','') }))
-      .on('close', callback);
-    }
-    catch(err){
-      logError(err);
-    }
-  }
-}
-
 function deleteFile(fpth){
   try {
     if(fs.existsSync(fpth))
@@ -144,6 +130,5 @@ function getFileList(dirPath){
 
 module.exports = {
   backupProject, 
-  archiveProject,
-  unzipProject
+  archiveProject
 }

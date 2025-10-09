@@ -1,5 +1,4 @@
 const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
-const { unzipProject } = require('../controllers/backup-project');
 const { createNewDirectory, renameFiles, moveFiles, getFileList, deleteFile, getParentDirectory } = require('../controllers/file-manager');
 
 function showFileManager(sysDir, projDir){
@@ -51,7 +50,7 @@ function showFileManager(sysDir, projDir){
 
         createNewDirectory(newDirNameInput.value, currentDirDisplay.innerText);
         populateFMFileList(currentDirDisplay.innerText, fileListSelect, currentDirDisplay);
-
+ 
         newDirNameInput.value = "";
         newDirInputPanel.style.display = "none";
         fileListSelect.focus();
@@ -176,6 +175,7 @@ function showFileManager(sysDir, projDir){
     var unzipBtn = createButton("<span class='access-key'>U</span>nzip");
     unzipBtn.accessKey = "u";
     unzipBtn.onclick = function(){
+      const { unzipProject } = require('../controllers/file-manager');
       unzipProject(currentDirDisplay.innerText + '/' + fileListSelect.selectedOptions[0].value, function(){
           populateFMFileList(currentDirDisplay.innerText, fileListSelect, currentDirDisplay);
       });

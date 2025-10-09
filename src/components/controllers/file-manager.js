@@ -130,6 +130,20 @@ function thisFileExists(filepath){
   }
 }
 
+function unzipProject(zipPath, callback){
+  const unzipper = require('unzipper');
+  if(zipPath.includes('.zip')){
+    try{
+      fs.createReadStream(zipPath)
+      .pipe(unzipper.Extract({ path: zipPath.replace('.zip','') }))
+      .on('close', callback);
+    }
+    catch(err){
+      logError(err);
+    }
+  }
+}
+
 module.exports = {
   copyFiles,
   renameFiles,
@@ -138,5 +152,6 @@ module.exports = {
   deleteFile,
   getParentDirectory,
   getFileList,
-  thisFileExists
+  thisFileExists,
+  unzipProject
 }
