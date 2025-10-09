@@ -1,7 +1,7 @@
 <p align="center">
 	<img src="./src/assets/logo.png" style="width: 280px"/>
 </p>
-<p align="center">v2.2.0</p>
+<p align="center">v2.2.1</p>
 <p align="center">"The only writing software I use." -Virginia Woolf</p>
 
 WareWoolf is designed for one thing: writing fiction. It is intentionally simplified: you cannot change the font, line spacing, or color. But it has everything you need to organize, edit, and revise a novel--and you don't even need a mouse.
@@ -68,6 +68,11 @@ This app was built using Electron Forge. To run it from source...
 For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.com/brsloan/warewoolf/wiki).
 
 ## Status
+
+2025-10-09: v2.2.1. Changes made:
+* This is a patch to fix a bug I introduced/missed in last update which broke restoring chapters from trash. (Plan to implement testing scripts to catch these issues in future.)
+* Added an alert that updates on progress when backing up files on close so it doesn't seem to freeze momentarily.
+* Refactored code for readability.
 
 2025-10-07: v2.2.0. Changes made:
 * .epub export/compile. Meant for quickly generating .epub ebook files for sharing with first readers, etc.
