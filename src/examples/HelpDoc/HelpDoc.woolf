@@ -3,13 +3,6 @@
 	"chapsDirectory": "HelpDoc_chapters/",
 	"title": "helpDoc",
 	"author": "Benjamin Sloan",
-	"notes": {
-		"ops": [
-			{
-				"insert": "\n"
-			}
-		]
-	},
 	"chapters": [
 		{
 			"title": "WareWoolf Basics",
@@ -120,6 +113,7 @@
 			"summary": null
 		}
 	],
+	"reference": [],
 	"filters": [],
 	"trash": [],
 	"activeChapterIndex": 0,

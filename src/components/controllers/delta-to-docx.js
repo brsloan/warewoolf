@@ -22,7 +22,12 @@ function packageDocxBase64(doc, callback){
   });
 }
 
-function convertDeltaToDocx(delt, options, project, userSettings){
+function convertDeltaToDocx(delt, options, project, addressInfo){
+  if(options == null){
+    options = {
+      styleHeadingAsChapter: false
+    }
+  }
   var parsedQuill = parseDelta(delt);
 
   var fnoteParRegx = /^\[\^\d+]:/;
@@ -136,7 +141,7 @@ function convertDeltaToDocx(delt, options, project, userSettings){
 
   var sections = [];
   if(options && options.generateTitlePage == true)
-    sections.push(getTitlePage(project, userSettings));
+    sections.push(getTitlePage(project, addressInfo));
 
   sections.push(getDocBody(xParagraphs, project));
 
@@ -144,22 +149,7 @@ function convertDeltaToDocx(delt, options, project, userSettings){
     creator: project.author,
     title: project.title,
     styles: {
-      default: {
-        heading1: {
-                run: {
-                    size: 32,
-                    bold: true,
-                    color: "000000",
-                },
-                paragraph: {
-                    spacing: {
-                        before: 1200,
-                        after: 1200,
-                    },
-                    pageBreakBefore: true,
-                },
-            },
-      },
+      default: options.styleHeadingAsChapter ? getChapterHeadingStyle() : {},
       paragraphStyles: [
         {
           name: 'Normal',
@@ -255,14 +245,14 @@ function getDocBody(xParagraphs, project){
   }
 }
 
-function getTitlePage(project, userSettings){
+function getTitlePage(project, addressInfo){
   var titleParas = [];
   titleParas.push(new docx.Paragraph({
     text: getTitlePageFirstLine(project),
     style: 'address'
   }));
 
-  var addressLines = userSettings.addressInfo.split('\n');
+  var addressLines = addressInfo.split('\n');
   addressLines.forEach((line, i) => {
     titleParas.push(new docx.Paragraph({
       text: line,
@@ -333,6 +323,25 @@ function getTitlePageFirstLine(project){
   lineText = project.author + lineText + wordCount;
 
   return lineText;
+}
+
+function getChapterHeadingStyle(){
+  return {
+        heading1: {
+                run: {
+                    size: 32,
+                    bold: true,
+                    color: "000000",
+                },
+                paragraph: {
+                    spacing: {
+                        before: 1200,
+                        after: 1200,
+                    },
+                    pageBreakBefore: true,
+                },
+            },
+      }
 }
 
 module.exports = {

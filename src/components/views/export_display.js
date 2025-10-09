@@ -46,7 +46,7 @@ function showExportOptions(project, userSettings, sysDirectories){
     exportForm.appendChild(typeLabel);
 
     var typeSelect = document.createElement("select");
-    const typeOptions = [".docx", ".txt", ".mdfc", ".md", ".html"];
+    const typeOptions = [".docx", ".txt", ".mdfc", ".md", ".html", ".epub"];
     typeOptions.forEach(function(op){
       var txtOp = document.createElement("option");
       txtOp.value = op;
@@ -86,7 +86,9 @@ function showExportOptions(project, userSettings, sysDirectories){
 
       var options = {
         type: typeSelect.value,
-        what: expProjOp.checked ? 'project' : 'chapter'
+        what: expProjOp.checked ? 'project' : 'chapter',
+        styleHeadingAsChapter: true,
+        generateTitlePage: false
         //insertHead: insertHeadCheck.checked
       }
       getExportFilePath(project, userSettings, options, sysDirectories, function(){

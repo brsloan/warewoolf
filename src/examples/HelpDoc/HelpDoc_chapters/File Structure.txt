@@ -2,13 +2,15 @@
 
 WareWoolf saves its projects as plain text markdown files so they are human readable and archival. (That is, if someone found your files in 100 years and WareWoolf no longer existed, they could still just open the .txt files and have perfectly readable copies of your work.) It uses a specific variant of Markdown created for WareWoolf, called MarkdownFic. More on that in the "MarkdownFic" chapter of this help file.
 
-There is a primary .woolf project file which holds your notes and metadata, and individual .txt files for each chapter in a subdirectory.
+There is a primary .woolf project file which holds your metadata, and individual .txt files for each chapter in a subdirectory. For ease of organization, all notes documents start with "-notes_". If you use the corkboard feature, it will also save here as "project_corkboard.txt".
 
-- Frankenstein.woolf
-- Frankenstein_chapters
-	- Chapter 1.txt
-	- Chapter 2.txt
-	- Chapter 3.txt
+	Frankenstein.woolf
+	Frankenstein_chapters
+		Chapter 1.txt
+		Chapter 2.txt
+		Chapter 3.txt
+		-notes_Chapter 3.txt
+		-notes_project.txt
 
 The reason for doing this rather than one (more convenient) file is speed. This way, WareWoolf does not hold your entire (perhaps very long) novel in memory, but only one chapter at a time--the chapter you are viewing. That way it can run on low-powered computers like a Raspberry Pi while still being fast and responsive.
 

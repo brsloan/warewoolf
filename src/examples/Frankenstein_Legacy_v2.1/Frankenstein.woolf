@@ -1,0 +1,195 @@
+{
+	"filename": "Frankenstein.woolf",
+	"chapsDirectory": "Frankenstein_chapters/",
+	"title": "Frankenstein",
+	"author": "Mary Shelley",
+	"notes": {
+		"ops": [
+			{
+				"insert": "-Make monster more verbose?\n-Should he fuck?\n"
+			}
+		]
+	},
+	"chapters": [
+		{
+			"title": "Quick Start",
+			"filename": "Quick Start.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Letter 1",
+			"filename": "Letter 1.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Letter 2",
+			"filename": "Letter 2.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Letter 3",
+			"filename": "Letter 3.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Letter 4",
+			"filename": "Letter 4.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 1",
+			"filename": "Chapter 1.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 2",
+			"filename": "Chapter 2.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 3",
+			"filename": "Chapter 3.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 4",
+			"filename": "Chapter 4.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 5",
+			"filename": "Chapter 5.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 6",
+			"filename": "Chapter 6.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 7",
+			"filename": "Chapter 7.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 8",
+			"filename": "Chapter 8.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 9",
+			"filename": "Chapter 9.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 10",
+			"filename": "Chapter 10.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 11",
+			"filename": "Chapter 11.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 12",
+			"filename": "Chapter 12.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 13",
+			"filename": "Chapter 13.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 14",
+			"filename": "Chapter 14.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 15",
+			"filename": "Chapter 15.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 16",
+			"filename": "Chapter 16.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 17",
+			"filename": "Chapter 17.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 18",
+			"filename": "Chapter 18.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 19",
+			"filename": "Chapter 19.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 20",
+			"filename": "Chapter 20.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 21",
+			"filename": "Chapter 21.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 22",
+			"filename": "Chapter 22.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 23",
+			"filename": "Chapter 23.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Chapter 24",
+			"filename": "Chapter 24.txt",
+			"filter": null,
+			"summary": null
+		}
+	],
+	"filters": [],
+	"trash": [],
+	"activeChapterIndex": 0,
+	"wordGoal": 0,
+	"textCursorPosition": 0,
+	"corkboardColumns": 4
+}

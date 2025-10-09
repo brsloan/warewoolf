@@ -3,26 +3,32 @@ const unzipper = require('unzipper');
 const fs = require('fs');
 const { logError } = require('./error-log');
 
-function backupProject(project, userSettings, docsDir, callback){
-  console.log('backing up project...');
+function backupProject(project, userSettings, docsDir, updatesFunction){
+  updatesFunction('Backing up project...');
   try{
     if(userSettings.backupDirectory == null || userSettings.backupDirectory == ""){
+      updatesFunction('Creating backup directory...');
       userSettings.backupDirectory = createBackupsDirectory(docsDir);
       userSettings.save();
     }
     else{
-      if(!fs.existsSync(userSettings.backupDirectory))
+      updatesFunction('Checking if backup directory exists...');
+      if(!fs.existsSync(userSettings.backupDirectory)){
+        updatesFunction('Creating backup directory...');
         fs.mkdirSync(userSettings.backupDirectory);
+      }
     }
 
+    updatesFunction('Creating project archive...');
     archiveProject(project, userSettings.backupDirectory, function(archName){
+      updatesFunction('Archive saved. Deleting old archives...');
       deleteOldBackups();
-      callback(archName);
+      updatesFunction('Backup finished.');
     });
   }
   catch(err){
     logError(err);
-    callback(err);
+    updatesFunction(err);
   }
 }
 

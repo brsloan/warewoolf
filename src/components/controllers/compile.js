@@ -3,8 +3,9 @@ const { convertDeltaToMDF } = require('./markdownFic');
 const Quill = require('quill');
 const { convertDeltaToDocx, saveDocx } = require('./delta-to-docx');
 const { logError } = require('./error-log');
-const { convertMdfcToHtmlPage } = require('./mdfc-to-html');
+const { convertMdfcToHtmlPage, convertMdfcToHtml } = require('./mdfc-to-html');
 const { convertMdfcToMd } = require('./mdfc-to-md');
+const { htmlChaptersToEpub } = require('./epub');
 
 function compileProject(project, options, filepath){
     console.log(options);
@@ -27,9 +28,33 @@ function compileProject(project, options, filepath){
         case ".html":
             compileHtml(filepath, allChaps, project.title, project.author, options.generateTitlePage);
             break;
+          case ".epub":
+            compileEpub(filepath, project.chapters, project.title, project.author, options.generateTitlePage);
+            break;
         default:
             console.log("No valid filetype selected for compile.");
     }
+}
+
+function compileEpub(dir, allChaps, title, author, insertTitle){
+  try {
+    var htmlChaps = [];
+
+    allChaps.forEach(function(chap){
+      htmlChaps.push({
+        title: chap.title,
+        html: convertMdfcToHtml(convertDeltaToMDF(chap.getContentsOrFile()))
+      })
+    })
+
+    htmlChaptersToEpub(title, author, htmlChaps, dir, insertTitle, function(resp){
+      console.log('Conversion done: ' + resp);
+    })
+
+  }
+  catch(err){
+    logError(err);
+  }
 }
 
 function compileHtml(dir, allChaps, title, author, insertTitle){
@@ -99,7 +124,7 @@ function compileChapterDeltas(project, options){
 
 
 function compileDocx(filepath, delt, options) {
-  var doc = convertDeltaToDocx(delt, options, project, userSettings);
+  var doc = convertDeltaToDocx(delt, options, project, userSettings.addressInfo);
   saveDocx(filepath, doc);
 }
 
