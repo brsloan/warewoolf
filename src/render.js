@@ -325,7 +325,8 @@ function refreshNotesDisplay(){
   var notesHeader = document.getElementById('notes-header');
 
   if(userSettings.displayChapNotes){
-    let savedNotes = project.getActiveChapter().getNotesContentOrFile();
+    var activeChapter = project.getActiveChapter();
+    var savedNotes = activeChapter ? activeChapter.getNotesContentOrFile() : null;
     var currentNotes = savedNotes ? savedNotes : getEmptyDelta();
     notesQuill.setContents(currentNotes);
 
@@ -508,6 +509,7 @@ function createNewProject(){
       project = newProject();
       project.title = title;
       project.author = userSettings.defaultAuthor;
+      project.notesChap = newChapter();
       addNewChapter();
       displayProject();
     }
@@ -528,7 +530,7 @@ function addNewChapter(){
     
     project.hasUnsavedChanges = true;
     updateFileList();
-    var thisIndex = project.activeChapterIndex + 1;
+    var thisIndex = currentIndexIs.chapter ? project.chapters.indexOf(newChap) : project.reference.indexOf(newChap);
     displayChapterByIndex(thisIndex);
     editorQuill.enable();
     changeChapterTitle(thisIndex);
@@ -741,7 +743,7 @@ function chapIndexIs(ind){
     reference: ind > project.chapters.length - 1 && ind < project.chapters.length + project.reference.length && project.reference.length > 0,
     firstReference: ind == project.chapters.length && project.reference.length > 0,
     lastReference: ind == project.chapters.length + project.reference.length - 1 && project.reference.length > 0,
-    trash: ind > project.chapters.length + project.reference.length - 1,
+    trash: ind > project.chapters.length + project.reference.length - 1 && project.trash.length > 0,
     firstTrash: ind == project.chapters.length + project.reference.length,
     lastTrash: ind == project.chapters.length + project.reference.length + project.trash.length - 1 && project.trash.length > 0,
     lastAll: ind == project.chapters.length + project.reference.length + project.trash.length - 1

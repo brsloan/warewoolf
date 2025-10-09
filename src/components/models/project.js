@@ -31,7 +31,7 @@ function newProject(){
       var chap;
         if(this.activeChapterIndex < this.chapters.length)
             chap =  this.chapters[this.activeChapterIndex];
-        else if(this.activeChapterIndex < this.chapters.length + this.reference.length)
+        else if(this.activeChapterIndex < this.chapters.length + this.reference.length && this.reference.length > 0)
             chap = this.reference[this.activeChapterIndex - this.chapters.length];
         else
             chap = this.trash[this.activeChapterIndex - this.chapters.length - this.reference.length];
