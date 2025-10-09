@@ -906,6 +906,52 @@ function addImportedChapter(chapDelta, title){
   displayChapterByIndex(project.activeChapterIndex + 1);
 }
 
+function toggleChapterNotes(){
+  userSettings.displayChapNotes = !userSettings.displayChapNotes;
+  userSettings.save();
+  refreshNotesDisplay();
+}
+
+function goPageDown(quillObj){
+  var selectedRange = quillObj.getSelection();
+
+  if(selectedRange){
+    var startingScrolltop = 0 + quillObj.root.scrollTop;
+    var destinationY = quillObj.root.clientHeight;
+    var textIndex = selectedRange.index + 1;
+
+    var found = false;
+    
+    while(!found){
+      var bounds = quillObj.selection.getBounds(textIndex, 1);
+
+      if(bounds.y >= destinationY){
+        found = true;
+        quillObj.setSelection(textIndex);
+        quillObj.root.scrollTop = startingScrolltop + bounds.y - bounds.height;
+      }
+      else if(bounds == undefined || bounds.y == undefined){
+        found = true;
+        quillObj.setSelection(textIndex - 1);
+      }
+      textIndex += 1;
+    }
+  }
+}
+
+function editorHasFocus(){
+  return editorIsVisible() && document.querySelector(".ql-editor") === document.activeElement;
+}
+
+function editorIsVisible(){
+  return document.getElementById('writing-field').classList.contains('visible');
+}
+
+function stopDefaultPropagation(keyEvent){
+  keyEvent.preventDefault();
+  keyEvent.stopPropagation();
+}
+
 ///////////////////////////////////////////////////////////////////
   //Event Handlers ///////////////////////////////////////////////
 
@@ -1014,7 +1060,6 @@ function addBindingsToQuill(q){
 
 };
 
-
 document.addEventListener ("keydown", function (e) {
     if((e.ctrlKey || e.metaKey) && e.key === "ArrowLeft"){
       stopDefaultPropagation(e);
@@ -1077,12 +1122,6 @@ document.addEventListener ("keydown", function (e) {
     }
 } );
 
-function toggleChapterNotes(){
-  userSettings.displayChapNotes = !userSettings.displayChapNotes;
-  userSettings.save();
-  refreshNotesDisplay();
-}
-
 document.getElementById('editor-container').addEventListener('keydown', editorControlEvents);
 document.getElementById('chapter-list-sidebar').addEventListener('keydown', editorControlEvents);
 document.getElementById('notes-editor').addEventListener('keydown', editorControlEvents);
@@ -1126,38 +1165,6 @@ function editorControlEvents(e){
     else
       goPageDown(editorQuill);
   }
-}
-
-function goPageDown(quillObj){
-  var selectedRange = quillObj.getSelection();
-
-  if(selectedRange){
-    var startingScrolltop = 0 + quillObj.root.scrollTop;
-    var destinationY = quillObj.root.clientHeight;
-    var textIndex = selectedRange.index + 1;
-
-    var found = false;
-    
-    while(!found){
-      var bounds = quillObj.selection.getBounds(textIndex, 1);
-
-      if(bounds.y >= destinationY){
-        found = true;
-        quillObj.setSelection(textIndex);
-        quillObj.root.scrollTop = startingScrolltop + bounds.y - bounds.height;
-      }
-      else if(bounds == undefined || bounds.y == undefined){
-        found = true;
-        quillObj.setSelection(textIndex - 1);
-      }
-      textIndex += 1;
-    }
-  }
-}
-
-function stopDefaultPropagation(keyEvent){
-  keyEvent.preventDefault();
-  keyEvent.stopPropagation();
 }
 
 ipcRenderer.on("save-clicked", function(e){
@@ -1375,14 +1382,3 @@ ipcRenderer.on('file-opened-from-outside-warewoolf', function(event, fPath){
   }
 
 });
-
-//**** utils ***/
-
-
-function editorHasFocus(){
-  return editorIsVisible() && document.querySelector(".ql-editor") === document.activeElement;
-}
-
-function editorIsVisible(){
-  return document.getElementById('writing-field').classList.contains('visible');
-}
