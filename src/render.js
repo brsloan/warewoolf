@@ -875,6 +875,12 @@ function alertBackupResult(msg){
     backupAlertText = document.createElement('p');
     backupAlertText.id = 'backup-alert-text';
     backupAlert.appendChild(backupAlertText);
+    var exitBtn = document.createElement('button');
+    exitBtn.innerText = 'Exit Without Backup';
+    exitBtn.onclick = function(e){
+      ipcRenderer.send('exit-app-confirmed');
+    }
+    backupAlert.appendChild(exitBtn);
   }
 
   backupAlertText.innerText = msg;
