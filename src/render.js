@@ -518,23 +518,20 @@ function createNewProject(){
 
 function addNewChapter(){
   var currentIndexIs = chapIndexIs(project.activeChapterIndex);
-    //If not trash selected
-  if(!currentIndexIs.trash){
-    var newChap = newChapter();
-    newChap.hasUnsavedChanges = true;
-    newChap.contents = getEmptyDelta();
-    if(currentIndexIs.chapter)
-      project.chapters.splice(project.activeChapterIndex + 1, 0, newChap);
-    else
-      project.reference.splice(project.activeChapterIndex - project.chapters.length + 1, 0, newChap);
-    
-    project.hasUnsavedChanges = true;
-    updateFileList();
-    var thisIndex = currentIndexIs.chapter ? project.chapters.indexOf(newChap) : project.reference.indexOf(newChap);
-    displayChapterByIndex(thisIndex);
-    editorQuill.enable();
-    changeChapterTitle(thisIndex);
-  }
+  var newChap = newChapter();
+  newChap.hasUnsavedChanges = true;
+  newChap.contents = getEmptyDelta();
+  if(currentIndexIs.chapter || currentIndexIs.trash)
+    project.chapters.splice(project.activeChapterIndex + 1, 0, newChap);
+  else
+    project.reference.splice(project.activeChapterIndex - project.chapters.length + 1, 0, newChap);
+  
+  project.hasUnsavedChanges = true;
+  updateFileList();
+  var thisIndex = currentIndexIs.chapter || currentIndexIs.trash ? project.chapters.indexOf(newChap) : project.reference.indexOf(newChap);
+  displayChapterByIndex(thisIndex);
+  editorQuill.enable();
+  changeChapterTitle(thisIndex);
 }
 
 function saveProject(){
@@ -737,7 +734,8 @@ function verifyToDelete(ind){
 
 function chapIndexIs(ind){
   return {
-    chapter: ind < project.chapters.length,
+    //Second part of chapter "or" statement is to catch when the very first chapter is added to a new project
+    chapter: ind < project.chapters.length || (project.chapters.length == 0 && project.reference.length == 0 && project.trash.length == 0), 
     firstChapter: ind == 0,
     lastChapter: ind == project.chapters.length - 1,
     reference: ind > project.chapters.length - 1 && ind < project.chapters.length + project.reference.length && project.reference.length > 0,
