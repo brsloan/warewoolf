@@ -59,9 +59,9 @@ Binaries of the current release for Windows, MacOS, Debian AMD64, and Debian ARM
 This app was built using Electron Forge. To run it from source...
 
 * You must first have [Node.js](https://nodejs.dev/en/learn/how-to-install-nodejs/) installed.
-* Run "npm install" in the WareWoolf source code directory to install the dependencies using the Node Package Manager, or however you like.
+* Run "npm install" in the WareWoolf source code directory to install the dependencies using the Node Package Manager.
 * Then you can simply use command "npm start" to run the program.
-* To make a binary, "npm run make". See the [Electron Forge documentation](https://www.electronforge.io/) for instructions on how to alter the package.json file for making binaries for different systems, but basically in the "makers" property of the "forge" object in the package.json file, there is an array of different makers for producing different binaries. The "@electron-forge/maker-squirrel" is for producing a Windows binary, the maker-deb for Debian, and the maker-rpm for Redhat. To produce one, delete the other two from the file before running "npm run make". You will find the binary in the "out" folder.  
+* To make a binary, "npm run make". See the [Electron Forge documentation](https://www.electronforge.io/) for instructions on how to alter the package.json file for making binaries for different systems, but basically in the "makers" property of the "forge" object in the package.json file, there is an array of different makers for producing different binaries. The "@electron-forge/maker-squirrel" is for producing a Windows binary, the maker-deb for Linux, and the maker-dmg for MacOS. To produce them, run "npm run make" and it should use the appropriate one for your system. You will find the binary in the "out" folder.  
 
 ## Documentation
 
