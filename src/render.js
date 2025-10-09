@@ -850,10 +850,12 @@ function openHelpDoc(){
 
 function exitApp(){
   if(userSettings.autoBackup == true && project.filename != ''){
-    //TODO: Add "backing up project..." alert
+    alertBackupResult('Loading backup tools...');
     const { backupProject } = require('./components/controllers/backup-project');
-    backupProject(project, userSettings, sysDirectories.docs, function(msg){
-      ipcRenderer.send('exit-app-confirmed');
+    backupProject(project, userSettings, sysDirectories.docs, function(update){
+      alertBackupResult(update);
+      if(update == 'Backup finished.')
+        ipcRenderer.send('exit-app-confirmed');
     });
   } else {
       ipcRenderer.send('exit-app-confirmed');
@@ -861,7 +863,24 @@ function exitApp(){
 }
 
 function alertBackupResult(msg){
-  console.log(msg);
+  var backupAlert = document.getElementById('backup-alert');
+  var backupAlertText = document.getElementById('backup-alert-text');
+
+  if(backupAlert == null){
+    backupAlert = document.createElement('div');
+    backupAlert.id = 'backup-alert';
+    backupAlert.classList.add('popup');
+    backupAlert.classList.add('working-popup');
+    document.body.appendChild(backupAlert);
+    backupAlertText = document.createElement('p');
+    backupAlertText.id = 'backup-alert-text';
+    backupAlert.appendChild(backupAlertText);
+  }
+
+  backupAlertText.innerText = msg;
+
+  if(msg == 'Backup finished.')
+    backupAlert.remove();
 }
 
 function addImportedChapter(chapDelta, title){
