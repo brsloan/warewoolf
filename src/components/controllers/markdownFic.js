@@ -14,6 +14,8 @@ function parseMDF(str){
   let rightHeader3 = /^\[>r] ### (.+)/gm
   let rightHeader4 = /^\[>r] #### (.+)/gm
 
+  let listUnordered = /^(\\t)*(?:-|\*|\+) (.*)/gm; //Tabs must be searched for as escaped since styling comes after JSON character conversion
+  let listOrdered = /^(\\t)*(\d+.) (.*)/gm;
   let blockquote = /^>+ {0,1}(.+)/gm;
   let alignLeft = /^\[>l] (.+)/gm;
   let alignRight = /^\[>r] (.+)/gm;
@@ -28,11 +30,13 @@ function parseMDF(str){
   str = str.replaceAll('"','\\"');
   str = str.replaceAll('\t','\\t'); 
 
+  str = str.replace(listUnordered,  '{"insert":"$2"},{"insert":"\\n","attributes":{"list":"bullet"}},');
+  str = str.replace(listOrdered,  '{"insert":"$3"},{"insert":"\\n","attributes":{"list":"ordered"}},');
   str = str.replace(centeredHeader1, '{"insert":"$1"},{"insert":"\\n","attributes":{"align":"center","header":1}},');
   str = str.replace(centeredHeader2, '{"insert":"$1"},{"insert":"\\n","attributes":{"align":"center","header":2}},');
   str = str.replace(centeredHeader3, '{"insert":"$1"},{"insert":"\\n","attributes":{"align":"center","header":3}},');
   str = str.replace(centeredHeader4, '{"insert":"$1"},{"insert":"\\n","attributes":{"align":"center","header":4}},');
-   str = str.replace(rightHeader1, '{"insert":"$1"},{"insert":"\\n","attributes":{"align":"right","header":1}},');
+  str = str.replace(rightHeader1, '{"insert":"$1"},{"insert":"\\n","attributes":{"align":"right","header":1}},');
   str = str.replace(rightHeader2, '{"insert":"$1"},{"insert":"\\n","attributes":{"align":"right","header":2}},');
   str = str.replace(rightHeader3, '{"insert":"$1"},{"insert":"\\n","attributes":{"align":"right","header":3}},');
   str = str.replace(rightHeader4, '{"insert":"$1"},{"insert":"\\n","attributes":{"align":"right","header":4}},');
@@ -96,11 +100,26 @@ function convertDeltaToMDF(delt){
 
   var parsedQuill = parseDelta(delt);
 
+  var listItemNum = 0;
+
   parsedQuill.paragraphs.forEach((para, i) => {
     
-    if(para.textRuns.length > 0)
-      mdf += getLineMarker(para.attributes);
-
+    if(para.textRuns.length > 0){
+      var lastParaWasNumList = false;
+      if(i > 0){
+        lastParaWasNumList = parsedQuill.paragraphs[i - 1].attributes && parsedQuill.paragraphs[i - 1].attributes.list && parsedQuill.paragraphs[i - 1].attributes.list == 'ordered';
+      }
+      if(para.attributes && para.attributes.list && para.attributes.list == 'ordered'){
+        if(lastParaWasNumList == false)
+          listItemNum = 0;
+        listItemNum++;
+      }
+      else
+        listItemNum = 0;
+  
+      mdf += getLineMarker(para.attributes, listItemNum);
+    }
+      
     para.textRuns.forEach((run, i) => {
       run.text = escapeAnyMarkers(run.text);
       mdf += getMarkedTextFromRun(run);
@@ -131,7 +150,7 @@ function getMarkedTextFromRun(run){
   return run.text;
 }
 
-function getLineMarker(attr){
+function getLineMarker(attr, listItemNum = 0){
   var marker = '';
 
   if(attr){
@@ -151,6 +170,11 @@ function getLineMarker(attr){
     }
     if(attr.blockquote)
       marker = '> ';
+    if(attr.list && attr.list == 'bullet')
+      marker = '* ';
+    else if(attr.list && attr.list  == 'ordered'){
+      marker = listItemNum + '. ';
+    }
   }
 
   return marker;
