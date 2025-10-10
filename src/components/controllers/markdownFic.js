@@ -14,8 +14,12 @@ function parseMDF(str){
   let rightHeader3 = /^\[>r] ### (.+)/gm
   let rightHeader4 = /^\[>r] #### (.+)/gm
 
-  let listUnordered = /^(\\t)*(?:-|\*|\+) (.*)/gm; //Tabs must be searched for as escaped since styling comes after JSON character conversion
-  let listOrdered = /^(\\t)*(\d+.) (.*)/gm;
+  let listUnordered = /^(?:-|\*|\+) (.*)/gm; 
+  let listUnorderedTwo = /^(\\t)(?:-|\*|\+) (.*)/gm; //Tabs must be searched for as escaped since styling comes after JSON character conversion
+  let listUnorderedThreePlus = /^(\\t){2,}(?:-|\*|\+) (.*)/gm;
+  let listOrdered = /^((?:\d+|[a-z])\.) (.*)/gm;
+  let listOrderedTwo = /^(\\t)((?:\d+|[a-z])\.) (.*)/gm;
+  let listOrderedThreePlus = /^(\\t){2,}((?:\d+|[a-z])\.) (.*)/gm;
   let blockquote = /^>+ {0,1}(.+)/gm;
   let alignLeft = /^\[>l] (.+)/gm;
   let alignRight = /^\[>r] (.+)/gm;
@@ -30,8 +34,12 @@ function parseMDF(str){
   str = str.replaceAll('"','\\"');
   str = str.replaceAll('\t','\\t'); 
 
-  str = str.replace(listUnordered,  '{"insert":"$2"},{"insert":"\\n","attributes":{"list":"bullet"}},');
-  str = str.replace(listOrdered,  '{"insert":"$3"},{"insert":"\\n","attributes":{"list":"ordered"}},');
+  str = str.replace(listUnorderedThreePlus,  '{"insert":"$2"},{"insert":"\\n","attributes":{"list":"bullet","indent":2}},');
+  str = str.replace(listUnorderedTwo,  '{"insert":"$2"},{"insert":"\\n","attributes":{"list":"bullet","indent":1}},');
+  str = str.replace(listUnordered,  '{"insert":"$1"},{"insert":"\\n","attributes":{"list":"bullet"}},');
+  str = str.replace(listOrderedThreePlus,  '{"insert":"$3"},{"insert":"\\n","attributes":{"list":"ordered","indent":2}},');
+  str = str.replace(listOrderedTwo,  '{"insert":"$3"},{"insert":"\\n","attributes":{"list":"ordered","indent":1}},');
+  str = str.replace(listOrdered,  '{"insert":"$2"},{"insert":"\\n","attributes":{"list":"ordered"}},');
   str = str.replace(centeredHeader1, '{"insert":"$1"},{"insert":"\\n","attributes":{"align":"center","header":1}},');
   str = str.replace(centeredHeader2, '{"insert":"$1"},{"insert":"\\n","attributes":{"align":"center","header":2}},');
   str = str.replace(centeredHeader3, '{"insert":"$1"},{"insert":"\\n","attributes":{"align":"center","header":3}},');
@@ -170,10 +178,19 @@ function getLineMarker(attr, listItemNum = 0){
     }
     if(attr.blockquote)
       marker = '> ';
-    if(attr.list && attr.list == 'bullet')
-      marker = '* ';
+    if(attr.list && attr.list == 'bullet'){
+      let tabs = '';
+      if(attr.indent && attr.indent > 0){
+        tabs = attr.indent == 1 ? '\t' : '\t\t';
+      }
+      marker = tabs + '* ';
+    }
     else if(attr.list && attr.list  == 'ordered'){
-      marker = listItemNum + '. ';
+      let tabs = '';
+      if(attr.indent && attr.indent > 0){
+        tabs = attr.indent == 1 ? '\t' : '\t\t';
+      }
+      marker = tabs + listItemNum + '. ';
     }
   }
 
