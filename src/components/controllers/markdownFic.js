@@ -104,11 +104,16 @@ function parseMDF(str){
 }
 
 function convertDeltaToMDF(delt){
+  //This function was much simpler before I decided to support nested, numbered lists...
+
   var mdf = '';
 
   var parsedQuill = parseDelta(delt);
 
   var listItemNum = 0;
+  var listItemNumLvl2 = 0;
+  var listItemNumLvl3 = 0;
+  var listNumToSubmit = 0; //To be assigned the value of one of the above depending on which needs used for each list item
 
   parsedQuill.paragraphs.forEach((para, i) => {
     
@@ -118,14 +123,34 @@ function convertDeltaToMDF(delt){
         lastParaWasNumList = parsedQuill.paragraphs[i - 1].attributes && parsedQuill.paragraphs[i - 1].attributes.list && parsedQuill.paragraphs[i - 1].attributes.list == 'ordered';
       }
       if(para.attributes && para.attributes.list && para.attributes.list == 'ordered'){
-        if(lastParaWasNumList == false)
+        if(lastParaWasNumList == false){ //Start of new numbered list, so restart counters
           listItemNum = 0;
-        listItemNum++;
+          listItemNumLvl2 = 0;
+          listItemNumLvl3 = 0;
+        }
+        
+        if(!para.attributes.indent || para.attributes.indent < 1){
+          listItemNum++;
+          listNumToSubmit = listItemNum;
+        }
+        else if(para.attributes.indent == 1){
+          listItemNumLvl2++;
+          listNumToSubmit = listItemNumLvl2;
+        }
+        else if(para.attributes.indent > 1){
+          listItemNumLvl3++;
+          listNumToSubmit = listItemNumLvl3;
+        }
+          
       }
-      else
+      else{
         listItemNum = 0;
+        listItemNumLvl2 = 0;
+        listItemNumLvl3 = 0;
+      }
+        
   
-      mdf += getLineMarker(para.attributes, listItemNum);
+      mdf += getLineMarker(para.attributes, listNumToSubmit);
     }
       
     para.textRuns.forEach((run, i) => {
