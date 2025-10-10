@@ -21,7 +21,7 @@ var editorQuill = new Quill('#editor-container', {
     }
   },
   placeholder: '',
-  formats: ['bold', 'italic', 'strike', 'underline', 'blockquote', 'header', 'align']
+  formats: ['bold', 'italic', 'strike', 'underline', 'blockquote', 'header', 'align', 'list', 'indent']
 });
 
 var notesQuill = new Quill('#notes-editor', {
@@ -31,7 +31,7 @@ var notesQuill = new Quill('#notes-editor', {
     }
   },
   placeholder: 'Notes...',
-  formats: ['bold', 'italic', 'strike', 'underline', 'blockquote', 'header', 'align']
+  formats: ['bold', 'italic', 'strike', 'underline', 'blockquote', 'header', 'align', 'list', 'indent']
 });
 
 var project = newProject();
@@ -1057,6 +1057,20 @@ function addBindingsToQuill(q){
       }
     }
   });
+
+  q.keyboard.addBinding({
+    key: 'b',
+    shortKey: true,
+    shiftKey: true,
+    handler: function(range, context){
+      if(q.getFormat().list == 'bullet')
+        q.format('list', 'ordered', 'user');
+      else if(q.getFormat().list == 'ordered')
+        q.format('list', null, 'user');
+      else
+        q.format('list', 'bullet', 'user');
+    }
+  })
 
 };
 
