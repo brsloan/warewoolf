@@ -104,12 +104,12 @@ function parseMDF(str){
 }
 
 function convertDeltaToMDF(delt){
-  //This function was much simpler before I decided to support nested, numbered lists...
-
   var mdf = '';
 
   var parsedQuill = parseDelta(delt);
 
+  //This function was much simpler before I decided to support nested, numbered lists...
+  //The numbering has to restart at each level within the list, but remain continuous across breaks in level.
   var listItemNum = 0;
   var listItemNumLvl2 = 0;
   var listItemNumLvl3 = 0;
@@ -148,7 +148,6 @@ function convertDeltaToMDF(delt){
         listItemNumLvl2 = 0;
         listItemNumLvl3 = 0;
       }
-        
   
       mdf += getLineMarker(para.attributes, listNumToSubmit);
     }
