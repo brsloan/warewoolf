@@ -182,7 +182,7 @@ function convertDeltaToDocx(delt, options, project, addressInfo){
     numbering: {
       config: [
         {
-          reference: 'default-numbering',
+          reference: 'numbered-list',
           levels: [
             {
               level: 0,
@@ -191,7 +191,7 @@ function convertDeltaToDocx(delt, options, project, addressInfo){
               format: docx.LevelFormat.DECIMAL,
               style: {
                 paragraph: {
-                    indent: { left: docx.convertInchesToTwip(0.5), hanging: docx.convertInchesToTwip(0.18) },
+                    indent: { left: docx.convertInchesToTwip(0.5), hanging: docx.convertInchesToTwip(0.25) },
                 },
             },
             },
@@ -199,10 +199,10 @@ function convertDeltaToDocx(delt, options, project, addressInfo){
               level: 1,
               alignment: docx.AlignmentType.START,
               text: "%2.",
-              format: docx.LevelFormat.DECIMAL,
+              format: docx.LevelFormat.LOWER_LETTER,
               style: {
                 paragraph: {
-                    indent: { left: docx.convertInchesToTwip(1), hanging: docx.convertInchesToTwip(0.18) },
+                    indent: { left: docx.convertInchesToTwip(1), hanging: docx.convertInchesToTwip(0.25) },
                 },
             },
             },
@@ -210,10 +210,10 @@ function convertDeltaToDocx(delt, options, project, addressInfo){
               level: 2,
               alignment: docx.AlignmentType.START,
               text: "%3.",
-              format: docx.LevelFormat.DECIMAL,
+              format: docx.LevelFormat.LOWER_ROMAN,
               style: {
                 paragraph: {
-                    indent: { left: docx.convertInchesToTwip(1.5), hanging: docx.convertInchesToTwip(0.18) },
+                    indent: { left: docx.convertInchesToTwip(1.5), hanging: docx.convertInchesToTwip(0.25) },
                 },
             },
             }
@@ -244,11 +244,11 @@ function convertParaAttributes(attr, previousAttr = null){
         indentLevel += attr.indent;
       }
       if(attr.list == 'bullet'){
-        xAttr.bullet = {level: indentLevel};
+        xAttr.bullet = {level: indentLevel - 1};
       }
       else{
         xAttr.numbering = {
-          reference: 'default-numbering',
+          reference: 'numbered-list',
           level: indentLevel - 1
         }
         //If start of new list, need to iterate to new list instance to restart numbering sequence
