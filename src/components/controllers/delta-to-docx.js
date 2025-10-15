@@ -80,7 +80,8 @@ function convertDeltaToDocx(delt, options, project, addressInfo){
   var xParagraphs = [];
   var fnoteMarkerRegx = /\[\^\d+]/gm;
 
-  nonfootnoteParas.forEach(function(para){
+  nonfootnoteParas.forEach(function(para, paraIndex){
+    var previousPara = paraIndex > 0 ? nonfootnoteParas[paraIndex - 1] : null;
     var xRuns = [];
     para.textRuns.forEach(function(run){
       var fnoteMarker = run.text.match(fnoteMarkerRegx);
@@ -123,7 +124,7 @@ function convertDeltaToDocx(delt, options, project, addressInfo){
       }
     });
 
-    var xParaAttributes = convertParaAttributes(para.attributes);
+    var xParaAttributes = convertParaAttributes(para.attributes, previousPara ? previousPara.attributes : null);
     xParaAttributes.children = xRuns;
 
     xParagraphs.push(new docx.Paragraph(xParaAttributes));
@@ -136,8 +137,6 @@ function convertDeltaToDocx(delt, options, project, addressInfo){
       children: footnoteBodies[i].paras
     }
   }
-
-  console.log(footnotes);
 
   var sections = [];
   if(options && options.generateTitlePage == true)
@@ -179,13 +178,57 @@ function convertDeltaToDocx(delt, options, project, addressInfo){
       ]
     },
     footnotes: footnotes,
-    sections: sections
+    sections: sections,
+    numbering: {
+      config: [
+        {
+          reference: 'default-numbering',
+          levels: [
+            {
+              level: 0,
+              alignment: docx.AlignmentType.START,
+              text: "%1.",
+              format: docx.LevelFormat.DECIMAL,
+              style: {
+                paragraph: {
+                    indent: { left: docx.convertInchesToTwip(0.5), hanging: docx.convertInchesToTwip(0.18) },
+                },
+            },
+            },
+            {
+              level: 1,
+              alignment: docx.AlignmentType.START,
+              text: "%2.",
+              format: docx.LevelFormat.DECIMAL,
+              style: {
+                paragraph: {
+                    indent: { left: docx.convertInchesToTwip(1), hanging: docx.convertInchesToTwip(0.18) },
+                },
+            },
+            },
+            {
+              level: 2,
+              alignment: docx.AlignmentType.START,
+              text: "%3.",
+              format: docx.LevelFormat.DECIMAL,
+              style: {
+                paragraph: {
+                    indent: { left: docx.convertInchesToTwip(1.5), hanging: docx.convertInchesToTwip(0.18) },
+                },
+            },
+            }
+          ]
+        }
+      ]
+    }
   });
 
   return doc;
 }
 
-function convertParaAttributes(attr){
+var numListInstance = 0;
+
+function convertParaAttributes(attr, previousAttr = null){
   var xAttr = {};
   if(attr){
     if(attr.header){
@@ -194,6 +237,27 @@ function convertParaAttributes(attr){
     }
     if(attr.align){
       xAttr.alignment = docx.AlignmentType[attr.align.toUpperCase()];
+    }
+    if(attr.list){
+      var indentLevel = 1;
+      if(attr.indent){
+        indentLevel += attr.indent;
+      }
+      if(attr.list == 'bullet'){
+        xAttr.bullet = {level: indentLevel};
+      }
+      else{
+        xAttr.numbering = {
+          reference: 'default-numbering',
+          level: indentLevel - 1
+        }
+        //If start of new list, need to iterate to new list instance to restart numbering sequence
+        if(!previousAttr || !previousAttr.list || previousAttr.list == 'bullet'){
+          numListInstance++;
+          if(numListInstance > 1)
+            xAttr.numbering.instance = numListInstance;
+        }
+      }
     }
   }
 
