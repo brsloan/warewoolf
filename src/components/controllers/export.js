@@ -7,6 +7,7 @@ const { convertMdfcToHtmlPage, convertMdfcToHtml } = require('./mdfc-to-html');
 const { convertMdfcToMd } = require('./mdfc-to-md');
 const { htmlChaptersToEpub } = require('./epub');
 const { getCorkboardForExport } = require('./corkboard');
+const { convertToPlainText } = require('./quill-utils');
 const notesNamePrepend = '-notes_';
 
 function exportProject(project, userSettings, options, filepath){
@@ -107,14 +108,6 @@ function exportChapAsEpub(projectTitle, chapTitle, author, chapDelta, filepathNa
   htmlChaptersToEpub(projectTitle + ': ' + chapTitle, author, [htmlChap], filepathNameNoExt + '.epub', generateTitlePage, function(resp){
     console.log('epub exported: ' + resp);
   });
-}
-
-function convertToPlainText(delt){
-  var text = '';
-  delt.ops.forEach(op => {
-    text += op.insert;
-  });
-  return text;
 }
 
 function generateChapterFilename(num, title, what){
