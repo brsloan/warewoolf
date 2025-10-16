@@ -14,13 +14,13 @@ function convertMdfcToHtml(str){
     let rightHeader3 = /^\[>r] ### (.+)/gm
     let rightHeader4 = /^\[>r] #### (.+)/gm
   
-    let startOfUnorderedList = /^(?!<li|<ul).*[\n\r]^(?:<li|<ul) class="ul".*$/gm;
     let unorderedListHtml = /((?:(?:<li|<ul) class="ul.*(?:<\/li>|<\/ul>)\n)+)/g;
     let unorderedListHtmlLvl2 = /((?:(?:<li|<ul) class="ul (?:ul-two|ul-three).*(?:<\/li>|<\/ul>)\n)+)/g;
     let unorderedListHtmlLvl3 = /((?:(?:<li|<ul) class="ul ul-three".*(?:<\/li>|<\/ul>)\n)+)/g;
     let orderedListHtml = /((?:(?:<li|<ol) class="ol.*(?:<\/li>|<\/ol>)\n)+)/g
     let orderedListHtmlLvl2 = /((?:(?:<li|<ol) class="ol (?:ol-two|ol-three).*(?:<\/li>|<\/ol>)\n)+)/g;
     let orderedListHtmlLvl3 = /((?:(?:<li|<ol) class="ol ol-three".*(?:<\/li>|<\/ol>)\n)+)/g;
+    let tempClasses = /class="(ol|ul).*"/g;
 
     let listUnordered = /^(?:-|\*|\+) (.*)/gm; 
     let listUnorderedTwo = /^(\t)(?:-|\*|\+) (.*)/gm; //Tabs must be searched for as escaped since styling comes after JSON character conversion
@@ -73,12 +73,15 @@ function convertMdfcToHtml(str){
     console.log(JSON.stringify(str));
 
     //Now add outer list tags for entire lists
-    str = str.replace(unorderedListHtml, '<ul class="OUTER-LIST">$1</ul>');
-    str = str.replace(orderedListHtml, '<ol class="OUTER-LIST">$1</ol>');
-    str = str.replace(unorderedListHtmlLvl2, '<ul class="SECOND-LIST">$1</ul>');
-    str = str.replace(unorderedListHtmlLvl3, '<ul class="THIRD-LIST">$1</ul>');
-    str = str.replace(orderedListHtmlLvl2, '<ol class="SECOND-LIST">$1</ol>');
-    str = str.replace(orderedListHtmlLvl3, '<ol class="THIRD-LIST">$1</ol>');
+    str = str.replace(unorderedListHtml, '<ul>$1</ul>\n');
+    str = str.replace(orderedListHtml, '<ol>$1</ol>\n');
+    str = str.replace(unorderedListHtmlLvl2, '<ul>$1</ul>\n');
+    str = str.replace(unorderedListHtmlLvl3, '<ul>$1</ul>\n');
+    str = str.replace(orderedListHtmlLvl2, '<ol>$1</ol>\n');
+    str = str.replace(orderedListHtmlLvl3, '<ol>$1</ol>\n');
+
+    //Clean up temp classes used for grouping lists
+    str = str.replace(tempClasses, '');
 
   
     let bold = /(?<!\\|\\\*\*)\*\*([^\*\*]+)\*\*/g;
