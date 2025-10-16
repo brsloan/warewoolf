@@ -1,4 +1,6 @@
 function convertMdfcToHtml(str){
+    str = convertWindowsToLinuxLineEndings(str);
+
     let header1 = /^# (.+)/gm;
     let header2 = /^## (.+)/gm;
     let header3 = /^### (.+)/gm;
@@ -12,6 +14,16 @@ function convertMdfcToHtml(str){
     let rightHeader3 = /^\[>r] ### (.+)/gm
     let rightHeader4 = /^\[>r] #### (.+)/gm
   
+    let startOfUnorderedList = /^(?!<li|<ul).*[\n\r]^(?:<li|<ul) class="ul".*$/gm;
+    let unorderedListHtml = /((?:(?:<li|<ul) class="ul".*(?:<\/li>|<\/ul>)\n)+)/g;
+    let orderedListHtml = /((?:(?:<li|<ol) class="ol".*(?:<\/li>|<\/ol>)\n)+)/g
+
+    let listUnordered = /^(?:-|\*|\+) (.*)/gm; 
+    let listUnorderedTwo = /^(\t)(?:-|\*|\+) (.*)/gm; //Tabs must be searched for as escaped since styling comes after JSON character conversion
+    let listUnorderedThreePlus = /^(\t){2,}(?:-|\*|\+) (.*)/gm;
+    let listOrdered = /^((?:\d+|[a-z])\.) (.*)/gm;
+    let listOrderedTwo = /^(\t)((?:\d+|[a-z])\.) (.*)/gm;
+    let listOrderedThreePlus = /^(\t){2,}((?:\d+|[a-z])\.) (.*)/gm;
     let blockquote = /^>+ {0,1}(.+)/gm;
     let alignLeft = /^\[>l] (.+)/gm;
     let alignRight = /^\[>r] (.+)/gm;
@@ -21,9 +33,19 @@ function convertMdfcToHtml(str){
     let blankLines = /(?:\r?\n){2,}/gm;
   
     str = convertFootnotes(str);
-    //Must do references AFTER footnotes themselves to aviod replacing footnote markers
+    //Must do references AFTER footnotes themselves to avoid replacing footnote markers
     str = convertFootnoteReferences(str);
   
+
+    //Assign class to assist in discriminating between ordered and UL list items in whole list detection
+    str = str.replace(listUnorderedThreePlus, '<ul class="ul"><ul><li>$2</li></ul></ul>');
+    str = str.replace(listUnorderedTwo, '<ul class="ul"><li>$2</li></ul>');
+    str = str.replace(listUnordered, '<li class="ul">$1</li>');
+    str = str.replace(listOrderedThreePlus, '<ol class="ol"><ol><li>$3</li></ol></ol>');
+    str = str.replace(listOrderedTwo, '<ol class="ol"><li>$3</li></ol>');
+    str = str.replace(listOrdered, '<li class="ol">$2</li>');
+    
+
     str = str.replace(centeredHeader1, '<h1 class="center">$1</h1>');
     str = str.replace(centeredHeader2, '<h2 class="center">$1</h2>');
     str = str.replace(centeredHeader3, '<h3 class="center">$1</h3>');
@@ -42,7 +64,13 @@ function convertMdfcToHtml(str){
     str = str.replace(alignJustified, '<p class="justified">$1</p>');
     str = str.replace(blockquote, '<blockquote>$1</blockquote>');
     str = str.replace(normal, '<p>$1</p>');
-    str = str.replace(blankLines, '<br/>');
+    str = str.replace(blankLines, '\n<br/>\n');
+ 
+    console.log(JSON.stringify(str));
+
+    //Now add outer list tags for entire lists
+    str = str.replace(unorderedListHtml, '<ul class="OUTER-LIST">$1</ul>');
+    str = str.replace(orderedListHtml, '<ol class="OUTER-LIST">$1</ol>');
   
     let bold = /(?<!\\|\\\*\*)\*\*([^\*\*]+)\*\*/g;
     let italic = /(?<!\\|\\\*)\*([^\*]+)\*/g;
@@ -185,6 +213,11 @@ function escapeRegExp(string) {
   const specialCharacters = /[.*+?^${}()|[\]\\]/g; 
   return string.replace(specialCharacters, '\\$&');
 }
+
+function convertWindowsToLinuxLineEndings(text) {
+    // Replace all occurrences of '\r\n' with '\n'
+    return text.replace(/\r\n/g, '\n');
+  }
 
 module.exports = {
     convertMdfcToHtml,
