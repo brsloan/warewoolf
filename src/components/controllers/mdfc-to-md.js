@@ -2,18 +2,14 @@
 
 function convertMdfcToMd(mdfText){
     const alignmentMarker = /\[>.\] ?/gm;
-    const tabsAtStartOfLine = /^\t+/gm;
   
     var converted = mdfText.replaceAll(alignmentMarker,'');
     converted = converted.replaceAll('\n\n\t','\n\n');
     converted = converted.replaceAll('\n\t','\n\n');
-    converted = converted.replace(tabsAtStartOfLine, '');
     
     converted = convertFootnotes(converted);
   
     return converted;
-  
-   
   }
 
   function convertFootnotes(text){
