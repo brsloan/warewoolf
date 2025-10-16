@@ -23,7 +23,7 @@ function convertMdfcToHtml(str){
     let tempClasses = /class="(ol|ul).*"/g;
 
     let listUnordered = /^(?:-|\*|\+) (.*)/gm; 
-    let listUnorderedTwo = /^(\t)(?:-|\*|\+) (.*)/gm; //Tabs must be searched for as escaped since styling comes after JSON character conversion
+    let listUnorderedTwo = /^(\t)(?:-|\*|\+) (.*)/gm;
     let listUnorderedThreePlus = /^(\t){2,}(?:-|\*|\+) (.*)/gm;
     let listOrdered = /^((?:\d+|[a-z])\.) (.*)/gm;
     let listOrderedTwo = /^(\t)((?:\d+|[a-z])\.) (.*)/gm;
