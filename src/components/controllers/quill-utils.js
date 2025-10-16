@@ -45,7 +45,7 @@ function parseDelta(delta){
 
     for(let i=0;i<ops.length;i++){
       if(ops[i].insert == '\n'){
-        //tempRuns.push({text: '\n'})
+        tempRuns.push({text: ''})
         var para = { textRuns: tempRuns };
         if(ops[i].attributes)
           para.attributes = ops[i].attributes;
