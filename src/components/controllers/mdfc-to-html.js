@@ -15,8 +15,12 @@ function convertMdfcToHtml(str){
     let rightHeader4 = /^\[>r] #### (.+)/gm
   
     let startOfUnorderedList = /^(?!<li|<ul).*[\n\r]^(?:<li|<ul) class="ul".*$/gm;
-    let unorderedListHtml = /((?:(?:<li|<ul) class="ul".*(?:<\/li>|<\/ul>)\n)+)/g;
-    let orderedListHtml = /((?:(?:<li|<ol) class="ol".*(?:<\/li>|<\/ol>)\n)+)/g
+    let unorderedListHtml = /((?:(?:<li|<ul) class="ul.*(?:<\/li>|<\/ul>)\n)+)/g;
+    let unorderedListHtmlLvl2 = /((?:(?:<li|<ul) class="ul (?:ul-two|ul-three).*(?:<\/li>|<\/ul>)\n)+)/g;
+    let unorderedListHtmlLvl3 = /((?:(?:<li|<ul) class="ul ul-three".*(?:<\/li>|<\/ul>)\n)+)/g;
+    let orderedListHtml = /((?:(?:<li|<ol) class="ol.*(?:<\/li>|<\/ol>)\n)+)/g
+    let orderedListHtmlLvl2 = /((?:(?:<li|<ol) class="ol (?:ol-two|ol-three).*(?:<\/li>|<\/ol>)\n)+)/g;
+    let orderedListHtmlLvl3 = /((?:(?:<li|<ol) class="ol ol-three".*(?:<\/li>|<\/ol>)\n)+)/g;
 
     let listUnordered = /^(?:-|\*|\+) (.*)/gm; 
     let listUnorderedTwo = /^(\t)(?:-|\*|\+) (.*)/gm; //Tabs must be searched for as escaped since styling comes after JSON character conversion
@@ -38,11 +42,11 @@ function convertMdfcToHtml(str){
   
 
     //Assign class to assist in discriminating between ordered and UL list items in whole list detection
-    str = str.replace(listUnorderedThreePlus, '<ul class="ul"><ul><li>$2</li></ul></ul>');
-    str = str.replace(listUnorderedTwo, '<ul class="ul"><li>$2</li></ul>');
+    str = str.replace(listUnorderedThreePlus, '<li class="ul ul-three">$2</li>');
+    str = str.replace(listUnorderedTwo, '<li class="ul ul-two">$2</li>');
     str = str.replace(listUnordered, '<li class="ul">$1</li>');
-    str = str.replace(listOrderedThreePlus, '<ol class="ol"><ol><li>$3</li></ol></ol>');
-    str = str.replace(listOrderedTwo, '<ol class="ol"><li>$3</li></ol>');
+    str = str.replace(listOrderedThreePlus, '<li class="ol ol-three">$3</li>');
+    str = str.replace(listOrderedTwo, '<li class="ol ol-two">$3</li>');
     str = str.replace(listOrdered, '<li class="ol">$2</li>');
     
 
@@ -71,6 +75,11 @@ function convertMdfcToHtml(str){
     //Now add outer list tags for entire lists
     str = str.replace(unorderedListHtml, '<ul class="OUTER-LIST">$1</ul>');
     str = str.replace(orderedListHtml, '<ol class="OUTER-LIST">$1</ol>');
+    str = str.replace(unorderedListHtmlLvl2, '<ul class="SECOND-LIST">$1</ul>');
+    str = str.replace(unorderedListHtmlLvl3, '<ul class="THIRD-LIST">$1</ul>');
+    str = str.replace(orderedListHtmlLvl2, '<ol class="SECOND-LIST">$1</ol>');
+    str = str.replace(orderedListHtmlLvl3, '<ol class="THIRD-LIST">$1</ol>');
+
   
     let bold = /(?<!\\|\\\*\*)\*\*([^\*\*]+)\*\*/g;
     let italic = /(?<!\\|\\\*)\*([^\*]+)\*/g;
