@@ -97,7 +97,7 @@ function parseMDF(str){
   str = str.replace(underline, '"},{"insert":"$1","attributes":{"underline":"true"}},{"insert":"');
   str = str.replace(strike, '"},{"insert":"$1","attributes":{"strike":"true"}},{"insert":"');
 
-  let escapedMarkers = /\\\\(\*\*|\*|~~|__|#|\[>|>|\[\^|-|\+)/g;
+  let escapedMarkers = /\\\\(\*\*|\*|~~|__|#|\[>|>|\[\^|-|\+|(?:\d+|[a-z])\. )/g;
   str = str.replace(escapedMarkers, '$1');
 
   return JSON.parse(str);
@@ -227,6 +227,9 @@ function escapeAnyMarkers(text){
 
   const listUnordered = /^(\t*)(-|\*|\+) /gm; 
   text = text.replace(listUnordered, '$1\\$2 ');
+
+  const listOrdered = /^(\t*)((?:\d+|[a-z])\.) /gm;
+  text = text.replace(listOrdered, '$1\\$2 ');
 
   return text;
 }
