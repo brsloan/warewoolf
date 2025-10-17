@@ -32,6 +32,7 @@ function showShortcutsHelp(isMac){
           ['Title (Heading 1, Centered)', cmdOrCtrl + ' + T'],
           ['Headings', cmdOrCtrl + ' + (1-4)'],
           ['Clear Heading', cmdOrCtrl + ' + 0'],
+          ['Bullets/Numbered List', cmdOrCtrl + ' + Shift + B'],
           ['Left Align', cmdOrCtrl + ' + L'],
           ['Right Align', cmdOrCtrl + ' + R'],
           ['Center Align', cmdOrCtrl + ' + E'],
