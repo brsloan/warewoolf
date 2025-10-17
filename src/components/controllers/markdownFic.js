@@ -153,7 +153,7 @@ function convertDeltaToMDF(delt){
     }
       
     para.textRuns.forEach((run, i) => {
-      run.text = escapeAnyMarkers(run.text);
+      run.text = escapeAnyMarkers(run.text, i);
       mdf += getMarkedTextFromRun(run);
     });
 
@@ -221,16 +221,17 @@ function getLineMarker(attr, listItemNum = 0){
   return marker;
 };
 
-function escapeAnyMarkers(text){
+function escapeAnyMarkers(text, runIndex){
   var escapedMarkersRegx = /(\*\*|\*|~~|__|#|\[>|>|\[\^)/g;
   text = text.replace(escapedMarkersRegx, '\\$1')
 
-  //This is not ideal to run here, because escapeAnyMarkers is applied to every run in every paragraph
-  //individually, so in some circumstances (formatting within a line breaking it up into multiple runs)
-  //it will escape markers inside of a line instead of at the beginning. So far it doesn't seem to be 
-  //a huge issue, since the un-escaping function in the MDF parsing still unescapes these unnecssary escapes,
-  //but there may be circumstances in which this does not work out. To be revisited.
-  text = escapeListMarkers(text);
+  //Because escapeAnyMarkers is applied to every run in every paragraph
+  //individually, in some circumstances (formatting within a line breaking it up into multiple runs)
+  //escapeListMarkers would escape markers inside of a line instead of at the beginning. 
+  //So we only apply escapeListMarkers to the first run, since any valid list marker would reside
+  //entirely within the first run of any given paragraph
+  if(runIndex == 0)
+    text = escapeListMarkers(text);
 
   return text;
 }
