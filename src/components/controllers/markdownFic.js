@@ -97,7 +97,7 @@ function parseMDF(str){
   str = str.replace(underline, '"},{"insert":"$1","attributes":{"underline":"true"}},{"insert":"');
   str = str.replace(strike, '"},{"insert":"$1","attributes":{"strike":"true"}},{"insert":"');
 
-  let escapedMarkers = /\\\\(\*\*|\*|~~|__|#|\[>|>|\[\^)/g;
+  let escapedMarkers = /\\\\(\*\*|\*|~~|__|#|\[>|>|\[\^|-|\+)/g;
   str = str.replace(escapedMarkers, '$1');
 
   return JSON.parse(str);
@@ -223,8 +223,12 @@ function getLineMarker(attr, listItemNum = 0){
 
 function escapeAnyMarkers(text){
   var escapedMarkersRegx = /(\*\*|\*|~~|__|#|\[>|>|\[\^)/g;
+  text = text.replace(escapedMarkersRegx, '\\$1')
 
-  return text.replace(escapedMarkersRegx, '\\$1');
+  const listUnordered = /^(\t*)(-|\*|\+) /gm; 
+  text = text.replace(listUnordered, '$1\\$2 ');
+
+  return text;
 }
 
 module.exports = {
