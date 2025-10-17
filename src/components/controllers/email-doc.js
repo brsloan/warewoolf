@@ -8,6 +8,7 @@ const { logError } = require('./error-log');
 const { convertMdfcToMd } = require('./mdfc-to-md');
 const { convertMdfcToHtmlPage, convertMdfcToHtml } = require('./mdfc-to-html');
 const { htmlChaptersToEpub } = require('./epub');
+const { convertToPlainText } = require('./quill-utils');
 
 function prepareAndEmail(project, userSettings, editorQuill, sender, pass, receiver, filetype, compileOptions, callback){
   var delt;
@@ -192,14 +193,6 @@ function emailFile(sender, pass, receiver, attachments, callback){
       callback('Email sent successfully.');
     }
   });
-}
-
-function convertToPlainText(delt){
-  var text = '';
-  delt.ops.forEach(op => {
-    text += op.insert;
-  });
-  return text;
 }
 
 module.exports = {
