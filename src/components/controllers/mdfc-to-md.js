@@ -2,18 +2,17 @@
 
 function convertMdfcToMd(mdfText){
     const alignmentMarker = /\[>.\] ?/gm;
-    const tabsAtStartOfLine = /^\t+/gm;
+    //regex below looks for paragraphs that begin with a tab but are not list items, and it includes 1 to 2 newlines before the indented
+    //paragaph so that any matches can be replaced with two new lines, which will standardize paragraphs to have 1 empty line between them
+    //for markdown. (If only one one newline, it will add one during the replace. If two, it stays at two.)
+    const indentedParas = /\n{1,2}\t(?!(\t*(?:\d+|[a-z])\. )|(\t*(?:-|\*|\+) ))/g;
   
     var converted = mdfText.replaceAll(alignmentMarker,'');
-    converted = converted.replaceAll('\n\n\t','\n\n');
-    converted = converted.replaceAll('\n\t','\n\n');
-    converted = converted.replace(tabsAtStartOfLine, '');
-    
-    converted = convertFootnotes(converted);
+    converted = converted.replace(indentedParas, '\n\n');
+
+    converted = convertFootnotes(converted); 
   
     return converted;
-  
-   
   }
 
   function convertFootnotes(text){
