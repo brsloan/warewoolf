@@ -532,3 +532,7 @@ display: block;
 .ql-editor .transition-block {
   text-align: right;
 }
+
+.dialog-block + .parenthetical-block {
+  margin-top: -1em;
+}
