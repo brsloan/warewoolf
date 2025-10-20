@@ -2,6 +2,7 @@ const fs = require('fs');
 const { logError } = require('../controllers/error-log');
 const { parseMDF, convertDeltaToMDF } = require('../controllers/markdownFic');
 const { sanitizeFilename } = require('../controllers/utils');
+const { parseFountain } = require('../controllers/screenplay');
 const notesNamePrepend = '-notes_';
 
 function newChapter(){
@@ -48,6 +49,8 @@ function newChapter(){
         var fileText = fs.readFileSync(project.directory + project.chapsDirectory + chap.filename, "utf8");
         if(chap.filename.includes('.pup'))
           chapterObj = JSON.parse(fileText);
+        else if(project.screenplay)
+          chapterObj = parseFountain(fileText);
         else
           chapterObj = parseMDF(fileText);
 
@@ -175,7 +178,7 @@ function newChapter(){
 
   function getNewFilename(title){
     
-    const fileExt = '.txt';    
+    const fileExt = project.screenplay ? '.fountain' : '.txt';    
     var copyNum = 1;
     var filenameRoot = sanitizeFilename(title && title != '' ? title : 'untitled');
     var filename = filenameRoot + fileExt;

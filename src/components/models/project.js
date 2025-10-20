@@ -20,6 +20,7 @@ function newProject(){
         hasUnsavedChanges: false,
         textCursorPosition: 0,
         corkboardColumns: 4,
+        screenplay: false,
         getActiveChapter: getActiveChapter,
         loadFile: loadFile,
         saveFile: saveFile,

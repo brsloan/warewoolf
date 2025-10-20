@@ -14,6 +14,50 @@ const {
 const fileRequestedOnOpen = ipcRenderer.sendSync('get-file-requested-on-open');
 const { showBattery } = require('./components/views/battery_display');
 
+function addScreenplayFormats(){
+  const Block = Quill.import('blots/block');
+
+  class CharacterBlock extends Block { }
+  CharacterBlock.blotName = 'character-cue'; 
+  CharacterBlock.tagName = 'h1'; 
+  CharacterBlock.className = 'character-cue'; 
+  Quill.register(CharacterBlock, true);
+
+  class SceneBlock extends Block { }
+  SceneBlock.blotName = 'scene-header'; 
+  SceneBlock.tagName = 'h1'; 
+  SceneBlock.className = 'scene-header';
+  Quill.register(SceneBlock, true);
+
+  class ActionBlock extends Block { }
+  ActionBlock.blotName = 'action-block'; 
+  ActionBlock.tagName = 'div'; 
+  ActionBlock.className = 'action-block'; 
+  Quill.register(ActionBlock, true);
+
+  class DialogBlock extends Block {}
+  DialogBlock.blotName = 'dialog-block';
+  DialogBlock.tagName = 'div';
+  Quill.register(DialogBlock, true);
+
+  class ParentheticalBlock extends Block {}
+  ParentheticalBlock.blotName = 'parenthetical-block';
+  ParentheticalBlock.tagName = 'p';
+  Quill.register(ParentheticalBlock, true);
+
+  class TransitionBlock extends Block {}
+  TransitionBlock.blotName = 'transition-block';
+  TransitionBlock.tagName = 'p';
+  Quill.register(TransitionBlock, true);
+
+
+}
+
+addScreenplayFormats();
+
+var editorQuill;
+
+/*
 var editorQuill = new Quill('#editor-container', {
   modules: {
     history: {
@@ -22,7 +66,7 @@ var editorQuill = new Quill('#editor-container', {
   },
   placeholder: '',
   formats: ['bold', 'italic', 'strike', 'underline', 'blockquote', 'header', 'align', 'list', 'indent']
-});
+});*/
 
 var notesQuill = new Quill('#notes-editor', {
   modules: {
@@ -34,6 +78,21 @@ var notesQuill = new Quill('#notes-editor', {
   formats: ['bold', 'italic', 'strike', 'underline', 'blockquote', 'header', 'align', 'list', 'indent']
 });
 
+function generateEditorQuill(screenplay = false){
+  var fictionFormats = ['bold', 'italic', 'strike', 'underline', 'blockquote', 'header', 'align', 'list', 'indent'];
+  var screenplayFormats = ['bold', 'italic', 'strike', 'underline', 'align', 'character-cue', 'scene-header']; 
+  return new Quill('#editor-container', {
+    modules: {
+      history: {
+        userOnly: true
+      }
+    },
+    placeholder: '',
+    formats: screenplay ? screenplayFormats : fictionFormats
+  });
+}
+
+
 var project = newProject();
 
 var userSettings = getUserSettings(sysDirectories.userData + "/user-settings.json").load();
@@ -41,24 +100,29 @@ var userSettings = getUserSettings(sysDirectories.userData + "/user-settings.jso
 initialize();
 
 function initialize(){
-  setUpQuills();
-  applyUserSettings();
-  loadInitialProject();
+  loadInitialProject(function(){
+    setUpQuills();
+    applyUserSettings();
+    displayProject();
+  });
 }
 
-function loadInitialProject(){
+function loadInitialProject(successFunction){
   //Load requested project, last project opened, or if none logged, load example project, and if example gone, create new project
   const defaultProject = sysDirectories.app + "/examples/Frankenstein/Frankenstein.woolf";
 
   if(fileRequestedOnOpen != null && fs.existsSync(fileRequestedOnOpen)){
-    setProject(fileRequestedOnOpen);
+    setProject(fileRequestedOnOpen, successFunction);
     userSettings.lastProject = fileRequestedOnOpen;
   }
   else if(userSettings.lastProject != null && fs.existsSync(userSettings.lastProject))
-    setProject(userSettings.lastProject);
+    setProject(userSettings.lastProject, successFunction);
   else if(fs.existsSync(defaultProject)){
-    setProject(defaultProject);
-    userSettings.lastProject = defaultProject;
+    setProject(defaultProject, function(){
+      userSettings.lastProject = defaultProject;
+      successFunction();
+    });
+    
   }
   else {
     //Start new project
@@ -67,7 +131,12 @@ function loadInitialProject(){
 }
 
 function setUpQuills(){
-  addBindingsToQuill(editorQuill);
+  console.log('screenplay? ' + project.screenplay);
+  editorQuill = generateEditorQuill(project.screenplay);
+  if(project.screenplay)
+    addBindingsToScreenplayQuill(editorQuill)
+  else
+    addBindingsToQuill(editorQuill);
   addBindingsToQuill(notesQuill);
   disableTabbingToEditors();
 }
@@ -108,7 +177,7 @@ function setDarkMode(){
   ipcRenderer.send('set-dark-mode', userSettings.darkMode);
 }
 
-function setProject(filepath){
+function setProject(filepath, successFunction){
   if(filepath && filepath != null){
     var missingChaps = project.loadFile(filepath);
     if(missingChaps.length > 0){
@@ -116,14 +185,15 @@ function setProject(filepath){
       const promptForMissingPups = require('./components/views/missing-pups_display');
       promptForMissingPups(project, function(resp){
         if(resp == 'save')
-          setProject(filepath);
+          setProject(filepath, successFunction);
         else
           createNewProject();
       });
     }
     else{
       convertLegacyProject();
-      displayProject();
+      //displayProject();
+      successFunction();
     }
   }
 }
@@ -527,6 +597,7 @@ function createNewProject(){
       project.author = userSettings.defaultAuthor;
       project.notesChap = newChapter();
       addNewChapter();
+      setUpQuills();
       displayProject();
     }
   });
@@ -627,6 +698,7 @@ function openAProject() {
         promptForMissingPups(project, missingChaps);
       }
       else{
+        setUpQuills();
         displayProject();
       }
       userSettings.lastProject = filepath[0];
@@ -845,6 +917,7 @@ function scrollChapterListToActiveChapter(){
 function openHelpDoc(){
   const helpDocPath = sysDirectories.app + "/examples/HelpDoc/HelpDoc.woolf";
   project.loadFile(helpDocPath);
+  setUpQuills();
   displayProject();
 }
 
@@ -1071,6 +1144,53 @@ function addBindingsToQuill(q){
         q.format('list', 'bullet', 'user');
     }
   })
+
+};
+
+function addBindingsToScreenplayQuill(q){
+  q.keyboard.addBinding({
+    key: '1',
+    shortKey: true,
+    handler: function(range, context) {
+      this.quill.format('character-cue', true, 'user');
+    }
+  });
+
+  q.keyboard.addBinding({
+    key: 'L',
+    shortKey: true,
+    handler: function(range, context) {
+      this.quill.format('align', null, 'user');
+    }
+  });
+
+  q.keyboard.addBinding({
+    key: 'E',
+    shortKey: true,
+    handler: function(range, context) {
+      this.quill.format('align', 'center', 'user');
+    }
+  });
+
+  q.keyboard.addBinding({
+    key: 'R',
+    shortKey: true,
+    handler: function(range, context) {
+      this.quill.format('align', 'right', 'user');
+    }
+  });
+
+  q.keyboard.addBinding({
+    key: 'k',
+    shortKey: true,
+    handler: function(range, context){
+      if(q.getFormat().strike)
+        q.format('strike', false, 'user');
+      else {
+        q.format('strike', true, 'user');
+      }
+    }
+  });
 
 };
 
@@ -1389,6 +1509,7 @@ ipcRenderer.on('file-opened-from-outside-warewoolf', function(event, fPath){
       promptForMissingPups(project, missingChaps);
     }
     else{
+      setUpQuills();
       displayProject();
     }
     userSettings.lastProject = fPath;

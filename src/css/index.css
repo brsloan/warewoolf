@@ -497,3 +497,26 @@ display: block;
   background-color: red;
   color: white;
 }
+
+/* ~~~~ Screenplay Mode ~~~~~~~  */
+
+.character-cue {
+  text-align: center;
+}
+
+.scene-header {
+  text-align: left;
+  font-weight: bolder;
+}
+
+.dialog-block {
+  padding-left: 40px;
+}
+
+.parenthetical-block {
+  text-align: center;
+}
+
+.transition-block {
+  text-align: right;
+}

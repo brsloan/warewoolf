@@ -1,0 +1,22 @@
+{
+	"filename": "screenplay.woolf",
+	"chapsDirectory": "screenplay_chapters/",
+	"title": "Screenplay",
+	"author": "Benjamin Sloan",
+	"chapters": [
+		{
+			"title": "new",
+			"filename": "new.fountain",
+			"filter": null,
+			"summary": null
+		}
+	],
+	"reference": [],
+	"filters": [],
+	"trash": [],
+	"activeChapterIndex": 0,
+	"wordGoal": 0,
+	"textCursorPosition": 18,
+	"corkboardColumns": 4,
+	"screenplay": true
+}
