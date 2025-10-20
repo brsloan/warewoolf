@@ -40,7 +40,7 @@ function parseFountain(str){
     str = str.replaceAll('\t','\\t'); 
 
     //Escape newlines within JSON properties, condensing blank lines while we're at it
-    let interiorNewlines = /(:"[^\n"]*)(\n\n|\n)/g;
+    let interiorNewlines = /(:"[^\n}]*)(\n\n|\n)/g;
     while(str.search(interiorNewlines) > 0){
         str = str.replace(interiorNewlines, '$1\\n');
     }
@@ -54,7 +54,6 @@ function parseFountain(str){
     let cleanup = /{"insert":"","attributes":{"action-block":true}},{"insert":"\\n","attributes":{"action-block":true}},/g;
     str = str.replace(cleanup,'');
 
-    //console.log(str);
     return JSON.parse(str);
 }
 
