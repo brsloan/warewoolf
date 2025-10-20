@@ -25,24 +25,26 @@ function parseFountain(str){
     str = str.replace(transition, '\n{"insert":"$1","attributes":{"transition-block":true}},{"insert":"\\n","attributes":{"transition-block":true}},');
     str = str.replace(dialog, '{"insert":"$1","attributes":{"dialog-block":true}},{"insert":"\\n","attributes":{"dialog-block":true}},');
     str = str.replace(forcedTransition, '\n{"insert":"$1","attributes":{"transition-block":true}},{"insert":"\\n","attributes":{"transition-block":true}},\n');
-    str = str.replace(falseTransition, '{"insert":"$1","attributes":{"action-block":true}},{"insert":"\\n","attributes":{"action-block":true}},\n');
-    console.log(str);
     str = str.replace(action, '{"insert":"$1","attributes":{"action-block":true}},\n');
 
     //Escape tabs
     str = str.replaceAll('\t','\\t'); 
 
-    //Escape newlines within JSON properties
-    let interiorNewlines = /(:"[^\n"]*)(\n)/g;
+    //Escape newlines within JSON properties, condensing blank lines while we're at it
+    let interiorNewlines = /(:"[^\n"]*)(\n\n|\n)/g;
     while(str.search(interiorNewlines) > 0){
         str = str.replace(interiorNewlines, '$1\\n');
     }
   
-    str = '{"ops":[' + str.trim().slice(0, -1) + ']}';
+    //Right now this is just fixing the last line of > The End <, not sure of original function, need to replace with specific for all endings?
+    str = str.replace(falseTransition, '{"insert":"$1","attributes":{"action-block":true}},{"insert":"\\n","attributes":{"action-block":true}},\n');
+   
+    str = '{"ops":[' + str.trim().slice(0,-1) + ']}';
 
     let cleanup = /{"insert":"","attributes":{"action-block":true}},{"insert":"\\n","attributes":{"action-block":true}},/g;
     str = str.replace(cleanup,'');
 
+    console.log('after condensing newlins etc:\n' + str);
     return JSON.parse(str);
 }
 
