@@ -1,19 +1,17 @@
-const { getTempQuill } = require('./quill-utils');
-
 function parseFountain(str){
     str = convertAllLineBreaks(str);
-    //console.log(str);
 
     let sceneHeader = /(?<=\n|^)(([iI][nN][tT]|[eE][xX][tT]|[^\w][eE][sS][tT]|[iI]\.?\/[eE]\.?)([^\n]+))\n/g; //Not multi-line because ^ is checking very first line in document
     let forcedSceneHeader = /(?<=\n|^)\.([^\n]+)\n/gm;
-    let character = /(?<=\n)([ \t]*[^<>a-z\s\/\n][^<>a-z:!\?\n]*[^<>a-z\(!\?:,\n\.][ \t]?)\n{1}(?!\n)/g;
-    let parenthetical = /^(\s*\([^<>\n]*?\)[\s]?)\n/gm;
+    let character = /(?<=\n)[ \t]*([^<>a-z\s\/\n][^<>a-z:!\?\n]*[^<>a-z\(!\?:,\n\.][ \t]?)\n{1}(?!\n)/g;
+    let parenthetical = /^\s*(\([^<>\n]*?\)[\s]?)\n/gm;
     let transition = /\n([\*_]*([^<>\na-z]*TO:|FADE TO BLACK\.|FADE OUT\.|CUT TO BLACK\.)[\*_]*)\n/g;
     let forcedTransition = /\n>(\s*[^<>\n]+)\n/g;
 
-    let dialog = /(?<="character-cue":true}},\n|"parenthetical-block":true}},\n)([^{]*?)\n(?=\n|{)/g; //Must be run after character & parenthetical since it matches on their results
+    let dialog = /(?<="character-cue":true}},\n|"parenthetical-block":true}},\n)[ \t]*([^{]*?)\n(?=\n|{)/g; //Must be run after character & parenthetical since it matches on their results
     //let falseTransition = /\n(>\s*[^<>\n]+(<\s*))\n/g; //For centered actions that may appear to be transitions??? Taken from Fountain github
     let action = /(?<=}},\n)([^{}]*)(?=\n{2}|\n{)/g;
+    let centeredAction = /^> ?(.*) ?<$/gm;
     let anythingLeft = /^\s*([^{}\n]+)$/gm;
 
       //escape JSON chars (except Tab, which will do later so can be detected with Regexes)
@@ -28,7 +26,15 @@ function parseFountain(str){
     str = str.replace(transition, '\n{"insert":"$1","attributes":{"transition-block":true}},{"insert":"\\n","attributes":{"transition-block":true}},');
     str = str.replace(dialog, '{"insert":"$1","attributes":{"dialog-block":true}},{"insert":"\\n","attributes":{"dialog-block":true}},');
     str = str.replace(forcedTransition, '\n{"insert":"$1","attributes":{"transition-block":true}},{"insert":"\\n","attributes":{"transition-block":true}},\n');
+    str = str.replace(centeredAction, '{"insert":"$1"},{"insert":"\\n","attributes":{"action-block":true,"align":"center"}},');
     str = str.replace(action, '{"insert":"$1","attributes":{"action-block":true}},\n');
+
+    //Remove leading spaces on internal newlines of any element except action
+    let internalLeadingWhiteSpace = /(?<={"insert":")([^{}]+\n)([ \t]+)([^{}]+)(?=","attributes":{"(?!action))/g;
+    while(str.search(internalLeadingWhiteSpace) > 0){
+        str = str.replace(internalLeadingWhiteSpace, '$1$3');
+    }
+    
 
     //Escape tabs
     str = str.replaceAll('\t','\\t'); 
@@ -48,25 +54,7 @@ function parseFountain(str){
     let cleanup = /{"insert":"","attributes":{"action-block":true}},{"insert":"\\n","attributes":{"action-block":true}},/g;
     str = str.replace(cleanup,'');
 
-    let boldItalicUnderline = /(_\*{3}|\*{3}_)([^{}]+)(_\*{3}|\*{3}_)/g;
-    let boldItalic = /(\*{3})([^{}]+)(\*{3})/g;
-    let boldUnderline = /(_\*{2}|\*{2}_)([^{}]+)(_\*{2}|\*{2}_)/g;
-    let italicUnderline = /(_\*{1}|\*{1}_)([^{}]+)(_\*{1}|\*{1}_)/g;
-    let bold = /(\*{2})([^{}]+)(\*{2})/g;
-    let italic = /(?<!\\)(\*{1})([^{}]+?)(\*{1})/g;
-    let underline = /(_)([^{}_]+)(_)/g;
-
-    console.log('before styling:\n' + str);
-
-    str = str.replace(boldItalicUnderline, '"},{"insert":"$2","attributes":{"bold":"true","italic":"true","underline":"true"}},{"insert":"');
-    str = str.replace(boldItalic, '"},{"insert":"$2","attributes":{"bold":"true","italic":"true"}},{"insert":"');
-    str = str.replace(boldUnderline, '"},{"insert":"$2","attributes":{"bold":"true","underline":"true"}},{"insert":"');
-    str = str.replace(italicUnderline, '"},{"insert":"$2","attributes":{"italic":"true","underline":"true"}},{"insert":"');
-    str = str.replace(underline, '"},{"insert":"$2","attributes":{"underline":"true"}},{"insert":"');
-    str = str.replace(bold, '"},{"insert":"$2","attributes":{"bold":"true"}},{"insert":"');
-    str = str.replace(italic, '"},{"insert":"$2","attributes":{"italic":"true"}},{"insert":"');
-    
-    console.log('after condensing newlins etc:\n' + str);
+    console.log(str);
     return JSON.parse(str);
 }
 
@@ -74,46 +62,59 @@ function convertAllLineBreaks(text) {
     return text.replace(/\r\n|\r/g, '\n');
 }
 
-function styleInlineMarkers(delt){
-    let boldItalicUnderline = /(_\*{3}|\*{3}_)([^{}]+)(_\*{3}|\*{3}_)/g;
-    let boldItalic = /(\*{3})([^{}]+)(\*{3})/g;
-    let boldUnderline = /(_\*{2}|\*{2}_)([^{}]+)(_\*{2}|\*{2}_)/g;
-    let italicUnderline = /(_\*{1}|\*{1}_)([^{}]+)(_\*{1}|\*{1}_)/g;
-    let bold = /(\*{2})([^{}]+)(\*{2})/g;
-    let italic = /(?<!\\)(\*{1})([^{}]+?)(\*{1})/g;
-    let underline = /(_)([^{}_]+)(_)/g;
 
-    var tempQuill = getTempQuill();
+/* Despite my best efforts, since JSON is not a nested format like XML, it seems to be impossible
+to cover all configurations of inline markers with the initial parsing, so it has to be done in the Quill editor
+using Quill's built in formatting functions after parsing. This is waaaaaay slower than some simple regex functions followed by a
+JSON parse, but it's where I'm at for now. May be faster to do original parse to XML and then convert to Delta from there? */
+function styleFountainInlineMarkers(quill){
+    let boldItalicUnderline = /(_\*{3}|\*{3}_)([^{}]+)(_\*{3}|\*{3}_)/;
+    let boldItalic = /(\*{3})([^{}]+)(\*{3})/;
+    let boldUnderline = /(_\*{2}|\*{2}_)([^{}]+)(_\*{2}|\*{2}_)/;
+    let italicUnderline = /(_\*{1}|\*{1}_)([^{}]+)(_\*{1}|\*{1}_)/;
+    let bold = /(\*{2})([^{}]+)(\*{2})/;
+    let italic = /(?<!\\)(\*{1})([^{}]+?)(\*{1})/;
+    let underline = /(_)([^{}_]+)(_)/;
+    var formats = [boldItalicUnderline, boldItalic, boldUnderline, italicUnderline, bold, italic, underline];
+    var styleNames = [
+        ['bold', 'italic', 'underline'],
+        ['bold', 'italic'],
+        ['bold', 'underline'],
+        ['italic', 'underline'],
+        ['bold'],
+        ['italic'],
+        ['underline']
+    ];
 
+    for(i=0;i<formats.length;i++){
+        styleMarkedSpans(quill, formats[i], styleNames[i]);
+    }
 };
 
-function styleMarkedSpans(tempQuill, delt, markerRegx, style){  
-   //var tempQuill = getTempQuill();
-    tempQuill.setContents(delt);
-    var text = tempQuill.getText();
+function styleMarkedSpans(quill, markerRegx, styles){  
+    var text = quill.getText();
   
     var foundIndex = 0;
     var startingIndex = 0;
     var matchResult;
-    var markedText = "";
   
     while(foundIndex > -1){
-  
         matchResult = text.match(markerRegx);
         foundIndex = matchResult ? matchResult.index : -1;
   
         if(foundIndex > -1){
-            tempQuill.deleteText(foundIndex, matchResult[0].length);
-            tempQuill.insertText(foundIndex, matchResult[2]);
-            tempQuill.formatText(matchResult.index, matchResult[2].length, style, true);
-            startingIndex = foundIndex + matchResult[1].length;
-            text = tempQuill.getText();
+            quill.deleteText(foundIndex, matchResult[1].length);
+            quill.deleteText(foundIndex + matchResult[2].length, matchResult[3].length);
+            for(i = 0; i < styles.length; i++){
+                quill.formatText(matchResult.index, matchResult[2].length, styles[i], true);
+            }
+            startingIndex = foundIndex + matchResult[2].length;
+            text = quill.getText();
         }
     }
-  
-    return tempQuill.getContents();
-  }
+}
 
 module.exports = {
-    parseFountain
+    parseFountain,
+    styleFountainInlineMarkers
 };
