@@ -239,6 +239,8 @@ function displayProject(){
 
 function setWordCountOnLoad(){
   const { getTotalWordCount } = require('./components/controllers/wordcount');
+  if(project.screenplay)
+    project.chapters[0].contents = editorQuill.getContents(); //preload chap so wordcount function doesn't trigger fountain parse again
   project.wordCountOnLoad = getTotalWordCount(project);
 }
 
