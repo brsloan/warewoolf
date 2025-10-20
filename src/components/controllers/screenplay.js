@@ -2,7 +2,7 @@ function parseFountain(str){
     str = convertAllLineBreaks(str);
 
     let sceneHeader = /(?<=\n|^)(([iI][nN][tT]|[eE][xX][tT]|[^\w][eE][sS][tT]|[iI]\.?\/[eE]\.?)([^\n]+))\n/g; //Not multi-line because ^ is checking very first line in document
-    let forcedSceneHeader = /(?<=\n|^)\.([^\n]+)\n/gm;
+    let forcedSceneHeader = /(?<=\n|^)\.{1}([^\.][^\n]+)\n/gm;
     let character = /(?<=\n)[ \t]*([^<>a-z\s\/\n][^<>a-z:!\?\n]*[^<>a-z\(!\?:,\n\.][ \t]?)\n{1}(?!\n)/g;
     let parenthetical = /^\s*(\([^<>\n]*?\)[\s]?)\n/gm;
     let transition = /\n([\*_]*([^<>\na-z]*TO:|FADE TO BLACK\.|FADE OUT\.|CUT TO BLACK\.)[\*_]*)\n/g;
@@ -54,7 +54,7 @@ function parseFountain(str){
     let cleanup = /{"insert":"","attributes":{"action-block":true}},{"insert":"\\n","attributes":{"action-block":true}},/g;
     str = str.replace(cleanup,'');
 
-    console.log(str);
+    //console.log(str);
     return JSON.parse(str);
 }
 
@@ -68,13 +68,13 @@ to cover all configurations of inline markers with the initial parsing, so it ha
 using Quill's built in formatting functions after parsing. This is waaaaaay slower than some simple regex functions followed by a
 JSON parse, but it's where I'm at for now. May be faster to do original parse to XML and then convert to Delta from there? */
 function styleFountainInlineMarkers(quill){
-    let boldItalicUnderline = /(_\*{3}|\*{3}_)([^{}]+)(_\*{3}|\*{3}_)/;
-    let boldItalic = /(\*{3})([^{}]+)(\*{3})/;
-    let boldUnderline = /(_\*{2}|\*{2}_)([^{}]+)(_\*{2}|\*{2}_)/;
-    let italicUnderline = /(_\*{1}|\*{1}_)([^{}]+)(_\*{1}|\*{1}_)/;
-    let bold = /(\*{2})([^{}]+)(\*{2})/;
+    let boldItalicUnderline = /(_\*{3}|\*{3}_)([^{}]+?)(_\*{3}|\*{3}_)/;
+    let boldItalic = /(\*{3})([^{}]+?)(\*{3})/;
+    let boldUnderline = /(_\*{2}|\*{2}_)([^{}]+?)(_\*{2}|\*{2}_)/;
+    let italicUnderline = /(_\*{1}|\*{1}_)([^{}]+?)(_\*{1}|\*{1}_)/;
+    let bold = /(\*{2})([^{}]+?)(\*{2})/;
     let italic = /(?<!\\)(\*{1})([^{}]+?)(\*{1})/;
-    let underline = /(_)([^{}_]+)(_)/;
+    let underline = /(_)([^{}_]+?)(_)/;
     var formats = [boldItalicUnderline, boldItalic, boldUnderline, italicUnderline, bold, italic, underline];
     var styleNames = [
         ['bold', 'italic', 'underline'],
@@ -93,7 +93,7 @@ function styleFountainInlineMarkers(quill){
 
 function styleMarkedSpans(quill, markerRegx, styles){  
     var text = quill.getText();
-  
+
     var foundIndex = 0;
     var startingIndex = 0;
     var matchResult;
