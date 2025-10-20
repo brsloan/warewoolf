@@ -11,8 +11,9 @@ function parseFountain(str){
     let forcedTransition = /\n>(\s*[^<>\n]+)\n/g;
 
     let dialog = /(?<="character-cue":true}},\n|"parenthetical-block":true}},\n)([^{]*?)\n(?=\n|{)/g; //Must be run after character & parenthetical since it matches on their results
-    let falseTransition = /\n(>\s*[^<>\n]+(<\s*))\n/g; //For centered actions that may appear to be transitions??? Taken from Fountain github
+    //let falseTransition = /\n(>\s*[^<>\n]+(<\s*))\n/g; //For centered actions that may appear to be transitions??? Taken from Fountain github
     let action = /(?<=}},\n)([^{}]*)(?=\n{2}|\n{)/g;
+    let anythingLeft = /^\s*([^{}\n]+)$/gm;
 
 
       //escape JSON chars (except Tab, which will do later so can be detected with Regexes)
@@ -38,10 +39,11 @@ function parseFountain(str){
         str = str.replace(interiorNewlines, '$1\\n');
     }
   
-    //Right now this is just fixing the last line of > The End <, not sure of original function, need to replace with specific for all endings?
-    str = str.replace(falseTransition, '{"insert":"$1","attributes":{"action-block":true}},{"insert":"\\n","attributes":{"action-block":true}},\n');
-   
-    str = '{"ops":[' + str.trim().slice(0,-1) + ']}';
+    //Catch anything left, mainly gets the final line of the screenplay if it's action
+    //Must run after newlines have been condensed for reasons of deep magic
+    str = str.replace(anythingLeft, '{"insert":"$1","attributes":{"action-block":true}},{"insert":"\\n","attributes":{"action-block":true}},\n');
+
+    str = '{"ops":[' + str.trim().slice(0,-1) + ']}'; //slice is to remove the last comma from the generated JSON array
 
     let cleanup = /{"insert":"","attributes":{"action-block":true}},{"insert":"\\n","attributes":{"action-block":true}},/g;
     str = str.replace(cleanup,'');
