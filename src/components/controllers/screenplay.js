@@ -32,6 +32,7 @@ function parseFountain(str){
     //Escape tabs
     str = str.replaceAll('\t','\\t'); 
 
+    //Escape newlines within JSON properties
     let interiorNewlines = /(:"[^\n"]*)(\n)/g;
     while(str.search(interiorNewlines) > 0){
         str = str.replace(interiorNewlines, '$1\\n');
@@ -42,14 +43,10 @@ function parseFountain(str){
     let cleanup = /{"insert":"","attributes":{"action-block":true}},{"insert":"\\n","attributes":{"action-block":true}},/g;
     str = str.replace(cleanup,'');
 
-    //console.log(str);
-    //console.log(JSON.parse(str));
     return JSON.parse(str);
-    //return str;
 }
 
 function convertAllLineBreaks(text) {
-    // Replace all occurrences of '\r\n' or \r with '\\n'
     return text.replace(/\r\n|\r/g, '\n');
 }
 

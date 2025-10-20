@@ -19,13 +19,13 @@ function addScreenplayFormats(){
 
   class CharacterBlock extends Block { }
   CharacterBlock.blotName = 'character-cue'; 
-  CharacterBlock.tagName = 'h1'; 
+  CharacterBlock.tagName = 'p'; 
   CharacterBlock.className = 'character-cue'; 
   Quill.register(CharacterBlock, true);
 
   class SceneBlock extends Block { }
   SceneBlock.blotName = 'scene-header'; 
-  SceneBlock.tagName = 'h1'; 
+  SceneBlock.tagName = 'p'; 
   SceneBlock.className = 'scene-header';
   Quill.register(SceneBlock, true);
 
@@ -136,12 +136,18 @@ function loadInitialProject(successFunction){
 function setUpQuills(){
   console.log('screenplay? ' + project.screenplay);
   editorQuill = generateEditorQuill(project.screenplay);
-  if(project.screenplay)
-    addBindingsToScreenplayQuill(editorQuill)
+  if(project.screenplay){
+    addBindingsToScreenplayQuill(editorQuill);
+    attachScreenplayEditorClass(editorQuill);
+  }
   else
     addBindingsToQuill(editorQuill);
   addBindingsToQuill(notesQuill);
   disableTabbingToEditors();
+}
+
+function attachScreenplayEditorClass(quill){
+  quill.root.classList.add('ql-editor-screenplay');
 }
 
 function disableTabbingToEditors(){

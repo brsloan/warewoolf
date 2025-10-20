@@ -500,23 +500,35 @@ display: block;
 
 /* ~~~~ Screenplay Mode ~~~~~~~  */
 
-.character-cue {
-  text-align: center;
+.ql-editor-screenplay {
+  line-height: 100%;
 }
 
-.scene-header {
+.ql-editor-screenplay p{
+  margin-bottom: 1em;
+}
+
+.ql-editor .character-cue {
+  text-align: center;
+  margin-bottom: 0em;
+}
+
+.ql-editor .scene-header {
   text-align: left;
   font-weight: bolder;
+  margin-top: 2em;
 }
 
-.dialog-block {
-  padding-left: 40px;
+.ql-editor .dialog-block {
+  padding-left: 25%;
+  padding-right: 25%;
 }
 
-.parenthetical-block {
+.ql-editor .parenthetical-block {
   text-align: center;
+  margin-bottom: 0em;
 }
 
-.transition-block {
+.ql-editor .transition-block {
   text-align: right;
 }
