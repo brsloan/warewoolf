@@ -1,6 +1,7 @@
 
 function parseFountain(str){
     str = convertAllLineBreaks(str);
+    //console.log(str);
 
     let sceneHeader = /(?<=\n|^)(([iI][nN][tT]|[eE][xX][tT]|[^\w][eE][sS][tT]|\.|[iI]\.?\/[eE]\.?)([^\n]+))\n/g; //Not multi-line because ^ is checking very first line in document
     let character = /(?<=\n)([ \t]*[^<>a-z\s\/\n][^<>a-z:!\?\n]*[^<>a-z\(!\?:,\n\.][ \t]?)\n{1}(?!\n)/g;
@@ -20,25 +21,30 @@ function parseFountain(str){
 
     str = str.replace(sceneHeader, '\n{"insert":"$1"},{"insert":"\\n","attributes":{"scene-header":true}},');
     str = str.replace(character, '{"insert":"$1"},{"insert":"\\n","attributes":{"character-cue":true}},\n');
-    str = str.replace(parenthetical, '{"insert":"$1"},{"insert":"\\n","attributes":{"parenthetical-block":true}},\n');
-    str = str.replace(transition, '{"insert":"$1"},{"insert":"\\n","attributes":{"transition-block":true}},\n');
-    str = str.replace(dialog, '{"insert":"$1"},{"insert":"\\n","attributes":{"dialog-block":true}},');
-    str = str.replace(forcedTransition, '{"insert":"$1"},{"insert":"\\n","attributes":{"transition-block":true}},\n');
-    str = str.replace(falseTransition, '{"insert":"$1"},{"insert":"\\n","attributes":{"action-block":true}},\n');
-    str = str.replace(action, '{"insert":"$1"},{"insert":"\\n","attributes":{"action-block":true}},\n');
+    str = str.replace(parenthetical, '{"insert":"$1","attributes":{"parenthetical-block":true}},{"insert":"\\n","attributes":{"parenthetical-block":true}},\n');
+    str = str.replace(transition, '{"insert":"$1","attributes":{"transition-block":true}},{"insert":"\\n","attributes":{"transition-block":true}},\n');
+    str = str.replace(dialog, '{"insert":"$1","attributes":{"dialog-block":true}},{"insert":"\\n","attributes":{"dialog-block":true}},');
+    str = str.replace(forcedTransition, '{"insert":"$1","attributes":{"transition-block":true}},{"insert":"\\n","attributes":{"transition-block":true}},\n');
+    str = str.replace(falseTransition, '{"insert":"$1","attributes":{"action-block":true}},{"insert":"\\n","attributes":{"action-block":true}},\n');
+    str = str.replace(action, '{"insert":"$1","attributes":{"action-block":true}},{"insert":"\\n","attributes":{"action-block":true}},\n');
 
     //Escape tabs
     str = str.replaceAll('\t','\\t'); 
+
+    let interiorNewlines = /(:"[^\n"]*)(\n)/g;
+    while(str.search(interiorNewlines) > 0){
+        str = str.replace(interiorNewlines, '$1\\n');
+    }
   
     str = '{"ops":[' + str.trim().slice(0, -1) + ']}';
 
-    console.log(str);
+    console.log(JSON.parse(str));
     return JSON.parse(str);
     //return str;
 }
 
 function convertAllLineBreaks(text) {
-    // Replace all occurrences of '\r\n' or \r with '\n'
+    // Replace all occurrences of '\r\n' or \r with '\\n'
     return text.replace(/\r\n|\r/g, '\n');
 }
 

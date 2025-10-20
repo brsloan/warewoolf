@@ -31,23 +31,26 @@ function addScreenplayFormats(){
 
   class ActionBlock extends Block { }
   ActionBlock.blotName = 'action-block'; 
-  ActionBlock.tagName = 'div'; 
+  ActionBlock.tagName = 'p'; 
   ActionBlock.className = 'action-block'; 
   Quill.register(ActionBlock, true);
 
   class DialogBlock extends Block {}
   DialogBlock.blotName = 'dialog-block';
-  DialogBlock.tagName = 'div';
+  DialogBlock.tagName = 'p';
+  DialogBlock.className = 'dialog-block';
   Quill.register(DialogBlock, true);
 
   class ParentheticalBlock extends Block {}
   ParentheticalBlock.blotName = 'parenthetical-block';
   ParentheticalBlock.tagName = 'p';
+  ParentheticalBlock.className = 'parenthetical-block';
   Quill.register(ParentheticalBlock, true);
 
   class TransitionBlock extends Block {}
   TransitionBlock.blotName = 'transition-block';
   TransitionBlock.tagName = 'p';
+  TransitionBlock.className = 'transition-block';
   Quill.register(TransitionBlock, true);
 
 
@@ -80,7 +83,7 @@ var notesQuill = new Quill('#notes-editor', {
 
 function generateEditorQuill(screenplay = false){
   var fictionFormats = ['bold', 'italic', 'strike', 'underline', 'blockquote', 'header', 'align', 'list', 'indent'];
-  var screenplayFormats = ['bold', 'italic', 'strike', 'underline', 'align', 'character-cue', 'scene-header']; 
+  var screenplayFormats = ['bold', 'italic', 'strike', 'underline', 'align', 'character-cue', 'scene-header', 'action-block', 'dialog-block', 'parenthetical-block', 'transition-block']; 
   return new Quill('#editor-container', {
     modules: {
       history: {
