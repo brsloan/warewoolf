@@ -427,6 +427,10 @@ function getEmptyDelta(){
 
 function displayInitialChapter(){
   displayChapterByIndex(project.activeChapterIndex);
+  if(project.screenplay){
+    const {styleFountainInlineMarkers} = require('./components/controllers/screenplay');
+    styleFountainInlineMarkers(editorQuill);
+  };
 }
 
 function togglePanelDisplay(p){
