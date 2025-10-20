@@ -9,7 +9,7 @@ function parseFountain(str){
     let transition = /\n([\*_]*([^<>\na-z]*TO:|FADE TO BLACK\.|FADE OUT\.|CUT TO BLACK\.)[\*_]*)\n/g;
     let forcedTransition = /\n((&gt;|>)\s*[^<>\n]+)\n/g;
 
-    let dialog = /(?<="character-cue":true}},\n|"parenthetical-block":true}},\n)([^{]*?)(?=\n\n|\n{)/g; //Must be run after character & parenthetical since it matches on their results
+    let dialog = /(?<="character-cue":true}},\n|"parenthetical-block":true}},\n)([^{]*?)\n(?=\n|{)/g; //Must be run after character & parenthetical since it matches on their results
     let falseTransition = /\n(>\s*[^<>\n]+(<\s*))\n/g; //For centered actions that may appear to be transitions??? Taken from Fountain github
     let action = /(?<=}},\n)([^{}]*)(?=\n{2}|\n{)/g;
 
@@ -22,11 +22,12 @@ function parseFountain(str){
     str = str.replace(sceneHeader, '\n{"insert":"$1"},{"insert":"\\n","attributes":{"scene-header":true}},');
     str = str.replace(character, '{"insert":"$1"},{"insert":"\\n","attributes":{"character-cue":true}},\n');
     str = str.replace(parenthetical, '{"insert":"$1","attributes":{"parenthetical-block":true}},{"insert":"\\n","attributes":{"parenthetical-block":true}},\n');
-    str = str.replace(transition, '{"insert":"$1","attributes":{"transition-block":true}},{"insert":"\\n","attributes":{"transition-block":true}},\n');
+    str = str.replace(transition, '\n{"insert":"$1","attributes":{"transition-block":true}},{"insert":"\\n","attributes":{"transition-block":true}},');
     str = str.replace(dialog, '{"insert":"$1","attributes":{"dialog-block":true}},{"insert":"\\n","attributes":{"dialog-block":true}},');
-    str = str.replace(forcedTransition, '{"insert":"$1","attributes":{"transition-block":true}},{"insert":"\\n","attributes":{"transition-block":true}},\n');
+    str = str.replace(forcedTransition, '\n{"insert":"$1","attributes":{"transition-block":true}},{"insert":"\\n","attributes":{"transition-block":true}},\n');
     str = str.replace(falseTransition, '{"insert":"$1","attributes":{"action-block":true}},{"insert":"\\n","attributes":{"action-block":true}},\n');
-    str = str.replace(action, '{"insert":"$1","attributes":{"action-block":true}},{"insert":"\\n","attributes":{"action-block":true}},\n');
+    console.log(str);
+    str = str.replace(action, '{"insert":"$1","attributes":{"action-block":true}},\n');
 
     //Escape tabs
     str = str.replaceAll('\t','\\t'); 
@@ -38,7 +39,11 @@ function parseFountain(str){
   
     str = '{"ops":[' + str.trim().slice(0, -1) + ']}';
 
-    console.log(JSON.parse(str));
+    let cleanup = /{"insert":"","attributes":{"action-block":true}},{"insert":"\\n","attributes":{"action-block":true}},/g;
+    str = str.replace(cleanup,'');
+
+    //console.log(str);
+    //console.log(JSON.parse(str));
     return JSON.parse(str);
     //return str;
 }
