@@ -52,7 +52,7 @@ function newChapter(){
         else if(project.screenplay){
           console.time('fountain-parse');
           chapterObj = parseFountain(fileText);
-          console.timeLog('fountain-parse');
+          console.timeEnd('fountain-parse');
         }
         else
           chapterObj = parseMDF(fileText);

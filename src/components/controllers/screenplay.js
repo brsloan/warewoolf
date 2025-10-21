@@ -85,19 +85,11 @@ using Quill's built in formatting functions after parsing. This is waaaaaay slow
 JSON parse, but it's where I'm at for now. May be faster to do original parse to XML and then convert to Delta from there? */
 function styleFountainInlineMarkers(quill){
     console.time('fountain-style');
-    const boldItalicUnderline = /(_\*{3}|\*{3}_)([^{}]+?)(_\*{3}|\*{3}_)/;
-    const boldItalic = /(\*{3})([^{}]+?)(\*{3})/;
-    const boldUnderline = /(_\*{2}|\*{2}_)([^{}]+?)(_\*{2}|\*{2}_)/;
-    const italicUnderline = /(_\*{1}|\*{1}_)([^{}]+?)(_\*{1}|\*{1}_)/;
     const bold = /(\*{2})([^{}]+?)(\*{2})/;
     const italic = /(?<!\\)(\*{1})([^{}]+?)(\*{1})/;
     const underline = /(_)([^{}_]+?)(_)/;
-    const formats = [boldItalicUnderline, boldItalic, boldUnderline, italicUnderline, bold, italic, underline];
+    const formats = [bold, italic, underline];
     const styleNames = [
-        ['bold', 'italic', 'underline'],
-        ['bold', 'italic'],
-        ['bold', 'underline'],
-        ['italic', 'underline'],
         ['bold'],
         ['italic'],
         ['underline']
@@ -112,7 +104,7 @@ function styleFountainInlineMarkers(quill){
         opStartIndex += opText.length;
 
     });
-    console.timeLog('fountain-style');
+    console.timeEnd('fountain-style');
 };
 
 function styleMarkedSpans(quill, text, markerRegx, styles, opStartIndex){  
