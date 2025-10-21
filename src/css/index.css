@@ -536,3 +536,7 @@ display: block;
 .dialog-block + .parenthetical-block {
   margin-top: -1em;
 }
+
+.hidden {
+  display: none;
+}

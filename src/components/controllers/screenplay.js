@@ -54,6 +54,23 @@ function parseFountain(str){
     let cleanup = /{"insert":"","attributes":{"action-block":true}},{"insert":"\\n","attributes":{"action-block":true}},/g;
     str = str.replace(cleanup,'');
 
+    /*
+    const boldItalicUnderline = /(_\*{3}|\*{3}_)([^{}]+?)(_\*{3}|\*{3}_)/;
+    const boldItalic = /(\*{3})([^{}]+?)(\*{3})/;
+    const boldUnderline = /(_\*{2}|\*{2}_)([^{}]+?)(_\*{2}|\*{2}_)/;
+    const italicUnderline = /(_\*{1}|\*{1}_)([^{}]+?)(_\*{1}|\*{1}_)/;
+    const bold = /(\*{2})([^{}]+?)(\*{2})/;
+    const italic = /(?<!\\)(\*{1})([^{}]+?)(\*{1})/;
+    const underline = /(_)([^{}_]+?)(_)/;    
+
+    str = str.replace(boldItalicUnderline, '"},{"insert":"$2","attributes":{"bold":"true","italic":"true","underline":"true"}},{"insert":"');
+    str = str.replace(boldItalic, '"},{"insert":"$2","attributes":{"bold":"true","italic":"true"}},{"insert":"');
+    str = str.replace(boldUnderline, '"},{"insert":"$2","attributes":{"bold":"true","underline":"true"}},{"insert":"');
+    str = str.replace(italicUnderline, '"},{"insert":"$2","attributes":{"italic":"true","underline":"true"}},{"insert":"');
+    str = str.replace(bold, '"},{"insert":"$2","attributes":{"bold":"true"}},{"insert":"');
+    str = str.replace(italic, '"},{"insert":"$2","attributes":{"italic":"true"}},{"insert":"');
+    str = str.replace(underline, '"},{"insert":"$2","attributes":{"underline":"true"}},{"insert":"');
+    */
     return JSON.parse(str);
 }
 
@@ -85,16 +102,20 @@ function styleFountainInlineMarkers(quill){
         ['italic'],
         ['underline']
     ];
+    var delt = quill.getContents();
+    var opStartIndex = 0;
+    delt.ops.forEach(function(op){
+        var opText = op.insert;
+        formats.forEach(function(format, i){
+            opText = styleMarkedSpans(quill, opText, formats[i], styleNames[i], opStartIndex);
+        });
+        opStartIndex += opText.length;
 
-    for(i=0;i<formats.length;i++){
-        styleMarkedSpans(quill, formats[i], styleNames[i]);
-    }
+    });
     console.timeLog('fountain-style');
 };
 
-function styleMarkedSpans(quill, markerRegx, styles){  
-    var text = quill.getText();
-
+function styleMarkedSpans(quill, text, markerRegx, styles, opStartIndex){  
     var foundIndex = 0;
     var matchResult;
   
@@ -103,14 +124,18 @@ function styleMarkedSpans(quill, markerRegx, styles){
         foundIndex = matchResult ? matchResult.index : -1;
   
         if(foundIndex > -1){
-            quill.deleteText(foundIndex, matchResult[1].length);
-            quill.deleteText(foundIndex + matchResult[2].length, matchResult[3].length);
+            //Delete in Quill
+            quill.deleteText(opStartIndex + foundIndex, matchResult[1].length, 'api');
+            quill.deleteText(opStartIndex + foundIndex + matchResult[2].length, matchResult[3].length, 'api');
+            //Delete in local text
+            text = text.replace(markerRegx, '$2');
             for(i = 0; i < styles.length; i++){
-                quill.formatText(matchResult.index, matchResult[2].length, styles[i], true);
+                quill.formatText(opStartIndex + foundIndex, matchResult[2].length, styles[i], true, 'api');
             }
-            text = quill.getText();
         }
     }
+
+    return text;
 }
 
 module.exports = {

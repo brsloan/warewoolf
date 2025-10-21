@@ -32,7 +32,7 @@ function createEditorDiv(){
     screenplayEditorDiv.id = screenplayEditorDivName;
 
     var fictionEditorDiv = document.getElementById('editor-container');
-    fictionEditorDiv.remove();
+    fictionEditorDiv.classList.add('hidden');
     var writingFieldDiv = document.getElementById('writing-field');
     writingFieldDiv.appendChild(screenplayEditorDiv);
 
@@ -133,8 +133,24 @@ function addScreenplayFormats(Quill){
         this.quill.format('align', 'right', 'user');
       }
     });
+
+    q.root.addEventListener('keyup', function(e){
+      if(e.key == "Enter"){
+        const thisLine = q.getLine(q.getSelection().index, 1);
+        const previousLineType = thisLine[0].statics.blotName;
+        const enteringNewPara = thisLine[0].cache.length == 1;
+        switch(previousLineType){
+          case 'character-cue':
+            q.format('dialog-block', true, 'api');
+            break;
+          default:
+
+        }
+      }
+    });
   
   };
+
 
   module.exports = {
     showScreenplayEditor
