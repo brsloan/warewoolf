@@ -14,53 +14,6 @@ const {
 const fileRequestedOnOpen = ipcRenderer.sendSync('get-file-requested-on-open');
 const { showBattery } = require('./components/views/battery_display');
 
-function addScreenplayFormats(){
-  const Block = Quill.import('blots/block');
-
-  class CharacterBlock extends Block { }
-  CharacterBlock.blotName = 'character-cue'; 
-  CharacterBlock.tagName = 'p'; 
-  CharacterBlock.className = 'character-cue'; 
-  Quill.register(CharacterBlock, true);
-
-  class SceneBlock extends Block { }
-  SceneBlock.blotName = 'scene-header'; 
-  SceneBlock.tagName = 'p'; 
-  SceneBlock.className = 'scene-header';
-  Quill.register(SceneBlock, true);
-
-  class ActionBlock extends Block { }
-  ActionBlock.blotName = 'action-block'; 
-  ActionBlock.tagName = 'p'; 
-  ActionBlock.className = 'action-block'; 
-  Quill.register(ActionBlock, true);
-
-  class DialogBlock extends Block {}
-  DialogBlock.blotName = 'dialog-block';
-  DialogBlock.tagName = 'p';
-  DialogBlock.className = 'dialog-block';
-  Quill.register(DialogBlock, true);
-
-  class ParentheticalBlock extends Block {}
-  ParentheticalBlock.blotName = 'parenthetical-block';
-  ParentheticalBlock.tagName = 'p';
-  ParentheticalBlock.className = 'parenthetical-block';
-  Quill.register(ParentheticalBlock, true);
-
-  class TransitionBlock extends Block {}
-  TransitionBlock.blotName = 'transition-block';
-  TransitionBlock.tagName = 'p';
-  TransitionBlock.className = 'transition-block';
-  Quill.register(TransitionBlock, true);
-
-
-}
-
-addScreenplayFormats();
-
-var editorQuill;
-
-/*
 var editorQuill = new Quill('#editor-container', {
   modules: {
     history: {
@@ -69,7 +22,7 @@ var editorQuill = new Quill('#editor-container', {
   },
   placeholder: '',
   formats: ['bold', 'italic', 'strike', 'underline', 'blockquote', 'header', 'align', 'list', 'indent']
-});*/
+});
 
 var notesQuill = new Quill('#notes-editor', {
   modules: {
@@ -80,21 +33,6 @@ var notesQuill = new Quill('#notes-editor', {
   placeholder: 'Notes...',
   formats: ['bold', 'italic', 'strike', 'underline', 'blockquote', 'header', 'align', 'list', 'indent']
 });
-
-function generateEditorQuill(screenplay = false){
-  var fictionFormats = ['bold', 'italic', 'strike', 'underline', 'blockquote', 'header', 'align', 'list', 'indent'];
-  var screenplayFormats = ['bold', 'italic', 'strike', 'underline', 'align', 'character-cue', 'scene-header', 'action-block', 'dialog-block', 'parenthetical-block', 'transition-block']; 
-  return new Quill('#editor-container', {
-    modules: {
-      history: {
-        userOnly: true
-      }
-    },
-    placeholder: '',
-    formats: screenplay ? screenplayFormats : fictionFormats
-  });
-}
-
 
 var project = newProject();
 
@@ -135,10 +73,8 @@ function loadInitialProject(successFunction){
 
 function setUpQuills(){
   console.log('screenplay? ' + project.screenplay);
-  editorQuill = generateEditorQuill(project.screenplay);
   if(project.screenplay){
-    addBindingsToScreenplayQuill(editorQuill);
-    attachScreenplayEditorClass(editorQuill);
+
   }
   else
     addBindingsToQuill(editorQuill);
@@ -146,9 +82,7 @@ function setUpQuills(){
   disableTabbingToEditors();
 }
 
-function attachScreenplayEditorClass(quill){
-  quill.root.classList.add('ql-editor-screenplay');
-}
+
 
 function disableTabbingToEditors(){
   var editors = document.getElementsByClassName("ql-editor");
@@ -227,14 +161,20 @@ function convertLegacyProject(){
 }
 
 function displayProject(){
-  updateFileList();
-  updateTitleBar();
-  refreshNotesDisplay();
-  displayInitialChapter();
-  setWordCountOnLoad();
-  editorQuill.focus();
-  editorQuill.setSelection(project.textCursorPosition);
-  scrollChapterListToActiveChapter();
+  if(project.screenplay == false){
+    updateFileList();
+    updateTitleBar();
+    refreshNotesDisplay();
+    displayInitialChapter();
+    setWordCountOnLoad();
+    editorQuill.focus();
+    editorQuill.setSelection(project.textCursorPosition);
+    scrollChapterListToActiveChapter();
+  }
+  else{
+    const { showScreenplayEditor } = require('./components/views/screenplay_display');
+    showScreenplayEditor(Quill, project);
+  }
 }
 
 function setWordCountOnLoad(){
@@ -1159,53 +1099,6 @@ function addBindingsToQuill(q){
         q.format('list', 'bullet', 'user');
     }
   })
-
-};
-
-function addBindingsToScreenplayQuill(q){
-  q.keyboard.addBinding({
-    key: '1',
-    shortKey: true,
-    handler: function(range, context) {
-      this.quill.format('character-cue', true, 'user');
-    }
-  });
-
-  q.keyboard.addBinding({
-    key: 'L',
-    shortKey: true,
-    handler: function(range, context) {
-      this.quill.format('align', null, 'user');
-    }
-  });
-
-  q.keyboard.addBinding({
-    key: 'E',
-    shortKey: true,
-    handler: function(range, context) {
-      this.quill.format('align', 'center', 'user');
-    }
-  });
-
-  q.keyboard.addBinding({
-    key: 'R',
-    shortKey: true,
-    handler: function(range, context) {
-      this.quill.format('align', 'right', 'user');
-    }
-  });
-
-  q.keyboard.addBinding({
-    key: 'k',
-    shortKey: true,
-    handler: function(range, context){
-      if(q.getFormat().strike)
-        q.format('strike', false, 'user');
-      else {
-        q.format('strike', true, 'user');
-      }
-    }
-  });
 
 };
 

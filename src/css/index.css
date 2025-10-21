@@ -79,7 +79,7 @@ input, textarea, select, button {
   margin-right: none;
 }
 
-#editor-container {
+#editor-container, #editor-container-screenplay {
   height: 97vh;
 }
 
