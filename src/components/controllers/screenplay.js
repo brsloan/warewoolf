@@ -67,15 +67,16 @@ to cover all configurations of inline markers with the initial parsing, so it ha
 using Quill's built in formatting functions after parsing. This is waaaaaay slower than some simple regex functions followed by a
 JSON parse, but it's where I'm at for now. May be faster to do original parse to XML and then convert to Delta from there? */
 function styleFountainInlineMarkers(quill){
-    let boldItalicUnderline = /(_\*{3}|\*{3}_)([^{}]+?)(_\*{3}|\*{3}_)/;
-    let boldItalic = /(\*{3})([^{}]+?)(\*{3})/;
-    let boldUnderline = /(_\*{2}|\*{2}_)([^{}]+?)(_\*{2}|\*{2}_)/;
-    let italicUnderline = /(_\*{1}|\*{1}_)([^{}]+?)(_\*{1}|\*{1}_)/;
-    let bold = /(\*{2})([^{}]+?)(\*{2})/;
-    let italic = /(?<!\\)(\*{1})([^{}]+?)(\*{1})/;
-    let underline = /(_)([^{}_]+?)(_)/;
-    var formats = [boldItalicUnderline, boldItalic, boldUnderline, italicUnderline, bold, italic, underline];
-    var styleNames = [
+    console.time('fountain-style');
+    const boldItalicUnderline = /(_\*{3}|\*{3}_)([^{}]+?)(_\*{3}|\*{3}_)/;
+    const boldItalic = /(\*{3})([^{}]+?)(\*{3})/;
+    const boldUnderline = /(_\*{2}|\*{2}_)([^{}]+?)(_\*{2}|\*{2}_)/;
+    const italicUnderline = /(_\*{1}|\*{1}_)([^{}]+?)(_\*{1}|\*{1}_)/;
+    const bold = /(\*{2})([^{}]+?)(\*{2})/;
+    const italic = /(?<!\\)(\*{1})([^{}]+?)(\*{1})/;
+    const underline = /(_)([^{}_]+?)(_)/;
+    const formats = [boldItalicUnderline, boldItalic, boldUnderline, italicUnderline, bold, italic, underline];
+    const styleNames = [
         ['bold', 'italic', 'underline'],
         ['bold', 'italic'],
         ['bold', 'underline'],
@@ -88,13 +89,13 @@ function styleFountainInlineMarkers(quill){
     for(i=0;i<formats.length;i++){
         styleMarkedSpans(quill, formats[i], styleNames[i]);
     }
+    console.timeLog('fountain-style');
 };
 
 function styleMarkedSpans(quill, markerRegx, styles){  
     var text = quill.getText();
 
     var foundIndex = 0;
-    var startingIndex = 0;
     var matchResult;
   
     while(foundIndex > -1){
@@ -107,7 +108,6 @@ function styleMarkedSpans(quill, markerRegx, styles){
             for(i = 0; i < styles.length; i++){
                 quill.formatText(matchResult.index, matchResult[2].length, styles[i], true);
             }
-            startingIndex = foundIndex + matchResult[2].length;
             text = quill.getText();
         }
     }

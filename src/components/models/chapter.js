@@ -49,8 +49,11 @@ function newChapter(){
         var fileText = fs.readFileSync(project.directory + project.chapsDirectory + chap.filename, "utf8");
         if(chap.filename.includes('.pup'))
           chapterObj = JSON.parse(fileText);
-        else if(project.screenplay)
+        else if(project.screenplay){
+          console.time('fountain-parse');
           chapterObj = parseFountain(fileText);
+          console.timeLog('fountain-parse');
+        }
         else
           chapterObj = parseMDF(fileText);
 
