@@ -175,8 +175,12 @@ function addScreenplayFormats(Quill){
             else
               q.format('action-block', true, 'user');
             break;
-          case 'action':
-            //Nothing special for action
+          case 'action-block':
+            console.log(thisLine);
+            const previousLineText = thisLine[0].prev.cache.delta.ops[0].insert;
+            let styleToConvertPrevious = checkForFormatMatch(previousLineText);
+            if(styleToConvertPrevious)
+              q.formatText(selectionIndex - 1, 1, styleToConvertPrevious, true, 'user');
             break;
           case 'character-cue':
             if(enterWasPressedAtBeginningOfBlock)
@@ -208,6 +212,19 @@ function addScreenplayFormats(Quill){
   
   };
 
+  function checkForFormatMatch(str){
+    console.log('checking: ' + str);
+    let sceneHeader = /(?<=\n|^)(([iI][nN][tT]|[eE][xX][tT]|[^\w][eE][sS][tT]|[iI]\.?\/[eE]\.?)([.\s][^\n]+))/g;
+    let transition = /^(([^<>\na-z]*TO:|FADE TO BLACK\.|FADE OUT\.|CUT TO BLACK\.))/g;
+    let format = null;
+    if(sceneHeader.test(str))
+      format = 'scene-header';
+    else if(transition.test(str))
+      format = 'transition-block';
+
+    console.log('format match: ' + format);
+    return format;
+  }
 
   module.exports = {
     showScreenplayEditor
