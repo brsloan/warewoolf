@@ -40,7 +40,9 @@ function createEditorDiv(){
 }
 
 function addScreenplayFormats(Quill){
+    console.log(Quill.imports);
     const Block = Quill.import('blots/block');
+    //const Block = Quill.import('formats/blockquote');
   
     class CharacterBlock extends Block { }
     CharacterBlock.blotName = 'character-cue'; 
@@ -60,7 +62,9 @@ function addScreenplayFormats(Quill){
     ActionBlock.className = 'action-block'; 
     Quill.register(ActionBlock, true);
   
-    class DialogBlock extends Block {}
+    class DialogBlock extends Block {
+
+    }
     DialogBlock.blotName = 'dialog-block';
     DialogBlock.tagName = 'p';
     DialogBlock.className = 'dialog-block';
@@ -84,6 +88,9 @@ function addScreenplayFormats(Quill){
       modules: {
         history: {
           userOnly: true
+        },
+        keyboard: {
+          bindings: getInitialBindings()
         }
       },
       placeholder: '',
@@ -99,6 +106,33 @@ function addScreenplayFormats(Quill){
                 'parenthetical-block', 
                 'transition-block']
     });
+  }
+
+  function getInitialBindings(){
+    return {
+      backspace: {
+        key: 'backspace',
+        handler:function(range, context){
+          var useDefaultBackspace = true;
+
+          if(context.offset == 0 && range.length < 1){
+            useDefaultBackspace = false;
+            const thisLine = this.quill.getLine(range.index, 1);
+            const elIndex = thisLine[1];  
+            const thisLineType = thisLine[0].statics.blotName;
+            const prevLineType = thisLine[0].prev.statics.blotName;
+            const enteringNewPara = thisLine[0].cache.length == 1;
+
+            this.quill.deleteText(range.index - 1, 1, 'user');
+            this.quill.format(prevLineType, 'true');
+            
+            console.log(thisLine);
+          }
+          
+            return useDefaultBackspace;
+        }
+      }
+    }
   }
 
   function addBindingsToScreenplayQuill(q){
@@ -133,15 +167,60 @@ function addScreenplayFormats(Quill){
         this.quill.format('align', 'right', 'user');
       }
     });
-
-    q.root.addEventListener('keyup', function(e){
-      if(e.key == "Enter"){
-        const thisLine = q.getLine(q.getSelection().index, 1);
+/*
+    q.root.addEventListener('keydown', function(e){
+      if(e.key === 'Backspace'){
+        e.preventDefault();
+        console.log('backspace');
+        const selectionIndex = q.getSelection().index;
+        const thisLine = q.getLine(selectionIndex, 1);
         const previousLineType = thisLine[0].statics.blotName;
         const enteringNewPara = thisLine[0].cache.length == 1;
+       // const selectedIndex = thisLine[1];
+        console.log(thisLine);
+        
+      }
+    });*/
+
+    q.root.addEventListener('keydown', function(e){
+      if(e.key == "Enter"){
+        const selectionIndex = q.getSelection().index;
+        const thisLine = q.getLine(selectionIndex, 1);
+        const previousLineType = thisLine[0].prev.statics.blotName;
+        const enteringNewPara = thisLine[0].cache.length == 1;
+        const enterWasPressedAtBeginningOfBlock = thisLine[0].prev.cache.length == 1;
+
         switch(previousLineType){
+          case 'scene-header':
+            if(enterWasPressedAtBeginningOfBlock) //Entire block was moved down, so style newly created empty line as default (action) line type
+              q.formatText(selectionIndex - 1, 1, 'action-block', true, 'user');
+            else
+              q.format('action-block', true, 'user');
+            break;
+          case 'action':
+            //Nothing special for action
+            break;
           case 'character-cue':
-            q.format('dialog-block', true, 'api');
+            if(enterWasPressedAtBeginningOfBlock)
+              q.formatText(selectionIndex - 1, 1, 'action-block', true, 'user');
+            else
+              q.format('dialog-block', true, 'user');
+            break;
+          case 'dialog-block':
+            if(enteringNewPara)
+              q.format('action-block', true, 'user');
+            break;
+          case 'parenthetical-block':
+            if(enterWasPressedAtBeginningOfBlock)
+              q.formatText(selectionIndex - 1, 1, 'dialog-block', true, 'user');
+            else
+              q.format('dialog-block', true, 'user');
+            break;
+          case 'transition-block':
+            if(enterWasPressedAtBeginningOfBlock)
+              q.formatText(selectionIndex - 1, 1, 'action-block', true, 'user');
+            else
+              q.format('action-block', true, 'user');
             break;
           default:
 
