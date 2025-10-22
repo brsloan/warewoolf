@@ -1,5 +1,3 @@
-
-
 function showScreenplayEditor(Quill, project){
     var screenplayQuill = setupQuill(Quill);
 
@@ -153,6 +151,11 @@ function addScreenplayFormats(Quill){
                 this.quill.insertText(range.index + 1, '()\n', 'parenthetical-block', true, 'user');
                 this.quill.setSelection(range.index + 2, 'user');
               }
+            }
+            else if(thisLineType == 'scene-header' && isEmptyLine){
+              const sceneAutofill = 'INT. ';
+              this.quill.insertText(range.index, sceneAutofill, 'user');
+              this.quill.setSelection(range.index + sceneAutofill.length, 'user');
             }
           }
           else if(thisLineType == 'parenthetical-block'){
