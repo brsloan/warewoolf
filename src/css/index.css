@@ -511,12 +511,13 @@ display: block;
 .ql-editor .character-cue {
   text-align: center;
   margin-bottom: 0em;
+  text-transform: uppercase;
 }
 
 .ql-editor .scene-header {
   text-align: left;
-  font-weight: bolder;
   margin-top: 2em;
+  text-transform: uppercase;
 }
 
 .ql-editor .dialog-block {
@@ -531,6 +532,7 @@ display: block;
 
 .ql-editor .transition-block {
   text-align: right;
+  text-transform: uppercase;
 }
 
 .dialog-block + .parenthetical-block {
