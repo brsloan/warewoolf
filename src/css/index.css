@@ -502,6 +502,8 @@ display: block;
 
 .ql-editor-screenplay {
   line-height: 100%;
+  font-family:'Courier Screenplay', 'Courier New', Courier, monospace;
+  font-size: var(--main-font-size);
 }
 
 .ql-editor-screenplay p{
@@ -510,8 +512,12 @@ display: block;
 
 .ql-editor .character-cue {
   text-align: center;
-  margin-bottom: 0em;
   text-transform: uppercase;
+}
+
+.ql-editor .character-cue + .dialog-block, 
+.ql-editor .character-cue + .parenthetical-block {
+  margin-top: -1em;
 }
 
 .ql-editor .scene-header {
@@ -525,18 +531,21 @@ display: block;
   padding-right: 25%;
 }
 
+.dialog-block + .parenthetical-block {
+  margin-top: -1em;
+}
+
 .ql-editor .parenthetical-block {
   text-align: center;
-  margin-bottom: 0em;
+}
+
+.ql-editor .parenthetical-block + .dialog-block {
+  margin-top: -1em;
 }
 
 .ql-editor .transition-block {
   text-align: right;
   text-transform: uppercase;
-}
-
-.dialog-block + .parenthetical-block {
-  margin-top: -1em;
 }
 
 .hidden {
