@@ -40,31 +40,27 @@ function createEditorDiv(){
 }
 
 function addScreenplayFormats(Quill){
-    console.log(Quill.imports);
     const Block = Quill.import('blots/block');
-    //const Block = Quill.import('formats/blockquote');
   
-    class CharacterBlock extends Block { }
+    class CharacterBlock extends Block {}
     CharacterBlock.blotName = 'character-cue'; 
     CharacterBlock.tagName = 'p'; 
     CharacterBlock.className = 'character-cue'; 
     Quill.register(CharacterBlock, true);
   
-    class SceneBlock extends Block { }
+    class SceneBlock extends Block {}
     SceneBlock.blotName = 'scene-header'; 
     SceneBlock.tagName = 'p'; 
     SceneBlock.className = 'scene-header';
     Quill.register(SceneBlock, true);
   
-    class ActionBlock extends Block { }
+    class ActionBlock extends Block {}
     ActionBlock.blotName = 'action-block'; 
     ActionBlock.tagName = 'p'; 
     ActionBlock.className = 'action-block'; 
     Quill.register(ActionBlock, true);
   
-    class DialogBlock extends Block {
-
-    }
+    class DialogBlock extends Block {}
     DialogBlock.blotName = 'dialog-block';
     DialogBlock.tagName = 'p';
     DialogBlock.className = 'dialog-block';
@@ -96,7 +92,6 @@ function addScreenplayFormats(Quill){
       placeholder: '',
       formats: ['bold', 
                 'italic', 
-                'strike', 
                 'underline', 
                 'align', 
                 'character-cue', 
@@ -115,18 +110,15 @@ function addScreenplayFormats(Quill){
         handler:function(range, context){
           var useDefaultBackspace = true;
 
+          //If backspacing at beginning of paragraph to combine with previous,
+          //take the previous paragraph's style (default is opposite for custom block types for some reason)
           if(context.offset == 0 && range.length < 1){
             useDefaultBackspace = false;
             const thisLine = this.quill.getLine(range.index, 1);
-            const elIndex = thisLine[1];  
-            const thisLineType = thisLine[0].statics.blotName;
             const prevLineType = thisLine[0].prev.statics.blotName;
-            const enteringNewPara = thisLine[0].cache.length == 1;
 
             this.quill.deleteText(range.index - 1, 1, 'user');
             this.quill.format(prevLineType, 'true');
-            
-            console.log(thisLine);
           }
           
             return useDefaultBackspace;
