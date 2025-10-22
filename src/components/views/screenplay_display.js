@@ -104,6 +104,9 @@ function addScreenplayFormats(Quill){
   }
 
   function getInitialBindings(){
+    /* With Quill, some special bindings (enter, backspace, tab) have to be set at time of initializiation if
+    you want to customize behavior *before* default behavior. For Enter, some of my customizations can be run
+    after default, so not all are here */
     return {
       backspace: {
         key: 'backspace',
@@ -122,6 +125,60 @@ function addScreenplayFormats(Quill){
           }
           
             return useDefaultBackspace;
+        }
+      },
+      tab: {
+        key: 'tab',
+        handler:function(range, context){
+          const atEndOfBlock = context.suffix == '';
+          const isEmptyLine = context.empty;
+          const thisLine = this.quill.getLine(range.index, 1);
+          const thisLineType = thisLine[0].statics.blotName;
+          const nextLineType = thisLine[0].next.statics.blotName;
+
+          if(atEndOfBlock){
+            if(thisLineType == 'action-block' && isEmptyLine)
+              this.quill.format('character-cue', true, 'user');
+            else if(thisLineType == 'character-cue' && !isEmptyLine){
+              this.quill.insertText(range.index + 1, '()\n', 'parenthetical-block', true, 'user');
+              this.quill.setSelection(range.index + 2, 'user');
+            }
+            else if(thisLineType == 'dialog-block'){
+              if(isEmptyLine){
+                this.quill.format('parenthetical-block', true, 'user');
+                this.quill.insertText(range.index, '()', 'user');
+                this.quill.setSelection(range.index + 1, 'user');
+              }
+              else{
+                this.quill.insertText(range.index + 1, '()\n', 'parenthetical-block', true, 'user');
+                this.quill.setSelection(range.index + 2, 'user');
+              }
+            }
+          }
+          else if(thisLineType == 'parenthetical-block'){
+            if(nextLineType != 'dialog-block')
+              this.quill.insertText(range.index + context.suffix.length + 1, '\n', 'dialog-block', true, 'user');
+            this.quill.setSelection(range.index + context.suffix.length + 1, 'user');
+          }
+          return false;
+        }
+      },
+      enter: {
+        key: 'Enter',
+        handler:function(range, context){
+          var useDefaultEnter = true;
+          const thisLine = this.quill.getLine(range.index, 1);
+          const thisLineType = thisLine[0].statics.blotName;
+          const nextLineType = thisLine[0].next.statics.blotName;
+
+          if(thisLineType == 'parenthetical-block' && context.offset > 0 && context.suffix.length > 0){
+            useDefaultEnter = false;
+            if(nextLineType != 'dialog-block')
+              this.quill.insertText(range.index + context.suffix.length + 1, '\n', 'dialog-block', true, 'user');
+            this.quill.setSelection(range.index + context.suffix.length + 1, 'user');
+          }
+          
+          return useDefaultEnter;
         }
       }
     }
@@ -161,6 +218,7 @@ function addScreenplayFormats(Quill){
     });
 
     q.root.addEventListener('keydown', function(e){
+      //Quill doesn't like adding bindings to Enter after initialization, so we go around it with manual event listeners
       if(e.key == "Enter"){
         const selectionIndex = q.getSelection().index;
         const thisLine = q.getLine(selectionIndex, 1);
@@ -181,6 +239,8 @@ function addScreenplayFormats(Quill){
             let styleToConvertPrevious = checkForFormatMatch(previousLineText);
             if(styleToConvertPrevious)
               q.formatText(selectionIndex - 1, 1, styleToConvertPrevious, true, 'user');
+            if(styleToConvertPrevious == 'transition-block')
+              q.format('scene-header', true, 'user');
             break;
           case 'character-cue':
             if(enterWasPressedAtBeginningOfBlock)
@@ -202,7 +262,7 @@ function addScreenplayFormats(Quill){
             if(enterWasPressedAtBeginningOfBlock)
               q.formatText(selectionIndex - 1, 1, 'action-block', true, 'user');
             else
-              q.format('action-block', true, 'user');
+              q.format('scene-header', true, 'user');
             break;
           default:
 
