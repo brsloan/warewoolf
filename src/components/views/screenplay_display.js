@@ -167,20 +167,6 @@ function addScreenplayFormats(Quill){
         this.quill.format('align', 'right', 'user');
       }
     });
-/*
-    q.root.addEventListener('keydown', function(e){
-      if(e.key === 'Backspace'){
-        e.preventDefault();
-        console.log('backspace');
-        const selectionIndex = q.getSelection().index;
-        const thisLine = q.getLine(selectionIndex, 1);
-        const previousLineType = thisLine[0].statics.blotName;
-        const enteringNewPara = thisLine[0].cache.length == 1;
-       // const selectedIndex = thisLine[1];
-        console.log(thisLine);
-        
-      }
-    });*/
 
     q.root.addEventListener('keydown', function(e){
       if(e.key == "Enter"){
