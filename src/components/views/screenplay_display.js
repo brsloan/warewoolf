@@ -176,7 +176,7 @@ function addScreenplayFormats(Quill){
               q.format('action-block', true, 'user');
             break;
           case 'action-block':
-            console.log(thisLine);
+            //If action line just terminated is formatted as a scene header or transition, format it as such
             const previousLineText = thisLine[0].prev.cache.delta.ops[0].insert;
             let styleToConvertPrevious = checkForFormatMatch(previousLineText);
             if(styleToConvertPrevious)
@@ -213,7 +213,6 @@ function addScreenplayFormats(Quill){
   };
 
   function checkForFormatMatch(str){
-    console.log('checking: ' + str);
     let sceneHeader = /(?<=\n|^)(([iI][nN][tT]|[eE][xX][tT]|[^\w][eE][sS][tT]|[iI]\.?\/[eE]\.?)([.\s][^\n]+))/g;
     let transition = /^(([^<>\na-z]*TO:|FADE TO BLACK\.|FADE OUT\.|CUT TO BLACK\.))/g;
     let format = null;
@@ -222,7 +221,6 @@ function addScreenplayFormats(Quill){
     else if(transition.test(str))
       format = 'transition-block';
 
-    console.log('format match: ' + format);
     return format;
   }
 
