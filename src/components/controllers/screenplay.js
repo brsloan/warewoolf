@@ -1,7 +1,7 @@
 function parseFountain(str){
     str = convertAllLineBreaks(str);
 
-    let sceneHeader = /(?<=\n|^)(([iI][nN][tT]|[eE][xX][tT]|[^\w][eE][sS][tT]|[iI]\.?\/[eE]\.?)([^\n]+))\n/g; //Not multi-line because ^ is checking very first line in document
+    let sceneHeader = /(?<=\n|^)(([iI][nN][tT]|[eE][xX][tT]|[^\w][eE][sS][tT]|[iI]\.?\/[eE]\.?)([.\s][^\n]+))\n/g; //Not multi-line because ^ is checking very first line in document
     let forcedSceneHeader = /(?<=\n|^)\.{1}([^\.][^\n]+)\n/gm;
     let character = /(?<=\n)[ \t]*([^<>a-z\s\/\n][^<>a-z:!\?\n]*[^<>a-z\(!\?:,\n\.][ \t]?)\n{1}(?!\n)/g;
     let parenthetical = /^\s*(\([^<>\n]*?\)[\s]?)\n/gm;
