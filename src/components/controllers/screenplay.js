@@ -81,8 +81,6 @@ function parseFountain(str){
     
     for(let i=0;i<patterns.length;i++){
         str = str.replace(patterns[i], templates[i]);
-        console.log(patterns[i]);
-        console.log(str);
     }
 
     //Fix ellipses now that parsing is done
@@ -241,6 +239,9 @@ function quillHtmlToFountain(html){
         var nextClasses = i < matches.length - 1 ? matches[i + 1][1] : null;
         fountain += cleanFountainElement(match[1], match[2], nextClasses);
     });
+
+    const trailingNewlines = /\n*$/g;
+    fountain = fountain.replace(trailingNewlines, '');
 
     return fountain;
 }

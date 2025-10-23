@@ -1,11 +1,10 @@
 const fs = require('fs');
 const { logError } = require('../controllers/error-log');
-const { parseMDF, convertDeltaToMDF } = require('../controllers/markdownFic');
 const { sanitizeFilename } = require('../controllers/utils');
-const { parseFountain, fountainToHtml, quillHtmlToFountain } = require('../controllers/screenplay');
+const { parseFountain, quillHtmlToFountain } = require('../controllers/screenplay');
 const notesNamePrepend = '-notes_';
 
-function newChapter(){
+function newScreenplay(){
     return {
       title: "new",
       filename: null,
@@ -44,16 +43,9 @@ function newChapter(){
       try{
         var chap = this;
         
-        //Temporarily support both old chapter JSON files (.pup) and new markdown (.txt)
-        var chapterObj;
         var fileText = fs.readFileSync(project.directory + project.chapsDirectory + chap.filename, "utf8");
-        if(chap.filename.includes('.pup'))
-          chapterObj = JSON.parse(fileText);
-        else if(project.screenplay){
-          chapterObj = fountainToHtml(fileText);
-        }
-        else
-          chapterObj = parseMDF(fileText);
+
+        var chapterObj = parseFountain(fileText);
 
         return chapterObj;
       }
@@ -88,9 +80,7 @@ function newChapter(){
         var chap = this;
         chap.filename = getNewFilename(chap.title); 
 
-        var fileContents = project.screenplay ? quillHtmlToFountain(chap.contents) : convertDeltaToMDF(chap.contents);
-
-        fs.writeFileSync(project.directory + project.chapsDirectory + chap.filename, fileContents, "utf8")
+        fs.writeFileSync(project.directory + project.chapsDirectory + chap.filename, convertDeltaToMDF(chap.contents), "utf8")
       }
       catch(err){
         logError(err);
@@ -114,8 +104,7 @@ function newChapter(){
 
         chap.filename = getNewFilename(chap.title);
 
-        var fileContents = project.screenplay ? quillHtmlToFountain(chap.contents) : convertDeltaToMDF(chap.contents);
-        fs.writeFileSync(filepathRoot + chap.filename, fileContents, "utf8")
+        fs.writeFileSync(filepathRoot + chap.filename, convertDeltaToMDF(chap.contents), "utf8")
         
         //If filename has changed and new file successfully created, delete old file
         if(oldFilename != undefined && oldFilename != null && fs.existsSync(filepathRoot + chap.filename) && fs.existsSync(filepathRoot + oldVersionFlag + oldFilename))
@@ -182,7 +171,7 @@ function newChapter(){
 
   function getNewFilename(title){
     
-    const fileExt = project.screenplay ? '.fountain' : '.txt';    
+    const fileExt = '.fountain';    
     var copyNum = 1;
     var filenameRoot = sanitizeFilename(title && title != '' ? title : 'untitled');
     var filename = filenameRoot + fileExt;
@@ -197,4 +186,4 @@ function newChapter(){
 
 }
 
-module.exports = newChapter;
+module.exports = newScreenplay;

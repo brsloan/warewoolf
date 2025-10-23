@@ -2,10 +2,8 @@ function showScreenplayEditor(Quill, project){
     var screenplayQuill = setupQuill(Quill);
 
     project.activeChapterIndex = 0;
-    screenplayQuill.setContents(project.chapters[0].getContentsOrFile(), 'api');
 
-    const {styleFountainInlineMarkers} = require('../controllers/screenplay');
-    styleFountainInlineMarkers(screenplayQuill);
+    screenplayQuill.root.innerHTML = project.chapters[0].getContentsOrFile();
 
     screenplayQuill.focus();
     screenplayQuill.setSelection(project.textCursorPosition);
@@ -192,7 +190,9 @@ function addScreenplayFormats(Quill){
       key: '1',
       shortKey: true,
       handler: function(range, context) {
-        this.quill.format('character-cue', true, 'user');
+        //this.quill.format('character-cue', true, 'user');
+        const { quillHtmlToFountain } = require('../controllers/screenplay');
+        console.log(quillHtmlToFountain(this.quill.root.innerHTML));
       }
     });
   
@@ -217,6 +217,15 @@ function addScreenplayFormats(Quill){
       shortKey: true,
       handler: function(range, context) {
         this.quill.format('align', 'right', 'user');
+      }
+    });
+
+    q.on('text-change', function(delta, oldDelta, source) {
+      if(source == "user"){
+        var chap = project.chapters[0];
+        chap.contents = q.root.innerHTML;
+        chap.hasUnsavedChanges = true;
+        project.hasUnsavedChanges = true;
       }
     });
 
@@ -272,7 +281,6 @@ function addScreenplayFormats(Quill){
         }
       }
     });
-  
   };
 
   function checkForFormatMatch(str){
