@@ -2,7 +2,6 @@ function showScreenplayEditor(Quill, project){
     var screenplayQuill = setupQuill(Quill);
 
     project.activeChapterIndex = 0;
-
     screenplayQuill.root.innerHTML = project.chapters[0].getContentsOrFile();
 
     screenplayQuill.focus();
