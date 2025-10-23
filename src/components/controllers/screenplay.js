@@ -1,5 +1,6 @@
 function fountainToHtml(str){
     var parsed = parseFountain(str);
+    console.log(parsed);
 
     const elementTags = ['Scene Heading', 'Action', 'Character', 'Dialogue', 'Parenthetical', 'Transition'];
     const htmlClasses = ['scene-header','action-block','character-cue','dialog-block','parenthetical-block','transition-block'];
@@ -13,7 +14,7 @@ function fountainToHtml(str){
     const centeredActionsTemplate = '<p class="action-block ql-align-center">$2</p>';
     parsed = parsed.replace(centeredActionsPattern, centeredActionsTemplate);
 
-    console.log(JSON.stringify(parsed));
+    //console.log(JSON.stringify(parsed));
     return parsed;
 }
 
@@ -24,13 +25,16 @@ function parseFountain(str){
     if(str.charAt(str.length - 1) != '\n')
         str = str + '\n';
 
+    //Remove all tabs
+    str = str.replaceAll('\t','');
+
     const SCENE_HEADER_PATTERN       = /(?<=\n)(([iI][nN][tT]|[eE][xX][tT]|[^\w][eE][sS][tT]|[iI]\.?\/[eE]\.?)([^\n]+))\n/g;
     const forcedSceneHeaderPattern   = /(?<=\n|^)\.{1}([^\.][^\n]+)\n/g;
     const ACTION_PATTERN             = /\n*([^<>]*?)(\n{2}|\n<)/g;
     const MULTI_LINE_ACTION_PATTERN  = /\n{2}(([^a-z\n:]+?[\.\?,\s!\*_]*?)\n{2}){1,2}/g;
     const CHARACTER_CUE_PATTERN      = /(?<=\n)[ \t]*([^<>a-z\s\/\n][^<>a-z:!\?\n]*[^<>a-z\(!\?:,\n\.][ \t]?)\n{1}(?!\n)/g;
     const DIALOGUE_PATTERN           = /(<(Character|Parenthetical)>[^<>\n]+<\/(Character|Parenthetical)>)\s*([^<>]*?)(?=\n{2}|\n{1}<Parenthetical>)/g;
-    const PARENTHETICAL_PATTERN      = /\s*(\([^<>]*?\)[\s]?)\n/g;
+    const PARENTHETICAL_PATTERN      = /(\([^<>]*?\)[\s]?)\n/g;
     const TRANSITION_PATTERN         = /\n([\*_]*([^<>\na-z]*TO:|FADE TO BLACK\.|FADE OUT\.|CUT TO BLACK\.)[\*_]*)\n/g;
     const FORCED_TRANSITION_PATTERN  = /\n(?:&gt;|>)(\s*[^<>\n]+)\n/g;     // need to look for &gt; pattern because we run this regex against marked up content
     const FALSE_TRANSITION_PATTERN  = /\n((&gt;|>)\s*[^<>\n]+(&lt;\s*))\n/g;     // need to look for &gt; pattern because we run this regex against marked up content
@@ -39,7 +43,7 @@ function parseFountain(str){
     const FIRST_LINE_ACTION_PATTERN  = /^\n\n([^<>\n#]*?)\n/g;
     //const SCENE_NUMBER_PATTERN       = /(\#([0-9A-Za-z\.\)-]+)\#)/g;
     //const SECTION_HEADER_PATTERN     = /((#+)(\s*[^\n]*))\n?/g;
-    const newLinesBetweenElements = /(?<=>)(\n*)(?=<[^/])/g;
+    const newLinesOrSpaceBetweenElements = /(?<=>)([\n|\s]*)(?=<[^/])/g;
     const newLinesAtBeginning = /^(\n+)</g;
 
     const SCENE_HEADER_TEMPLATE      = "\n<Scene Heading>$1</Scene Heading>";
@@ -62,7 +66,7 @@ function parseFountain(str){
 
     const patterns = [FALSE_TRANSITION_PATTERN, FORCED_TRANSITION_PATTERN, SCENE_HEADER_PATTERN, forcedSceneHeaderPattern,
         FIRST_LINE_ACTION_PATTERN, TRANSITION_PATTERN, CHARACTER_CUE_PATTERN, PARENTHETICAL_PATTERN, 
-        DIALOGUE_PATTERN, ACTION_PATTERN, CLEANUP_PATTERN, newLinesBetweenElements, newLinesAtBeginning];
+        DIALOGUE_PATTERN, ACTION_PATTERN, CLEANUP_PATTERN, newLinesOrSpaceBetweenElements, newLinesAtBeginning];
 
     const templates = [FALSE_TRANSITION_TEMPLATE, FORCED_TRANSITION_TEMPLATE, SCENE_HEADER_TEMPLATE, SCENE_HEADER_TEMPLATE,
         FIRST_LINE_ACTION_TEMPLATE, TRANSITION_TEMPLATE, CHARACTER_CUE_TEMPLATE, PARENTHETICAL_TEMPLATE, 
@@ -70,6 +74,8 @@ function parseFountain(str){
     
     for(let i=0;i<patterns.length;i++){
         str = str.replace(patterns[i], templates[i]);
+        console.log(patterns[i]);
+        console.log(str);
     }
 
     //Fix ellipses now that parsing is done
