@@ -44,7 +44,7 @@ function parseFountain(str){
     const PARENTHETICAL_PATTERN      = /(\([^<>]*?\)[\s]?)\n/g;
     const TRANSITION_PATTERN         = /\n([\*_]*([^<>\na-z]*TO:|FADE TO BLACK\.|FADE OUT\.|CUT TO BLACK\.)[\*_]*)\n/g;
     const FORCED_TRANSITION_PATTERN  = /\n(?:&gt;|>)(\s*[^<>\n]+)\n/g;     // need to look for &gt; pattern because we run this regex against marked up content
-    const FALSE_TRANSITION_PATTERN  = /\n((&gt;|>)\s*[^<>\n]+(&lt;\s*))\n/g;     // need to look for &gt; pattern because we run this regex against marked up content
+    const FALSE_TRANSITION_PATTERN  = /\n((&gt;|>)\s*[^<>\n]+(&lt;))\n/g;     // need to look for &gt; pattern because we run this regex against marked up content
     //const PAGE_BREAK_PATTERN         = /(?<=\n)(\s*[\=\-\_]{3,8}\s*)\n{1}/g;
     const CLEANUP_PATTERN            = /<Action>\s*<\/Action>/g;
     const FIRST_LINE_ACTION_PATTERN  = /^\n\n([^<>\n#]*?)\n/g;
@@ -81,6 +81,8 @@ function parseFountain(str){
     
     for(let i=0;i<patterns.length;i++){
         str = str.replace(patterns[i], templates[i]);
+        console.log(i+1);
+        console.log(str);
     }
 
     //Fix ellipses now that parsing is done
