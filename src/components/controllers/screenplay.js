@@ -8,8 +8,12 @@ function fountainToHtml(str){
         parsed = parsed.replaceAll('<' + elementTags[i] + '>', '<p class="' + htmlClasses[i] + '">');
         parsed = parsed.replaceAll('</' + elementTags[i] + '>', '</p>');
     }
-    
-    console.log(parsed);
+
+    const centeredActionsPattern = /<p class="action-block">(&gt;)(\s*[^<>\n]+)(&lt;\s*)<\/p>/g;
+    const centeredActionsTemplate = '<p class="action-block ql-align-center">$2</p>';
+    parsed = parsed.replace(centeredActionsPattern, centeredActionsTemplate);
+
+    console.log(JSON.stringify(parsed));
     return parsed;
 }
 
@@ -20,14 +24,15 @@ function parseFountain(str){
     if(str.charAt(str.length - 1) != '\n')
         str = str + '\n';
 
-    const SCENE_HEADER_PATTERN       = /(?<=\n)(([iI][nN][tT]|[eE][xX][tT]|[^\w][eE][sS][tT]|\.|[iI]\.?\/[eE]\.?)([^\n]+))\n/g;
-    const ACTION_PATTERN             = /([^<>]*?)(\n{2}|\n<)/g;
+    const SCENE_HEADER_PATTERN       = /(?<=\n)(([iI][nN][tT]|[eE][xX][tT]|[^\w][eE][sS][tT]|[iI]\.?\/[eE]\.?)([^\n]+))\n/g;
+    const forcedSceneHeaderPattern   = /(?<=\n|^)\.{1}([^\.][^\n]+)\n/g;
+    const ACTION_PATTERN             = /\n*([^<>]*?)(\n{2}|\n<)/g;
     const MULTI_LINE_ACTION_PATTERN  = /\n{2}(([^a-z\n:]+?[\.\?,\s!\*_]*?)\n{2}){1,2}/g;
-    const CHARACTER_CUE_PATTERN      = /(?<=\n)([ \t]*[^<>a-z\s\/\n][^<>a-z:!\?\n]*[^<>a-z\(!\?:,\n\.][ \t]?)\n{1}(?!\n)/g;
-    const DIALOGUE_PATTERN           = /(<(Character|Parenthetical)>[^<>\n]+<\/(Character|Parenthetical)>)([^<>]*?)(?=\n{2}|\n{1}<Parenthetical>)/g;
-    const PARENTHETICAL_PATTERN      = /(\([^<>]*?\)[\s]?)\n/g;
+    const CHARACTER_CUE_PATTERN      = /(?<=\n)[ \t]*([^<>a-z\s\/\n][^<>a-z:!\?\n]*[^<>a-z\(!\?:,\n\.][ \t]?)\n{1}(?!\n)/g;
+    const DIALOGUE_PATTERN           = /(<(Character|Parenthetical)>[^<>\n]+<\/(Character|Parenthetical)>)\s*([^<>]*?)(?=\n{2}|\n{1}<Parenthetical>)/g;
+    const PARENTHETICAL_PATTERN      = /\s*(\([^<>]*?\)[\s]?)\n/g;
     const TRANSITION_PATTERN         = /\n([\*_]*([^<>\na-z]*TO:|FADE TO BLACK\.|FADE OUT\.|CUT TO BLACK\.)[\*_]*)\n/g;
-    const FORCED_TRANSITION_PATTERN  = /\n((&gt;|>)\s*[^<>\n]+)\n/g;     // need to look for &gt; pattern because we run this regex against marked up content
+    const FORCED_TRANSITION_PATTERN  = /\n(?:&gt;|>)(\s*[^<>\n]+)\n/g;     // need to look for &gt; pattern because we run this regex against marked up content
     const FALSE_TRANSITION_PATTERN  = /\n((&gt;|>)\s*[^<>\n]+(&lt;\s*))\n/g;     // need to look for &gt; pattern because we run this regex against marked up content
     //const PAGE_BREAK_PATTERN         = /(?<=\n)(\s*[\=\-\_]{3,8}\s*)\n{1}/g;
     const CLEANUP_PATTERN            = /<Action>\s*<\/Action>/g;
@@ -35,6 +40,7 @@ function parseFountain(str){
     //const SCENE_NUMBER_PATTERN       = /(\#([0-9A-Za-z\.\)-]+)\#)/g;
     //const SECTION_HEADER_PATTERN     = /((#+)(\s*[^\n]*))\n?/g;
     const newLinesBetweenElements = /(?<=>)(\n*)(?=<[^/])/g;
+    const newLinesAtBeginning = /^(\n+)</g;
 
     const SCENE_HEADER_TEMPLATE      = "\n<Scene Heading>$1</Scene Heading>";
     const ACTION_TEMPLATE            = "<Action>$1</Action>$2";
@@ -49,17 +55,18 @@ function parseFountain(str){
     const CLEANUP_TEMPLATE           = "";
     const FIRST_LINE_ACTION_TEMPLATE = "<Action>$1</Action>\n";
     const SECTION_HEADER_TEMPLATE    = "<Section Heading>$1</Section Heading>";
+    const newLinesAtBeginningTemplate = "<";
 
     //sanitize html chars (and ellipses for easier period detection)
     str = str.replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('...','::trip::');
 
-    const patterns = [FALSE_TRANSITION_PATTERN, FORCED_TRANSITION_PATTERN, SCENE_HEADER_PATTERN, 
+    const patterns = [FALSE_TRANSITION_PATTERN, FORCED_TRANSITION_PATTERN, SCENE_HEADER_PATTERN, forcedSceneHeaderPattern,
         FIRST_LINE_ACTION_PATTERN, TRANSITION_PATTERN, CHARACTER_CUE_PATTERN, PARENTHETICAL_PATTERN, 
-        DIALOGUE_PATTERN, ACTION_PATTERN, CLEANUP_PATTERN, newLinesBetweenElements];
+        DIALOGUE_PATTERN, ACTION_PATTERN, CLEANUP_PATTERN, newLinesBetweenElements, newLinesAtBeginning];
 
-    const templates = [FALSE_TRANSITION_TEMPLATE, FORCED_TRANSITION_TEMPLATE, SCENE_HEADER_TEMPLATE, 
+    const templates = [FALSE_TRANSITION_TEMPLATE, FORCED_TRANSITION_TEMPLATE, SCENE_HEADER_TEMPLATE, SCENE_HEADER_TEMPLATE,
         FIRST_LINE_ACTION_TEMPLATE, TRANSITION_TEMPLATE, CHARACTER_CUE_TEMPLATE, PARENTHETICAL_TEMPLATE, 
-        DIALOGUE_TEMPLATE, ACTION_TEMPLATE, CLEANUP_TEMPLATE, CLEANUP_TEMPLATE];
+        DIALOGUE_TEMPLATE, ACTION_TEMPLATE, CLEANUP_TEMPLATE, CLEANUP_TEMPLATE, newLinesAtBeginningTemplate];
     
     for(let i=0;i<patterns.length;i++){
         str = str.replace(patterns[i], templates[i]);
