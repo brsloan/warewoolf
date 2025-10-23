@@ -14,6 +14,14 @@ function fountainToHtml(str){
     const centeredActionsTemplate = '<p class="action-block ql-align-center">$2</p>';
     parsed = parsed.replace(centeredActionsPattern, centeredActionsTemplate);
 
+    const BOLD_PATTERN = /(\*{2})([^\t]+?)(\*{2})/g;
+    const ITALIC_PATTERN = /(?<!\\)(\*{1})([^\t]+?)(\*{1})/g;
+    const UNDERLINE_PATTERN = /(_)([^_]+?)(_)/g;
+
+    parsed = parsed.replace(BOLD_PATTERN, '<strong>$2</strong>');
+    parsed = parsed.replace(ITALIC_PATTERN, '<em>$2</em>');
+    parsed = parsed.replace(UNDERLINE_PATTERN, '<u>$2</u>');
+
     //console.log(JSON.stringify(parsed));
     return parsed;
 }
@@ -31,7 +39,6 @@ function parseFountain(str){
     const SCENE_HEADER_PATTERN       = /(?<=\n)(([iI][nN][tT]|[eE][xX][tT]|[^\w][eE][sS][tT]|[iI]\.?\/[eE]\.?)([^\n]+))\n/g;
     const forcedSceneHeaderPattern   = /(?<=\n|^)\.{1}([^\.][^\n]+)\n/g;
     const ACTION_PATTERN             = /\n*([^<>]*?)(\n{2}|\n<)/g;
-    const MULTI_LINE_ACTION_PATTERN  = /\n{2}(([^a-z\n:]+?[\.\?,\s!\*_]*?)\n{2}){1,2}/g;
     const CHARACTER_CUE_PATTERN      = /(?<=\n)[ \t]*([^<>a-z\s\/\n][^<>a-z:!\?\n]*[^<>a-z\(!\?:,\n\.][ \t]?)\n{1}(?!\n)/g;
     const DIALOGUE_PATTERN           = /(<(Character|Parenthetical)>[^<>\n]+<\/(Character|Parenthetical)>)\s*([^<>]*?)(?=\n{2}|\n{1}<Parenthetical>)/g;
     const PARENTHETICAL_PATTERN      = /(\([^<>]*?\)[\s]?)\n/g;
@@ -45,10 +52,10 @@ function parseFountain(str){
     //const SECTION_HEADER_PATTERN     = /((#+)(\s*[^\n]*))\n?/g;
     const newLinesOrSpaceBetweenElements = /(?<=>)([\n|\s]*)(?=<[^/])/g;
     const newLinesAtBeginning = /^(\n+)</g;
+    const centeredActionsPattern = /\n((?:>[^<>]*?<\n)+)/g; //Doesn't work right now--need to figure out how to do it after HTML char conversion
 
     const SCENE_HEADER_TEMPLATE      = "\n<Scene Heading>$1</Scene Heading>";
     const ACTION_TEMPLATE            = "<Action>$1</Action>$2";
-    const MULTI_LINE_ACTION_TEMPLATE = "\n<Action>$2</Action>";
     const CHARACTER_CUE_TEMPLATE     = "<Character>$1</Character>";
     const DIALOGUE_TEMPLATE          = "$1<Dialogue>$4</Dialogue>";
     const PARENTHETICAL_TEMPLATE     = "<Parenthetical>$1</Parenthetical>";
