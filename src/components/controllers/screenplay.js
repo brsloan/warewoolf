@@ -36,12 +36,12 @@ function parseFountain(str){
     //Remove all tabs
     str = str.replaceAll('\t','');
 
-    const SCENE_HEADER_PATTERN       = /(?<=\n)(([iI][nN][tT]|[eE][xX][tT]|[^\w][eE][sS][tT]|[iI]\.?\/[eE]\.?)([^\n]+))\n/g;
+    const SCENE_HEADER_PATTERN       = /(?<=\n)(([iI][nN][tT]|[eE][xX][tT]|[eE][sS][tT]|[iI]\.?\/[eE]\.?)([.\s\/][^\n]+))\n/g;
     const forcedSceneHeaderPattern   = /(?<=\n|^)\.{1}([^\.][^\n]+)\n/g;
     const ACTION_PATTERN             = /\n*([^<>]*?)(\n{2}|\n<)/g;
     const CHARACTER_CUE_PATTERN      = /(?<=\n)[ \t]*([^<>a-z\s\/\n][^<>a-z:!\?\n]*[^<>a-z\(!\?:,\n\.][ \t]?)\n{1}(?!\n)/g;
     const DIALOGUE_PATTERN           = /(<(Character|Parenthetical)>[^<>\n]+<\/(Character|Parenthetical)>)\s*([^<>]*?)(?=\n{2}|\n{1}<Parenthetical>)/g;
-    const PARENTHETICAL_PATTERN      = /(\([^<>]*?\)[\s]?)\n/g;
+    const PARENTHETICAL_PATTERN      = /(?<=\n)[ \t]*(\([^<>]*?\)[\s]?)\n/g;
     const TRANSITION_PATTERN         = /\n([\*_]*([^<>\na-z]*TO:|FADE TO BLACK\.|FADE OUT\.|CUT TO BLACK\.)[\*_]*)\n/g;
     const FORCED_TRANSITION_PATTERN  = /\n(?:&gt;|>)(\s*[^<>\n]+)\n/g;     // need to look for &gt; pattern because we run this regex against marked up content
     const FALSE_TRANSITION_PATTERN  = /\n((&gt;|>)\s*[^<>\n]+(&lt;))\n/g;     // need to look for &gt; pattern because we run this regex against marked up content
@@ -223,7 +223,11 @@ function styleMarkedSpans(quill, text, markerRegx, styles, opStartIndex){
 }
 
 function quillHtmlToFountain(html){
+    //console.log('html straight from quill: ');
+    //console.log(html);
     html = decodeHtmlEntities(html);
+    //console.log('after decoding entities');
+    //console.log(html);
     const italics = /<em>|<\/em>/g;
     const bold = /<strong>|<\/strong>/g;
     const underline = /<u>|<\/u>/g;
@@ -231,7 +235,7 @@ function quillHtmlToFountain(html){
     html = html.replace(bold, '**');
     html = html.replace(underline, '_');
 
-    const classesAndValue = /<p class="([^"]+)">(.*?)<\/p>/g;
+    const classesAndValue = /<p class="([^"]+)">([^<>]*?)<\/p>/g;
     const matchesIterator = html.matchAll(classesAndValue);
     const matches = Array.from(matchesIterator);
 
@@ -241,6 +245,8 @@ function quillHtmlToFountain(html){
         var nextClasses = i < matches.length - 1 ? matches[i + 1][1] : null;
         fountain += cleanFountainElement(match[1], match[2], nextClasses);
     });
+
+    fountain = fountain.replaceAll('<br>', '')
 
     const trailingNewlines = /\n*$/g;
     fountain = fountain.replace(trailingNewlines, '');
