@@ -1,7 +1,7 @@
 function parseFountain(str){
     str = convertAllLineBreaks(str);
 
-    let sceneHeader = /(?<=\n|^)(([iI][nN][tT]|[eE][xX][tT]|[^\w][eE][sS][tT]|[iI]\.?\/[eE]\.?)([.\s][^\n]+))\n/g; //Not multi-line because ^ is checking very first line in document
+    let sceneHeader = /(?<=\n|^)(([iI][nN][tT]|[eE][xX][tT]|[eE][sS][tT]|[iI]\.?\/[eE]\.?)([.\s\/][^\n]+))\n/g; //Not multi-line because ^ is checking very first line in document
     let forcedSceneHeader = /(?<=\n|^)\.{1}([^\.][^\n]+)\n/gm;
     let character = /(?<=\n)[ \t]*([^<>a-z\s\/\n][^<>a-z:!\?\n]*[^<>a-z\(!\?:,\n\.][ \t]?)\n{1}(?!\n)/g;
     let parenthetical = /^\s*(\([^<>\n]*?\)[\s]?)\n/gm;
@@ -9,7 +9,6 @@ function parseFountain(str){
     let forcedTransition = /\n>(\s*[^<>\n]+)\n/g;
 
     let dialog = /(?<="character-cue":true}},\n|"parenthetical-block":true}},\n)[ \t]*([^{]*?)\n(?=\n|{)/g; //Must be run after character & parenthetical since it matches on their results
-    //let falseTransition = /\n(>\s*[^<>\n]+(<\s*))\n/g; //For centered actions that may appear to be transitions??? Taken from Fountain github
     let action = /(?<=}},\n)([^{}]*)(?=\n{2}|\n{)/g;
     let centeredAction = /^> ?(.*) ?<$/gm;
     let anythingLeft = /^\s*([^{}\n]+)$/gm;
@@ -130,7 +129,82 @@ function styleMarkedSpans(quill, text, markerRegx, styles, opStartIndex){
     return text;
 }
 
+function quillHtmlToFountain(html){
+    html = decodeHtmlEntities(html);
+    const italics = /<em>|<\/em>/g;
+    const bold = /<strong>|<\/strong>/g;
+    const underline = /<u>|<\/u>/g;
+    html = html.replace(italics, '*');
+    html = html.replace(bold, '**');
+    html = html.replace(underline, '_');
+
+    const classesAndValue = /<p class="([^"]+)">(.*?)<\/p>/g;
+    const matchesIterator = html.matchAll(classesAndValue);
+    const matches = Array.from(matchesIterator);
+
+    var fountain = '';
+
+    matches.forEach(function(match, i){
+        var nextClasses = i < matches.length - 1 ? matches[i + 1][1] : null;
+        fountain += cleanFountainElement(match[1], match[2], nextClasses);
+    });
+
+    return fountain;
+}
+
+
+function cleanFountainElement(classes, text, nextClasses){
+    let sceneHeaderTest = /(?<=\n|^)(([iI][nN][tT]|[eE][xX][tT]|[eE][sS][tT]|[iI]\.?\/[eE]\.?)([.\s\/][^\n]+))/g;
+    let characterTest = /[a-zA-Z]/g;
+    let parentheticalTest = /^\s*(\([^\n]*?\)[\s]?)/g;
+    let transitionTest = /^([\*_]*([^<>\na-z]*TO:|FADE TO BLACK\.|FADE OUT\.|CUT TO BLACK\.)[\*_]*)/g;  
+
+    if(classes == 'scene-header'){
+        if(sceneHeaderTest.test(text) == false)
+            text = '.' + text; //. forces a scene header in Fountain
+        text += '\n\n';
+    }
+    else if(classes == 'character-cue'){
+        if(characterTest.test(text) == false)
+            text = '@' + text; //@ forces character cue
+        text = text.toUpperCase() + '\n';
+    }
+    else if(classes == 'parenthetical-block'){
+        if(parentheticalTest.test(text) == false)
+            text = '(' + text + ')';
+        if(nextClasses == 'dialog-block')
+            text += '\n';
+        else
+            text += '\n\n';
+    }
+    else if(classes == 'transition-block'){
+        if(transitionTest.test(text) == false)
+            text = '>' + text;
+        text = text.toUpperCase() + '\n\n';
+    }
+    else if(classes == 'dialog-block'){
+        if(nextClasses == 'dialog-block' || nextClasses == 'parenthetical-block')
+            text += '\n';
+        else
+            text += '\n\n';
+    }
+    else if(classes == 'action-block ql-align-center'){
+        text = '>' + text + '<\n\n';
+    }
+    else
+        text += '\n\n'; //Default to action
+
+    return text;
+}
+
+function decodeHtmlEntities(htmlString) {
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = htmlString;
+    return textarea.value;
+}
+
 module.exports = {
     parseFountain,
-    styleFountainInlineMarkers
+    styleFountainInlineMarkers,
+    quillHtmlToFountain
 };
