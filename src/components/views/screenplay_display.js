@@ -391,6 +391,10 @@ function addBindingsToScreenplayQuill(q){
         default:
 
       }
+      requestIdleCallback(updateSceneList);
+    }
+    else if(e.key === 'Backspace'){
+      requestIdleCallback(updateSceneList);
     }
   });
 };
