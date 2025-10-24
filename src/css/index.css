@@ -551,3 +551,12 @@ display: block;
 .hidden {
   display: none;
 }
+
+.sidebar-screenplay {
+  height: 97vh;
+  font-size: var(--main-font-size);
+}
+
+.sidebar-screenplay li{
+  text-transform: capitalize;
+}

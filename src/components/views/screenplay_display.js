@@ -107,7 +107,7 @@ function updateSceneList(){
   var scenes = document.getElementsByClassName('scene-header');
   for(let i=0;i<scenes.length;i++){
     var scene = document.createElement('li');
-    scene.innerText = scenes[i].innerText;
+    scene.innerText = scenes[i].innerText.toLowerCase();
     list.appendChild(scene);
   }
 
