@@ -1,19 +1,29 @@
-function showScreenplayEditor(Quill, project){
-    var screenplayQuill = setupQuill(Quill);
+/* This module uses global objects Quill, Project, from render.js. Not best practice, I know, but if they're there... */
+/* This module also horrifically abuses QuillJS in ways it was never meant to have been used, because the usual ways are
+just too slow (2-5 seconds to load a full screenplay). You aren't supposed to directly insert HTML like I do here, so things
+get...wonky. Plan to eventually replace Quill with my own editor object. */
 
+var screenplayQuill = setupQuill();
+
+function showScreenplayEditor(){
     project.activeChapterIndex = 0;
     screenplayQuill.root.innerHTML = project.chapters[0].getContentsOrFile();
 
     updateSceneList();
-    screenplayQuill.focus();
-    screenplayQuill.setSelection(project.textCursorPosition);
     document.getElementById('chapter-list-sidebar').classList.add('sidebar-screenplay');
+
+    //Appears that since I am hacking Quill a bit by directly placing contents into its HTML instead of using its own
+    //painfully slow function, I have to set a delay before manipulating that HTML through Quill, for mysterious reasons
+    setTimeout(function(){
+      screenplayQuill.setSelection(project.textCursorPosition);
+      screenplayQuill.focus();
+    }, 10);
 }
 
-function setupQuill(Quill){
-    addScreenplayFormats(Quill);
+function setupQuill(){
+    addScreenplayFormats();
     var editorDivName = createEditorDiv();
-    var screenplayQuill = generateScreenplayQuill(Quill, editorDivName);
+    var screenplayQuill = generateScreenplayQuill(editorDivName);
     addBindingsToScreenplayQuill(screenplayQuill);
     screenplayQuill.root.classList.add('ql-editor-screenplay');
     screenplayQuill.root.id = 'screenplay-editor';
@@ -33,7 +43,7 @@ function createEditorDiv(){
     return screenplayEditorDivName;
 }
 
-function addScreenplayFormats(Quill){
+function addScreenplayFormats(){
   const Block = Quill.import('blots/block');
 
   class CharacterBlock extends Block {}
@@ -73,7 +83,7 @@ function addScreenplayFormats(Quill){
   Quill.register(TransitionBlock, true);
 }
 
-function generateScreenplayQuill(Quill, editorDivName){
+function generateScreenplayQuill(editorDivName){
   return new Quill('#' + editorDivName, {
     modules: {
       history: {
@@ -112,7 +122,6 @@ function updateSceneList(){
 
 }
 
-
 function clearDiv(d){
   while (d.hasChildNodes()) {
     try{
@@ -122,6 +131,20 @@ function clearDiv(d){
       console.log(err);
     }
   }
+}
+
+function getScreenplayQuillText(){
+  var screenplayEditor = document.getElementById('screenplay-editor');
+
+  var text = '';
+
+  var elements = screenplayEditor.children;
+
+  for(let i=0;i<elements.length;i++){
+    text += elements[i].innerText + '\n';
+  }
+  
+  return text;
 }
 
 function estimatePageLength(){
@@ -270,9 +293,13 @@ function addBindingsToScreenplayQuill(q){
     key: '1',
     shortKey: true,
     handler: function(range, context) {
-      //this.quill.format('character-cue', true, 'user');
-      const { quillHtmlToFountain } = require('../controllers/screenplay');
-      console.log(quillHtmlToFountain(this.quill.root.innerHTML));
+
+        const showFindReplace = require('./findreplace_display');
+        showFindReplace(project, q, function(ind){
+          console.log('display chapter by index ' + ind);
+          console.log(screenplayQuill.getContents());
+        });
+
     }
   });
 
@@ -307,6 +334,11 @@ function addBindingsToScreenplayQuill(q){
       chap.hasUnsavedChanges = true;
       project.hasUnsavedChanges = true;
     }
+  });
+
+  q.on('selection-change', function(range, oldRange, source){
+    if(range)
+      project.textCursorPosition = range.index;
   });
 
   q.root.addEventListener('keydown', function(e){

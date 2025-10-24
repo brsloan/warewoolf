@@ -98,6 +98,27 @@ function replaceAllInChapter(oldStr, newStr, caseSensitive, chap){
   return result.changed;
 }
 
+function replaceAllInScreenplay(oldStr, newStr, caseSensitive, screenplayQuill){
+    var counter = 0;
+
+    var text = screenplayQuill.getText();
+
+    var foundIndex = 0;
+    var startingIndex = 0;
+
+    while(foundIndex > -1){
+        foundIndex = findInText(oldStr, text, caseSensitive, startingIndex);
+        if(foundIndex > -1){
+            counter++;
+            screenplayQuill.deleteText(foundIndex, oldStr.length, 'api');
+            screenplayQuill.insertText(foundIndex, newStr, 'api');
+            startingIndex = foundIndex + newStr.length;
+            text = text.slice(0,foundIndex) + newStr + text.slice(foundIndex + oldStr.length);
+        }
+    }
+    return counter;
+}
+
 function replaceAllInDelta(oldStr, newStr, caseSensitive, delt){
     var tempQuill = getTempQuill();
     var counter = 0;
@@ -132,5 +153,6 @@ module.exports = {
     replace,
     replaceAllInAllChapters,
     replaceAllInChapter,
-    replaceAllInDelta
+    replaceAllInDelta,
+    replaceAllInScreenplay
 }

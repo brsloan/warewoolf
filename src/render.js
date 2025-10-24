@@ -168,7 +168,7 @@ function displayProject(){
   }
   else{
     const { showScreenplayEditor } = require('./components/views/screenplay_display');
-    showScreenplayEditor(Quill, project);
+    showScreenplayEditor();
   }
 }
 

@@ -1,5 +1,5 @@
 const { closePopups, createButton, removeElementsByClass, enableSearchView } = require('../controllers/utils');
-const { find, replace, replaceAllInChapter, replaceAllInAllChapters } = require('../controllers/findreplace');
+const { find, replace, replaceAllInChapter, replaceAllInAllChapters, replaceAllInScreenplay } = require('../controllers/findreplace');
 
 function showFindReplace(project, editorQuill, displayChapterByIndex){
     enableSearchView();
@@ -80,10 +80,13 @@ function showFindReplace(project, editorQuill, displayChapterByIndex){
       replacementCount.innerText = "";
       var numReplaced = 0;
 
-      if(inAllChapters.checked)
+      if(inAllChapters.checked && !project.screenplay)
         numReplaced = replaceAllInAllChapters(project, findIn.value, replaceIn.value, caseSensitive.checked);
       else {
-        numReplaced = replaceAllInChapter(findIn.value, replaceIn.value, caseSensitive.checked, project.getActiveChapter());
+        if(project.screenplay)
+          numReplaced = replaceAllInScreenplay(findIn.value, replaceIn.value, caseSensitive.checked, editorQuill)
+        else
+          numReplaced = replaceAllInChapter(findIn.value, replaceIn.value, caseSensitive.checked, project.getActiveChapter());
       }
       displayChapterByIndex(project.activeChapterIndex);
       replacementCount.innerText = numReplaced + " instances replaced!";
