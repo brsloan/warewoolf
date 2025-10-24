@@ -72,12 +72,7 @@ function loadInitialProject(successFunction){
 }
 
 function setUpQuills(){
-  console.log('screenplay? ' + project.screenplay);
-  if(project.screenplay){
-
-  }
-  else
-    addBindingsToQuill(editorQuill);
+  addBindingsToQuill(editorQuill);
   addBindingsToQuill(notesQuill);
   disableTabbingToEditors();
 }
@@ -161,10 +156,10 @@ function convertLegacyProject(){
 }
 
 function displayProject(){
+  updateTitleBar();
+  refreshNotesDisplay();
   if(project.screenplay == false){
     updateFileList();
-    updateTitleBar();
-    refreshNotesDisplay();
     displayInitialChapter();
     setWordCountOnLoad();
     editorQuill.focus();
@@ -581,7 +576,8 @@ function saveProject(){
     clearCurrentChapterIfUnchanged();
     project.saveFile();
     project.hasUnsavedChanges = false;
-    updateFileList();
+    if(project.screenplay == false)
+      updateFileList();
   }
   else
     saveProjectAs();
@@ -1108,7 +1104,10 @@ document.addEventListener ("keydown", function (e) {
       if(document.getElementById('writing-field').classList.contains('visible')){
         removeElementsByClass('popup');
         disableSearchView();
-        editorQuill.focus();
+        if(project.screenplay)
+          document.getElementById('editor-container-screenplay').firstElementChild.focus();
+        else
+          editorQuill.focus();
       }
     }
     else if((e.ctrlKey || e.metaKey) && e.key === "ArrowRight"){
