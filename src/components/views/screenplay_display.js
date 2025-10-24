@@ -8,7 +8,6 @@ function showScreenplayEditor(Quill, project){
     screenplayQuill.focus();
     screenplayQuill.setSelection(project.textCursorPosition);
     document.getElementById('chapter-list-sidebar').classList.add('sidebar-screenplay');
-    console.log(estimatePageLength(true));
 }
 
 function setupQuill(Quill){
@@ -137,7 +136,7 @@ function estimatePageLength(){
     charsPerLine: 60
   };
   const action = {
-    blankLinesPerInsance: 1,
+    blankLinesPerInstance: 1,
     charsPerLine: page.charsPerLine
   };
   const dialog = {
@@ -158,7 +157,7 @@ function estimatePageLength(){
 
   //Now add for Action lines and dialog lines
   for(let i=0;i<acts.length;i++){
-    linesFilled += action.blankLinesPerInsance;
+    linesFilled += action.blankLinesPerInstance;
     linesFilled += Math.ceil(acts[i].innerText.length / action.charsPerLine);
   }
   for(let i=0; i<dias.length;i++){
