@@ -98,7 +98,7 @@ function replaceAllInChapter(oldStr, newStr, caseSensitive, chap){
   return result.changed;
 }
 
-function replaceAllInScreenplay(oldStr, newStr, caseSensitive, screenplayQuill){
+function replaceAllInScreenplay(oldStr, newStr, caseSensitive, screenplayQuill, updateFunction){
     var counter = 0;
 
     var text = screenplayQuill.getText();
@@ -106,17 +106,23 @@ function replaceAllInScreenplay(oldStr, newStr, caseSensitive, screenplayQuill){
     var foundIndex = 0;
     var startingIndex = 0;
 
-    while(foundIndex > -1){
+    function replaceNext(){
         foundIndex = findInText(oldStr, text, caseSensitive, startingIndex);
         if(foundIndex > -1){
             counter++;
+            updateFunction('Replacing instance ' + counter + '...');
             screenplayQuill.deleteText(foundIndex, oldStr.length, 'api');
             screenplayQuill.insertText(foundIndex, newStr, 'api');
             startingIndex = foundIndex + newStr.length;
             text = text.slice(0,foundIndex) + newStr + text.slice(foundIndex + oldStr.length);
+            setTimeout(replaceNext, 1);
+        }
+        else{
+            updateFunction('Replaced ' + counter + ' instances!');
         }
     }
-    return counter;
+
+    replaceNext();
 }
 
 function replaceAllInDelta(oldStr, newStr, caseSensitive, delt){
