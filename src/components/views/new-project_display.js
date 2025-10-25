@@ -1,4 +1,4 @@
-function requestProjectTitle(callback){
+function requestProjectTitle(project, callback){
   var popup = document.createElement("div");
   popup.classList.add("popup");
 
@@ -9,7 +9,7 @@ function requestProjectTitle(callback){
   var titleForm = document.createElement("form");
 
   var message = document.createElement("label");
-  message.innerText = "What is the title of this project?";
+  message.innerText = "Title:";
   message.for = "title-input";
   titleForm.appendChild(message);
 
@@ -20,6 +20,32 @@ function requestProjectTitle(callback){
   titleInput.placeholder = "Mrs. Dalloway 2: Back In Action";
   titleInput.id = "title-input";
   titleForm.appendChild(titleInput);
+
+  var novelRadio = document.createElement('input');
+  novelRadio.type = 'radio';
+  novelRadio.id = 'novel-radio';
+  novelRadio.name = 'project-type';
+  novelRadio.value = 'novel';
+  novelRadio.checked = !project.screenplay;
+  titleForm.appendChild(novelRadio);
+  var novelLabel = document.createElement('label');
+  novelLabel.innerText = 'Novel';
+  novelLabel.for = 'novel-radio';
+  titleForm.appendChild(novelLabel);
+
+  var screenplayRadio = document.createElement('input');
+  screenplayRadio.type = 'radio';
+  screenplayRadio.id = 'screenplay-radio';
+  screenplayRadio.name = 'project-type';
+  screenplayRadio.value = 'screenplay';
+  screenplayRadio.checked = project.screenplay;
+  titleForm.appendChild(screenplayRadio);
+  var screenplayLabel = document.createElement('label');
+  screenplayLabel.innerText = 'Screenplay';
+  screenplayLabel.for = 'screenplay-radio';
+  titleForm.appendChild(screenplayLabel);
+
+  titleForm.appendChild(document.createElement('br'));
 
   var createButton = document.createElement("input");
   createButton.type = "submit";
@@ -33,7 +59,7 @@ function requestProjectTitle(callback){
     else
       title = "New Project";
     popup.remove();
-    callback(title);
+    callback(title, screenplayRadio.checked);
   }
 
   titleForm.appendChild(createButton);
