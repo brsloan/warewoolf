@@ -69,7 +69,7 @@ function showWordCount(project, editorQuill){
     document.body.appendChild(popup);
 
     var activeTotal = countWords(editorQuill.getText());
-    var total = getTotalWordCount(project);
+    var total = project.screenplay ? activeTotal : getTotalWordCount(project);
     updateProgressBar();
 
     goalInput.onkeyup = function(){
