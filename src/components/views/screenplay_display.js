@@ -3,6 +3,8 @@
 just too slow (2-5 seconds to load a full screenplay). You aren't supposed to directly insert HTML like I do here, so things
 get...wonky. Plan to eventually replace Quill with my own editor object. */
 
+const { ipcRenderer } = require('electron'); //Not technically necessary since it has access through global const in render.js
+
 var screenplayQuill = setupQuill();
 
 function showScreenplayEditor(){
@@ -17,7 +19,10 @@ function showScreenplayEditor(){
     setTimeout(function(){
       screenplayQuill.setSelection(project.textCursorPosition);
       screenplayQuill.focus();
+      requestIdleCallback(setWordCountOnLoad);
     }, 10);
+
+    updateIPCBindings();
 }
 
 function setupQuill(){
@@ -35,12 +40,17 @@ function createEditorDiv(){
     var screenplayEditorDiv = document.createElement('div');
     screenplayEditorDiv.id = screenplayEditorDivName;
 
-    var fictionEditorDiv = document.getElementById('editor-container');
-    fictionEditorDiv.classList.add('hidden');
+    hideFictionEditor();
+
     var writingFieldDiv = document.getElementById('writing-field');
     writingFieldDiv.appendChild(screenplayEditorDiv);
 
     return screenplayEditorDivName;
+}
+
+function hideFictionEditor(){
+  var fictionEditorDiv = document.getElementById('editor-container');
+  fictionEditorDiv.classList.add('hidden');
 }
 
 function addScreenplayFormats(){
@@ -128,7 +138,7 @@ function clearDiv(d){
       d.removeChild(d.firstChild);
     }
     catch(err){
-      console.log(err);
+      //console.log(err);
     }
   }
 }
@@ -198,6 +208,11 @@ function estimatePageLength(){
   };
 
   return pagesFilled;
+}
+
+function setWordCountOnLoad(){
+  const { countWords } = require('../controllers/wordcount');
+  project.wordCountOnLoad = countWords(screenplayQuill.getText());
 }
 
 /* ~~~~~~~~~~~~~~ Event Handlers / Key Bindings ~~~~~~~~~~~~~ */
@@ -409,6 +424,51 @@ function checkForFormatMatch(str){
     format = 'transition-block';
 
   return format;
+}
+
+function updateIPCBindings(){
+  //Disable those features that won't be used at all
+  const toBeDisabled = ['convert-first-lines', 'headings-to-chaps', 'convert-italics', 
+    'split-chapter', 'convert-tabs', 'renumber-chapters', 'outliner'
+  ];
+  ipcRenderer.send('disable-menu-items', toBeDisabled);
+
+   //Clear listeners for features will need adjusted/re-written for screenplay
+  const toBeReset = ['find-replace-clicked', 
+    'word-count-clicked', 'spellcheck-clicked', 'add-chapter-clicked', 
+    'delete-chapter-clicked', 'restore-chapter-clicked', 'outliner-clicked'];
+  ipcRenderer.removeAllListeners(toBeReset);
+
+  ipcRenderer.on('find-replace-clicked', function(e){
+    if(editorHasFocus()){
+      const showFindReplace = require('./findreplace_display');
+      showFindReplace(project, screenplayQuill, function(){});
+    }
+  });
+
+  ipcRenderer.on('spellcheck-clicked', function(e){
+    if(editorHasFocus()){
+      const showSpellcheck = require('./spellcheck_display');
+      const { getBeginningOfCurrentWord } = require('../controllers/spellcheck');
+      var currentIndex = screenplayQuill.getSelection(true).index;
+      var beginningOfWord = getBeginningOfCurrentWord(screenplayQuill.getText(), currentIndex);
+      showSpellcheck(screenplayQuill, project, sysDirectories, function(){}, beginningOfWord);
+    }
+  });
+  
+  ipcRenderer.on('word-count-clicked', function(e){
+    const showWordCount = require('./wordcount_display');
+    showWordCount(project, screenplayQuill);
+  });
+
+}
+
+function editorHasFocus(){
+  return editorIsVisible() && document.querySelector(".ql-editor-screenplay") === document.activeElement;
+}
+
+function editorIsVisible(){
+  return document.getElementById('writing-field').classList.contains('visible');
 }
 
 module.exports = {

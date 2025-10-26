@@ -23,6 +23,8 @@ app.on('open-file', (event, fPath) => {
   fileRequestedOnOpen = fPath;
 });
 
+var menu;
+
 const createWindow = () => {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
@@ -51,7 +53,7 @@ const createWindow = () => {
   // Open the DevTools.
   mainWindow.webContents.openDevTools();
 
-  var menu = Menu.buildFromTemplate([
+  menu = Menu.buildFromTemplate([
     ...(isMac
       ? [{
           label: app.name,
@@ -268,6 +270,7 @@ const createWindow = () => {
         { type: 'separator' },
         {
           label: 'Outliner',
+          id: 'outliner',
           click(item, focusWindow){
             mainWindow.webContents.send('outliner-clicked');
           },
@@ -282,24 +285,28 @@ const createWindow = () => {
         { type: 'separator' },
         {
           label: 'Renumber Chapters',
+          id: 'renumber-chapters',
           click(item, focusWindow){
             mainWindow.webContents.send('renumber-chapters-clicked');
           }
         },
         {
           label: 'Convert First Lines To Titles',
+          id: 'convert-first-lines',
           click(item, focusWindow){
             mainWindow.webContents.send('convert-first-lines-clicked');
           }
         },
         {
           label: 'Convert Marked Italics',
+          id: 'convert-italics',
           click(item, focusWindow){
             mainWindow.webContents.send('convert-italics-clicked');
           }
         },
         {
           label: 'Convert Marked Tabs',
+          id: 'convert-tabs',
           click(item, focusWindow){
             mainWindow.webContents.send('convert-tabs-clicked');
           }
@@ -307,6 +314,7 @@ const createWindow = () => {
         { type: 'separator' },
         {
           label: 'Break Headings Into Chapters',
+          id: 'headings-to-chaps',
           click(item, focusWindow){
             mainWindow.webContents.send('headings-to-chaps-clicked');
           }
@@ -434,5 +442,21 @@ ipcMain.on('show-menu', function(e){
   app.applicationMenu.popup({
     x: 0,
     y: 0
+  });
+});
+
+ipcMain.on('disable-menu-items', function(e, items){
+  items.forEach(function(itemID){
+      var menuItem = menu.getMenuItemById(itemID);
+      if(menuItem)
+        menuItem.enabled = false;
+  });
+});
+
+ipcMain.on('enable-menu-items', function(e, items){
+  items.forEach(function(itemID){
+      var menuItem = menu.getMenuItemById(itemID);
+      if(menuItem)
+        menuItem.enabled = true;
   });
 });

@@ -159,6 +159,9 @@ function displayProject(){
   updateTitleBar();
   refreshNotesDisplay();
   if(project.screenplay == false){
+    unhideFictionEditor();
+    removeScreenplayEditor();
+    updateIPCBindings();
     updateFileList();
     displayInitialChapter();
     setWordCountOnLoad();
@@ -172,10 +175,21 @@ function displayProject(){
   }
 }
 
+function unhideFictionEditor(){
+  var fictionEditorDiv = document.getElementById('editor-container');
+  fictionEditorDiv.classList.remove('hidden');
+  document.getElementById('chapters-header').innerText = "Chapters";
+}
+
+function removeScreenplayEditor(){
+  var screenplayEditorContainer = document.getElementById('editor-container-screenplay');
+  //screenplayEditorContainer.classList.add('hidden');
+  if(screenplayEditorContainer)
+    screenplayEditorContainer.remove();
+}
+
 function setWordCountOnLoad(){
   const { getTotalWordCount } = require('./components/controllers/wordcount');
-  if(project.screenplay)
-    project.chapters[0].contents = editorQuill.getContents(); //preload chap so wordcount function doesn't trigger fountain parse again
   project.wordCountOnLoad = getTotalWordCount(project);
 }
 
@@ -540,9 +554,10 @@ function moveChapDown(chapInd){
 
 function createNewProject(){
   const requestProjectTitle = require('./components/views/new-project_display');
-  requestProjectTitle(function(title){
+  requestProjectTitle(project, function(title, isScreenplay){
     if(title && title != ""){
       project = newProject();
+      project.screenplay = isScreenplay;
       project.title = title;
       project.author = userSettings.defaultAuthor;
       project.notesChap = newChapter();
@@ -1203,7 +1218,7 @@ function editorControlEvents(e){
     stopDefaultPropagation(e);
     if(e.currentTarget.id == 'notes-editor')
       goPageDown(notesQuill)
-    else
+    else if(project.screenplay == false)
       goPageDown(editorQuill);
   }
 }
@@ -1252,28 +1267,6 @@ ipcRenderer.on('properties-clicked', function(e){
 ipcRenderer.on('compile-clicked', function(e){
   const showCompileOptions = require('./components/views/compile_display');
   showCompileOptions(project, sysDirectories, userSettings);
-});
-
-ipcRenderer.on('word-count-clicked', function(e){
-  const showWordCount = require('./components/views/wordcount_display');
-  showWordCount(project, editorQuill);
-});
-
-ipcRenderer.on('find-replace-clicked', function(e){
-  if(editorHasFocus()){
-    const showFindReplace = require('./components/views/findreplace_display');
-    showFindReplace(project, editorQuill, displayChapterByIndex);
-  }
-});
-
-ipcRenderer.on('spellcheck-clicked', function(e){
-  if(editorHasFocus()){
-    const showSpellcheck = require('./components/views/spellcheck_display');
-    const { getBeginningOfCurrentWord } = require('./components/controllers/spellcheck');
-    var currentIndex = editorQuill.getSelection(true).index;
-    var beginningOfWord = getBeginningOfCurrentWord(editorQuill.getText(), currentIndex);
-    showSpellcheck(editorQuill, project, sysDirectories, displayChapterByIndex, beginningOfWord);
-  }
 });
 
 ipcRenderer.on('convert-first-lines-clicked', function(e){
@@ -1424,3 +1417,40 @@ ipcRenderer.on('file-opened-from-outside-warewoolf', function(event, fPath){
   }
 
 });
+
+function updateIPCBindings(){
+  //Enable those features that are disabled for Screenplay mode
+  const toBeEnabled = ['convert-first-lines', 'headings-to-chaps', 'convert-italics', 
+    'split-chapter', 'convert-tabs', 'renumber-chapters', 'outliner'
+  ];
+  ipcRenderer.send('enable-menu-items', toBeEnabled);
+
+   //Clear listeners for features will need adjusted/re-written for screenplay
+   const toBeReset = ['find-replace-clicked', 
+    'word-count-clicked', 'spellcheck-clicked', 'add-chapter-clicked', 
+    'delete-chapter-clicked', 'restore-chapter-clicked', 'outliner-clicked'];
+  ipcRenderer.removeAllListeners(toBeReset);
+
+  ipcRenderer.on('find-replace-clicked', function(e){
+    if(editorHasFocus()){
+      const showFindReplace = require('./components/views/findreplace_display');
+      showFindReplace(project, editorQuill, displayChapterByIndex);
+    }
+  });
+
+  ipcRenderer.on('spellcheck-clicked', function(e){
+    if(editorHasFocus()){
+      const showSpellcheck = require('./components/views/spellcheck_display');
+      const { getBeginningOfCurrentWord } = require('./components/controllers/spellcheck');
+      var currentIndex = editorQuill.getSelection(true).index;
+      var beginningOfWord = getBeginningOfCurrentWord(editorQuill.getText(), currentIndex);
+      showSpellcheck(editorQuill, project, sysDirectories, displayChapterByIndex, beginningOfWord);
+    }
+  });
+
+  ipcRenderer.on('word-count-clicked', function(e){
+    const showWordCount = require('./components/views/wordcount_display');
+    showWordCount(project, editorQuill);
+  });
+
+}
