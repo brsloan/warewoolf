@@ -76,21 +76,6 @@ function showFindReplace(project, editorQuill, displayChapterByIndex){
 
     var replaceAllBtn = createButton("Replace <span class='access-key'>A</span>ll");
     replaceAllBtn.id = "replace-all-btn";
-    replaceAllBtn.onclick = function(){
-      replacementCount.innerText = "";
-      var numReplaced = 0;
-
-      if(inAllChapters.checked && !project.screenplay)
-        numReplaced = replaceAllInAllChapters(project, findIn.value, replaceIn.value, caseSensitive.checked);
-      else {
-        if(project.screenplay)
-          numReplaced = replaceAllInScreenplay(findIn.value, replaceIn.value, caseSensitive.checked, editorQuill)
-        else
-          numReplaced = replaceAllInChapter(findIn.value, replaceIn.value, caseSensitive.checked, project.getActiveChapter());
-      }
-      displayChapterByIndex(project.activeChapterIndex);
-      replacementCount.innerText = numReplaced + " instances replaced!";
-    };
     replaceAllBtn.accessKey = "a";
     findForm.appendChild(replaceAllBtn);
 
@@ -104,9 +89,31 @@ function showFindReplace(project, editorQuill, displayChapterByIndex){
 
     findForm.appendChild(document.createElement('br'));
 
-    var replacementCount = document.createElement('label');
+    var replacementCount = document.createElement('p');
     replacementCount.innerText = "";
     findForm.appendChild(replacementCount);
+
+    replaceAllBtn.onclick = function(){
+      replacementCount.innerText = "test";
+      var numReplaced = 0;
+
+      if(inAllChapters.checked && !project.screenplay){
+        numReplaced = replaceAllInAllChapters(project, findIn.value, replaceIn.value, caseSensitive.checked);
+        replacementCount.innerText = numReplaced + " instances replaced!";
+      }
+      else {
+        if(project.screenplay)
+          replaceAllInScreenplay(findIn.value, replaceIn.value, caseSensitive.checked, editorQuill, function(update){
+            replacementCount.innerText = update;
+          });
+        else{
+          numReplaced = replaceAllInChapter(findIn.value, replaceIn.value, caseSensitive.checked, project.getActiveChapter());
+          replacementCount.innerText = numReplaced + " instances replaced!";
+        }
+      }
+      displayChapterByIndex(project.activeChapterIndex);
+      //replacementCount.innerText = numReplaced + " instances replaced!";
+    };
 
     findIn.addEventListener("keyup", function(event){
       event.preventDefault();
