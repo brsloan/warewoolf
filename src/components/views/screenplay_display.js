@@ -10,17 +10,16 @@ var screenplayQuill = setupQuill();
 function showScreenplayEditor(){
   hideFictionEditor();
   unhideScreenplayEditor();
+  restyleSceneList();
   project.activeChapterIndex = 0;
 
   screenplayQuill.root.innerHTML = project.chapters[0].getContentsOrFile();
-  project.hasUnsavedChanges = false;
-
-  updateSceneList();
-  document.getElementById('chapter-list-sidebar').classList.add('sidebar-screenplay');
-
   screenplayQuill.update(); //Since we're adding html manually, have to update Quill manually or settimeout for html updates
+  project.hasUnsavedChanges = false; //Correct for initial insert setting off onchange event and marking unsaved changes
   screenplayQuill.setSelection(project.textCursorPosition);
   screenplayQuill.focus();
+  
+  requestIdleCallback(updateSceneList);
   requestIdleCallback(setWordCountOnLoad);
 
   updateIPCBindings();
@@ -55,6 +54,10 @@ function hideFictionEditor(){
 function unhideScreenplayEditor(){
   var screenplayEditorContainer = document.getElementById('editor-container-screenplay');
   screenplayEditorContainer.classList.remove('hidden');
+}
+
+function restyleSceneList(){
+  document.getElementById('chapter-list-sidebar').classList.add('sidebar-screenplay');
 }
 
 function addScreenplayFormats(){
@@ -280,17 +283,83 @@ function moveSceneDown(range, context){
       nextLine.domNode.before(line.domNode); 
     })
 
-    console.log('insert index: ' + insertIndex + ', scene length: ' + sceneLength);
-    var selectionPoint = range.index + (insertIndex - nextSceneIndex);
-    console.log(insertIndex + ' - ' + sceneLength + ' = ' + selectionPoint);
-   
+    var selectionPoint = range.index + (insertIndex - nextSceneIndex);   
     screenplayQuill.update();
     screenplayQuill.setSelection(selectionPoint);
   }
 
 }
 
-function moveSceneUp(){
+function moveSceneUp(range, context){
+  const thisLine = screenplayQuill.getLine(range.index, 1);
+  
+  console.log('cursor index: ' + range.index);
+  //Current selection could be anywhere within a scene, so first cycle back
+  //through lines until we find the index of the header for this scene...
+  var currentSceneHeaderIndex = -1;
+  //(Unless we are already on a scene header, in which case we skip this step and use this line's index)
+  if(thisLine[0].statics.blotName == 'scene-header'){
+    currentSceneHeaderIndex = range.index - context.offset;
+  }
+  var prevLine = thisLine[0].prev;
+  while(currentSceneHeaderIndex == -1){
+    let prevLineType =  prevLine ? prevLine.statics.blotName : null;
+    if(prevLineType == null)
+      currentSceneHeaderIndex = 0;
+    else if(prevLineType == 'scene-header'){
+      currentSceneHeaderIndex = prevLine.offset(thisLine);
+    }
+    else
+      prevLine = prevLine.prev;
+  }
+
+  //Finding the next scene header index gives us the lower boundary of the current scene
+  var nextSceneIndex = 0;
+  var nextLine = thisLine[0].next;
+  while(nextSceneIndex == 0){
+    let nextLineType =  nextLine ? nextLine.statics.blotName : null;
+    if(nextLineType == null)
+      nextSceneIndex = -1;
+    else if(nextLineType == 'scene-header'){
+      nextSceneIndex = nextLine.offset(thisLine);
+    }
+    else
+      nextLine = nextLine.next;
+  }
+
+//We need to find the scene index before ours in order to find our insertion point. 
+//PRevline could be above our scene line or at it, depending on where the inital index was, so...
+ // if(prevLine != thisLine[0].prev) //If we started on our header line, this is the line before it, and we're good to start with it
+    prevLine = prevLine.prev; //But if we didn't, then it will be set to our header, and we need to move up a line to start
+  var insertIndex = -1;
+  while(insertIndex == -1){
+    let prevLineType =  prevLine ? prevLine.statics.blotName : null;
+    if(prevLineType == null){ //If null, insert at beginning of document
+      insertIndex = 0;
+      prevLine = screenplayQuill.getLine(0,1)[0];
+    }
+    else if(prevLineType == 'scene-header'){
+      insertIndex = prevLine.offset(thisLine);
+    }
+    else
+    prevLine = prevLine.prev;
+  }
+
+  //Nextline should now be set to the scene header just after our new insertion point, 
+  //so we can just insert our lines before it
+  if(insertIndex > -1 && currentSceneHeaderIndex > 0){
+    var sceneLength = nextSceneIndex - currentSceneHeaderIndex;
+    var linesToMove = screenplayQuill.getLines(currentSceneHeaderIndex, sceneLength);
+
+    console.log(linesToMove);
+    linesToMove.forEach(function(line){
+      prevLine.domNode.before(line.domNode); 
+    })
+
+    var selectionPoint = range.index - (currentSceneHeaderIndex - insertIndex);   
+    screenplayQuill.update();
+    screenplayQuill.setSelection(selectionPoint);
+  }
 
 }
 
@@ -390,12 +459,7 @@ function addBindingsToScreenplayQuill(q){
     shortKey: true,
     handler: function(range, context) {
 
-        const showFindReplace = require('./findreplace_display');
-        showFindReplace(project, q, function(ind){
-          console.log('display chapter by index ' + ind);
-          console.log(screenplayQuill.getContents());
-        });
-
+      console.log('current index: ' + range.index);
     }
   });
 
@@ -428,6 +492,16 @@ function addBindingsToScreenplayQuill(q){
     shortKey: true,
     handler: function(range, context) {
       moveSceneDown(range, context);
+      requestIdleCallback(updateSceneList);
+    }
+  });
+
+  q.keyboard.addBinding({
+    key: 'Up',
+    shortKey: true,
+    handler: function(range, context) {
+      moveSceneUp(range, context);
+      requestIdleCallback(updateSceneList);
     }
   });
 
