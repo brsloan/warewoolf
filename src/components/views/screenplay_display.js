@@ -8,25 +8,22 @@ const { ipcRenderer } = require('electron'); //Not technically necessary since i
 var screenplayQuill = setupQuill();
 
 function showScreenplayEditor(){
-    hideFictionEditor();
-    unhideScreenplayEditor();
-    project.activeChapterIndex = 0;
+  hideFictionEditor();
+  unhideScreenplayEditor();
+  project.activeChapterIndex = 0;
 
-    screenplayQuill.root.innerHTML = project.chapters[0].getContentsOrFile();
-    project.hasUnsavedChanges = false;
+  screenplayQuill.root.innerHTML = project.chapters[0].getContentsOrFile();
+  project.hasUnsavedChanges = false;
 
-    updateSceneList();
-    document.getElementById('chapter-list-sidebar').classList.add('sidebar-screenplay');
+  updateSceneList();
+  document.getElementById('chapter-list-sidebar').classList.add('sidebar-screenplay');
 
-    //Since I am hacking Quill by inserting HTML directly, we need to give time for the HTML to finish rendering
-    //before moving forward
-    setTimeout(function(){
-      screenplayQuill.setSelection(project.textCursorPosition);
-      screenplayQuill.focus();
-      requestIdleCallback(setWordCountOnLoad);
-    }, 10);
+  screenplayQuill.update(); //Since we're adding html manually, have to update Quill manually or settimeout for html updates
+  screenplayQuill.setSelection(project.textCursorPosition);
+  screenplayQuill.focus();
+  requestIdleCallback(setWordCountOnLoad);
 
-    updateIPCBindings();
+  updateIPCBindings();
 }
 
 function setupQuill(){
@@ -222,6 +219,81 @@ function setWordCountOnLoad(){
   project.wordCountOnLoad = countWords(screenplayQuill.getText());
 }
 
+function moveSceneDown(range, context){
+  const thisLine = screenplayQuill.getLine(range.index, 1);
+  
+  //Current selection could be anywhere within a scene, so first cycle back
+  //through lines until we find the index of the header for this scene...
+  var currentSceneHeaderIndex = -1;
+  //(Unless we are already on a scene header, in which case we skip this step and use this line's index)
+  if(thisLine[0].statics.blotName == 'scene-header'){
+    currentSceneHeaderIndex = range.index - context.offset;
+  }
+  var prevLine = thisLine[0].prev;
+  while(currentSceneHeaderIndex == -1){
+    var prevLineType =  prevLine ? prevLine.statics.blotName : null;
+    if(prevLineType == null)
+      currentSceneHeaderIndex = 0;
+    else if(prevLineType == 'scene-header'){
+      currentSceneHeaderIndex = prevLine.offset(thisLine);
+    }
+    else
+      prevLine = prevLine.prev;
+  }
+
+  //Finding the next scene header index gives us the lower boundary of the current scene
+  var nextSceneIndex = 0;
+  var nextLine = thisLine[0].next;
+  while(nextSceneIndex == 0){
+    let nextLineType =  nextLine ? nextLine.statics.blotName : null;
+    if(nextLineType == null)
+      nextSceneIndex = -1;
+    else if(nextLineType == 'scene-header'){
+      nextSceneIndex = nextLine.offset(thisLine);
+    }
+    else
+      nextLine = nextLine.next;
+  }
+
+//We need to find the third scene index in order to find our insertion point. 
+//Nextline should still be on the second scene line, so continue from there...
+  var insertIndex = 0;
+  nextLine = nextLine.next;
+  while(insertIndex == 0){
+    let nextLineType =  nextLine ? nextLine.statics.blotName : null;
+    if(nextLineType == null)
+      insertIndex = -1;
+    else if(nextLineType == 'scene-header'){
+      insertIndex = nextLine.offset(thisLine);
+    }
+    else
+    nextLine = nextLine.next;
+  }
+
+  //Nextline should now be set to the scene header just after our new insertion point, 
+  //so we can just insert our lines before it
+  if(nextSceneIndex > 0){
+    var sceneLength = nextSceneIndex - currentSceneHeaderIndex;
+    var linesToMove = screenplayQuill.getLines(currentSceneHeaderIndex, sceneLength);
+
+    linesToMove.forEach(function(line){
+      nextLine.domNode.before(line.domNode); 
+    })
+
+    console.log('insert index: ' + insertIndex + ', scene length: ' + sceneLength);
+    var selectionPoint = range.index + (insertIndex - nextSceneIndex);
+    console.log(insertIndex + ' - ' + sceneLength + ' = ' + selectionPoint);
+   
+    screenplayQuill.update();
+    screenplayQuill.setSelection(selectionPoint);
+  }
+
+}
+
+function moveSceneUp(){
+
+}
+
 /* ~~~~~~~~~~~~~~ Event Handlers / Key Bindings ~~~~~~~~~~~~~ */
 
 function getInitialBindings(){
@@ -348,6 +420,14 @@ function addBindingsToScreenplayQuill(q){
     shortKey: true,
     handler: function(range, context) {
       this.quill.format('align', 'right', 'user');
+    }
+  });
+
+  q.keyboard.addBinding({
+    key: 'Down',
+    shortKey: true,
+    handler: function(range, context) {
+      moveSceneDown(range, context);
     }
   });
 
@@ -478,6 +558,11 @@ function editorHasFocus(){
 
 function editorIsVisible(){
   return document.getElementById('writing-field').classList.contains('visible');
+}
+
+function stopDefaultPropagation(keyEvent){
+  keyEvent.preventDefault();
+  keyEvent.stopPropagation();
 }
 
 module.exports = {
