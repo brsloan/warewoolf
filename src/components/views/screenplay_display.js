@@ -329,8 +329,9 @@ function moveSceneUp(range, context){
   var nextLine = thisLine[0].next;
   while(nextSceneIndex == 0){
     let nextLineType =  nextLine ? nextLine.statics.blotName : null;
-    if(nextLineType == null)
-      nextSceneIndex = -1;
+    if(nextLineType == null){//If no more scenes at end of document
+      nextSceneIndex = screenplayQuill.getLength();
+    }
     else if(nextLineType == 'scene-header'){
       nextSceneIndex = nextLine.offset(thisLine);
     }
@@ -359,8 +360,11 @@ function moveSceneUp(range, context){
   //Nextline should now be set to the scene header just after our new insertion point, 
   //so we can just insert our lines before it
   if(insertIndex > -1 && currentSceneHeaderIndex > 0){
+    console.log('current scne header:' + currentSceneHeaderIndex);
+    console.log('next scene index: '  + nextSceneIndex);
     var sceneLength = nextSceneIndex - currentSceneHeaderIndex;
     var linesToMove = screenplayQuill.getLines(currentSceneHeaderIndex, sceneLength);
+    console.log(linesToMove);
 
     linesToMove.forEach(function(line){
       prevLine.domNode.before(line.domNode); 
