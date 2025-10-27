@@ -15,6 +15,7 @@ function showScreenplayEditor(){
 
   screenplayQuill.root.innerHTML = project.chapters[0].getContentsOrFile();
   screenplayQuill.update(); //Since we're adding html manually, have to update Quill manually or settimeout for html updates
+  screenplayQuill.history.clear(); //So they can't undo past file load
   project.hasUnsavedChanges = false; //Correct for initial insert setting off onchange event and marking unsaved changes
   screenplayQuill.setSelection(project.textCursorPosition);
   screenplayQuill.focus();
@@ -342,7 +343,7 @@ function moveSceneUp(range, context){
 //We need to find the scene index before ours in order to find our insertion point. 
 //PRevline could be above our scene line or at it, depending on where the inital index was, so...
  // if(prevLine != thisLine[0].prev) //If we started on our header line, this is the line before it, and we're good to start with it
-    prevLine = prevLine.prev; //But if we didn't, then it will be set to our header, and we need to move up a line to start
+    prevLine = prevLine ? prevLine.prev : null; //But if we didn't, then it will be set to our header, and we need to move up a line to start
   var insertIndex = -1;
   while(insertIndex == -1){
     let prevLineType =  prevLine ? prevLine.statics.blotName : null;
@@ -360,11 +361,8 @@ function moveSceneUp(range, context){
   //Nextline should now be set to the scene header just after our new insertion point, 
   //so we can just insert our lines before it
   if(insertIndex > -1 && currentSceneHeaderIndex > 0){
-    console.log('current scne header:' + currentSceneHeaderIndex);
-    console.log('next scene index: '  + nextSceneIndex);
     var sceneLength = nextSceneIndex - currentSceneHeaderIndex;
     var linesToMove = screenplayQuill.getLines(currentSceneHeaderIndex, sceneLength);
-    console.log(linesToMove);
 
     linesToMove.forEach(function(line){
       prevLine.domNode.before(line.domNode); 
