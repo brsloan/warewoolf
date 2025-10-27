@@ -562,8 +562,14 @@ function createNewProject(){
       project.author = userSettings.defaultAuthor;
       project.notesChap = newChapter();
       addNewChapter();
-      setUpQuills();
-      displayProject();
+      if(project.screenplay){
+        const { showScreenplayEditor } = require('./components/views/screenplay_display');
+        showScreenplayEditor();
+      }
+      else{
+        setUpQuills();
+        displayProject();
+      }
     }
   });
 }
@@ -572,18 +578,21 @@ function addNewChapter(){
   var currentIndexIs = chapIndexIs(project.activeChapterIndex);
   var newChap = newChapter();
   newChap.hasUnsavedChanges = true;
-  newChap.contents = getEmptyDelta();
+  newChap.contents = project.screenplay ? '<p class="action-block"></p>' : getEmptyDelta();
   if(currentIndexIs.chapter || currentIndexIs.trash)
     project.chapters.splice(project.activeChapterIndex + 1, 0, newChap);
   else
     project.reference.splice(project.activeChapterIndex - project.chapters.length + 1, 0, newChap);
   
   project.hasUnsavedChanges = true;
-  updateFileList();
-  var thisIndex = currentIndexIs.chapter || currentIndexIs.trash ? project.chapters.indexOf(newChap) : project.reference.indexOf(newChap);
-  displayChapterByIndex(thisIndex);
-  editorQuill.enable();
-  changeChapterTitle(thisIndex);
+  
+  if(project.screenplay == false){
+    updateFileList();
+    var thisIndex = currentIndexIs.chapter || currentIndexIs.trash ? project.chapters.indexOf(newChap) : project.reference.indexOf(newChap);
+    displayChapterByIndex(thisIndex);
+    editorQuill.enable();
+    changeChapterTitle(thisIndex);
+  }
 }
 
 function saveProject(){

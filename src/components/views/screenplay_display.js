@@ -9,6 +9,7 @@ var screenplayQuill = setupQuill();
 
 function showScreenplayEditor(){
     project.activeChapterIndex = 0;
+
     screenplayQuill.root.innerHTML = project.chapters[0].getContentsOrFile();
 
     updateSceneList();
@@ -37,13 +38,15 @@ function setupQuill(){
 
 function createEditorDiv(){
     const screenplayEditorDivName = 'editor-container-screenplay';
-    var screenplayEditorDiv = document.createElement('div');
-    screenplayEditorDiv.id = screenplayEditorDivName;
+
+    if(document.getElementById(screenplayEditorDivName) == null){
+      var screenplayEditorDiv = document.createElement('div');
+      screenplayEditorDiv.id = screenplayEditorDivName;
+      var writingFieldDiv = document.getElementById('writing-field');
+      writingFieldDiv.appendChild(screenplayEditorDiv);
+    }
 
     hideFictionEditor();
-
-    var writingFieldDiv = document.getElementById('writing-field');
-    writingFieldDiv.appendChild(screenplayEditorDiv);
 
     return screenplayEditorDivName;
 }
@@ -232,10 +235,11 @@ function getInitialBindings(){
         if(context.offset == 0 && range.length < 1){
           useDefaultBackspace = false;
           const thisLine = this.quill.getLine(range.index, 1);
-          const prevLineType = thisLine[0].prev.statics.blotName;
+          const prevLineType = thisLine[0].prev ? thisLine[0].prev.statics.blotName : null;
 
           this.quill.deleteText(range.index - 1, 1, 'user');
-          this.quill.format(prevLineType, 'true');
+          if(prevLineType)
+            this.quill.format(prevLineType, 'true');
         }
         
           return useDefaultBackspace;
@@ -248,7 +252,7 @@ function getInitialBindings(){
         const isEmptyLine = context.empty;
         const thisLine = this.quill.getLine(range.index, 1);
         const thisLineType = thisLine[0].statics.blotName;
-        const nextLineType = thisLine[0].next.statics.blotName;
+        const nextLineType = thisLine[0].next ? thisLine[0].next.statics.blotName : null;
 
         if(atEndOfBlock){
           if(thisLineType == 'action-block' && isEmptyLine)
@@ -287,8 +291,9 @@ function getInitialBindings(){
       handler:function(range, context){
         var useDefaultEnter = true;
         const thisLine = this.quill.getLine(range.index, 1);
+
         const thisLineType = thisLine[0].statics.blotName;
-        const nextLineType = thisLine[0].next.statics.blotName;
+        const nextLineType = thisLine[0].next ? thisLine[0].next.statics.blotName : null;
 
         if(thisLineType == 'parenthetical-block' && context.offset > 0 && context.suffix.length > 0){
           useDefaultEnter = false;
@@ -361,7 +366,7 @@ function addBindingsToScreenplayQuill(q){
     if(e.key == "Enter"){
       const selectionIndex = q.getSelection().index;
       const thisLine = q.getLine(selectionIndex, 1);
-      const previousLineType = thisLine[0].prev.statics.blotName;
+      const previousLineType = thisLine[0].prev ? thisLine[0].prev.statics.blotName : null;
       const enteringNewPara = thisLine[0].cache.length == 1;
       const enterWasPressedAtBeginningOfBlock = thisLine[0].prev.cache.length == 1;
 
