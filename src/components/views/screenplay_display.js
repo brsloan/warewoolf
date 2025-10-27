@@ -258,30 +258,42 @@ function moveSceneDown(range, context){
       nextLine = nextLine.next;
   }
 
-//We need to find the third scene index in order to find our insertion point. 
-//Nextline should still be on the second scene line, so continue from there...
-  var insertIndex = 0;
-  nextLine = nextLine.next;
-  while(insertIndex == 0){
-    let nextLineType =  nextLine ? nextLine.statics.blotName : null;
-    if(nextLineType == null)
-      insertIndex = -1;
-    else if(nextLineType == 'scene-header'){
-      insertIndex = nextLine.offset(thisLine);
-    }
-    else
+  if(nextLine){//Only continue if this scene isn't already at the end of the document
+
+  //We need to find the third scene index in order to find our insertion point. 
+  //Nextline should still be on the second scene line, so continue from there...
+    var insertIndex = 0;
     nextLine = nextLine.next;
-  }
+    while(insertIndex == 0){
+      let nextLineType =  nextLine ? nextLine.statics.blotName : null;
+      if(nextLineType == null){
+        insertIndex = -1; //Flag that we are inserting at the end of the document
+      }
+      else if(nextLineType == 'scene-header'){
+        insertIndex = nextLine.offset(thisLine);
+      }
+      else
+      nextLine = nextLine.next;
+    }
 
   //Nextline should now be set to the scene header just after our new insertion point, 
   //so we can just insert our lines before it
-  if(nextSceneIndex > 0){
     var sceneLength = nextSceneIndex - currentSceneHeaderIndex;
     var linesToMove = screenplayQuill.getLines(currentSceneHeaderIndex, sceneLength);
 
-    linesToMove.forEach(function(line){
-      nextLine.domNode.before(line.domNode); 
-    })
+    if(insertIndex > -1)
+      linesToMove.forEach(function(line){
+        nextLine.domNode.before(line.domNode); 
+      });
+    else{//If moving to end of document...
+      var endOfDocIndex = screenplayQuill.getLength();
+      insertIndex = endOfDocIndex;
+      var lastLine = screenplayQuill.getLine(endOfDocIndex, 0)[0];
+      linesToMove.reverse();
+      linesToMove.forEach(function(line){
+        lastLine.domNode.after(line.domNode); 
+      });
+    }
 
     var selectionPoint = range.index + (insertIndex - nextSceneIndex);   
     screenplayQuill.update();
@@ -293,7 +305,6 @@ function moveSceneDown(range, context){
 function moveSceneUp(range, context){
   const thisLine = screenplayQuill.getLine(range.index, 1);
   
-  console.log('cursor index: ' + range.index);
   //Current selection could be anywhere within a scene, so first cycle back
   //through lines until we find the index of the header for this scene...
   var currentSceneHeaderIndex = -1;
@@ -351,7 +362,6 @@ function moveSceneUp(range, context){
     var sceneLength = nextSceneIndex - currentSceneHeaderIndex;
     var linesToMove = screenplayQuill.getLines(currentSceneHeaderIndex, sceneLength);
 
-    console.log(linesToMove);
     linesToMove.forEach(function(line){
       prevLine.domNode.before(line.domNode); 
     })
