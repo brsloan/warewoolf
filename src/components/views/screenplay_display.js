@@ -132,11 +132,28 @@ function updateSceneList(){
   document.getElementById('chapters-header').innerText = project.hasUnsavedChanges ? 'Scenes*' : 'Scenes';
 
   var scenes = document.getElementsByClassName('scene-header');
+
+  var currentScene = null;
   for(let i=0;i<scenes.length;i++){
     var scene = document.createElement('li');
     scene.innerText = scenes[i].innerText.toLowerCase();
+
+    
+    if(currentScene == null && scenes[i].offsetTop > screenplayQuill.root.scrollTop){
+      scene.classList.add('activeChapter');
+      currentScene = scene;
+    }
+    
+    scene.onclick = function(){
+      screenplayQuill.setSelection(screenplayQuill.getIndex(Quill.find(scenes[i])), 0);
+      scenes[i].scrollIntoView({block: 'center'});
+      updateSceneList();
+    }
+
     list.appendChild(scene);
   }
+
+  currentScene.scrollIntoView({block: 'center'});
 
 }
 
@@ -149,20 +166,6 @@ function clearDiv(d){
       //console.log(err);
     }
   }
-}
-
-function getScreenplayQuillText(){
-  var screenplayEditor = document.getElementById('screenplay-editor');
-
-  var text = '';
-
-  var elements = screenplayEditor.children;
-
-  for(let i=0;i<elements.length;i++){
-    text += elements[i].innerText + '\n';
-  }
-  
-  return text;
 }
 
 function estimatePageLength(){
@@ -375,6 +378,52 @@ function moveSceneUp(range, context){
 
 }
 
+function jumpToNextHeading(range, context){
+  const thisLine = screenplayQuill.getLine(range.index, 1);
+
+  var nextSceneIndex = 0;
+  var nextLine = thisLine[0].next;
+  while(nextSceneIndex == 0){
+    let nextLineType =  nextLine ? nextLine.statics.blotName : null;
+    if(nextLineType == null)
+      nextSceneIndex = -1;
+    else if(nextLineType == 'scene-header'){
+      nextSceneIndex = nextLine.offset(thisLine);
+    }
+    else
+      nextLine = nextLine.next;
+  }
+
+  if(nextLine && nextSceneIndex != null){
+    screenplayQuill.setSelection(nextSceneIndex, 0);
+    nextLine.domNode.scrollIntoView({block: 'center'});
+  }
+}
+
+function jumpToPreviousHeading(range, context){
+  const thisLine = screenplayQuill.getLine(range.index, 1);
+  
+  var prevSceneHeaderIndex = -1;
+  var prevLine = thisLine[0].prev;
+  while(prevSceneHeaderIndex == -1){
+    let prevLineType =  prevLine ? prevLine.statics.blotName : null;
+    if(prevLineType == null)
+      prevSceneHeaderIndex = 0;
+    else if(prevLineType == 'scene-header'){
+      prevSceneHeaderIndex = prevLine.offset(thisLine);
+    }
+    else
+      prevLine = prevLine.prev;
+  }
+
+  if(prevSceneHeaderIndex > -1){
+    screenplayQuill.setSelection(prevSceneHeaderIndex, 0);
+    if(prevLine)
+      prevLine.domNode.scrollIntoView({block: 'center'});
+  }
+
+}
+
 /* ~~~~~~~~~~~~~~ Event Handlers / Key Bindings ~~~~~~~~~~~~~ */
 
 function getInitialBindings(){
@@ -502,6 +551,7 @@ function addBindingsToScreenplayQuill(q){
   q.keyboard.addBinding({
     key: 'Down',
     shortKey: true,
+    shiftKey: true,
     handler: function(range, context) {
       moveSceneDown(range, context);
       requestIdleCallback(updateSceneList);
@@ -511,8 +561,27 @@ function addBindingsToScreenplayQuill(q){
   q.keyboard.addBinding({
     key: 'Up',
     shortKey: true,
+    shiftKey: true,
     handler: function(range, context) {
       moveSceneUp(range, context);
+      requestIdleCallback(updateSceneList);
+    }
+  });
+
+  q.keyboard.addBinding({
+    key: 'Down',
+    shortKey: true,
+    handler: function(range, context) {
+      jumpToNextHeading(range, context);
+      requestIdleCallback(updateSceneList);
+    }
+  });
+
+  q.keyboard.addBinding({
+    key: 'Up',
+    shortKey: true,
+    handler: function(range, context) {
+      jumpToPreviousHeading(range,context);
       requestIdleCallback(updateSceneList);
     }
   });
