@@ -8,15 +8,18 @@ const { ipcRenderer } = require('electron'); //Not technically necessary since i
 var screenplayQuill = setupQuill();
 
 function showScreenplayEditor(){
+    hideFictionEditor();
+    unhideScreenplayEditor();
     project.activeChapterIndex = 0;
 
     screenplayQuill.root.innerHTML = project.chapters[0].getContentsOrFile();
+    project.hasUnsavedChanges = false;
 
     updateSceneList();
     document.getElementById('chapter-list-sidebar').classList.add('sidebar-screenplay');
 
-    //Appears that since I am hacking Quill a bit by directly placing contents into its HTML instead of using its own
-    //painfully slow function, I have to set a delay before manipulating that HTML through Quill, for mysterious reasons
+    //Since I am hacking Quill by inserting HTML directly, we need to give time for the HTML to finish rendering
+    //before moving forward
     setTimeout(function(){
       screenplayQuill.setSelection(project.textCursorPosition);
       screenplayQuill.focus();
@@ -39,14 +42,10 @@ function setupQuill(){
 function createEditorDiv(){
     const screenplayEditorDivName = 'editor-container-screenplay';
 
-    if(document.getElementById(screenplayEditorDivName) == null){
-      var screenplayEditorDiv = document.createElement('div');
-      screenplayEditorDiv.id = screenplayEditorDivName;
-      var writingFieldDiv = document.getElementById('writing-field');
-      writingFieldDiv.appendChild(screenplayEditorDiv);
-    }
-
-    hideFictionEditor();
+    var screenplayEditorDiv = document.createElement('div');
+    screenplayEditorDiv.id = screenplayEditorDivName;
+    var writingFieldDiv = document.getElementById('writing-field');
+    writingFieldDiv.appendChild(screenplayEditorDiv);   
 
     return screenplayEditorDivName;
 }
@@ -54,6 +53,11 @@ function createEditorDiv(){
 function hideFictionEditor(){
   var fictionEditorDiv = document.getElementById('editor-container');
   fictionEditorDiv.classList.add('hidden');
+}
+
+function unhideScreenplayEditor(){
+  var screenplayEditorContainer = document.getElementById('editor-container-screenplay');
+  screenplayEditorContainer.classList.remove('hidden');
 }
 
 function addScreenplayFormats(){
@@ -367,8 +371,8 @@ function addBindingsToScreenplayQuill(q){
       const selectionIndex = q.getSelection().index;
       const thisLine = q.getLine(selectionIndex, 1);
       const previousLineType = thisLine[0].prev ? thisLine[0].prev.statics.blotName : null;
-      const enteringNewPara = thisLine[0].cache.length == 1;
-      const enterWasPressedAtBeginningOfBlock = thisLine[0].prev.cache.length == 1;
+      const enteringNewPara = thisLine[0].cache && thisLine[0].cache.length == 1;
+      const enterWasPressedAtBeginningOfBlock = thisLine[0].prev && thisLine[0].prev.cache.length == 1;
 
       switch(previousLineType){
         case 'scene-header':

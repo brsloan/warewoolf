@@ -183,9 +183,8 @@ function unhideFictionEditor(){
 
 function removeScreenplayEditor(){
   var screenplayEditorContainer = document.getElementById('editor-container-screenplay');
-  //screenplayEditorContainer.classList.add('hidden');
   if(screenplayEditorContainer)
-    screenplayEditorContainer.remove();
+    screenplayEditorContainer.classList.add('hidden');
 }
 
 function setWordCountOnLoad(){
