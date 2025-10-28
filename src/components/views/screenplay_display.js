@@ -25,7 +25,6 @@ function showScreenplayEditor(){
   refreshNotes();
 
   updateIPCBindings();
-  editorEventsController.abort();
 }
 
 function refreshNotes(){
