@@ -22,8 +22,23 @@ function showScreenplayEditor(){
   
   requestIdleCallback(updateSceneList);
   requestIdleCallback(setWordCountOnLoad);
+  refreshNotes();
 
   updateIPCBindings();
+  editorEventsController.abort();
+}
+
+function refreshNotes(){
+  var correctNotesChap = userSettings.displayChapNotes ? chap : project.notesChap;
+  var notes;
+  if(correctNotesChap.notes != undefined && correctNotesChap.notes != null){
+    notes = correctNotesChap.notes;
+  }
+  else {
+    let savedNotes = correctNotesChap.getNotesFile();
+    notes = savedNotes ? savedNotes : getEmptyDelta();
+  }
+  notesQuill.setContents(notes, 'api');
 }
 
 function setupQuill(){
@@ -153,7 +168,8 @@ function updateSceneList(){
     list.appendChild(scene);
   }
 
-  currentScene.scrollIntoView({block: 'center'});
+  if(currentScene)
+    currentScene.scrollIntoView({block: 'center'});
 
 }
 
@@ -554,7 +570,6 @@ function addBindingsToScreenplayQuill(q){
     shiftKey: true,
     handler: function(range, context) {
       moveSceneDown(range, context);
-      requestIdleCallback(updateSceneList);
     }
   });
 
@@ -564,7 +579,6 @@ function addBindingsToScreenplayQuill(q){
     shiftKey: true,
     handler: function(range, context) {
       moveSceneUp(range, context);
-      requestIdleCallback(updateSceneList);
     }
   });
 
@@ -573,7 +587,6 @@ function addBindingsToScreenplayQuill(q){
     shortKey: true,
     handler: function(range, context) {
       jumpToNextHeading(range, context);
-      requestIdleCallback(updateSceneList);
     }
   });
 
@@ -582,7 +595,6 @@ function addBindingsToScreenplayQuill(q){
     shortKey: true,
     handler: function(range, context) {
       jumpToPreviousHeading(range,context);
-      requestIdleCallback(updateSceneList);
     }
   });
 
@@ -725,5 +737,6 @@ function stopDefaultPropagation(keyEvent){
 }
 
 module.exports = {
-  showScreenplayEditor
+  showScreenplayEditor,
+  updateSceneList
 }

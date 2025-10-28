@@ -13,6 +13,7 @@ const {
 } = require('./components/controllers/utils');
 const fileRequestedOnOpen = ipcRenderer.sendSync('get-file-requested-on-open');
 const { showBattery } = require('./components/views/battery_display');
+const editorEventsController = new AbortController(); //To allow disabling eventListeners from screenplay_display.js
 
 var editorQuill = new Quill('#editor-container', {
   modules: {
@@ -377,10 +378,6 @@ function getEmptyDelta(){
 
 function displayInitialChapter(){
   displayChapterByIndex(project.activeChapterIndex);
-  if(project.screenplay){
-    const {styleFountainInlineMarkers} = require('./components/controllers/screenplay');
-    styleFountainInlineMarkers(editorQuill);
-  };
 }
 
 function togglePanelDisplay(p){
@@ -601,6 +598,10 @@ function saveProject(){
     project.hasUnsavedChanges = false;
     if(project.screenplay == false)
       updateFileList();
+    else {
+      const { updateSceneList } = require('./components/views/screenplay_display');
+      updateSceneList();
+    }
   }
   else
     saveProjectAs();
@@ -1187,8 +1188,8 @@ document.addEventListener ("keydown", function (e) {
 } );
 
 document.getElementById('editor-container').addEventListener('keydown', editorControlEvents);
-document.getElementById('chapter-list-sidebar').addEventListener('keydown', editorControlEvents);
-document.getElementById('notes-editor').addEventListener('keydown', editorControlEvents);
+document.getElementById('chapter-list-sidebar').addEventListener('keydown', editorControlEvents, { signal: editorEventsController.signal });
+document.getElementById('notes-editor').addEventListener('keydown', editorControlEvents, {signal: editorEventsController.signal});
 
 function editorControlEvents(e){
   if ((e.ctrlKey || e.metaKey)  && e.shiftKey && e.key === "ArrowUp") {
