@@ -104,7 +104,7 @@ function quillHtmlToFountain(html){
     const matchesIterator = html.matchAll(classesAndValue);
     const matches = Array.from(matchesIterator);
 
-    var fountain = '';
+    var fountain = '\n';
 
     matches.forEach(function(match, i){
         var nextClasses = i < matches.length - 1 ? matches[i + 1][1] : null;
