@@ -656,6 +656,10 @@ function addBindingsToScreenplayQuill(q){
       requestIdleCallback(updateSceneList);
     }
   });
+
+  q.root.addEventListener('scroll', function(e){
+    requestIdleCallback(updateSceneList);
+  })
 };
 
 function checkForFormatMatch(str){
