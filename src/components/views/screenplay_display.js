@@ -183,7 +183,7 @@ function clearDiv(d){
   }
 }
 
-function estimatePageLength(){
+function estimateScreenplayPageLength(){
   //Since screenplays have a very rigid page layout with monospace text,
   //we should be able to estimate page length fairly accurately based on some averages.
   const linesPerParenthetical = 1;
@@ -737,5 +737,6 @@ function stopDefaultPropagation(keyEvent){
 
 module.exports = {
   showScreenplayEditor,
-  updateSceneList
+  updateSceneList,
+  estimateScreenplayPageLength
 }

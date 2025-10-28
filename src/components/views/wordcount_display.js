@@ -1,5 +1,5 @@
 const { closePopups, createButton, removeElementsByClass, generateRow } = require('../controllers/utils');
-const { countWords, getTotalWordCount } = require('../controllers/wordcount');
+const { countWords, getTotalWordCount } = require('../controllers/wordcount'); 
 
 function showWordCount(project, editorQuill){
     removeElementsByClass('popup');
@@ -12,13 +12,15 @@ function showWordCount(project, editorQuill){
 
     var cntTbl = document.createElement('table');
 
-    var chapLabel = document.createElement('label');
-    chapLabel.innerText = 'Chapter: ';
+    if(project.screenplay == false){
+      var chapLabel = document.createElement('label');
+      chapLabel.innerText = 'Chapter: ';
 
-    var chapTotalDisplay = document.createElement('p');
-    chapTotalDisplay.innerText = "Calculating...";
+      var chapTotalDisplay = document.createElement('p');
+      chapTotalDisplay.innerText = "Calculating...";
 
-    cntTbl.appendChild(generateRow(chapLabel, chapTotalDisplay));
+      cntTbl.appendChild(generateRow(chapLabel, chapTotalDisplay));
+    }
 
     var totalLabel = document.createElement('label');
     totalLabel.innerText = 'Project: ';
@@ -60,6 +62,18 @@ function showWordCount(project, editorQuill){
     progressBarContainer.appendChild(progressBarFill);
     popup.appendChild(progressBarContainer);
 
+    if(project.screenplay){
+      popup.appendChild(document.createElement('hr'));
+      var pageTitle = document.createElement('h1');
+      pageTitle.innerText = 'Pages';
+      popup.appendChild(pageTitle);
+
+      var pageNumberDisplay = document.createElement('p');
+      pageNumberDisplay.innerText = 'Calculating...';
+      popup.appendChild(pageNumberDisplay);
+      popup.appendChild(document.createElement('hr'));
+    }
+
     var closeBtn = createButton("Close");
     closeBtn.onclick = function(){
       closePopups();
@@ -76,10 +90,18 @@ function showWordCount(project, editorQuill){
       project.wordGoal = goalInput.value;
       updateProgressBar();
     };
-
-    chapTotalDisplay.innerText = activeTotal;
+    
+    if(project.screenplay == false)
+      chapTotalDisplay.innerText = activeTotal;
     totalDisplay.innerText = total;
     sessionTotalDisplay.innerText = total - project.wordCountOnLoad;
+
+    if(project.screenplay){
+      const { estimateScreenplayPageLength } = require('./screenplay_display');
+      let pageLength = estimateScreenplayPageLength();
+      if(pageLength)
+        pageNumberDisplay.innerText = pageLength.eighths;
+    }
     closeBtn.focus();
 
     function updateProgressBar(){
