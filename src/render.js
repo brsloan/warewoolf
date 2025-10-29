@@ -1196,7 +1196,6 @@ function attachEditorEventListeners(){
   document.getElementById('notes-editor').addEventListener('keydown', editorControlEvents);
 }
 
-
 function removeEditoreventListeners(){
   document.getElementById('editor-container').removeEventListener('keydown', editorControlEvents);
   document.getElementById('chapter-list-sidebar').removeEventListener('keydown', editorControlEvents);
