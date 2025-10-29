@@ -560,3 +560,8 @@ display: block;
 .sidebar-screenplay li{
   text-transform: capitalize;
 }
+
+.suggestion-box {
+  display: block;
+  position: absolute;
+}

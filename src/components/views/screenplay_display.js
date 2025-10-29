@@ -436,7 +436,77 @@ function jumpToPreviousHeading(range, context){
     if(prevLine)
       prevLine.domNode.scrollIntoView({block: 'center'});
   }
+}
 
+function getCharacterList(){
+  const toBeRemoved = /\(V\.O\.\)|\(O\.S\.\)|\(O\.C\.\)|\(SUBTITLE\)|\(CONT'D\)/g;
+  
+  const cues = document.getElementsByClassName('character-cue');
+  var characters = [];
+  for(let i=0;i<cues.length;i++){
+    let text = cues[i].innerText.replace(toBeRemoved,'').trim();
+    if(characters.includes(text) == false)
+      characters.push(text);
+  }
+
+  return characters.sort();
+}
+
+function getLocationList(){
+  const locationMatch = /^(?:(?:[iI][nN][tT]\.?\/[eE][xX][tT].?|[iI][nN][tT]|[eE][xX][tT]|[eE][sS][tT]|[iI]\.?\/[eE]\.?)[.\s\/]([^\n-]+)).*/;
+
+  const scenes = document.getElementsByClassName('scene-header');
+  var locations = [];
+  for(let i=0;i<scenes.length;i++){
+    let text = scenes[i].innerText.match(locationMatch)[1].trim();
+    if(locations.includes(text) == false)
+      locations.push(text);
+  }
+
+  return locations.sort();
+}
+
+function displaySuggestionBox(suggestions){
+  var selectedIndex = screenplayQuill.getSelection(true).index;
+
+  var suggestionBox = document.createElement('div');
+  suggestionBox.classList.add('suggestion-box');
+  var suggestionList = document.createElement('select');
+  suggestionList.size = 5;
+
+  suggestions.forEach(function(suggestion){
+    let sugOption = document.createElement('option');
+    sugOption.value = suggestion;
+    sugOption.innerText = suggestion;
+    suggestionList.appendChild(sugOption);
+  });
+
+  suggestionBox.appendChild(suggestionList);
+
+  suggestionBox.addEventListener("keydown", function(e){
+    if(e.key === "Enter" || e.key === "Tab"){
+      stopDefaultPropagation(e);
+      screenplayQuill.insertText(selectedIndex, suggestionList.value);
+      removeElementsByClass('suggestion-box');
+      screenplayQuill.focus();
+    }
+    else if (e.key === "Escape"){
+      removeElementsByClass('suggestion-box');
+      screenplayQuill.focus();
+    }
+  });
+
+  suggestionBox.onblur = function(){
+      removeElementsByClass('suggestion-box');
+  }
+
+  var cursorBounds = screenplayQuill.getBounds(selectedIndex);
+  var editorBounds = screenplayQuill.root.getBoundingClientRect();
+  suggestionBox.style.left = cursorBounds.left + editorBounds.left + 'px';
+  suggestionBox.style.top = cursorBounds.top + cursorBounds.height + + editorBounds.top + 'px';
+
+  document.body.appendChild(suggestionBox);
+  suggestionList.focus();
 }
 
 /* ~~~~~~~~~~~~~~ Event Handlers / Key Bindings ~~~~~~~~~~~~~ */
@@ -536,6 +606,7 @@ function addBindingsToScreenplayQuill(q){
     handler: function(range, context) {
 
       console.log('current index: ' + range.index);
+      displaySuggestionBox(getCharacterList());
     }
   });
 
