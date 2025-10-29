@@ -4,6 +4,7 @@ just too slow (2-5 seconds to load a full screenplay). You aren't supposed to di
 get...wonky. Plan to eventually replace Quill with my own editor object. */
 
 const { ipcRenderer } = require('electron'); //Not technically necessary since it has access through global const in render.js
+const { removeElementsByClass } = require('../controllers/utils');
 
 var screenplayQuill = setupQuill();
 
@@ -458,7 +459,8 @@ function getLocationList(){
   const scenes = document.getElementsByClassName('scene-header');
   var locations = [];
   for(let i=0;i<scenes.length;i++){
-    let text = scenes[i].innerText.match(locationMatch)[1].trim();
+    let locMatch = scenes[i].innerText.match(locationMatch);
+    let text = locMatch ? locMatch[1].trim() : scenes[i].innerText;
     if(locations.includes(text) == false)
       locations.push(text);
   }
@@ -466,47 +468,97 @@ function getLocationList(){
   return locations.sort();
 }
 
-function displaySuggestionBox(suggestions){
-  var selectedIndex = screenplayQuill.getSelection(true).index;
+function displaySuggestionBox(suggestions, selectFunction = null){
+  console.log('display box');
+  removeElementsByClass('suggestion-box');
+  if(suggestions.length > 0){
+    var selectedIndex = screenplayQuill.getSelection(true).index;
 
-  var suggestionBox = document.createElement('div');
-  suggestionBox.classList.add('suggestion-box');
-  var suggestionList = document.createElement('select');
-  suggestionList.size = 5;
+    var suggestionBox = document.createElement('div');
+    suggestionBox.classList.add('suggestion-box');
+    var suggestionList = document.createElement('select');
+    suggestionList.id = 'suggestion-list';
+    suggestionList.size = 5;
 
-  suggestions.forEach(function(suggestion){
-    let sugOption = document.createElement('option');
-    sugOption.value = suggestion;
-    sugOption.innerText = suggestion;
-    suggestionList.appendChild(sugOption);
-  });
+    suggestions.forEach(function(suggestion){
+      let sugOption = document.createElement('option');
+      sugOption.value = suggestion;
+      sugOption.innerText = suggestion;
+      suggestionList.appendChild(sugOption);
+    });
 
-  suggestionBox.appendChild(suggestionList);
+    suggestionList.selectedIndex = 0;
+    suggestionBox.appendChild(suggestionList);
 
-  suggestionBox.addEventListener("keydown", function(e){
-    if(e.key === "Enter" || e.key === "Tab"){
-      stopDefaultPropagation(e);
-      screenplayQuill.insertText(selectedIndex, suggestionList.value);
-      removeElementsByClass('suggestion-box');
-      screenplayQuill.focus();
+    suggestionBox.addEventListener("keydown", function(e){
+      if(e.key === "Enter" || e.key === "Tab"){
+        stopDefaultPropagation(e);
+        if(selectFunction)
+          selectFunction(suggestionList.value);
+        removeElementsByClass('suggestion-box');
+        screenplayQuill.focus();
+      }
+      else if (e.key === "Escape"){
+        removeElementsByClass('suggestion-box');
+        screenplayQuill.focus();
+      }
+    });
+
+    screenplayQuill.root.addEventListener("keydown", function(e){
+      console.log('fired');
+      if(e.key === "Enter" || e.key === "Tab"){
+        stopDefaultPropagation(e);
+        if(selectFunction)
+          selectFunction(suggestionList.value);
+        removeElementsByClass('suggestion-box');
+        screenplayQuill.focus();
+      }
+      else if (e.key === "Escape"){
+        removeElementsByClass('suggestion-box');
+        screenplayQuill.focus();
+      }
+    }, {once: true});
+
+    suggestionBox.onblur = function(){
+        removeElementsByClass('suggestion-box');
     }
-    else if (e.key === "Escape"){
-      removeElementsByClass('suggestion-box');
-      screenplayQuill.focus();
-    }
-  });
 
-  suggestionBox.onblur = function(){
-      removeElementsByClass('suggestion-box');
+    var cursorBounds = screenplayQuill.getBounds(selectedIndex);
+    var editorBounds = screenplayQuill.root.getBoundingClientRect();
+    suggestionBox.style.left = cursorBounds.left + editorBounds.left + 'px';
+    suggestionBox.style.top = cursorBounds.top + cursorBounds.height + + editorBounds.top + 'px';
+
+    document.body.appendChild(suggestionBox);
+    //suggestionList.focus();
   }
+}
 
-  var cursorBounds = screenplayQuill.getBounds(selectedIndex);
-  var editorBounds = screenplayQuill.root.getBoundingClientRect();
-  suggestionBox.style.left = cursorBounds.left + editorBounds.left + 'px';
-  suggestionBox.style.top = cursorBounds.top + cursorBounds.height + + editorBounds.top + 'px';
+function checkForHeaderSuggestions(){
+  let selectedIndex = screenplayQuill.getSelection(true).index;
+  let line = screenplayQuill.getLine(selectedIndex)[0];
+  let lineIndex = screenplayQuill.getIndex(line);
+  let lineType = line.statics ? line.statics.blotName : null;
+  if(lineType == 'action-block' || lineType == 'scene-header'){
+    const locationMatch = /^(?:((?:[iI][nN][tT]\.?\/[eE][xX][tT].?|[iI][nN][tT]|[eE][xX][tT]|[eE][sS][tT]|[iI]\.?\/[eE]\.?)[.\s\/])([^\n]+))/;
+    let matches = line.domNode.innerText.match(locationMatch);
+    if(matches && matches[2].trim().length > 0){
+      let suggestions = getLocationList().filter(function(location){
+        let valOne = location.toUpperCase();
+        let valTwo = matches[2].trim().toUpperCase();
+        return valOne.startsWith(valTwo) && valOne != valTwo;
+      });
 
-  document.body.appendChild(suggestionBox);
-  suggestionList.focus();
+      if(suggestions.length > 0)
+        displaySuggestionBox(suggestions, function(selected){
+          let newText = matches[1] + ' ' + selected;
+          line.domNode.innerText = newText;
+          screenplayQuill.format('scene-header', true, 'user');
+          screenplayQuill.setSelection(lineIndex + newText.length);
+        });
+      else
+        removeElementsByClass('suggestion-box');
+    }
+  }
 }
 
 /* ~~~~~~~~~~~~~~ Event Handlers / Key Bindings ~~~~~~~~~~~~~ */
@@ -668,12 +720,28 @@ function addBindingsToScreenplayQuill(q){
     }
   });
 
+  q.keyboard.addBinding({
+    key: 'Down',
+    handler: function(range, context) {
+      let suggestionList = document.getElementById('suggestion-list');
+      if(suggestionList != null){
+        console.log(suggestionList);
+        suggestionList.focus();
+        return false;
+      }
+      else
+        return true;
+    }
+  });
+
   q.on('text-change', function(delta, oldDelta, source) {
     if(source == "user"){
       var chap = project.chapters[0];
       chap.contents = q.root.innerHTML;
       chap.hasUnsavedChanges = true;
       project.hasUnsavedChanges = true;
+
+      checkForHeaderSuggestions();
     }
   });
 
