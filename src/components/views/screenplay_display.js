@@ -469,7 +469,6 @@ function getLocationList(){
 }
 
 function displaySuggestionBox(suggestions, selectFunction = null){
-  console.log('display box');
   removeElementsByClass('suggestion-box');
   if(suggestions.length > 0){
     var selectedIndex = screenplayQuill.getSelection(true).index;
@@ -493,9 +492,7 @@ function displaySuggestionBox(suggestions, selectFunction = null){
 
     suggestionBox.addEventListener("keydown", function(e){
       if(e.key === "Enter" || e.key === "Tab"){
-        console.log('suggest box enter or tab');
         stopDefaultPropagation(e);
-        console.log(e);
         if(selectFunction)
           selectFunction(suggestionList.value, e);
         removeElementsByClass('suggestion-box');
@@ -510,7 +507,6 @@ function displaySuggestionBox(suggestions, selectFunction = null){
     screenplayQuill.root.addEventListener("keydown", function(e){
       if(e.key === "Enter" || e.key === "Tab"){
         stopDefaultPropagation(e);
-        console.log('once keydown for enter or tab');
         if(selectFunction)
           selectFunction(suggestionList.value, e);
         removeElementsByClass('suggestion-box');
@@ -573,10 +569,8 @@ function checkForAutofillSuggestions(){
 
       if(suggestions.length > 0)  
         displaySuggestionBox(suggestions, function(selected, e){
-        console.log('text replace function');
           line.domNode.innerText = selected;
           if(e.target.id == 'suggestion-list'){
-            console.log('key pressed in suggestion list');
             screenplayQuill.update();
             screenplayQuill.setSelection(lineIndex + selected.length);
           }
@@ -617,7 +611,6 @@ function getInitialBindings(){
     tab: {
       key: 'tab',
       handler:function(range, context){
-        console.log('initial tab handler');
         const atEndOfBlock = context.suffix == '';
         const isEmptyLine = context.empty;
         const thisLine = this.quill.getLine(range.index, 1);
@@ -659,7 +652,6 @@ function getInitialBindings(){
     enter: {
       key: 'Enter',
       handler:function(range, context){
-        console.log('initial enter handler');
         var useDefaultEnter = true;
 
         const suggestionBox = document.getElementById('suggestion-box');
@@ -689,9 +681,7 @@ function addBindingsToScreenplayQuill(q){
     key: '1',
     shortKey: true,
     handler: function(range, context) {
-
       console.log('current index: ' + range.index);
-      displaySuggestionBox(getCharacterList());
     }
   });
 
