@@ -476,6 +476,7 @@ function displaySuggestionBox(suggestions, selectFunction = null){
 
     var suggestionBox = document.createElement('div');
     suggestionBox.classList.add('suggestion-box');
+    suggestionBox.id = 'suggestion-box';
     var suggestionList = document.createElement('select');
     suggestionList.id = 'suggestion-list';
     suggestionList.size = 5;
@@ -492,9 +493,11 @@ function displaySuggestionBox(suggestions, selectFunction = null){
 
     suggestionBox.addEventListener("keydown", function(e){
       if(e.key === "Enter" || e.key === "Tab"){
+        console.log('suggest box enter or tab');
         stopDefaultPropagation(e);
+        console.log(e);
         if(selectFunction)
-          selectFunction(suggestionList.value);
+          selectFunction(suggestionList.value, e);
         removeElementsByClass('suggestion-box');
         screenplayQuill.focus();
       }
@@ -505,11 +508,11 @@ function displaySuggestionBox(suggestions, selectFunction = null){
     });
 
     screenplayQuill.root.addEventListener("keydown", function(e){
-      console.log('fired');
       if(e.key === "Enter" || e.key === "Tab"){
         stopDefaultPropagation(e);
+        console.log('once keydown for enter or tab');
         if(selectFunction)
-          selectFunction(suggestionList.value);
+          selectFunction(suggestionList.value, e);
         removeElementsByClass('suggestion-box');
         screenplayQuill.focus();
       }
@@ -529,16 +532,15 @@ function displaySuggestionBox(suggestions, selectFunction = null){
     suggestionBox.style.top = cursorBounds.top + cursorBounds.height + + editorBounds.top + 'px';
 
     document.body.appendChild(suggestionBox);
-    //suggestionList.focus();
   }
 }
 
-function checkForHeaderSuggestions(){
+function checkForAutofillSuggestions(){
   let selectedIndex = screenplayQuill.getSelection(true).index;
   let line = screenplayQuill.getLine(selectedIndex)[0];
-  let lineIndex = screenplayQuill.getIndex(line);
   let lineType = line.statics ? line.statics.blotName : null;
   if(lineType == 'action-block' || lineType == 'scene-header'){
+    let lineIndex = screenplayQuill.getIndex(line);
     const locationMatch = /^(?:((?:[iI][nN][tT]\.?\/[eE][xX][tT].?|[iI][nN][tT]|[eE][xX][tT]|[eE][sS][tT]|[iI]\.?\/[eE]\.?)[.\s\/])([^\n]+))/;
     let matches = line.domNode.innerText.match(locationMatch);
     if(matches && matches[2].trim().length > 0){
@@ -549,12 +551,36 @@ function checkForHeaderSuggestions(){
       });
 
       if(suggestions.length > 0)
-        displaySuggestionBox(suggestions, function(selected){
+        displaySuggestionBox(suggestions, function(selected, e){
           let newText = matches[1] + ' ' + selected;
           line.domNode.innerText = newText;
           screenplayQuill.format('scene-header', true, 'user');
           screenplayQuill.setSelection(lineIndex + newText.length);
         });
+      else
+        removeElementsByClass('suggestion-box');
+    }
+  }
+  else if(lineType == 'character-cue'){
+    let lineIndex = screenplayQuill.getIndex(line);
+    let text = line.domNode.innerText;
+    if(text.length > 0){
+      let suggestions = getCharacterList().filter(function(character){
+        let valOne = character.toUpperCase();
+        let valTwo = text.toUpperCase();
+        return valOne.startsWith(valTwo) && valOne != valTwo;
+      });
+
+      if(suggestions.length > 0)  
+        displaySuggestionBox(suggestions, function(selected, e){
+        console.log('text replace function');
+          line.domNode.innerText = selected;
+          if(e.target.id == 'suggestion-list'){
+            console.log('key pressed in suggestion list');
+            screenplayQuill.update();
+            screenplayQuill.setSelection(lineIndex + selected.length);
+          }
+      });
       else
         removeElementsByClass('suggestion-box');
     }
@@ -591,6 +617,7 @@ function getInitialBindings(){
     tab: {
       key: 'tab',
       handler:function(range, context){
+        console.log('initial tab handler');
         const atEndOfBlock = context.suffix == '';
         const isEmptyLine = context.empty;
         const thisLine = this.quill.getLine(range.index, 1);
@@ -632,18 +659,24 @@ function getInitialBindings(){
     enter: {
       key: 'Enter',
       handler:function(range, context){
+        console.log('initial enter handler');
         var useDefaultEnter = true;
-        const thisLine = this.quill.getLine(range.index, 1);
 
-        const thisLineType = thisLine[0].statics.blotName;
-        const nextLineType = thisLine[0].next ? thisLine[0].next.statics.blotName : null;
+        const suggestionBox = document.getElementById('suggestion-box');
+        if(suggestionBox == null){
+          const thisLine = this.quill.getLine(range.index, 1);
+          const thisLineType = thisLine[0].statics.blotName;
+          const nextLineType = thisLine[0].next ? thisLine[0].next.statics.blotName : null;
 
-        if(thisLineType == 'parenthetical-block' && context.offset > 0 && context.suffix.length > 0){
-          useDefaultEnter = false;
-          if(nextLineType != 'dialog-block')
-            this.quill.insertText(range.index + context.suffix.length + 1, '\n', 'dialog-block', true, 'user');
-          this.quill.setSelection(range.index + context.suffix.length + 1, 'user');
+          if(thisLineType == 'parenthetical-block' && context.offset > 0 && context.suffix.length > 0){
+            useDefaultEnter = false;
+            if(nextLineType != 'dialog-block')
+              this.quill.insertText(range.index + context.suffix.length + 1, '\n', 'dialog-block', true, 'user');
+            this.quill.setSelection(range.index + context.suffix.length + 1, 'user');
+          }
         }
+        else
+          useDefaultEnter = false;
         
         return useDefaultEnter;
       }
@@ -725,7 +758,6 @@ function addBindingsToScreenplayQuill(q){
     handler: function(range, context) {
       let suggestionList = document.getElementById('suggestion-list');
       if(suggestionList != null){
-        console.log(suggestionList);
         suggestionList.focus();
         return false;
       }
@@ -741,7 +773,7 @@ function addBindingsToScreenplayQuill(q){
       chap.hasUnsavedChanges = true;
       project.hasUnsavedChanges = true;
 
-      checkForHeaderSuggestions();
+      checkForAutofillSuggestions();
     }
   });
 
@@ -753,54 +785,58 @@ function addBindingsToScreenplayQuill(q){
   q.root.addEventListener('keydown', function(e){
     //Quill doesn't like adding bindings to Enter after initialization, so we go around it with manual event listeners
     if(e.key == "Enter"){
-      const selectionIndex = q.getSelection().index;
-      const thisLine = q.getLine(selectionIndex, 1);
-      const previousLineType = thisLine[0].prev ? thisLine[0].prev.statics.blotName : null;
-      const enteringNewPara = thisLine[0].cache && thisLine[0].cache.length == 1;
-      const enterWasPressedAtBeginningOfBlock = thisLine[0].prev && thisLine[0].prev.cache.length == 1;
+      const suggestionBox = document.getElementById('suggestion-box');
 
-      switch(previousLineType){
-        case 'scene-header':
-          if(enterWasPressedAtBeginningOfBlock) //Entire block was moved down, so style newly created empty line as default (action) line type
-            q.formatText(selectionIndex - 1, 1, 'action-block', true, 'user');
-          else
-            q.format('action-block', true, 'user');
-          break;
-        case 'action-block':
-          //If action line just terminated is formatted as a scene header or transition, format it as such
-          const previousLineText = thisLine[0].prev.cache.delta.ops[0].insert;
-          let styleToConvertPrevious = checkForFormatMatch(previousLineText);
-          if(styleToConvertPrevious)
-            q.formatText(selectionIndex - 1, 1, styleToConvertPrevious, true, 'user');
-          if(styleToConvertPrevious == 'transition-block')
-            q.format('scene-header', true, 'user');
-          break;
-        case 'character-cue':
-          if(enterWasPressedAtBeginningOfBlock)
-            q.formatText(selectionIndex - 1, 1, 'action-block', true, 'user');
-          else
-            q.format('dialog-block', true, 'user');
-          break;
-        case 'dialog-block':
-          if(enteringNewPara)
-            q.format('action-block', true, 'user');
-          break;
-        case 'parenthetical-block':
-          if(enterWasPressedAtBeginningOfBlock)
-            q.formatText(selectionIndex - 1, 1, 'dialog-block', true, 'user');
-          else
-            q.format('dialog-block', true, 'user');
-          break;
-        case 'transition-block':
-          if(enterWasPressedAtBeginningOfBlock)
-            q.formatText(selectionIndex - 1, 1, 'action-block', true, 'user');
-          else
-            q.format('scene-header', true, 'user');
-          break;
-        default:
+      if(suggestionBox == null){
+        const selectionIndex = q.getSelection().index;
+        const thisLine = q.getLine(selectionIndex, 1);
+        const previousLineType = thisLine[0].prev ? thisLine[0].prev.statics.blotName : null;
+        const enteringNewPara = thisLine[0].cache && thisLine[0].cache.length == 1;
+        const enterWasPressedAtBeginningOfBlock = thisLine[0].prev && thisLine[0].prev.cache.length == 1;
 
+        switch(previousLineType){
+          case 'scene-header':
+            if(enterWasPressedAtBeginningOfBlock) //Entire block was moved down, so style newly created empty line as default (action) line type
+              q.formatText(selectionIndex - 1, 1, 'action-block', true, 'user');
+            else
+              q.format('action-block', true, 'user');
+            break;
+          case 'action-block':
+            //If action line just terminated is formatted as a scene header or transition, format it as such
+            const previousLineText = thisLine[0].prev.cache.delta.ops[0].insert;
+            let styleToConvertPrevious = checkForFormatMatch(previousLineText);
+            if(styleToConvertPrevious)
+              q.formatText(selectionIndex - 1, 1, styleToConvertPrevious, true, 'user');
+            if(styleToConvertPrevious == 'transition-block')
+              q.format('scene-header', true, 'user');
+            break;
+          case 'character-cue':
+            if(enterWasPressedAtBeginningOfBlock)
+              q.formatText(selectionIndex - 1, 1, 'action-block', true, 'user');
+            else
+              q.format('dialog-block', true, 'user');
+            break;
+          case 'dialog-block':
+            if(enteringNewPara)
+              q.format('action-block', true, 'user');
+            break;
+          case 'parenthetical-block':
+            if(enterWasPressedAtBeginningOfBlock)
+              q.formatText(selectionIndex - 1, 1, 'dialog-block', true, 'user');
+            else
+              q.format('dialog-block', true, 'user');
+            break;
+          case 'transition-block':
+            if(enterWasPressedAtBeginningOfBlock)
+              q.formatText(selectionIndex - 1, 1, 'action-block', true, 'user');
+            else
+              q.format('scene-header', true, 'user');
+            break;
+          default:
+
+        }
+        requestIdleCallback(updateSceneList);
       }
-      requestIdleCallback(updateSceneList);
     }
     else if(e.key === 'Backspace'){
       requestIdleCallback(updateSceneList);

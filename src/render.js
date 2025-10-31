@@ -409,6 +409,13 @@ function updatePanelDisplays(){
   var b = userSettings.displayEditor;
   var c = userSettings.displayNotes;
 
+  var editorOrScreenplayQuill = editorQuill;
+  if(project.screenplay == true){
+    const screenplayEditor = document.getElementById('screenplay-editor');
+    if(screenplayEditor)
+      editorOrScreenplayQuill = screenplayEditor;
+  }
+
   if(a)
     chapList.classList.add('visible');
   if(b)
@@ -417,11 +424,11 @@ function updatePanelDisplays(){
     notes.classList.add('visible');
 
   if(a && b && c){
-    editorQuill.focus();
+    editorOrScreenplayQuill.focus();
   }
   else if(a && b && !c){
     chapList.classList.add('sidebar-double-view');
-    editorQuill.focus();
+    editorOrScreenplayQuill.focus();
   }
   else if(a && !b && c){
     //Not sure here
@@ -431,7 +438,7 @@ function updatePanelDisplays(){
   }
   else if(!a && b && c){
     notes.classList.add('sidebar-double-view');
-    editorQuill.focus();
+    editorOrScreenplayQuill.focus();
   }
   else if(a && !b && !c){
     chapList.classList.add('sidebar-single-view');
@@ -439,7 +446,7 @@ function updatePanelDisplays(){
   }
   else if(!a && b && !c){
     writingField.classList.add('writing-field-single-view');
-    editorQuill.focus();
+    editorOrScreenplayQuill.focus();
   }
   else if(!a && !b && c){
     notes.classList.add('sidebar-single-view');
@@ -1148,6 +1155,7 @@ document.addEventListener ("keydown", function (e) {
     else if(e.key === "Escape"){
       removeElementsByClass('popup');
       removeElementsByClass('popup-dialog');
+      removeElementsByClass('suggestion-box');
       disableSearchView();
       updatePanelDisplays();
     }
