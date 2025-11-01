@@ -50,7 +50,7 @@ function newChapter(){
         if(chap.filename.includes('.pup'))
           chapterObj = JSON.parse(fileText);
         else if(project.screenplay){
-          chapterObj = fountainToHtml(fileText);
+          chapterObj = fountainToHtml(fileText).html;
         }
         else
           chapterObj = parseMDF(fileText);

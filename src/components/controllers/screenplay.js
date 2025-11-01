@@ -5,37 +5,33 @@ function fountainToHtml(str){
     const htmlClasses = ['scene-header','action-block','character-cue','dialog-block','parenthetical-block','transition-block'];
 
     for(let i=0;i<elementTags.length;i++){
-        parsed = parsed.replaceAll('<' + elementTags[i] + '>', '<p class="' + htmlClasses[i] + '">');
-        parsed = parsed.replaceAll('</' + elementTags[i] + '>', '</p>');
+        parsed.text = parsed.text.replaceAll('<' + elementTags[i] + '>', '<p class="' + htmlClasses[i] + '">');
+        parsed.text = parsed.text.replaceAll('</' + elementTags[i] + '>', '</p>');
     }
 
     const centeredActionsPattern = /<p class="action-block">(&gt;)(\s*[^<>\n]+)(&lt;\s*)<\/p>/g;
     const centeredActionsTemplate = '<p class="action-block ql-align-center">$2</p>';
-    parsed = parsed.replace(centeredActionsPattern, centeredActionsTemplate);
+    parsed.text = parsed.text.replace(centeredActionsPattern, centeredActionsTemplate);
 
     const BOLD_PATTERN = /(\*{2})([^\t]+?)(\*{2})/g;
     const ITALIC_PATTERN = /(?<!\\)(\*{1})([^\t]+?)(\*{1})/g;
     const UNDERLINE_PATTERN = /(_)([^_]+?)(_)/g;
 
-    parsed = parsed.replace(BOLD_PATTERN, '<strong>$2</strong>');
-    parsed = parsed.replace(ITALIC_PATTERN, '<em>$2</em>');
-    parsed = parsed.replace(UNDERLINE_PATTERN, '<u>$2</u>');
+    parsed.text = parsed.text.replace(BOLD_PATTERN, '<strong>$2</strong>');
+    parsed.text = parsed.text.replace(ITALIC_PATTERN, '<em>$2</em>');
+    parsed.text = parsed.text.replace(UNDERLINE_PATTERN, '<u>$2</u>');
 
-    return parsed;
+    return {
+        html: parsed.text, 
+        titlePage: parsed.titlePage
+    };
 }
 
 function parseFountain(str){
-    str = convertAllLineBreaks(str);
-
-    //Make sure ends in newline for proper regex function
-    if(str.charAt(str.length - 1) != '\n')
-        str = str + '\n';
-
-    //Some fountain may have leading tabs for readability but they don't matter for us
-    str = str.replaceAll('\t','');
-
+    /* Much of this is adapted from the original Fountain regexes, as is obvious from their all-capital naming convention,
+    which I have left for now as testament to where they came from */
     const SCENE_HEADER_PATTERN       = /(?<=\n)(([iI][nN][tT]|[eE][xX][tT]|[eE][sS][tT]|[iI]\.?\/[eE]\.?)([.\s\/][^\n]+))\n/g;
-    const forcedSceneHeaderPattern   = /(?<=\n|^)\.{1}([^\.][^\n]+)\n/g;
+    const forcedSceneHeaderPattern   = /(?<=\n)\.{1}([^\.][^\n]+)\n/g;
     const ACTION_PATTERN             = /\n*([^<>]*?)(\n{2}|\n<)/g;
     const CHARACTER_CUE_PATTERN      = /(?<=\n)[ \t]*([^<>a-z\s\/\n][^<>a-z:!\?\n]*[^<>a-z\(!\?:,\n\.][ \t]?)\n{1}(?!\n)/g;
     const DIALOGUE_PATTERN           = /(<(Character|Parenthetical)>[^<>\n]+<\/(Character|Parenthetical)>)\s*([^<>]*?)(?=\n{2}|\n{1}<Parenthetical>)/g;
@@ -50,8 +46,8 @@ function parseFountain(str){
     //const SECTION_HEADER_PATTERN     = /((#+)(\s*[^\n]*))\n?/g;
     const newLinesOrSpaceBetweenElements = /(?<=>)([\n|\s]*)(?=<[^/])/g;
     const newLinesAtBeginning = /^(\n+)</g;
-    const centeredActionsPattern = /\n((?:>[^<>]*?<\n)+)/g; //Doesn't work right now--need to figure out how to do it after HTML char conversion
-
+    const titlePagePattern = /^(.+:(([ \t]*|\n).+\n)+?)+\n/g;
+    
     const SCENE_HEADER_TEMPLATE      = "\n<Scene Heading>$1</Scene Heading>";
     const ACTION_TEMPLATE            = "<Action>$1</Action>$2";
     const CHARACTER_CUE_TEMPLATE     = "<Character>$1</Character>";
@@ -65,6 +61,24 @@ function parseFountain(str){
     const FIRST_LINE_ACTION_TEMPLATE = "<Action>$1</Action>\n";
     const SECTION_HEADER_TEMPLATE    = "<Section Heading>$1</Section Heading>";
     const newLinesAtBeginningTemplate = "<";
+    
+
+    str = convertAllLineBreaks(str);
+
+    //Make sure ends in newline for proper regex function
+    if(str.charAt(str.length - 1) != '\n')
+        str = str + '\n';
+
+    //Extract Title Page if it exists
+    var titlePage = null;
+    if(titlePagePattern.test(str)){
+        let titlePageText = str.match(titlePagePattern)[0];
+        titlePage = parseTitlePage(titlePageText);
+        str = str.replace(titlePagePattern, '\n');
+    }
+
+    //Some fountain may have leading tabs for readability but they don't matter for us after title page taken care of
+    str = str.replaceAll('\t','');
 
     //sanitize html chars (and ellipses for easier period detection)
     str = str.replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('...','::trip::');
@@ -84,12 +98,41 @@ function parseFountain(str){
     //Fix ellipses now that parsing is done
     str = str.replaceAll('::trip::','...');
 
-    return str;
+    return {
+        text: str, 
+        titlePage: titlePage
+    };
 }
 
 function convertAllLineBreaks(text) {
     return text.replace(/\r\n|\r/g, '\n');
 }
+
+function parseTitlePage(str){
+    const keyValuePattern = /^(.+):(?:[ \t]*)(.+)/;
+    var titlePage = {};
+    var lines = str.split('\n');
+    var lastKey;
+
+    lines.forEach(function(line){
+        var keyValue = line.match(keyValuePattern);
+        if(keyValue){
+            let values = [];
+            if(keyValue[2].trim().length > 0)
+                values.push(keyValue[2])
+            let lowerCaseKey = keyValue[1].toLowerCase();
+            titlePage[lowerCaseKey] = values;
+            lastKey = lowerCaseKey;
+        }
+        else {
+            let trimmedLine = line.trim();
+            if(trimmedLine.length > 0)
+                titlePage[lastKey].push(trimmedLine);
+        }
+    });
+
+    return titlePage;
+};
 
 function quillHtmlToFountain(html){
     html = decodeHtmlEntities(html);
