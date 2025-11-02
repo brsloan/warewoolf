@@ -79,13 +79,25 @@ function restyleSceneList(){
 function addScreenplayFormats(){
   const Block = Quill.import('blots/block');
 
-  class CharacterBlock extends Block {}
+  class CharacterBlock extends Block {
+    format(name, value){
+      if(name == 'align')
+        return;
+      super.format(name, value);
+    }
+  }
   CharacterBlock.blotName = 'character-cue'; 
   CharacterBlock.tagName = 'p'; 
   CharacterBlock.className = 'character-cue'; 
   Quill.register(CharacterBlock, true);
 
-  class SceneBlock extends Block {}
+  class SceneBlock extends Block {
+    format(name, value){
+      if(name == 'align')
+        return;
+      super.format(name, value);
+    }
+  }
   SceneBlock.blotName = 'scene-header'; 
   SceneBlock.tagName = 'p'; 
   SceneBlock.className = 'scene-header';
@@ -97,19 +109,37 @@ function addScreenplayFormats(){
   ActionBlock.className = 'action-block'; 
   Quill.register(ActionBlock, true);
 
-  class DialogBlock extends Block {}
+  class DialogBlock extends Block {
+    format(name, value){
+      if(name == 'align')
+        return;
+      super.format(name, value);
+    }
+  }
   DialogBlock.blotName = 'dialog-block';
   DialogBlock.tagName = 'p';
   DialogBlock.className = 'dialog-block';
   Quill.register(DialogBlock, true);
 
-  class ParentheticalBlock extends Block {}
+  class ParentheticalBlock extends Block {
+    format(name, value){
+      if(name == 'align')
+        return;
+      super.format(name, value);
+    }
+  }
   ParentheticalBlock.blotName = 'parenthetical-block';
   ParentheticalBlock.tagName = 'p';
   ParentheticalBlock.className = 'parenthetical-block';
   Quill.register(ParentheticalBlock, true);
 
-  class TransitionBlock extends Block {}
+  class TransitionBlock extends Block {
+    format(name, value){
+      if(name == 'align')
+        return;
+      super.format(name, value);
+    }
+  }
   TransitionBlock.blotName = 'transition-block';
   TransitionBlock.tagName = 'p';
   TransitionBlock.className = 'transition-block';
@@ -753,14 +783,6 @@ function addBindingsToScreenplayQuill(q){
     shortKey: true,
     handler: function(range, context) {
       this.quill.format('align', 'center', 'user');
-    }
-  });
-
-  q.keyboard.addBinding({
-    key: 'R',
-    shortKey: true,
-    handler: function(range, context) {
-      this.quill.format('align', 'right', 'user');
     }
   });
 
