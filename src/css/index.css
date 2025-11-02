@@ -565,3 +565,19 @@ display: block;
   display: block;
   position: absolute;
 }
+
+#properties-table {
+  width: 100%;
+}
+
+#properties-table input, #properties-table textarea{
+  width: 100%;
+}
+
+.table-column-fixed-width {
+  white-space: nowrap;
+}
+
+.table-column-fill-width {
+  width: 99%;
+}
