@@ -766,7 +766,47 @@ function addBindingsToScreenplayQuill(q){
     key: '1',
     shortKey: true,
     handler: function(range, context) {
-      console.log('current index: ' + range.index);
+      this.quill.format('scene-header', true);
+    }
+  });
+
+  q.keyboard.addBinding({
+    key: '2',
+    shortKey: true,
+    handler: function(range, context) {
+      this.quill.format('action-block', true);
+    }
+  });
+
+  q.keyboard.addBinding({
+    key: '3',
+    shortKey: true,
+    handler: function(range, context) {
+      this.quill.format('character-cue', true);
+    }
+  });
+
+  q.keyboard.addBinding({
+    key: '4',
+    shortKey: true,
+    handler: function(range, context) {
+      this.quill.format('parenthetical-block', true);
+    }
+  });
+
+  q.keyboard.addBinding({
+    key: '5',
+    shortKey: true,
+    handler: function(range, context) {
+      this.quill.format('dialog-block', true);
+    }
+  });
+
+  q.keyboard.addBinding({
+    key: '6',
+    shortKey: true,
+    handler: function(range, context) {
+      this.quill.format('transition-block', true);
     }
   });
 
