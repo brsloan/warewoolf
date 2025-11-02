@@ -55,7 +55,7 @@ function createButton(text){
 }
   
 
-function generateRow(elOne, elTwo){
+function generateRow(elOne, elTwo, makeFill = false){
     var row = document.createElement('tr');
     var cellOne = document.createElement('td');
     cellOne.appendChild(elOne);
@@ -63,6 +63,10 @@ function generateRow(elOne, elTwo){
     var cellTwo = document.createElement('td');
     cellTwo.appendChild(elTwo);
     row.appendChild(cellTwo);
+    if(makeFill){
+      cellOne.classList.add('table-column-fixed-width'); 
+      cellTwo.classList.add('table-column-fill-width');
+    }
     return row;
   }
   

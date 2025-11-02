@@ -10,10 +10,13 @@ function newProject(){
         chapsDirectory: "",
         title: "",
         author: "",
+        draftDate: "", //for screenplays
+        credit: "Written by", //for screenplays
+        source: "", //for screenplays
+        contact: "", //for screenplays
         notesChap: {}, //notesChap is a chapter file for which we never use chapter content but only chapter notes (in order to save project-wide notes)
         chapters: [],
         reference: [],
-        filters: [],
         trash: [],
         activeChapterIndex: 0,
         wordGoal: 0,

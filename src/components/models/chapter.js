@@ -99,7 +99,7 @@ function newChapter(){
 
     function saveFile(){
       try{
-        const oldVersionFlag = 'old_v_temp';
+        const oldVersionFlag = 'old_v_temp_';
         var chap = this;
         const filepathRoot = project.directory + project.chapsDirectory;
 
@@ -114,7 +114,14 @@ function newChapter(){
 
         chap.filename = getNewFilename(chap.title);
 
-        var fileContents = project.screenplay ? quillHtmlToFountain(chap.contents) : convertDeltaToMDF(chap.contents);
+        var fileContents = project.screenplay ? quillHtmlToFountain(chap.contents, {
+          title: project.title,
+          author: project.author,
+          credit: project.author && project.author.length > 0 ? project.credit : null,
+          source: project.source,
+          draftDate: project.draftDate,
+          contact: project.contact
+        }) : convertDeltaToMDF(chap.contents);
         fs.writeFileSync(filepathRoot + chap.filename, fileContents, "utf8")
         
         //If filename has changed and new file successfully created, delete old file

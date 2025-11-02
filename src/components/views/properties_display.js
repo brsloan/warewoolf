@@ -5,6 +5,8 @@ function showProperties(project, userSettings){
     var popup = document.createElement("div");
     popup.classList.add("popup");
 
+    const makeSecondColumnFillWidth = true;
+
     var popupTitle = document.createElement('h1');
     popupTitle.innerText = 'Project Properties';
     popup.appendChild(popupTitle);
@@ -12,6 +14,7 @@ function showProperties(project, userSettings){
     var propForm = document.createElement("form");
 
     var propTable = document.createElement("table");
+    propTable.id = 'properties-table';
 
     var titleLabel = document.createElement("label");
     titleLabel.innerText = "Title: ";
@@ -22,7 +25,19 @@ function showProperties(project, userSettings){
     titleInput.value = project.title;
     titleInput.id = "title-input";
 
-    propTable.appendChild(generateRow(titleLabel, titleInput));
+    propTable.appendChild(generateRow(titleLabel, titleInput, makeSecondColumnFillWidth));
+
+    var creditLabel = document.createElement("label");
+    creditLabel.innerText = "Credit: ";
+    creditLabel.for = "credit-input";
+    var creditInput = document.createElement("input");
+    creditInput.type = "text";
+    creditInput.value = project.credit;
+    creditInput.id = "credit-input";
+    
+    if(project.screenplay){
+      propTable.appendChild(generateRow(creditLabel, creditInput, makeSecondColumnFillWidth));
+    }
 
     var authorLabel = document.createElement("label");
     authorLabel.innerText = "Author: ";
@@ -33,8 +48,38 @@ function showProperties(project, userSettings){
     authorInput.value = project.author;
     authorInput.id = "author-input";
 
-    propTable.appendChild(generateRow(authorLabel, authorInput));
+    propTable.appendChild(generateRow(authorLabel, authorInput, makeSecondColumnFillWidth));
+    
 
+    var sourceLabel = document.createElement("label");
+    sourceLabel.innerText = "Source: ";
+    sourceLabel.for = "source-input";
+    var sourceInput = document.createElement("input");
+    sourceInput.type = "text";
+    sourceInput.value = project.source;
+    sourceInput.id = "source-input";
+
+    var draftDateLabel = document.createElement("label");
+    draftDateLabel.innerText = "Draft Date: ";
+    draftDateLabel.for = "draftDate-input";
+    var draftDateInput = document.createElement("input");
+    draftDateInput.type = "text";
+    draftDateInput.value = project.draftDate;
+    draftDateInput.id = "draftDate-input";
+
+    var contactLabel = document.createElement("label");
+    contactLabel.innerText = "Contact: ";
+    contactLabel.for = "contact-input";
+    var contactInput = document.createElement("textarea");
+    contactInput.value = project.contact;
+    contactInput.id = "contact-input";
+    
+    if(project.screenplay){
+      propTable.appendChild(generateRow(sourceLabel, sourceInput, makeSecondColumnFillWidth));
+      propTable.appendChild(generateRow(draftDateLabel, draftDateInput, makeSecondColumnFillWidth));
+      propTable.appendChild(generateRow(contactLabel, contactInput, makeSecondColumnFillWidth));
+    }
+    
     propForm.appendChild(propTable);
 
     var apply = document.createElement("input");
@@ -44,6 +89,12 @@ function showProperties(project, userSettings){
       e.preventDefault();
       project.title = titleInput.value;
       project.author = authorInput.value;
+      if(project.screenplay){
+        project.credit = creditInput.value;
+        project.draftDate = draftDateInput.value;
+        project.contact = contactInput.value;
+        project.source = sourceInput.value;
+      }
       closePopups();
     }
     propForm.appendChild(apply);

@@ -236,6 +236,7 @@ const createWindow = () => {
         },
         {
           label: 'Split Chapter',
+          id: 'split-chapter',
           click(item, focusWindow){
             mainWindow.webContents.send('split-chapter-clicked');
           },

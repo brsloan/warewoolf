@@ -134,7 +134,7 @@ function parseTitlePage(str){
     return titlePage;
 };
 
-function quillHtmlToFountain(html){
+function quillHtmlToFountain(html, titlePageInfo = null){
     html = decodeHtmlEntities(html);
     const italics = /<em>|<\/em>/g;
     const bold = /<strong>|<\/strong>/g;
@@ -147,7 +147,30 @@ function quillHtmlToFountain(html){
     const matchesIterator = html.matchAll(classesAndValue);
     const matches = Array.from(matchesIterator);
 
-    var fountain = '\n';
+    var fountain = '';
+    var titlePageKeys = ['title', 'credit', 'author', 'source', 'draftDate', 'contact'];
+    var keyLabels = ['Title','Credit','Author','Source','Draft Date','Contact'];
+
+    for(let i=0;i<titlePageKeys.length;i++){
+        let propertyString = titlePageInfo[titlePageKeys[i]];
+        if(propertyString){
+            let linesArray = propertyString.split(/\r\n|\r|\n/g);
+            let linesLabel = keyLabels[i];
+            if(linesArray){
+                fountain += linesLabel + ': ';
+                if(linesArray.length == 1)
+                    fountain += linesArray[0] + '\n'; //One-line properties are put inline with label
+                else{
+                    fountain += '\n';
+                    linesArray.forEach(function(line){
+                        fountain += '\t' + line + '\n';//While multi-lines are inset/tabbed underneath the label
+                    });
+                }
+            }
+        }
+    }
+
+    fountain += '\n';
 
     matches.forEach(function(match, i){
         var nextClasses = i < matches.length - 1 ? matches[i + 1][1] : null;
@@ -161,7 +184,6 @@ function quillHtmlToFountain(html){
 
     return fountain;
 }
-
 
 function cleanFountainElement(classes, text, nextClasses){
     let sceneHeaderTest = /(?<=\n|^)(([iI][nN][tT]|[eE][xX][tT]|[eE][sS][tT]|[iI]\.?\/[eE]\.?)([.\s\/][^\n]+))/g;
