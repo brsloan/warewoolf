@@ -93,14 +93,6 @@ function parseFountain(str){
     
     for(let i=0;i<patterns.length;i++){
         str = str.replace(patterns[i], templates[i]);
-        if(patterns[i] == PARENTHETICAL_PATTERN){
-            console.log('after parenthetical');
-            console.log(str);
-        }
-        else if(patterns[i] == DIALOGUE_PATTERN){
-            console.log('after dialog');
-            console.log(str);
-        }
     }
 
     //Fix ellipses now that parsing is done

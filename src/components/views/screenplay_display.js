@@ -148,28 +148,21 @@ function getClipboardMatchers(){
   var matchers = [
     [Node.ELEMENT_NODE, (node, delta) => {
       if (node.classList.contains('character-cue')) {
-        console.log(delta);
         delta = setDeltaBlockFormat(delta, 'character-cue');
-        console.log(delta);
       }
       else if (node.classList.contains('scene-header')) {
-        console.log(delta);
         delta = setDeltaBlockFormat(delta, 'scene-header');
       }
       else if (node.classList.contains('action-block')) {
-        console.log(delta);
         delta = setDeltaBlockFormat(delta, 'action-block');
       }
       else if (node.classList.contains('dialog-block')) {
-        console.log(delta);
         delta = setDeltaBlockFormat(delta, 'dialog-block');
       }
       else if (node.classList.contains('parenthetical-block')) {
-        console.log(delta);
         delta = setDeltaBlockFormat(delta, 'parenthetical-block');
       }
       else if (node.classList.contains('transition-block')) {
-        console.log(delta);
         delta = setDeltaBlockFormat(delta, 'transition-block');
       }
       return delta;
