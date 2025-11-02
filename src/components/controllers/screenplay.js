@@ -35,7 +35,7 @@ function parseFountain(str){
     const ACTION_PATTERN             = /\n*([^<>]*?)(\n{2}|\n<)/g;
     const CHARACTER_CUE_PATTERN      = /(?<=\n)[ \t]*([^<>a-z\s\/\n][^<>a-z:!\?\n]*[^<>a-z\(!\?:,\n\.][ \t]?)\n{1}(?!\n)/g;
     const DIALOGUE_PATTERN           = /(<(Character|Parenthetical)>[^<>\n]+<\/(Character|Parenthetical)>)\s*([^<>]*?)(?=\n{2}|\n{1}<Parenthetical>)/g;
-    const PARENTHETICAL_PATTERN      = /(?<=\n)[ \t]*(\([^<>]*?\)[\s]?)\n/g;
+    const PARENTHETICAL_PATTERN      = /(?<=[\n>])[ \t]*(\([^<>]*?\)[\s]?)\n/g;
     const TRANSITION_PATTERN         = /\n([\*_]*([^<>\na-z]*TO:|FADE TO BLACK\.|FADE OUT\.|CUT TO BLACK\.)[\*_]*)\n/g;
     const FORCED_TRANSITION_PATTERN  = /\n(?:&gt;|>)(\s*[^<>\n]+)\n/g;     // need to look for &gt; pattern because we run this regex against marked up content
     const FALSE_TRANSITION_PATTERN  = /\n((&gt;|>)\s*[^<>\n]+(&lt;))\n/g;     // need to look for &gt; pattern because we run this regex against marked up content
@@ -93,6 +93,14 @@ function parseFountain(str){
     
     for(let i=0;i<patterns.length;i++){
         str = str.replace(patterns[i], templates[i]);
+        if(patterns[i] == PARENTHETICAL_PATTERN){
+            console.log('after parenthetical');
+            console.log(str);
+        }
+        else if(patterns[i] == DIALOGUE_PATTERN){
+            console.log('after dialog');
+            console.log(str);
+        }
     }
 
     //Fix ellipses now that parsing is done
