@@ -17,6 +17,7 @@ function showScreenplayEditor(){
   screenplayQuill.root.innerHTML = project.chapters[0].getContentsOrFile();
   screenplayQuill.update(); //Since we're adding html manually, have to update Quill manually or settimeout for html updates
   screenplayQuill.history.clear(); //So they can't undo past file load
+  
   project.hasUnsavedChanges = false; //Correct for initial insert setting off onchange event and marking unsaved changes
   screenplayQuill.setSelection(project.textCursorPosition);
   screenplayQuill.focus();
@@ -26,6 +27,7 @@ function showScreenplayEditor(){
   refreshNotes();
 
   updateIPCBindings();
+  console.log(screenplayQuill.getContents());
 }
 
 function refreshNotes(){
@@ -43,6 +45,7 @@ function refreshNotes(){
 
 function setupQuill(){
     addScreenplayFormats();
+    customizeHistoryModule();
     var editorDivName = createEditorDiv();
     var screenplayQuill = generateScreenplayQuill(editorDivName);
     addBindingsToScreenplayQuill(screenplayQuill);
@@ -80,16 +83,20 @@ function addScreenplayFormats(){
   const Block = Quill.import('blots/block');
 
   class CharacterBlock extends Block {
+
     format(name, value){
       if(name == 'align')
         return;
       super.format(name, value);
     }
+    static formats(){
+      return true;
+    }
   }
   CharacterBlock.blotName = 'character-cue'; 
   CharacterBlock.tagName = 'p'; 
   CharacterBlock.className = 'character-cue'; 
-  Quill.register(CharacterBlock, true);
+  Quill.register(CharacterBlock);
 
   class SceneBlock extends Block {
     format(name, value){
@@ -97,17 +104,24 @@ function addScreenplayFormats(){
         return;
       super.format(name, value);
     }
+    static formats(){
+      return true;
+    }
   }
   SceneBlock.blotName = 'scene-header'; 
   SceneBlock.tagName = 'p'; 
   SceneBlock.className = 'scene-header';
-  Quill.register(SceneBlock, true);
+  Quill.register(SceneBlock);
 
-  class ActionBlock extends Block {}
+  class ActionBlock extends Block {
+    static formats(){
+      return true;
+    }
+  }
   ActionBlock.blotName = 'action-block'; 
   ActionBlock.tagName = 'p'; 
   ActionBlock.className = 'action-block'; 
-  Quill.register(ActionBlock, true);
+  Quill.register(ActionBlock);
 
   class DialogBlock extends Block {
     format(name, value){
@@ -115,11 +129,14 @@ function addScreenplayFormats(){
         return;
       super.format(name, value);
     }
+    static formats(){
+      return true;
+    }
   }
   DialogBlock.blotName = 'dialog-block';
   DialogBlock.tagName = 'p';
   DialogBlock.className = 'dialog-block';
-  Quill.register(DialogBlock, true);
+  Quill.register(DialogBlock);
 
   class ParentheticalBlock extends Block {
     format(name, value){
@@ -127,11 +144,14 @@ function addScreenplayFormats(){
         return;
       super.format(name, value);
     }
+    static formats(){
+      return true;
+    }
   }
   ParentheticalBlock.blotName = 'parenthetical-block';
   ParentheticalBlock.tagName = 'p';
   ParentheticalBlock.className = 'parenthetical-block';
-  Quill.register(ParentheticalBlock, true);
+  Quill.register(ParentheticalBlock);
 
   class TransitionBlock extends Block {
     format(name, value){
@@ -139,11 +159,54 @@ function addScreenplayFormats(){
         return;
       super.format(name, value);
     }
+    static formats(){
+      return true;
+    }
   }
   TransitionBlock.blotName = 'transition-block';
   TransitionBlock.tagName = 'p';
   TransitionBlock.className = 'transition-block';
-  Quill.register(TransitionBlock, true);
+  Quill.register(TransitionBlock);
+}
+
+function customizeHistoryModule(){
+  const History = Quill.import('modules/history');
+
+  class CustomHistory extends History {
+    constructor(quill, options) {
+      super(quill, options);
+      // Add custom initialization logic here
+    }
+
+    // Override methods like undo(), redo(), clear(), or record()
+    undo() {
+      // Implement custom undo logic
+      console.log('Custom undo called');
+      super.undo(); // Call the parent undo if desired
+    }
+
+    redo() {
+      // Implement custom redo logic
+      console.log('Custom redo called');
+      super.redo(); // Call the parent redo if desired
+    }
+
+    clear() {
+      // Implement custom clear logic
+      console.log('Custom history cleared');
+      super.clear(); // Call the parent clear if desired
+    }
+
+    record(delta, oldDelta) {
+      // Implement custom record logic for history changes
+      console.log('Recording custom history entry');
+      console.log(delta);
+      console.log(oldDelta);
+      super.record(delta, oldDelta); // Call the parent record if desired
+    }
+  }
+
+  Quill.register('modules/history', CustomHistory, true);
 }
 
 function generateScreenplayQuill(editorDivName){
