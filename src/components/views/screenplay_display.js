@@ -45,7 +45,6 @@ function refreshNotes(){
 
 function setupQuill(){
     addScreenplayFormats();
-    customizeHistoryModule();
     var editorDivName = createEditorDiv();
     var screenplayQuill = generateScreenplayQuill(editorDivName);
     addBindingsToScreenplayQuill(screenplayQuill);
@@ -167,46 +166,6 @@ function addScreenplayFormats(){
   TransitionBlock.tagName = 'p';
   TransitionBlock.className = 'transition-block';
   Quill.register(TransitionBlock);
-}
-
-function customizeHistoryModule(){
-  const History = Quill.import('modules/history');
-
-  class CustomHistory extends History {
-    constructor(quill, options) {
-      super(quill, options);
-      // Add custom initialization logic here
-    }
-
-    // Override methods like undo(), redo(), clear(), or record()
-    undo() {
-      // Implement custom undo logic
-      console.log('Custom undo called');
-      super.undo(); // Call the parent undo if desired
-    }
-
-    redo() {
-      // Implement custom redo logic
-      console.log('Custom redo called');
-      super.redo(); // Call the parent redo if desired
-    }
-
-    clear() {
-      // Implement custom clear logic
-      console.log('Custom history cleared');
-      super.clear(); // Call the parent clear if desired
-    }
-
-    record(delta, oldDelta) {
-      // Implement custom record logic for history changes
-      console.log('Recording custom history entry');
-      console.log(delta);
-      console.log(oldDelta);
-      super.record(delta, oldDelta); // Call the parent record if desired
-    }
-  }
-
-  Quill.register('modules/history', CustomHistory, true);
 }
 
 function generateScreenplayQuill(editorDivName){
