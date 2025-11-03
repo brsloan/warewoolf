@@ -27,7 +27,6 @@ function showScreenplayEditor(){
   refreshNotes();
 
   updateIPCBindings();
-  console.log(screenplayQuill.getContents());
 }
 
 function refreshNotes(){
