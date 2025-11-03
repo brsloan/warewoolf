@@ -172,7 +172,7 @@ function generateScreenplayQuill(editorDivName){
   return new Quill('#' + editorDivName, {
     modules: {
       clipboard: {
-        matchers: getClipboardMatchers()
+        matchVisual: false
       },
       history: {
         userOnly: true
@@ -193,58 +193,6 @@ function generateScreenplayQuill(editorDivName){
               'parenthetical-block', 
               'transition-block']
   });
-}
-
-function getClipboardMatchers(){
-  const Delta = Quill.import('delta');
-  var matchers = [
-    [Node.ELEMENT_NODE, (node, delta) => {
-      if (node.classList.contains('character-cue')) {
-        delta = setDeltaBlockFormat(delta, 'character-cue');
-      }
-      else if (node.classList.contains('scene-header')) {
-        delta = setDeltaBlockFormat(delta, 'scene-header');
-      }
-      else if (node.classList.contains('action-block')) {
-        delta = setDeltaBlockFormat(delta, 'action-block');
-      }
-      else if (node.classList.contains('dialog-block')) {
-        delta = setDeltaBlockFormat(delta, 'dialog-block');
-      }
-      else if (node.classList.contains('parenthetical-block')) {
-        delta = setDeltaBlockFormat(delta, 'parenthetical-block');
-      }
-      else if (node.classList.contains('transition-block')) {
-        delta = setDeltaBlockFormat(delta, 'transition-block');
-      }
-      return delta;
-    }]
-  ];
-
-  return matchers;
-}
-
-function setDeltaBlockFormat(delta, formatName){
-  //Quill likes to add an extra newline at end of blocks on copy/paste for some reason, so remove
-  let extraNewLineAtEnd = /\n\n$/;
-  delta.ops[delta.ops.length - 1].insert = delta.ops[delta.ops.length - 1].insert.replace(extraNewLineAtEnd, '\n');
-
-  if(delta.ops[delta.ops.length - 1].attributes){
-    delta.ops[delta.ops.length - 1].attributes[formatName] = true;
-    if(formatName != 'action-block' && delta.ops[delta.ops.length - 1].attributes.align){
-      //Quill also likes to add a center alignment on paste if the copied element is one that is centered by CSS,
-      //which we do not want because it will mess up fountain generation and is just unnecessary.
-      //The only elements that can be manually aligned are action blocks.
-      delta.ops[delta.ops.length - 1].attributes.align = null;
-    }
-  }
-  else{
-    let attr = {};
-    attr[formatName] = true;
-    delta.ops[delta.ops.length - 1].attributes = attr;
-  }
-    
-  return delta;
 }
 
 function updateSceneList(){
