@@ -233,7 +233,6 @@ function clearDiv(d){
       d.removeChild(d.firstChild);
     }
     catch(err){
-      //console.log(err);
     }
   }
 }
@@ -602,10 +601,10 @@ function checkForAutofillSuggestions(){
 
       if(suggestions.length > 0)
         displaySuggestionBox(suggestions, function(selected, e){
-          let newText = matches[1] + ' ' + selected;
-          line.domNode.innerText = newText;
-          screenplayQuill.format('scene-header', true, 'user');
-          screenplayQuill.setSelection(lineIndex + newText.length);
+          let newText = matches[1] + ' ' + selected + '\n';
+          screenplayQuill.deleteText(lineIndex, line.cache.length, 'user');
+          screenplayQuill.insertText(lineIndex, newText, {'scene-header': true}, 'user');
+          screenplayQuill.setSelection(lineIndex + newText.length - 1);
         });
       else
         removeElementsByClass('suggestion-box');
@@ -614,7 +613,7 @@ function checkForAutofillSuggestions(){
   else if(lineType == 'character-cue'){
     let lineIndex = screenplayQuill.getIndex(line);
     let text = line.domNode.innerText;
-    if(text.length > 0){
+    if(text.trim().length > 0){
       let suggestions = getCharacterList().filter(function(character){
         let valOne = character.toUpperCase();
         let valTwo = text.toUpperCase();
@@ -623,11 +622,9 @@ function checkForAutofillSuggestions(){
 
       if(suggestions.length > 0)  
         displaySuggestionBox(suggestions, function(selected, e){
-          line.domNode.innerText = selected;
-          if(e.target.id == 'suggestion-list'){
-            screenplayQuill.update();
-            screenplayQuill.setSelection(lineIndex + selected.length);
-          }
+          screenplayQuill.deleteText(lineIndex, line.cache.length, 'user');
+          screenplayQuill.insertText(lineIndex, selected + '\n', {'character-cue': true}, 'user');
+          screenplayQuill.setSelection(lineIndex + selected.length);
       });
       else
         removeElementsByClass('suggestion-box');
@@ -665,42 +662,45 @@ function getInitialBindings(){
     tab: {
       key: 'tab',
       handler:function(range, context){
-        const atEndOfBlock = context.suffix == '';
-        const isEmptyLine = context.empty;
-        const thisLine = this.quill.getLine(range.index, 1);
-        const thisLineType = thisLine[0].statics.blotName;
-        const nextLineType = thisLine[0].next ? thisLine[0].next.statics.blotName : null;
+        const suggestionBox = document.getElementById('suggestion-box');
+        if(suggestionBox == null){
+          const atEndOfBlock = context.suffix == '';
+          const isEmptyLine = context.empty;
+          const thisLine = this.quill.getLine(range.index, 1);
+          const thisLineType = thisLine[0].statics.blotName;
+          const nextLineType = thisLine[0].next ? thisLine[0].next.statics.blotName : null;
 
-        if(atEndOfBlock){
-          if(thisLineType == 'action-block' && isEmptyLine)
-            this.quill.format('character-cue', true, 'user');
-          else if(thisLineType == 'character-cue' && !isEmptyLine){
-            this.quill.insertText(range.index + 1, '()\n', 'parenthetical-block', true, 'user');
-            this.quill.setSelection(range.index + 2, 'user');
-          }
-          else if(thisLineType == 'dialog-block'){
-            if(isEmptyLine){
-              this.quill.format('parenthetical-block', true, 'user');
-              this.quill.insertText(range.index, '()', 'user');
-              this.quill.setSelection(range.index + 1, 'user');
-            }
-            else{
+          if(atEndOfBlock){
+            if(thisLineType == 'action-block' && isEmptyLine)
+              this.quill.format('character-cue', true, 'user');
+            else if(thisLineType == 'character-cue' && !isEmptyLine){
               this.quill.insertText(range.index + 1, '()\n', 'parenthetical-block', true, 'user');
               this.quill.setSelection(range.index + 2, 'user');
             }
+            else if(thisLineType == 'dialog-block'){
+              if(isEmptyLine){
+                this.quill.format('parenthetical-block', true, 'user');
+                this.quill.insertText(range.index, '()', 'user');
+                this.quill.setSelection(range.index + 1, 'user');
+              }
+              else{
+                this.quill.insertText(range.index + 1, '()\n', 'parenthetical-block', true, 'user');
+                this.quill.setSelection(range.index + 2, 'user');
+              }
+            }
+            else if(thisLineType == 'scene-header' && isEmptyLine){
+              const sceneAutofill = 'INT. ';
+              this.quill.insertText(range.index, sceneAutofill, 'user');
+              this.quill.setSelection(range.index + sceneAutofill.length, 'user');
+            }
           }
-          else if(thisLineType == 'scene-header' && isEmptyLine){
-            const sceneAutofill = 'INT. ';
-            this.quill.insertText(range.index, sceneAutofill, 'user');
-            this.quill.setSelection(range.index + sceneAutofill.length, 'user');
+          else if(thisLineType == 'parenthetical-block'){
+            if(nextLineType != 'dialog-block')
+              this.quill.insertText(range.index + context.suffix.length + 1, '\n', 'dialog-block', true, 'user');
+            this.quill.setSelection(range.index + context.suffix.length + 1, 'user');
           }
+          return false;
         }
-        else if(thisLineType == 'parenthetical-block'){
-          if(nextLineType != 'dialog-block')
-            this.quill.insertText(range.index + context.suffix.length + 1, '\n', 'dialog-block', true, 'user');
-          this.quill.setSelection(range.index + context.suffix.length + 1, 'user');
-        }
-        return false;
       }
     },
     enter: {
@@ -848,8 +848,6 @@ function addBindingsToScreenplayQuill(q){
       chap.contents = q.root.innerHTML;
       chap.hasUnsavedChanges = true;
       project.hasUnsavedChanges = true;
-
-      checkForAutofillSuggestions();
     }
   });
 
@@ -922,6 +920,13 @@ function addBindingsToScreenplayQuill(q){
   q.root.addEventListener('scroll', function(e){
     requestIdleCallback(updateSceneList);
   })
+
+  q.root.addEventListener('keyup', function(e){
+    const ignoreKeys = /(Enter|Tab|Up|Down|Left|Right)/;
+    if(ignoreKeys.test(e.key) == false){
+      checkForAutofillSuggestions();
+    }
+  });
 };
 
 function checkForFormatMatch(str){
