@@ -1,9 +1,6 @@
-/* This module uses global objects Quill, Project, from render.js. Not best practice, I know, but if they're there... */
-/* This module also horrifically abuses QuillJS in ways it was never meant to have been used, because the usual ways are
-just too slow (2-5 seconds to load a full screenplay). You aren't supposed to directly insert HTML like I do here, so things
-get...wonky. Plan to eventually replace Quill with my own editor object. */
+/* This module uses global objects Quill, Project, from render.js. Not best practice, I know... */
 
-const { ipcRenderer } = require('electron'); //Not technically necessary since it has access through global const in render.js
+const { ipcRenderer } = require('electron');
 const { removeElementsByClass } = require('../controllers/utils');
 
 var screenplayQuill = setupQuill();
@@ -14,8 +11,10 @@ function showScreenplayEditor(){
   restyleSceneList();
   project.activeChapterIndex = 0;
 
-  screenplayQuill.root.innerHTML = project.chapters[0].getContentsOrFile();
-  screenplayQuill.update(); //Since we're adding html manually, have to update Quill manually or settimeout for html updates
+  screenplayQuill.root.innerHTML = project.chapters[0].getContentsOrFile(); //Not how you're supposed to use Quill, but due to some bug, 
+                                                                            // adding a full screenplay the correct way takes 2-5 SECONDS 
+                                                                            // to process, so inserting HTML directly to root element
+  screenplayQuill.update(); //Since we're adding html manually, have to update Quill manually
   screenplayQuill.history.clear(); //So they can't undo past file load
   
   project.hasUnsavedChanges = false; //Correct for initial insert setting off onchange event and marking unsaved changes
@@ -25,7 +24,6 @@ function showScreenplayEditor(){
   requestIdleCallback(updateSceneList);
   requestIdleCallback(setWordCountOnLoad);
   refreshNotes();
-
   updateIPCBindings();
 }
 
