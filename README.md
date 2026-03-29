@@ -69,8 +69,9 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 
 ## Status
 
-2025-xx-xx: v2.3.0. Changes made:
+2026-xx-xx: v2.3.0. Changes made:
 * Bullets and numbered lists now supported.
+* Indent all paragraphs tool
 
 2025-10-09: v2.2.1. Changes made:
 * This is a patch to fix a couple bugs I introduced/missed in last update which broke restoring chapters from trash and creating new projects. (Obviously these are embarrassing to have released and I plan to implement testing scripts to catch these issues in future. I've gotten a little too excited about releasing new features this month and was careless.)
