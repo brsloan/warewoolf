@@ -317,6 +317,12 @@ const createWindow = () => {
             mainWindow.webContents.send('indent-all-clicked');
           }
         },
+        {
+          label: 'Center All Headings',
+          click(item, focusWindow){
+            mainWindow.webContents.send('center-all-heads-clicked');
+          }
+        },
         ...(isLinux ? [
           { type: 'separator' },
           {
