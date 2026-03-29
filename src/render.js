@@ -1402,3 +1402,9 @@ ipcRenderer.on('indent-all-clicked', function(e){
   indentAllParasInAllChaps(project);
   displayChapterByIndex(project.activeChapterIndex);
 });
+
+ipcRenderer.on('center-all-heads-clicked', function(e){
+  const { centerAllHeadingsInAllChaps } = require('./components/controllers/center-all-heads');
+  centerAllHeadingsInAllChaps(project);
+  displayChapterByIndex(project.activeChapterIndex);
+});
