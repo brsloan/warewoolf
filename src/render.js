@@ -1399,8 +1399,10 @@ ipcRenderer.on('file-opened-from-outside-warewoolf', function(event, fPath){
 
 ipcRenderer.on('indent-all-clicked', function(e){
   console.log('indenting!');
-  const { indentAllParas } = require('./components/controllers/indent-all');
+  const { indentAllParasInAllChaps } = require('./components/controllers/indent-all');
   //var newDelt = indentAllParas(editorQuill.getContents());
-  //editorQuill.setContents(newDelt);
-  indentAllParas(editorQuill);
+  //editorQuill.setContents(newDelt, 'user');
+  //indentAllParas(editorQuill);
+  indentAllParasInAllChaps(project);
+  displayChapterByIndex(project.activeChapterIndex);
 });
