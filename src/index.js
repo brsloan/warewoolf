@@ -311,6 +311,12 @@ const createWindow = () => {
             mainWindow.webContents.send('headings-to-chaps-clicked');
           }
         },
+        {
+          label: 'Indent All Paragraphs',
+          click(item, focusWindow){
+            mainWindow.webContents.send('indent-all-clicked');
+          }
+        },
         ...(isLinux ? [
           { type: 'separator' },
           {

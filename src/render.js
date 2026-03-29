@@ -1396,3 +1396,11 @@ ipcRenderer.on('file-opened-from-outside-warewoolf', function(event, fPath){
   }
 
 });
+
+ipcRenderer.on('indent-all-clicked', function(e){
+  console.log('indenting!');
+  const { indentAllParas } = require('./components/controllers/indent-all');
+  //var newDelt = indentAllParas(editorQuill.getContents());
+  //editorQuill.setContents(newDelt);
+  indentAllParas(editorQuill);
+});
