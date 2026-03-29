@@ -1396,3 +1396,9 @@ ipcRenderer.on('file-opened-from-outside-warewoolf', function(event, fPath){
   }
 
 });
+
+ipcRenderer.on('indent-all-clicked', function(e){
+  const { indentAllParasInAllChaps } = require('./components/controllers/indent-all');
+  indentAllParasInAllChaps(project);
+  displayChapterByIndex(project.activeChapterIndex);
+});
