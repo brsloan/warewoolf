@@ -949,7 +949,7 @@ function updateIPCBindings(){
    //Clear listeners for features will need adjusted/re-written for screenplay
   const toBeReset = ['find-replace-clicked', 
     'word-count-clicked', 'spellcheck-clicked', 'add-chapter-clicked', 
-    'delete-chapter-clicked', 'restore-chapter-clicked', 'outliner-clicked'];
+    'delete-chapter-clicked', 'restore-chapter-clicked', 'outliner-clicked', 'import-clicked'];
   ipcRenderer.removeAllListeners(toBeReset);
 
   ipcRenderer.on('find-replace-clicked', function(e){
@@ -974,7 +974,17 @@ function updateIPCBindings(){
     showWordCount(project, screenplayQuill);
   });
 
+  ipcRenderer.on('import-clicked', function(e){
+    const showImportOptions = require('./import_display');
+    showImportOptions(sysDirectories, addImportedScreenplay, function(){
+      //displayChapterByIndex(project.activeChapterIndex);
+      //if(project.chapters.length > 0)
+        //editorQuill.enable();
+    });
+  });
 }
+
+
 
 function editorHasFocus(){
   return editorIsVisible() && document.querySelector(".ql-editor-screenplay") === document.activeElement;

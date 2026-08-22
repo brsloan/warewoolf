@@ -1273,15 +1273,6 @@ ipcRenderer.on('new-project-clicked', function(e){
   createNewProject();
 });
 
-ipcRenderer.on('import-clicked', function(e){
-  const showImportOptions = require('./components/views/import_display');
-  showImportOptions(sysDirectories, addImportedChapter, function(){
-    displayChapterByIndex(project.activeChapterIndex);
-    if(project.chapters.length > 0)
-      editorQuill.enable();
-  });
-});
-
 ipcRenderer.on('export-clicked', function(e){
   const showExportOptions = require('./components/views/export_display');
   showExportOptions(project, userSettings, sysDirectories);
@@ -1447,16 +1438,16 @@ ipcRenderer.on('file-opened-from-outside-warewoolf', function(event, fPath){
 });
 
 function updateIPCBindings(){
-  //Enable those features that are disabled for Screenplay mode
+  //Enable those features that may have been disabled for Screenplay mode
   const toBeEnabled = ['convert-first-lines', 'headings-to-chaps', 'convert-italics', 
     'split-chapter', 'convert-tabs', 'renumber-chapters', 'outliner'
   ];
   ipcRenderer.send('enable-menu-items', toBeEnabled);
 
-   //Clear listeners for features will need adjusted/re-written for screenplay
-   const toBeReset = ['find-replace-clicked', 
+  //Clear listeners for features that may have been adjusted/re-assigned for screenplay
+  const toBeReset = ['find-replace-clicked', 
     'word-count-clicked', 'spellcheck-clicked', 'add-chapter-clicked', 
-    'delete-chapter-clicked', 'restore-chapter-clicked', 'outliner-clicked'];
+    'delete-chapter-clicked', 'restore-chapter-clicked', 'outliner-clicked', 'import-clicked'];
   ipcRenderer.removeAllListeners(toBeReset);
 
   ipcRenderer.on('find-replace-clicked', function(e){
@@ -1479,6 +1470,15 @@ function updateIPCBindings(){
   ipcRenderer.on('word-count-clicked', function(e){
     const showWordCount = require('./components/views/wordcount_display');
     showWordCount(project, editorQuill);
+  });
+
+  ipcRenderer.on('import-clicked', function(e){
+    const showImportOptions = require('./components/views/import_display');
+    showImportOptions(sysDirectories, addImportedChapter, function(){
+      displayChapterByIndex(project.activeChapterIndex);
+      if(project.chapters.length > 0)
+        editorQuill.enable();
+    });
   });
 
 }

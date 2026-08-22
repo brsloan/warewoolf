@@ -1,8 +1,12 @@
 {
 	"filename": "screenplay.woolf",
 	"chapsDirectory": "screenplay_chapters/",
-	"title": "Screenplay",
-	"author": "Benjamin Sloan",
+	"title": "Brick and Steele: Full Retired",
+	"author": "",
+	"draftDate": "",
+	"credit": "Written By",
+	"source": "",
+	"contact": "",
 	"chapters": [
 		{
 			"title": "new",
@@ -12,11 +16,12 @@
 		}
 	],
 	"reference": [],
-	"filters": [],
 	"trash": [],
 	"activeChapterIndex": 0,
 	"wordGoal": 0,
-	"textCursorPosition": 18,
+	"textCursorPosition": 80,
 	"corkboardColumns": 4,
-	"screenplay": true
+	"screenplay": true,
+	"draftLabel": "",
+	"filters": []
 }
