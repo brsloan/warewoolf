@@ -52,7 +52,7 @@ function find(editorQuill, project, str, caseSensitive = true, startingIndex, se
     return index;
 }
 
-function findInText(str, text, caseSensitive, startingIndex){
+function findInText(str, text, caseSensitive, startingIndex, wholeWordOnly = false){
     var index = -1;
 
     if(!caseSensitive){
@@ -60,8 +60,17 @@ function findInText(str, text, caseSensitive, startingIndex){
         str = str.toLowerCase();
     }
 
-    index = text.indexOf(str, startingIndex);
-
+    if(wholeWordOnly == false){
+        index = text.indexOf(str, startingIndex);
+    }
+    else {
+        const regex = new RegExp(`\\b${str}\\b`, 'g');
+        regex.lastIndex = startingIndex;
+        const match = regex.exec(text);
+        if(match)
+            index = match.index;
+    }
+    
     return index;
 }
 
@@ -73,24 +82,24 @@ function replace(editorQuill, newStr){
     }
 }
 
-function replaceAllInAllChapters(project, oldStr, newStr, caseSensitive){
+function replaceAllInAllChapters(project, oldStr, newStr, caseSensitive, wholeWordOnly = false){
   var numReplaced = 0;
 
   project.chapters.forEach(function(chap){
-    var changed = replaceAllInChapter(oldStr, newStr, caseSensitive, chap);
+    var changed = replaceAllInChapter(oldStr, newStr, caseSensitive, chap, wholeWordOnly);
     numReplaced += changed;
   });
 
   project.reference.forEach(function(chap){
-    var changed = replaceAllInChapter(oldStr, newStr, caseSensitive, chap);
+    var changed = replaceAllInChapter(oldStr, newStr, caseSensitive, chap, wholeWordOnly);
     numReplaced += changed;
   });
 
   return numReplaced;
 }
 
-function replaceAllInChapter(oldStr, newStr, caseSensitive, chap){
-  var result = replaceAllInDelta(oldStr, newStr, caseSensitive, chap.contents ? chap.contents : chap.getFile());
+function replaceAllInChapter(oldStr, newStr, caseSensitive, chap, wholeWordOnly = false){
+  var result = replaceAllInDelta(oldStr, newStr, caseSensitive, chap.contents ? chap.contents : chap.getFile(), wholeWordOnly);
   if(result.changed > 0){
     chap.contents = result.delta;
     chap.hasUnsavedChanges = true;
@@ -98,7 +107,7 @@ function replaceAllInChapter(oldStr, newStr, caseSensitive, chap){
   return result.changed;
 }
 
-function replaceAllInDelta(oldStr, newStr, caseSensitive, delt){
+function replaceAllInDelta(oldStr, newStr, caseSensitive, delt, wholeWordOnly = false){
     var tempQuill = getTempQuill();
     var counter = 0;
 
@@ -109,7 +118,7 @@ function replaceAllInDelta(oldStr, newStr, caseSensitive, delt){
     var startingIndex = 0;
 
     while(foundIndex > -1){
-        foundIndex = findInText(oldStr, text, caseSensitive, startingIndex);
+        foundIndex = findInText(oldStr, text, caseSensitive, startingIndex, wholeWordOnly);
         if(foundIndex > -1){
             counter++;
             tempQuill.deleteText(foundIndex, oldStr.length);

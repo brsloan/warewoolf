@@ -109,7 +109,9 @@ function showSpellcheck(editorQuill, project, sysDirectories, displayChapterByIn
         selectedReplacement = customInput;
 
       if(invalidWord && selectedReplacement != null){
-        replaceAllInAllChapters(project, invalidWord.word, selectedReplacement.value, true);
+        const caseSensitive = true;
+        const wholeWordOnly = true;
+        replaceAllInAllChapters(project, invalidWord.word, selectedReplacement.value, caseSensitive, wholeWordOnly);
         displayChapterByIndex(project.activeChapterIndex);
         ignoreBtn.click();
       }
