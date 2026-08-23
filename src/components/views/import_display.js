@@ -155,6 +155,41 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish){
 
   importForm.appendChild(document.createElement('br'));
 
+  var chapLabelSet = document.createElement('fieldset');
+  var chapLabelLegend = document.createElement('legend');
+  chapLabelLegend.innerText = 'Chapter Label Options';
+  chapLabelSet.appendChild(chapLabelLegend);
+
+  var chapLabelFilename = document.createElement('input');
+  chapLabelFilename.type = 'radio';
+  chapLabelFilename.name = 'chapLabelSelect';
+  chapLabelFilename.value = 'filename';
+  chapLabelFilename.id = 'chapLabelFilename';
+  chapLabelFilename.checked = true;
+  chapLabelSet.appendChild(chapLabelFilename);
+
+  var chapLabelFilenameLabel = document.createElement('label');
+  chapLabelFilenameLabel.for = 'chapLabelFilename';
+  chapLabelFilenameLabel.innerText = 'Filename';
+  chapLabelSet.appendChild(chapLabelFilenameLabel);
+
+  var chapLabelFirstLine = document.createElement('input');
+  chapLabelFirstLine.type = 'radio';
+  chapLabelFirstLine.name = 'chapLabelSelect';
+  chapLabelFirstLine.value = 'firstLine';
+  chapLabelFirstLine.id = 'chapLabelFirstLine';
+  chapLabelSet.appendChild(chapLabelFirstLine);
+
+  var chapLabelFirstLineLabel = document.createElement('label');
+  chapLabelFirstLineLabel.for = 'chapLabelFirstLine';
+  chapLabelFirstLineLabel.innerText = 'First line';
+  chapLabelSet.appendChild(chapLabelFirstLineLabel);
+
+  importForm.appendChild(chapLabelSet);
+  
+
+  importForm.appendChild(document.createElement('br'));
+
   var importBtn = document.createElement("input");
   importBtn.type = "submit";
   importBtn.value = "Import";
@@ -168,7 +203,8 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish){
 
   importForm.onsubmit = function(e){
     e.preventDefault();
-
+    const selectedChapLabel = document.querySelector('input[name="chapLabelSelect"]:checked').value;
+    console.log('on submit: ' + selectedChapLabel);
     var importOptions = {
       fileType: filetypes[document.querySelector('input[name="typeSelect"]:checked').value]
     };
@@ -185,11 +221,17 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish){
       splitChapters: {
         split: splitChapsCheck.checked,
         marker: chapsStrInput.value
-      }
+      },
+      chapLabels: selectedChapLabel
     };
 
     importOptions.docxOptions = {
-      splitChapters: docxSplitChapsCheck.checked
+      splitChapters: docxSplitChapsCheck.checked,
+      chapLabels: selectedChapLabel
+    };
+
+    importOptions.mdfcOptions = {
+      chapLabels: selectedChapLabel
     };
 
     closePopups();
