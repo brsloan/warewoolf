@@ -1,6 +1,6 @@
 const { getTempQuill } = require('./quill-utils');
 
-function find(editorQuill, project, str, caseSensitive = true, startingIndex, searchAllChapters, displayChapterByIndex){
+function find(editorQuill, project, str, caseSensitive = true, startingIndex, searchAllChapters, displayChapterByIndex, wholeWordOnly = false){
     var index = -1;
 
     if(str){
@@ -11,9 +11,9 @@ function find(editorQuill, project, str, caseSensitive = true, startingIndex, se
             str = str.toLowerCase();
         }
 
-        index = totalText.indexOf(str, startingIndex);
+        index = getNextIndex(str, totalText, startingIndex, wholeWordOnly);
         if(index == startingIndex)
-            index = totalText.indexOf(str, startingIndex + str.length);
+            index = getNextIndex(str, totalText, startingIndex + str.length, wholeWordOnly);
 
         if(index > -1)
             editorQuill.setSelection(index, str.length);
@@ -60,6 +60,13 @@ function findInText(str, text, caseSensitive, startingIndex, wholeWordOnly = fal
         str = str.toLowerCase();
     }
 
+    index = getNextIndex(str, text, startingIndex, wholeWordOnly);
+    
+    return index;
+}
+
+function getNextIndex(str, text, startingIndex, wholeWordOnly){
+    var index = -1;
     if(wholeWordOnly == false){
         index = text.indexOf(str, startingIndex);
     }
@@ -70,7 +77,6 @@ function findInText(str, text, caseSensitive, startingIndex, wholeWordOnly = fal
         if(match)
             index = match.index;
     }
-    
     return index;
 }
 

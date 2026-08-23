@@ -32,6 +32,16 @@ function showFindReplace(project, editorQuill, displayChapterByIndex){
 
     findForm.appendChild(document.createElement('br'));
 
+    var wholeWordOnly = document.createElement("input");
+    wholeWordOnly.type = "checkbox";
+    findForm.appendChild(wholeWordOnly);
+
+    var wholeWordLabel = document.createElement("label");
+    wholeWordLabel.innerText = "Whole Word Only";
+    findForm.appendChild(wholeWordLabel);
+
+    findForm.appendChild(document.createElement('br'));
+
     var inAllChapters = document.createElement("input");
     inAllChapters.type = "checkbox";
     findForm.appendChild(inAllChapters)
@@ -53,7 +63,7 @@ function showFindReplace(project, editorQuill, displayChapterByIndex){
     var findBtn = createButton("<span class='access-key'>F</span>ind");
     findBtn.onclick = function(){
       replacementCount.innerText = "";
-      var found = find(editorQuill, project, findIn.value, caseSensitive.checked, editorQuill.getSelection(true).index, inAllChapters.checked, displayChapterByIndex);
+      var found = find(editorQuill, project, findIn.value, caseSensitive.checked, editorQuill.getSelection(true).index, inAllChapters.checked, displayChapterByIndex, wholeWordOnly.checked);
       if(found < 0)
         replacementCount.innerText = "None Found.";
       findBtn.focus();
@@ -81,9 +91,9 @@ function showFindReplace(project, editorQuill, displayChapterByIndex){
       var numReplaced = 0;
 
       if(inAllChapters.checked)
-        numReplaced = replaceAllInAllChapters(project, findIn.value, replaceIn.value, caseSensitive.checked);
+        numReplaced = replaceAllInAllChapters(project, findIn.value, replaceIn.value, caseSensitive.checked, wholeWordOnly.checked);
       else {
-        numReplaced = replaceAllInChapter(findIn.value, replaceIn.value, caseSensitive.checked, project.getActiveChapter());
+        numReplaced = replaceAllInChapter(findIn.value, replaceIn.value, caseSensitive.checked, project.getActiveChapter(), wholeWordOnly.checked);
       }
       displayChapterByIndex(project.activeChapterIndex);
       replacementCount.innerText = numReplaced + " instances replaced!";
