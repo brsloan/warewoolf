@@ -1,18 +1,18 @@
 const { parseDelta } = require('./quill-utils');
 
 function parseMDF(str){
-  let header1 = /^# (.+)/gm;
-  let header2 = /^## (.+)/gm;
-  let header3 = /^### (.+)/gm;
-  let header4 = /^#### (.+)/gm;
-  let centeredHeader1 = /^\[>c] # (.+)/gm
-  let centeredHeader2 = /^\[>c] ## (.+)/gm
-  let centeredHeader3 = /^\[>c] ### (.+)/gm
-  let centeredHeader4 = /^\[>c] #### (.+)/gm
-  let rightHeader1 = /^\[>r] # (.+)/gm
-  let rightHeader2 = /^\[>r] ## (.+)/gm
-  let rightHeader3 = /^\[>r] ### (.+)/gm
-  let rightHeader4 = /^\[>r] #### (.+)/gm
+  let header1 = /^# (.*)/gm;
+  let header2 = /^## (.*)/gm;
+  let header3 = /^### (.*)/gm;
+  let header4 = /^#### (.*)/gm;
+  let centeredHeader1 = /^\[>c] # (.*)/gm
+  let centeredHeader2 = /^\[>c] ## (.*)/gm
+  let centeredHeader3 = /^\[>c] ### (.*)/gm
+  let centeredHeader4 = /^\[>c] #### (.*)/gm
+  let rightHeader1 = /^\[>r] # (.*)/gm
+  let rightHeader2 = /^\[>r] ## (.*)/gm
+  let rightHeader3 = /^\[>r] ### (.*)/gm
+  let rightHeader4 = /^\[>r] #### (.*)/gm
 
   let listUnordered = /^(?:-|\*|\+) (.*)/gm; 
   let listUnorderedTwo = /^(\\t)(?:-|\*|\+) (.*)/gm; //Tabs must be searched for as escaped since styling comes after JSON character conversion
@@ -21,10 +21,10 @@ function parseMDF(str){
   let listOrderedTwo = /^(\\t)((?:\d+|[a-z])\.) (.*)/gm;
   let listOrderedThreePlus = /^(\\t){2,}((?:\d+|[a-z])\.) (.*)/gm;
   let blockquote = /^>+ {0,1}(.+)/gm;
-  let alignLeft = /^\[>l] (.+)/gm;
-  let alignRight = /^\[>r] (.+)/gm;
-  let alignCenter = /^\[>c] (.+)/gm;
-  let alignJustified = /^\[>j] (.+)/gm;
+  let alignLeft = /^\[>l] (.*)/gm;
+  let alignRight = /^\[>r] (.*)/gm;
+  let alignCenter = /^\[>c] (.*)/gm;
+  let alignJustified = /^\[>j] (.*)/gm;
   let normal = /^(?!{)(.+)/gm;
   let blankLines = /(?:\r?\n){2,}/gm;
 
