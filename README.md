@@ -74,6 +74,7 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 * Indent all paragraphs tool
 * Center all headings tool
 * Import option to generate chapter labels from filename or first line of files
+* Find/Replace Whole Word Only option
 * Fixed bug centered blank lines not parsed properly
 * Fixed bug spellcheck change all did not limit to whole words
 
