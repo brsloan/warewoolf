@@ -1,8 +1,9 @@
 var fs = require('fs');
 const unzipper = require('unzipper');
+const { logError } = require('./error-log');
 
-function importDocx(filepath, split, cback){
-  tempUnzipDocx(filepath, function(xmlDir){
+function importDocx(filepath, sysDirectories, split, cback){
+  tempUnzipDocx(filepath, sysDirectories, function(xmlDir){
 
     var docInText = fs.readFileSync(xmlDir + '/document.xml', 'utf8');
     var docDom = parseDocx(docInText);
@@ -26,17 +27,30 @@ function getFootnotes(dir){
   return fnDom;
 }
 
-function tempUnzipDocx(filepath, callback){
+function tempUnzipDocx(filepath, sysDirectories, callback){
   var unzipDestination = sysDirectories.temp + '/docxguts';
   fs.createReadStream(filepath)
+  .on('error', logError)
   .pipe(unzipper.Extract({ path: unzipDestination }))
+  .on('error', logError)
   .on('close', function(){
     callback(unzipDestination + '/word');
   });
 }
 
 function docxToDelta(docDom, fnDom, split = false){
-  var paras = docDom.getElementsByTagName('w:p');
+  var allParas = docDom.getElementsByTagName('w:p');
+
+  //getElementsByTagName recurses into the whole subtree, so it also picks up paragraphs nested
+  //inside tables. Tables aren't supported by this importer (or by the docx exporter), so pulling
+  //those paragraphs in here would duplicate/misorder content relative to the document's visible
+  //layout - only paragraphs outside any table are kept.
+  var paras = [];
+  for(let p=0;p<allParas.length;p++){
+    if(!isInsideTable(allParas[p]))
+      paras.push(allParas[p]);
+  }
+
   var deltas = [];
   var delta = {
     ops: []
@@ -88,6 +102,8 @@ function docxToDelta(docDom, fnDom, split = false){
             plaintext = plaintext.concat(textNodes[z].childNodes[0].nodeValue);
       }
 
+      //Footnotes are represented inline in the body text rather than as a separate structure -
+      //see the comment on getFootnoteOps below for why.
       var footnoteRefs = runs[r].getElementsByTagName('w:footnoteReference');
       for(let f=0;f<footnoteRefs.length;f++){
         var refNum = footnoteRefs[f].getAttribute('w:id');
@@ -112,7 +128,7 @@ function docxToDelta(docDom, fnDom, split = false){
 
 
     var fnRefsInPara = paras[i].getElementsByTagName('w:footnoteReference');
-    if(fnRefsInPara.length > 0){
+    if(fnRefsInPara.length > 0 && fnDom){
 
       var fnoteBods = fnDom.getElementsByTagName('w:footnote');
 
@@ -120,8 +136,16 @@ function docxToDelta(docDom, fnDom, split = false){
         var refNum = fnRefsInPara[f].getAttribute('w:id');
         var fnoteBod = getMatchingFNBody(refNum, fnoteBods);
 
-        delta.ops = delta.ops.concat(getFootnoteOps(fnoteBod, refNum));
+        //A reference with no matching body means the docx is malformed (edited/corrupted after
+        //the reference was added) - skip it rather than crash the whole import over one footnote.
+        if(fnoteBod)
+          delta.ops = delta.ops.concat(getFootnoteOps(fnoteBod, refNum));
+        else
+          logError(new Error('docx import: footnote reference id ' + refNum + ' has no matching footnote body'));
       }
+    }
+    else if(fnRefsInPara.length > 0 && !fnDom){
+      logError(new Error('docx import: document contains footnote references but footnotes.xml is missing'));
     }
 
 
@@ -131,6 +155,13 @@ function docxToDelta(docDom, fnDom, split = false){
   return deltas;
 }
 
+//WareWoolf has no first-class footnote data structure. Footnotes round-trip through the body text
+//itself using a markdown-footnote-style marker: a "[^n]" reference point inline where the note was
+//called out (see docxToDelta above), and a "[^n]: text" paragraph holding the note's body (built
+//here). This keeps every format (delta, plain text, mdfc, docx) sharing one representation instead
+//of needing a parallel footnotes channel. On export, convertDeltaToDocx in delta-to-docx.js finds
+//paragraphs starting with the "[^n]:" marker and reassembles them into real docx footnotes - do not
+//"simplify" this by dropping the inline markers without updating that reader too.
 function getFootnoteOps(fnoteBod, refNum){
   var ops = [];
   var paras = fnoteBod.getElementsByTagName('w:p');
@@ -155,9 +186,12 @@ function getFootnoteOps(fnoteBod, refNum){
 
       var textNodes = runs[r].getElementsByTagName('w:t');
       for(let z=0;z<textNodes.length;z++){
-          if(z % 2 != 0)
+          //A manual line break splits one run into multiple w:t siblings. Each break starts its
+          //own footnote line, same convention as the one marker per w:p paragraph above.
+          if(z > 0 && hasPrecedingBreak(textNodes[z]))
             plaintext = plaintext.concat('\n[^' + refNum + ']: ');
-          plaintext = plaintext.concat(textNodes[z].childNodes[0].nodeValue);
+          if(textNodes[z].childNodes.length > 0)
+            plaintext = plaintext.concat(textNodes[z].childNodes[0].nodeValue);
       }
 
       var attributes = getRunStyles(runs[r]);
@@ -173,6 +207,31 @@ function getFootnoteOps(fnoteBod, refNum){
     });
   }
   return ops;
+}
+
+//Walks backward from a w:t node through its preceding siblings, skipping non-text markup
+//(w:rPr, w:tab, etc.), to find whether a w:br sits directly before it rather than another
+//w:t - i.e. whether this text segment starts a new line within the run.
+function hasPrecedingBreak(textNode){
+  var sib = textNode.previousSibling;
+  while(sib){
+    if(sib.nodeName == 'w:br')
+      return true;
+    if(sib.nodeName == 'w:t')
+      return false;
+    sib = sib.previousSibling;
+  }
+  return false;
+}
+
+function isInsideTable(para){
+  var node = para.parentNode;
+  while(node){
+    if(node.nodeName == 'w:tbl')
+      return true;
+    node = node.parentNode;
+  }
+  return false;
 }
 
 function getMatchingFNBody(refNum, fnoteBods){
@@ -232,31 +291,6 @@ function getRunStyles(run){
 
     return styles;
 }
-
-function extractPlainText(docDom){
-  var paras = docDom.getElementsByTagName('w:p');
-  var plaintext = '';
-
-  for(i=0;i<paras.length;i++){
-    var runs = paras[i].getElementsByTagName('w:r');
-    for(r=0;r<runs.length;r++){
-      var tabs = runs[r].getElementsByTagName('w:tab');
-      for(t=0;t<tabs.length;t++){
-        plaintext = plaintext.concat('\t')
-      }
-
-      var textNodes = runs[r].getElementsByTagName('w:t');
-      for(z=0;z<textNodes.length;z++){
-          plaintext = plaintext.concat(textNodes[z].childNodes[0].nodeValue);
-      }
-
-    }
-    plaintext = plaintext.concat('\n')
-  }
-
-  return plaintext;
-}
-
 
 function parseDocx(xmlStr){
   const parser = new DOMParser();

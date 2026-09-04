@@ -23,7 +23,7 @@ function initiateImport(sysDirectories, options, addImportedChapter, cback){
 
   showFileDialog(dialogOptions, function(filepaths){
     try{
-      importFilesAsync(filepaths, options, addImportedChapter, cback);
+      importFilesAsync(filepaths, options, addImportedChapter, cback, sysDirectories);
     }
     catch(err){
       logError(err);
@@ -32,7 +32,7 @@ function initiateImport(sysDirectories, options, addImportedChapter, cback){
   });
 }
 
-function importFilesAsync(filepaths, options, addImportedChapter, cback, importedDeltas = []){
+function importFilesAsync(filepaths, options, addImportedChapter, cback, sysDirectories, importedDeltas = []){
   showWorking('Importing file...');
   if(importedDeltas.length > 0)
     showWorking('Chapters Generated So Far: ' + importedDeltas.length);
@@ -40,7 +40,7 @@ function importFilesAsync(filepaths, options, addImportedChapter, cback, importe
 
   if(options.fileType.id == 'docxSelect'){
     var filename = getFilenameFromFilepath(path);
-    importDocx(path, options.docxOptions.splitChapters, function(delts){
+    importDocx(path, sysDirectories, options.docxOptions.splitChapters, function(delts){
         recurse(delts.map(function(delt, i, arr){
           return {
             title: options.docxOptions.chapLabels == 'filename' ? filename : generateChapTitleFromFirstLine(delt),
@@ -65,7 +65,7 @@ function importFilesAsync(filepaths, options, addImportedChapter, cback, importe
     });
 
     if(filepaths.length > 0){
-      importFilesAsync(filepaths, options, addImportedChapter, cback, importedDeltas);
+      importFilesAsync(filepaths, options, addImportedChapter, cback, sysDirectories, importedDeltas);
     }
     else {
       importedDeltas.forEach((delt, i) => {
