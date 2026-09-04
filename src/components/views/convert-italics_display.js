@@ -1,5 +1,6 @@
 const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
 const { convertMarkedItalicsForAllChapters } = require('../controllers/convert-italics');
+const { showWorkingAndThen, hideWorking } = require('./working_display');
 
 function showItalicsOptions(project, onFinish){
     removeElementsByClass('popup');
@@ -33,7 +34,7 @@ function showItalicsOptions(project, onFinish){
 
     var italicsBtn = document.createElement("input");
     italicsBtn.type = "submit";
-    italicsBtn.value = "Submit";
+    italicsBtn.value = "Convert";
     italicsForm.appendChild(italicsBtn);
 
     var cancelBtn = createButton("Cancel");
@@ -44,9 +45,21 @@ function showItalicsOptions(project, onFinish){
 
     italicsForm.onsubmit = function(e){
       e.preventDefault();
-      convertMarkedItalicsForAllChapters(project, italicsStrInput.value);
+
+      var marker = italicsStrInput.value.trim();
+      if(!marker){
+        italicsStrInput.focus();
+        return;
+      }
+
       closePopups();
-      onFinish();
+      //Converting can be slow on projects with many/large chapters, so show a working
+      //indicator (deferred via showWorkingAndThen) instead of blocking with no feedback.
+      showWorkingAndThen('Converting marked italics...', function(){
+        convertMarkedItalicsForAllChapters(project, marker);
+        hideWorking();
+        onFinish();
+      });
     };
 
     popup.appendChild(italicsForm);
