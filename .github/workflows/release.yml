@@ -7,11 +7,15 @@ name: Release
 #   warewoolf_<version>_amd64.deb
 #   warewoolf_<version>_arm64.deb
 #   warewoolf_<version>_MacOS_Intel.dmg
+#   warewoolf_<version>_MacOS_AppleSilicon.dmg
 #   warewoolf_<version>_Windows_x64.zip
 #
 # The amd64/arm64/Windows_x64 substrings are load-bearing: the in-app updater
 # (src/components/controllers/updates.js) picks the right asset by matching
-# these substrings in the release asset filenames.
+# these substrings in the release asset filenames. The macOS Apple Silicon
+# build is deliberately named "AppleSilicon" rather than "arm64" so it can't
+# collide with that arm64 substring match (which today is Linux-only, but
+# isn't guarded by platform) and get offered to Linux ARM users or vice versa.
 
 on:
   push:
@@ -74,6 +78,13 @@ jobs:
   macos:
     needs: check-version
     runs-on: macos-latest
+    strategy:
+      matrix:
+        include:
+          - arch: x64
+            label: MacOS_Intel
+          - arch: arm64
+            label: MacOS_AppleSilicon
     steps:
       - uses: actions/checkout@v4
         with:
@@ -82,7 +93,7 @@ jobs:
         with:
           node-version: 20
       - run: npm ci
-      - run: npx electron-forge package --platform=darwin --arch=x64
+      - run: npx electron-forge package --platform=darwin --arch=${{ matrix.arch }}
       - name: Build dmg with hdiutil
         shell: bash
         # @electron-forge/maker-dmg pulls in the unmaintained `appdmg` package
@@ -101,11 +112,11 @@ jobs:
           ln -s /Applications "$STAGING/Applications"
           mkdir -p out/make
           hdiutil create -volname "WareWoolf" -srcfolder "$STAGING" -ov -format UDZO \
-            "out/make/warewoolf_${{ needs.check-version.outputs.version }}_MacOS_Intel.dmg"
+            "out/make/warewoolf_${{ needs.check-version.outputs.version }}_${{ matrix.label }}.dmg"
       - uses: actions/upload-artifact@v4
         with:
-          name: release-asset-macos-x64
-          path: out/make/warewoolf_*_MacOS_Intel.dmg
+          name: release-asset-macos-${{ matrix.arch }}
+          path: out/make/warewoolf_*_${{ matrix.label }}.dmg
           if-no-files-found: error
 
   windows:
