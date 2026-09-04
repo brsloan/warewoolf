@@ -1,7 +1,7 @@
 function getTotalWordCount(project){
   var total = 0;
   project.chapters.forEach(function(chap){
-      var text = convertToPlainText(chap.contents ? chap.contents : chap.getFile());
+      var text = convertToPlainText(chap.getContentsOrFile());
       total += countWords(text);
   });
   return total;
@@ -17,9 +17,11 @@ function countWords(s){
 }
 
 function convertToPlainText(delt){
+  if(!delt || !delt.ops) return '';
   var text = '';
   delt.ops.forEach(op => {
-    text += op.insert;
+    if(typeof op.insert === 'string')
+      text += op.insert;
   });
   return text;
 }

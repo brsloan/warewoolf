@@ -36,7 +36,7 @@ function showOutliner(project){
     row.appendChild(titleCell);
 
     var wordCountCell = document.createElement('td');
-    var text = convertToPlainText(chap.contents ? chap.contents : chap.getFile());
+    var text = convertToPlainText(chap.getContentsOrFile());
     wordCountCell.innerText = countWords(text);
     wordCountCell.classList.add('outliner-word-count');
     row.appendChild(wordCountCell);
@@ -69,9 +69,11 @@ function showOutliner(project){
 }
 
 function convertToPlainText(delt){
+  if(!delt || !delt.ops) return '';
   var text = '';
   delt.ops.forEach(op => {
-    text += op.insert;
+    if(typeof op.insert === 'string')
+      text += op.insert;
   });
   return text;
 }
