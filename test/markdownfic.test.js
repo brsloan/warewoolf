@@ -108,3 +108,45 @@ test('parseMDF is not confused by quotes or apostrophes in the text', function()
     ops: [ {insert: 'She said "no" and didn\'t move.'}, {insert: '\n'} ]
   });
 });
+
+//Regression: consecutive blank paragraphs used to collapse into a single blank line on reload,
+//because the old blank-line regex matched a whole run of newlines at once no matter how many
+//blank paragraphs it spanned.
+test('several consecutive blank paragraphs all survive the round trip', function(){
+  assertRoundTrip({ ops: [
+    {insert: 'A'},   {insert: '\n'},
+    {insert: ''},    {insert: '\n'},
+    {insert: ''},    {insert: '\n'},
+    {insert: ''},    {insert: '\n'},
+    {insert: 'B'},   {insert: '\n'}
+  ]}, 'A\r\n\r\n\r\n\r\nB\r\n');
+});
+
+//Regression: a line of prose that happened to start with "{" used to crash parseMDF, because the
+//old implementation built a JSON string as it went and used "does this line start with {" as its
+//only signal for "has this line already been converted".
+test('a line starting with a curly brace does not crash the parser', function(){
+  assertRoundTrip({ ops: [ {insert: '{some text}'}, {insert: '\n'} ] }, '{some text}\r\n');
+});
+
+//Regression: centered and right-aligned headings round-tripped, but a justified heading did not -
+//there was no parser support for the "[>j] #" combination that convertDeltaToMDF itself produces,
+//so the "# " came back as literal text and the heading attribute was lost.
+test('a justified heading round trips', function(){
+  assertRoundTrip({ ops: [
+    {insert: 'Title'}, {insert: '\n', attributes: {align: 'justify', header: 1}}
+  ]}, '[>j] # Title\r\n');
+});
+
+//Regression: a style span that contains a differently-styled span in its *middle* (not the whole
+//span) used to lose its own attribute from the text on either side of the inner span, because each
+//style was applied as its own whole-line replace pass and a later pass could match markers that had
+//been embedded inside an earlier pass's already-built output.
+test('a style nested in the middle of another style does not clobber it', function(){
+  assertRoundTrip({ ops: [
+    {insert: 'bold and ', attributes: {bold: true}},
+    {insert: 'underlined', attributes: {bold: true, underline: true}},
+    {insert: ' within', attributes: {bold: true}},
+    {insert: '\n'}
+  ]}, '**bold and __underlined__ within**\r\n');
+});
