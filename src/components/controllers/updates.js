@@ -204,7 +204,7 @@ function downloadRequest(file, filePath, url){
 
         if(response.statusCode !== 200){
             response.resume();
-            file.close();
+            file.destroy();
             fs.unlink(filePath, () => {
                 logError(new Error('Download failed: ' + response.statusCode));
             });
@@ -215,7 +215,7 @@ function downloadRequest(file, filePath, url){
     });
 
     request.on('error', function(err){
-        file.close();
+        file.destroy();
         fs.unlink(filePath, function(){
             logError(err);
         })
