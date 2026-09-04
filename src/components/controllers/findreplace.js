@@ -25,7 +25,9 @@ function find(editorQuill, project, str, caseSensitive = true, startingIndex, se
                 while(result < 0){
                     if(project.activeChapterIndex < project.chapters.length - 1){
                         displayChapterByIndex(project.activeChapterIndex + 1);
-                        result = find(editorQuill, project, str, caseSensitive, 0);
+                        //searchAllChapters is deliberately false here so the recursive call searches
+                        //only the chapter just displayed rather than re-entering this loop.
+                        result = find(editorQuill, project, str, caseSensitive, 0, false, displayChapterByIndex, wholeWordOnly);
                         index = result;
                     }
                     else {
@@ -43,7 +45,7 @@ function find(editorQuill, project, str, caseSensitive = true, startingIndex, se
                 }
             } else {
                 if(startingIndex != 0){
-                    index =  find(editorQuill, project, str, caseSensitive, 0);
+                    index =  find(editorQuill, project, str, caseSensitive, 0, false, displayChapterByIndex, wholeWordOnly);
                 }
 
             }
@@ -71,13 +73,31 @@ function getNextIndex(str, text, startingIndex, wholeWordOnly){
         index = text.indexOf(str, startingIndex);
     }
     else {
-        const regex = new RegExp(`\\b${str}\\b`, 'g');
+        const regex = new RegExp(getWholeWordPattern(str), 'g');
         regex.lastIndex = startingIndex;
         const match = regex.exec(text);
         if(match)
             index = match.index;
     }
     return index;
+}
+
+//The search term comes straight from the user, so it must be escaped before going into a
+//RegExp or characters like ( and * will either throw or match the wrong thing. \b also only
+//marks a boundary between a word and a non-word character, so a term that starts or ends with
+//punctuation (--, 'tis) would never match; those sides need a "not preceded/followed by a word
+//character" check instead.
+function getWholeWordPattern(str){
+    var escaped = escapeRegExp(str);
+    var openingBoundary = /^\w/.test(str) ? '\\b' : '(?<!\\w)';
+    var closingBoundary = /\w$/.test(str) ? '\\b' : '(?!\\w)';
+
+    return openingBoundary + escaped + closingBoundary;
+}
+
+function escapeRegExp(string){
+    const specialCharacters = /[.*+?^${}()|[\]\\]/g;
+    return string.replace(specialCharacters, '\\$&');
 }
 
 function replace(editorQuill, newStr){
@@ -144,6 +164,8 @@ function replaceAllInDelta(oldStr, newStr, caseSensitive, delt, wholeWordOnly = 
 
 module.exports = {
     find,
+    findInText,
+    getNextIndex,
     replace,
     replaceAllInAllChapters,
     replaceAllInChapter,

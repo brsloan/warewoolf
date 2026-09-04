@@ -1,18 +1,21 @@
 function convertMdfcToHtml(str){
     str = convertWindowsToLinuxLineEndings(str);
 
-    let header1 = /^# (.+)/gm;
-    let header2 = /^## (.+)/gm;
-    let header3 = /^### (.+)/gm;
-    let header4 = /^#### (.+)/gm;
-    let centeredHeader1 = /^\[>c] # (.+)/gm
-    let centeredHeader2 = /^\[>c] ## (.+)/gm
-    let centeredHeader3 = /^\[>c] ### (.+)/gm
-    let centeredHeader4 = /^\[>c] #### (.+)/gm
-    let rightHeader1 = /^\[>r] # (.+)/gm
-    let rightHeader2 = /^\[>r] ## (.+)/gm
-    let rightHeader3 = /^\[>r] ### (.+)/gm
-    let rightHeader4 = /^\[>r] #### (.+)/gm
+    //These use (.*) rather than (.+) to match markdownFic.js: a blank line that carries a heading
+    //or alignment attribute is written out as a bare marker with no text after it, and it still
+    //has to be recognised here or the marker itself leaks into the exported HTML.
+    let header1 = /^# (.*)/gm;
+    let header2 = /^## (.*)/gm;
+    let header3 = /^### (.*)/gm;
+    let header4 = /^#### (.*)/gm;
+    let centeredHeader1 = /^\[>c] # (.*)/gm
+    let centeredHeader2 = /^\[>c] ## (.*)/gm
+    let centeredHeader3 = /^\[>c] ### (.*)/gm
+    let centeredHeader4 = /^\[>c] #### (.*)/gm
+    let rightHeader1 = /^\[>r] # (.*)/gm
+    let rightHeader2 = /^\[>r] ## (.*)/gm
+    let rightHeader3 = /^\[>r] ### (.*)/gm
+    let rightHeader4 = /^\[>r] #### (.*)/gm
   
     let unorderedListHtml = /((?:(?:<li|<ul) class="ul.*(?:<\/li>|<\/ul>)\n)+)/g;
     let unorderedListHtmlLvl2 = /((?:(?:<li|<ul) class="ul (?:ul-two|ul-three).*(?:<\/li>|<\/ul>)\n)+)/g;
@@ -20,7 +23,10 @@ function convertMdfcToHtml(str){
     let orderedListHtml = /((?:(?:<li|<ol) class="ol.*(?:<\/li>|<\/ol>)\n)+)/g
     let orderedListHtmlLvl2 = /((?:(?:<li|<ol) class="ol (?:ol-two|ol-three).*(?:<\/li>|<\/ol>)\n)+)/g;
     let orderedListHtmlLvl3 = /((?:(?:<li|<ol) class="ol ol-three".*(?:<\/li>|<\/ol>)\n)+)/g;
-    let tempClasses = /class="(ol|ul).*"/g;
+    //[^"]* rather than .* so the match stops at the closing quote of the class attribute. A greedy
+    //.* runs on to the last quote on the line, which swallows the item's text whenever it contains
+    //dialogue.
+    let tempClasses = / class="(?:ol|ul)[^"]*"/g;
 
     let listUnordered = /^(?:-|\*|\+) (.*)/gm; 
     let listUnorderedTwo = /^(\t)(?:-|\*|\+) (.*)/gm;
@@ -29,10 +35,10 @@ function convertMdfcToHtml(str){
     let listOrderedTwo = /^(\t)((?:\d+|[a-z])\.) (.*)/gm;
     let listOrderedThreePlus = /^(\t){2,}((?:\d+|[a-z])\.) (.*)/gm;
     let blockquote = /^>+ {0,1}(.+)/gm;
-    let alignLeft = /^\[>l] (.+)/gm;
-    let alignRight = /^\[>r] (.+)/gm;
-    let alignCenter = /^\[>c] (.+)/gm;
-    let alignJustified = /^\[>j] (.+)/gm;
+    let alignLeft = /^\[>l] (.*)/gm;
+    let alignRight = /^\[>r] (.*)/gm;
+    let alignCenter = /^\[>c] (.*)/gm;
+    let alignJustified = /^\[>j] (.*)/gm;
     let normal = /^(?!<)(.+)/gm;
     let blankLines = /(?:\r?\n){2,}/gm;
   
@@ -69,8 +75,6 @@ function convertMdfcToHtml(str){
     str = str.replace(blockquote, '<blockquote>$1</blockquote>');
     str = str.replace(normal, '<p>$1</p>');
     str = str.replace(blankLines, '\n<br/>\n');
- 
-    console.log(JSON.stringify(str));
 
     //Now add outer list tags for entire lists
     str = str.replace(unorderedListHtml, '<ul>$1</ul>\n');
@@ -94,7 +98,9 @@ function convertMdfcToHtml(str){
     str = str.replace(underline, '<u>$1</u>');
     str = str.replace(strike, '<del>$1</del>');
   
-    let escapedMarkers = /\\(\*\*|\*|~~|__|#|\[>|>|\[\^)/g;
+    //List markers are in this set to match markdownFic.js. Without them a line of prose that
+    //happens to open with "- " or "1984. " keeps the backslash it was escaped with.
+    let escapedMarkers = /\\(\*\*|\*|~~|__|#|\[>|>|\[\^|-|\+|(?:\d+|[a-z])\. )/g;
     str = str.replace(escapedMarkers, '$1');
   
     return str;
