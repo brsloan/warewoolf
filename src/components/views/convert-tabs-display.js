@@ -1,5 +1,6 @@
 const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
 const { convertMarkedTabsForAllChapters } = require('../controllers/convert-tabs');
+const { showWorkingAndThen, hideWorking } = require('./working_display');
 
 function showTabOptions(project, onFinish){
     removeElementsByClass('popup');
@@ -44,9 +45,15 @@ function showTabOptions(project, onFinish){
     tabForm.onsubmit = function(e){
       e.preventDefault();
 
-      convertMarkedTabsForAllChapters(project, tabStrInput.value);
+      var marker = tabStrInput.value;
       closePopups();
-      onFinish();
+      //Converting can be slow on projects with many/large chapters, so show a working
+      //indicator (deferred via showWorkingAndThen) instead of blocking with no feedback.
+      showWorkingAndThen('Converting marked tabs...', function(){
+        convertMarkedTabsForAllChapters(project, marker);
+        hideWorking();
+        onFinish();
+      });
     };
 
     popup.appendChild(tabForm);
