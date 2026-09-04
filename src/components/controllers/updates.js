@@ -5,7 +5,12 @@ const process = require('node:process');
 const { spawn } = require('node:child_process');
 
 function getUpdates(thisAppVersion, callback){
-    fetchLatestReleaseData(function(latest){
+    fetchLatestReleaseData(function(latest, err){
+        if(err){
+            callback(null, err);
+            return;
+        }
+
         if(!latest){
             callback(null);
             return;
@@ -41,8 +46,9 @@ function fetchLatestReleaseData(callback){
 
         res.on('end', function(){
             if(res.statusCode !== 200){
-                logError(new Error('GitHub release check failed with status ' + res.statusCode + ': ' + data));
-                callback(null);
+                var statusErr = new Error('GitHub release check failed with status ' + res.statusCode + ': ' + data);
+                logError(statusErr);
+                callback(null, statusErr);
                 return;
             }
 
@@ -52,19 +58,20 @@ function fetchLatestReleaseData(callback){
             }
             catch(err){
                 logError(err);
-                callback(null);
+                callback(null, err);
                 return;
             }
 
             var packagedData = packageReleaseData(parsed);
 
             if(!packagedData){
-                logError(new Error('Unexpected release data shape from GitHub API'));
-                callback(null);
+                var shapeErr = new Error('Unexpected release data shape from GitHub API');
+                logError(shapeErr);
+                callback(null, shapeErr);
                 return;
             }
 
-            callback(packagedData);
+            callback(packagedData, null);
         });
 
     });
@@ -75,7 +82,7 @@ function fetchLatestReleaseData(callback){
 
     req.on('error', function(err){
         logError(err);
-        callback(null);
+        callback(null, err);
     });
 
     req.end();

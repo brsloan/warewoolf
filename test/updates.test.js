@@ -152,8 +152,11 @@ test('getUpdates reports the release info when a newer version is available', as
 test('getUpdates reports null when already on the latest version', async function(t){
   mockReleaseResponse(t, { body: releaseJson('v1.0.0') });
 
-  const latest = await new Promise(function(resolve){ getUpdates('1.0.0', resolve); });
+  const [latest, err] = await new Promise(function(resolve){
+    getUpdates('1.0.0', function(latest, err){ resolve([latest, err]); });
+  });
   assert.strictEqual(latest, null);
+  assert.ok(!err, 'a genuine "no update" result must not be reported as a failed check');
 });
 
 test('getUpdates reports null when the installed version is already newer than the latest release', async function(t){
@@ -202,6 +205,51 @@ test('getUpdates regression: reports null instead of hanging forever when the re
 
   const latest = await new Promise(function(resolve){ getUpdates('1.0.0', resolve); });
   assert.strictEqual(latest, null);
+});
+
+//Regression: a failed release check (bad status, bad JSON, unexpected shape, or a network
+//error) used to call back with plain `null`, identical to a genuine "no update available"
+//result - the About panel then told the user "No Updates Available" even when the check never
+//actually completed. getUpdates must now pass an error as the second callback argument so the
+//two cases can be told apart.
+test('getUpdates regression: reports an error instead of a bare null when GitHub responds with a non-200 status', async function(t){
+  mockReleaseResponse(t, { statusCode: 403, body: JSON.stringify({ message: 'API rate limit exceeded' }) });
+
+  const [latest, err] = await new Promise(function(resolve){
+    getUpdates('1.0.0', function(latest, err){ resolve([latest, err]); });
+  });
+  assert.strictEqual(latest, null);
+  assert.ok(err instanceof Error);
+});
+
+test('getUpdates regression: reports an error instead of a bare null when the response body is not valid JSON', async function(t){
+  mockReleaseResponse(t, { statusCode: 200, body: '<html>not json</html>' });
+
+  const [latest, err] = await new Promise(function(resolve){
+    getUpdates('1.0.0', function(latest, err){ resolve([latest, err]); });
+  });
+  assert.strictEqual(latest, null);
+  assert.ok(err instanceof Error);
+});
+
+test('getUpdates regression: reports an error instead of a bare null for an unexpected release data shape', async function(t){
+  mockReleaseResponse(t, { statusCode: 200, body: JSON.stringify({ no: 'assets here' }) });
+
+  const [latest, err] = await new Promise(function(resolve){
+    getUpdates('1.0.0', function(latest, err){ resolve([latest, err]); });
+  });
+  assert.strictEqual(latest, null);
+  assert.ok(err instanceof Error);
+});
+
+test('getUpdates regression: reports an error instead of a bare null when the request errors', async function(t){
+  mockReleaseResponse(t, { triggerError: new Error('ENOTFOUND api.github.com') });
+
+  const [latest, err] = await new Promise(function(resolve){
+    getUpdates('1.0.0', function(latest, err){ resolve([latest, err]); });
+  });
+  assert.strictEqual(latest, null);
+  assert.ok(err instanceof Error);
 });
 
 //Regression: a malformed/prerelease-style tag produced NaN digits, which compared as neither

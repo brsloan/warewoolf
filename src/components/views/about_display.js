@@ -57,10 +57,14 @@ function showAbout(sysDirectories, appVersion){
   checkUpdatesBtn.onclick = function(){
     checkUpdatesBtn.disabled = true;
     checkUpdatesBtn.innerText = 'Checking...';
-    getUpdates(appVersion, function(latest){
+    getUpdates(appVersion, function(latest, err){
       console.log('gotten updates');
       console.log(latest);
-      if(latest){
+      if(err){
+        checkUpdatesBtn.innerText = 'Update Check Failed';
+        checkUpdatesBtn.disabled = false;
+      }
+      else if(latest){
         updatesTitle.innerText = 'WareWoolf ' + latest.tag + ' Available: ';
         updatesText.innerText = 'Published ' + latest.date.slice(0,10) + ':\n' + latest.description;
         updatesPanel.style.display = 'block';
