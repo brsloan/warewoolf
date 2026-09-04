@@ -4,7 +4,29 @@ const test = require('node:test');
 const assert = require('node:assert');
 
 const { makeChapter, makeProject } = require('./helpers');
-const { getNextIndex, findInText, replaceAllInDelta, replaceAllInAllChapters } = require('../src/components/controllers/findreplace');
+const { getNextIndex, findInText, replaceAllInDelta, replaceAllInAllChapters, find } = require('../src/components/controllers/findreplace');
+
+//find() needs a real editorQuill (it calls getText()/setSelection()/getSelection()), so these
+//tests drive it with a Quill instance the same way the app does. Unlike quill-utils.js's
+//getTempQuill(), the container is attached to the document - getSelection() needs a focusable,
+//attached root to report a non-null range.
+function makeEditorQuill(text){
+  const Quill = require('quill');
+  var container = document.createElement('div');
+  document.body.appendChild(container);
+  var quill = new Quill(container);
+  quill.setText(text);
+  return quill;
+}
+
+//Mirrors the relevant part of render.js's displayChapterByIndex: swap the editor's contents for
+//the target chapter's and record which chapter is now active.
+function makeDisplayChapterByIndex(project, editorQuill, chapters){
+  return function(ind){
+    project.activeChapterIndex = ind;
+    editorQuill.setText(chapters[ind].contents);
+  };
+}
 
 test('substring search finds a match at or after the starting index', function(){
   assert.strictEqual(getNextIndex('cat', 'the cat sat', 0, false), 4);
@@ -132,4 +154,80 @@ test('replaceAllInAllChapters leaves project.hasUnsavedChanges alone when nothin
   replaceAllInAllChapters(project, 'cat', 'dog', true);
 
   assert.notStrictEqual(project.hasUnsavedChanges, true);
+});
+
+//Regression: a match starting exactly at the search's starting index (most notably index 0, where
+//the cursor sits on a freshly opened chapter) used to be discarded by a heuristic that assumed it
+//must be the previously-found match. It isn't, on a fresh search, and got skipped entirely.
+test('find does not skip a match that starts at the search\'s starting index', function(){
+  var editorQuill = makeEditorQuill('cat sat on the mat\n');
+  var project = makeProject([]);
+
+  var index = find(editorQuill, project, 'cat', true, 0, false, undefined, false);
+
+  assert.strictEqual(index, 0);
+  var selection = editorQuill.getSelection(true);
+  assert.strictEqual(selection.index, 0);
+  assert.strictEqual(selection.length, 3);
+});
+
+//Regression coverage for the caller-side fix: searching from the end of the current selection
+//(rather than its start) is what lets a repeat Find move past the match that's currently selected
+//without the old skip-hack, which incorrectly discarded matches on a fresh search too (above).
+test('searching from the end of a just-found match advances to the next occurrence', function(){
+  var editorQuill = makeEditorQuill('cat and cat\n');
+  var project = makeProject([]);
+
+  var first = find(editorQuill, project, 'cat', true, 0, false, undefined, false);
+  assert.strictEqual(first, 0);
+
+  var selection = editorQuill.getSelection(true);
+  var second = find(editorQuill, project, 'cat', true, selection.index + selection.length, false, undefined, false);
+
+  assert.strictEqual(second, 8);
+});
+
+//Regression: the recursive call made when a search-all-chapters wraparound landed back on the
+//first chapter omitted wholeWordOnly, so it silently fell back to substring matching once the
+//search wrapped. activeChapterIndex is set to the last chapter so the very first hop wraps to
+//chapter 0 immediately, exercising that same transition.
+test('find keeps respecting wholeWordOnly across a search-all-chapters wraparound', function(){
+  var chapters = [
+    { contents: 'concatenate\n' },     //substring-only match, must be skipped
+    { contents: 'the cat sat\n' },     //whole-word match
+    { contents: 'no match here\n' }    //active chapter search starts from
+  ];
+  var editorQuill = makeEditorQuill(chapters[2].contents);
+  var project = makeProject(chapters, [], 2);
+  var displayChapterByIndex = makeDisplayChapterByIndex(project, editorQuill, chapters);
+
+  var index = find(editorQuill, project, 'cat', true, 0, true, displayChapterByIndex, true);
+
+  assert.strictEqual(index, 4);
+  assert.strictEqual(project.activeChapterIndex, 1);
+});
+
+//Regression: a failed search-all-chapters search re-walked chapters it had already searched during
+//the wraparound, and left the view on whichever chapter that redundant pass happened to end on
+//instead of restoring the chapter the search started from.
+test('find visits each other chapter once and restores the starting chapter when nothing is found', function(){
+  var chapters = [
+    { contents: 'no match here\n' },
+    { contents: 'nor here\n' },
+    { contents: 'still nothing\n' }
+  ];
+  var editorQuill = makeEditorQuill(chapters[0].contents);
+  var project = makeProject(chapters, [], 0);
+
+  var visited = [];
+  var displayChapterByIndex = function(ind){
+    visited.push(ind);
+    makeDisplayChapterByIndex(project, editorQuill, chapters)(ind);
+  };
+
+  var index = find(editorQuill, project, 'zzz', true, 0, true, displayChapterByIndex, false);
+
+  assert.strictEqual(index, -1);
+  assert.deepStrictEqual(visited, [1, 2, 0]);
+  assert.strictEqual(project.activeChapterIndex, 0);
 });

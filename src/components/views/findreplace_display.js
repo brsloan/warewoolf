@@ -65,7 +65,11 @@ function showFindReplace(project, editorQuill, displayChapterByIndex){
     var findBtn = createButton("<span class='access-key'>F</span>ind");
     findBtn.onclick = function(){
       replacementCount.innerText = "";
-      var found = find(editorQuill, project, findIn.value, caseSensitive.checked, editorQuill.getSelection(true).index, inAllChapters.checked, displayChapterByIndex, wholeWordOnly.checked);
+      //Search from the end of the current selection rather than its start, so a repeat Find
+      //advances past the match that's currently selected instead of re-finding it, while a fresh
+      //click with no selection (length 0) still searches from the cursor itself.
+      var selection = editorQuill.getSelection(true);
+      var found = find(editorQuill, project, findIn.value, caseSensitive.checked, selection.index + selection.length, inAllChapters.checked, displayChapterByIndex, wholeWordOnly.checked);
       if(found < 0)
         replacementCount.innerText = "None Found.";
       findBtn.focus();

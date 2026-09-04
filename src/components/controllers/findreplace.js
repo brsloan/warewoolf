@@ -12,8 +12,6 @@ function find(editorQuill, project, str, caseSensitive = true, startingIndex, se
         }
 
         index = getNextIndex(str, totalText, startingIndex, wholeWordOnly);
-        if(index == startingIndex)
-            index = getNextIndex(str, totalText, startingIndex + str.length, wholeWordOnly);
 
         if(index > -1)
             editorQuill.setSelection(index, str.length);
@@ -21,28 +19,22 @@ function find(editorQuill, project, str, caseSensitive = true, startingIndex, se
             //No more results. Either start again at top of current chapter or move to next chapter.
             if(searchAllChapters){
                 var startingChapIndex = project.activeChapterIndex;
-                var result = -1;
-                while(result < 0){
-                    if(project.activeChapterIndex < project.chapters.length - 1){
-                        displayChapterByIndex(project.activeChapterIndex + 1);
-                        //searchAllChapters is deliberately false here so the recursive call searches
-                        //only the chapter just displayed rather than re-entering this loop.
-                        result = find(editorQuill, project, str, caseSensitive, 0, false, displayChapterByIndex, wholeWordOnly);
-                        index = result;
-                    }
-                    else {
-                        //If search did not begin at first chapter, loop back to first chapter for one more go.
-                        if(startingChapIndex != 0){
-                            startingChapIndex = 0;
-                            displayChapterByIndex(0);
-                            result = find(editorQuill, project, str, caseSensitive, 0);
-                            index = result;
-                        }
-                        else {
-                            result = 1;
-                        }
-                    }
+                var chapIndex = startingChapIndex;
+
+                //Visits every other chapter exactly once, starting with the next one and wrapping
+                //around, stopping as soon as a match turns up.
+                for(var i = 0; i < project.chapters.length - 1 && index < 0; i++){
+                    chapIndex = chapIndex < project.chapters.length - 1 ? chapIndex + 1 : 0;
+                    displayChapterByIndex(chapIndex);
+                    //searchAllChapters is deliberately false here so the recursive call searches
+                    //only the chapter just displayed rather than re-entering this loop.
+                    index = find(editorQuill, project, str, caseSensitive, 0, false, displayChapterByIndex, wholeWordOnly);
                 }
+
+                //Nothing found anywhere; return to the chapter the search started from instead of
+                //leaving the view on whichever chapter the wraparound happened to end on.
+                if(index < 0)
+                    displayChapterByIndex(startingChapIndex);
             } else {
                 if(startingIndex != 0){
                     index =  find(editorQuill, project, str, caseSensitive, 0, false, displayChapterByIndex, wholeWordOnly);

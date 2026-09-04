@@ -9,12 +9,13 @@ function makeChapter(contents){
   return chap;
 }
 
-//The controllers under test only ever touch chapters, reference and hasUnsavedChanges, so the fake
-//project needs nothing else.
-function makeProject(chapters, reference){
+//The controllers under test only ever touch chapters, reference, activeChapterIndex and
+//hasUnsavedChanges, so the fake project needs nothing else.
+function makeProject(chapters, reference, activeChapterIndex){
   return {
     chapters: chapters || [],
     reference: reference || [],
+    activeChapterIndex: activeChapterIndex || 0,
     hasUnsavedChanges: false
   };
 }
