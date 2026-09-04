@@ -112,15 +112,42 @@ test('a footnote marker in the body becomes a linked reference', function(){
     'footnote reference anchor missing from the body text');
 });
 
-//Only footnotes spanning more than one paragraph currently get a wrapping div with the #fnote_N
-//anchor that the body reference links to. A single paragraph footnote does not, so its definition
-//line is left without an anchor and the body link has nothing to land on. That is a real defect
-//rather than something to pin down here, so this covers the case that does work and stops short of
-//the one that does not.
-test('a multi paragraph footnote is wrapped in a div carrying the anchor', function(){
-  var html = convertMdfcToHtml('Body text.[^1]\n[^1]: Para one.\n[^1]: Para two.\n');
-  assert.ok(html.includes('<div class="footnote" id="fnote_1">'),
-    'footnote definition div missing');
-  assert.ok(html.includes('Para one.') && html.includes('Para two.'),
-    'footnote paragraphs missing from the definition div');
+//Regression: the wrapping div was only built when a footnote spanned several paragraphs, so an
+//ordinary one paragraph footnote had no #fnote_N for the body reference to land on, and its
+//definition line fell through to the reference conversion and came back carrying a second copy of
+//the fnoteRef_N id.
+test('a single paragraph footnote is wrapped in a div carrying the anchor', function(){
+  assert.strictEqual(
+    convertMdfcToHtml('Body text.[^1]\n[^1]: The note.\n'),
+    '<p>Body text.<sup><a href="#fnote_1" id="fnoteRef_1">1</a></sup></p>\n' +
+    '<div class="footnote" id="fnote_1"><p><sup><a href="#fnoteRef_1">1</a></sup>The note.\n</p></div>\n'
+  );
+});
+
+test('the body reference and its definition anchor point at each other', function(){
+  var html = convertMdfcToHtml('Body text.[^1]\n[^1]: The note.\n');
+  assert.ok(html.includes('href="#fnote_1"'), 'body reference does not link to the definition');
+  assert.ok(html.includes('id="fnote_1"'), 'definition anchor missing');
+  assert.ok(html.includes('href="#fnoteRef_1"'), 'definition does not link back to the body');
+  assert.strictEqual(html.match(/id="fnoteRef_1"/g).length, 1, 'fnoteRef_1 id is duplicated');
+});
+
+test('a multi paragraph footnote collects its paragraphs into one div', function(){
+  assert.strictEqual(
+    convertMdfcToHtml('Body text.[^1]\n[^1]: Para one.\n[^1]: Para two.\n'),
+    '<p>Body text.<sup><a href="#fnote_1" id="fnoteRef_1">1</a></sup></p>\n' +
+    '<div class="footnote" id="fnote_1"><p><sup><a href="#fnoteRef_1">1</a></sup>Para one.\n</p>' +
+    '<p>Para two.\n</p></div>\n'
+  );
+});
+
+test('several footnotes each get their own div and anchor', function(){
+  var html = convertMdfcToHtml('A[^1] B[^2]\n[^1]: First.\n[^2]: Second.\n');
+  assert.ok(html.includes('<div class="footnote" id="fnote_1">'), 'first footnote div missing');
+  assert.ok(html.includes('<div class="footnote" id="fnote_2">'), 'second footnote div missing');
+  assert.ok(html.includes('First.') && html.includes('Second.'), 'footnote text missing');
+});
+
+test('text with no footnotes is left alone', function(){
+  assert.strictEqual(convertMdfcToHtml('Just prose.\n'), '<p>Just prose.</p>\n');
 });

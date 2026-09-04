@@ -117,13 +117,17 @@ function convertFootnotes(text){
 
     var allMarkers = text.match(footnoteMarker);
 
-    if(checkIfDuplicateExists(allMarkers)){
-        text = consolidateMultiParaFootnotes(text, allMarkers);
+    //Every footnote needs its div, not just the ones written across several paragraphs. Without it
+    //there is no #fnote_N for the reference in the body to link to, and the definition line falls
+    //through to convertFootnoteReferences, which turns it into a second element carrying the same
+    //id as the reference itself.
+    if(allMarkers && allMarkers.length > 0){
+        text = consolidateFootnotes(text, allMarkers);
     }
     return text;
 }
 
-function consolidateMultiParaFootnotes(text, allMarkers){
+function consolidateFootnotes(text, allMarkers){
     var uniqueMarkers = [...new Set(allMarkers)];
 
     uniqueMarkers.forEach(function(val,i,arr){
@@ -221,11 +225,6 @@ function convertMdfcToHtmlPage(text, title, author = null, insertTitle = false){
       "  </body>" +
       "</html>";
   }
-
-function checkIfDuplicateExists(arr) {
-    if(arr && arr.length > 0)
-        return new Set(arr).size !== arr.length
-}
 
 function escapeRegExp(string) {
   const specialCharacters = /[.*+?^${}()|[\]\\]/g; 
