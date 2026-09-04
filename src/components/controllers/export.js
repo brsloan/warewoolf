@@ -10,6 +10,9 @@ const { getCorkboardForExport } = require('./corkboard');
 const { convertToPlainText } = require('./quill-utils');
 const notesNamePrepend = '-notes_';
 
+//Unlike compile.js (which merges everything into a single output file), export.js is meant to
+//write one output file per chapter/notes/corkboard item - that's the whole point of this module,
+//so each chapter (including .epub) getting its own file is intentional, not a bug.
 function exportProject(project, userSettings, options, filepath){
   try{
     var dirName = project.title.length > 0 ? sanitizeFilename(project.title) : 'exports';
@@ -20,58 +23,79 @@ function exportProject(project, userSettings, options, filepath){
 
     var chapsToExport = options.what == 'project' ? project.chapters.concat(project.reference) : [ project.getActiveChapter() ];
     for(let i=0;i<chapsToExport.length;i++){
-      var chapFile = chapsToExport[i].getContentsOrFile();
-      var chapNumber = i < project.chapters.length ? i : i - project.chapters.length;
-      var outName = generateChapterFilename(chapNumber, chapsToExport[i].title, options.what);
+      //Each chapter is exported independently of the others, so one bad chapter (corrupt file,
+      //parse failure) shouldn't stop the rest of the batch from being written.
+      try{
+        var chap = chapsToExport[i];
+        var chapFile = chap.getContentsOrFile();
+        var chapNumber = i < project.chapters.length ? i : i - project.chapters.length;
+        var outName = generateChapterFilename(chapNumber, chap.title, options.what);
 
-      if(i > project.chapters.length - 1)
-        outName = '-ref_' + outName;
+        if(project.trash.includes(chap))
+          outName = '-trash_' + outName;
+        else if(i > project.chapters.length - 1)
+          outName = '-ref_' + outName;
 
-      exportChapter(project, chapsToExport[i].title, project.author, chapFile, dir + outName, userSettings, options);
+        exportChapter(project, chap.title, project.author, chapFile, dir + outName, userSettings, options);
 
-      var chapNotesDelta = chapsToExport[i].getNotesContentOrFile();
+        var chapNotesDelta = chap.getNotesContentOrFile();
 
-      if(chapNotesDelta)
-        exportChapter(project, chapsToExport[i].title + ' Notes', project.author, chapNotesDelta, dir + notesNamePrepend + outName, userSettings, options); 
+        if(chapNotesDelta)
+          exportChapter(project, chap.title + ' Notes', project.author, chapNotesDelta, dir + notesNamePrepend + outName, userSettings, options);
+      }
+      catch(err){
+        logError(err);
+      }
     }
 
     if(options.what == 'project'){
-      var projectNotesDelta = project.notesChap.getNotesContentOrFile();
-      if(projectNotesDelta)
-        exportChapter(project, 'Project Notes', project.author, projectNotesDelta, dir + notesNamePrepend + 'project_', userSettings, options);
-      var corkboardMd = getCorkboardForExport(project.directory + project.chapsDirectory, options);
-      if(corkboardMd){
-        //Override heading styles for just this document since it is not a chapter
-        options.styleHeadingAsChapter = false;
-        exportChapter(project, 'Project Corkboard', project.author, parseMDF(corkboardMd), dir + notesNamePrepend + 'corkboard', userSettings, options);
+      try{
+        var projectNotesDelta = project.notesChap.getNotesContentOrFile();
+        if(projectNotesDelta)
+          exportChapter(project, 'Project Notes', project.author, projectNotesDelta, dir + notesNamePrepend + 'project_', userSettings, options);
+      }
+      catch(err){
+        logError(err);
+      }
+
+      try{
+        var corkboardMd = getCorkboardForExport(project.directory + project.chapsDirectory, options);
+        if(corkboardMd){
+          //Override heading styles for just this document since it is not a chapter
+          options.styleHeadingAsChapter = false;
+          exportChapter(project, 'Project Corkboard', project.author, parseMDF(corkboardMd), dir + notesNamePrepend + 'corkboard', userSettings, options);
+        }
+      }
+      catch(err){
+        logError(err);
       }
     }
 
   }
   catch(err){
     logError(err);
-  }  
+  }
 }
 
 function exportChapter(project, chapterTitle, author, chapDelta, filepathNameNoExt, userSettings, options){
   switch(options.type){
         case ".txt":
-            exportChapAsText(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.compileGenTitlePage);
+            exportChapAsText(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.generateTitlePage);
             break;
         case ".docx":
             exportChapAsDocx(project, userSettings.addressInfo, chapDelta, filepathNameNoExt, options);
             break;
         case ".mdfc":
-            exportChapAsMdf(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.compileGenTitlePage);
+            exportChapAsMdf(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.generateTitlePage);
             break;
         case ".md":
-            exportChapAsMd(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.compileGenTitlePage);
+            exportChapAsMd(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.generateTitlePage);
             break;
         case ".html":
-            exportChapAsHtml(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.compileGenTitlePage);
+            exportChapAsHtml(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.generateTitlePage);
             break;
         case ".epub":
-            exportChapAsEpub(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.compileGenTitlePage);
+            exportChapAsEpub(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.generateTitlePage);
             break;
         default:
             console.log("No valid filetype selected for export.");
