@@ -57,9 +57,11 @@ function showCompileOptions(project, sysDirectories, userSettings){
 
     var titlePageLabel = document.createElement('label');
     titlePageLabel.innerText = 'Generate Title Page: ';
+    titlePageLabel.htmlFor = 'title-page-check';
 
     var titlePageCheck = document.createElement('input');
     titlePageCheck.type = 'checkbox';
+    titlePageCheck.id = 'title-page-check';
     titlePageCheck.checked = userSettings.compileGenTitlePage;
 
     compTbl.appendChild(generateRow(titlePageLabel, titlePageCheck));
@@ -101,7 +103,7 @@ function showCompileOptions(project, sysDirectories, userSettings){
         generateTitlePage: titlePageCheck.checked,
         styleHeadingAsChapter: true
       }
-      getCompileFilepath(options, sysDirectories, function(){
+      getCompileFilepath(project, userSettings, options, sysDirectories, function(){
         popup.remove();
       });
     };
@@ -115,7 +117,7 @@ function showCompileOptions(project, sysDirectories, userSettings){
 
   }
 
-  function getCompileFilepath(options, sysDirectories, cback){
+  function getCompileFilepath(project, userSettings, options, sysDirectories, cback){
     const dialogOptions = {
       title: 'Save compilation as...',
       defaultPath: sysDirectories.docs,
@@ -129,9 +131,10 @@ function showCompileOptions(project, sysDirectories, userSettings){
     showFileDialog(dialogOptions, function(filepath){
       if(filepath){
         showWorking();
-        compileProject(project, userSettings, options, filepath);
-        hideWorking();
-        cback();
+        compileProject(project, userSettings, options, filepath, function(){
+          hideWorking();
+          cback();
+        });
       }
     })
   }

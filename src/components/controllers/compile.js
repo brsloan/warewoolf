@@ -8,34 +8,40 @@ const { convertMdfcToMd } = require('./mdfc-to-md');
 const { htmlChaptersToEpub } = require('./epub');
 const { convertToPlainText } = require('./quill-utils');
 
-function compileProject(project, userSettings, options, filepath){
+function compileProject(project, userSettings, options, filepath, cback = function(){}){
     var allChaps = compileChapterDeltas(project, options);
 
     switch(options.type){
         case ".txt":
             compilePlainText(filepath, allChaps);
+            cback();
             break;
         case ".docx":
             compileDocx(filepath, allChaps, options, project, userSettings);
+            cback();
             break;
         case ".mdfc":
             compileMDF(filepath, allChaps);
+            cback();
             break;
         case ".md":
             compileMd(filepath, allChaps);
+            cback();
             break;
         case ".html":
             compileHtml(filepath, allChaps, project.title, project.author, options.generateTitlePage);
+            cback();
             break;
           case ".epub":
-            compileEpub(filepath, project.chapters, project.title, project.author, options.generateTitlePage, options.insertHead);
+            compileEpub(filepath, project.chapters, project.title, project.author, options.generateTitlePage, options.insertHead, cback);
             break;
         default:
             console.log("No valid filetype selected for compile.");
+            cback();
     }
 }
 
-function compileEpub(dir, chapters, title, author, insertTitle, insertHead){
+function compileEpub(dir, chapters, title, author, insertTitle, insertHead, cback = function(){}){
   try {
     var htmlChaps = [];
 
@@ -48,11 +54,13 @@ function compileEpub(dir, chapters, title, author, insertTitle, insertHead){
 
     htmlChaptersToEpub(title, author, htmlChaps, dir, insertTitle, function(resp){
       console.log('Conversion done: ' + resp);
+      cback();
     })
 
   }
   catch(err){
     logError(err);
+    cback();
   }
 }
 

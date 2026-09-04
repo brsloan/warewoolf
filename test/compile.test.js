@@ -86,6 +86,51 @@ test('compileProject writes a .docx file instead of throwing when project/userSe
   assert.ok(documentXml.includes('Some prose.'), 'compiled .docx is missing the chapter text');
 });
 
+//Regression: compileProject/compileEpub had no way to signal completion, so compile_display.js
+//had to hideWorking() and close its popup immediately after calling compileProject - fine for the
+//synchronous formats, but wrong for .epub, whose archive write finishes asynchronously.
+test('compileProject invokes its callback once a synchronous format has finished writing', async function(t){
+  var chap = makeChapter(textDelta('Some text.'));
+  var project = makeTestProject([chap]);
+  var options = { type: '.md', insertStrng: '***', insertHead: false };
+  var filepath = tempFilePath(t, '.md');
+
+  await new Promise(function(resolve){
+    compileProject(project, {}, options, filepath, resolve);
+  });
+
+  assert.ok(fs.existsSync(filepath), 'expected the .md file to exist once the callback fired');
+});
+
+test('compileProject callback for .epub only fires once the archive has actually finished writing, not synchronously', async function(t){
+  var chap = makeChapter(textDelta('Epub text.'));
+  chap.title = 'Chapter One';
+  var project = makeTestProject([chap]);
+  var options = { type: '.epub', insertStrng: '***', insertHead: false, generateTitlePage: false };
+  var filepath = tempFilePath(t, '.epub');
+
+  var callbackFired = false;
+  compileProject(project, {}, options, filepath, function(){
+    callbackFired = true;
+  });
+
+  assert.strictEqual(callbackFired, false, 'epub callback should not fire synchronously');
+
+  await waitForEpub(filepath, 2000);
+  assert.strictEqual(callbackFired, true, 'epub callback should have fired by the time the archive is readable');
+});
+
+test('compileProject does not throw when called without a callback (legacy call shape)', function(t){
+  var chap = makeChapter(textDelta('Some text.'));
+  var project = makeTestProject([chap]);
+  var options = { type: '.mdfc', insertStrng: '***', insertHead: false };
+  var filepath = tempFilePath(t, '.mdfc');
+
+  assert.doesNotThrow(function(){
+    compileProject(project, {}, options, filepath);
+  });
+});
+
 test('compileChapterDeltas does not leak an implicit global "i"', function(){
   delete global.i;
 
