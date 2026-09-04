@@ -106,3 +106,37 @@ test('renumberChaps rewrites chapter contents with the new title when withinChap
   assert.strictEqual(chap.contents.ops[0].insert, 'Chapter 1');
   assert.strictEqual(project.hasUnsavedChanges, true);
 });
+
+test('renumberChaps falls back to a numeral past the last spelled-out number word', function(){
+  var chaps = [];
+  for(let i = 0; i < 101; i++)
+    chaps.push(makeChapter(untitledFirstLine()));
+  var project = makeProject(chaps);
+
+  renumberChaps(project, 0, 100, false, false, 'Chapter [num]');
+
+  assert.strictEqual(chaps[99].title, 'Chapter One Hundred');
+  assert.strictEqual(chaps[100].title, 'Chapter 101');
+});
+
+test('renumberChaps leaves the project unmarked when the range is empty', function(){
+  var chap = makeChapter(untitledFirstLine());
+  var project = makeProject([chap]);
+  var originalTitle = chap.title;
+
+  renumberChaps(project, 1, 0, false, true, 'Chapter [num]');
+
+  assert.strictEqual(chap.title, originalTitle);
+  assert.strictEqual(project.hasUnsavedChanges, false);
+});
+
+test('renumberChaps clamps an out-of-range endIndex to the last chapter', function(){
+  var chapA = makeChapter(untitledFirstLine());
+  var chapB = makeChapter(untitledFirstLine());
+  var project = makeProject([chapA, chapB]);
+
+  renumberChaps(project, 0, 5, false, true, 'Chapter [num]');
+
+  assert.strictEqual(chapA.title, 'Chapter 1');
+  assert.strictEqual(chapB.title, 'Chapter 2');
+});

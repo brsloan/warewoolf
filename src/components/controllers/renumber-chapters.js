@@ -3,8 +3,11 @@ const { getTempQuill } = require('./quill-utils');
 function renumberChaps(project, startIndex, endIndex, withinChaps, useNumerals, template){
   //template should have [num] where number should go
   var newNum = 1;
+  var firstIndex = Math.max(0, startIndex);
+  var lastIndex = Math.min(project.chapters.length - 1, endIndex);
+  var anyChanged = false;
 
-  for (let i = startIndex; i <= endIndex; i++){
+  for (let i = firstIndex; i <= lastIndex; i++){
     let chap = project.chapters[i];
     var numText = useNumerals ? newNum : integerToWord(newNum);
     chap.title = template.replaceAll('[num]', numText);
@@ -14,8 +17,10 @@ function renumberChaps(project, startIndex, endIndex, withinChaps, useNumerals, 
       insertChapTitle(chap);
 
     chap.hasUnsavedChanges = true;
+    anyChanged = true;
   }
 
+  if(anyChanged)
     project.hasUnsavedChanges = true;
 }
 
@@ -150,7 +155,7 @@ function integerToWord(i){
     'One Hundred'
   ];
 
-  return words[i];
+  return words[i] || String(i);
 }
 
 module.exports = {
