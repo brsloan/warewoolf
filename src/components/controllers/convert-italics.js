@@ -1,13 +1,19 @@
 const { getTempQuill } = require('./quill-utils');
 
 function convertMarkedItalicsForAllChapters(project, marker){
+  var anyChanged = false;
+
   project.chapters.forEach(function(chap){
     var result = convertMarkedItalics(chap.contents ? chap.contents : chap.getFile(), marker);
     if(result.changed > 0){
       chap.contents = result.delta;
       chap.hasUnsavedChanges = true;
+      anyChanged = true;
     }
   });
+
+  if(anyChanged)
+    project.hasUnsavedChanges = true;
 }
 
 function convertMarkedItalics(delt, marker){

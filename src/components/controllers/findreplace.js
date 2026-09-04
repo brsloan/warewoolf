@@ -121,6 +121,9 @@ function replaceAllInAllChapters(project, oldStr, newStr, caseSensitive, wholeWo
     numReplaced += changed;
   });
 
+  if(numReplaced > 0)
+    project.hasUnsavedChanges = true;
+
   return numReplaced;
 }
 

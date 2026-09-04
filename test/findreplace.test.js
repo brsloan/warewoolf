@@ -1,7 +1,10 @@
+require('./quill-dom-setup');
+
 const test = require('node:test');
 const assert = require('node:assert');
 
-const { getNextIndex, findInText } = require('../src/components/controllers/findreplace');
+const { makeChapter, makeProject } = require('./helpers');
+const { getNextIndex, findInText, replaceAllInDelta, replaceAllInAllChapters } = require('../src/components/controllers/findreplace');
 
 test('substring search finds a match at or after the starting index', function(){
   assert.strictEqual(getNextIndex('cat', 'the cat sat', 0, false), 4);
@@ -65,4 +68,68 @@ test('findInText respects the starting index in whole word mode', function(){
   assert.strictEqual(findInText('cat', 'cat and cat', true, 0, true), 0);
   assert.strictEqual(findInText('cat', 'cat and cat', true, 1, true), 8);
   assert.strictEqual(findInText('cat', 'cat and cat', true, 9, true), -1);
+});
+
+function textDelta(text){
+  return { ops: [ { insert: text + '\n' } ] };
+}
+
+test('replaceAllInDelta replaces every occurrence and reports how many', function(){
+  var result = replaceAllInDelta('cat', 'dog', true, textDelta('the cat sat on the cat mat'));
+  assert.strictEqual(result.changed, 2);
+  assert.strictEqual(result.delta.ops[0].insert, 'the dog sat on the dog mat\n');
+});
+
+test('replaceAllInDelta reports no changes when the term is absent', function(){
+  var result = replaceAllInDelta('zzz', 'dog', true, textDelta('the cat sat'));
+  assert.strictEqual(result.changed, 0);
+});
+
+test('replaceAllInDelta guards against an empty search term instead of looping forever', function(){
+  var delt = textDelta('the cat sat');
+  var result = replaceAllInDelta('', 'dog', true, delt);
+  assert.strictEqual(result.changed, 0);
+  assert.strictEqual(result.delta, delt);
+});
+
+test('replaceAllInAllChapters only marks chapters that actually changed', function(){
+  var hasMatch = makeChapter(textDelta('the cat sat'));
+  var noMatch = makeChapter(textDelta('the dog sat'));
+
+  var project = makeProject([hasMatch, noMatch]);
+
+  replaceAllInAllChapters(project, 'cat', 'dog', true);
+
+  assert.strictEqual(hasMatch.hasUnsavedChanges, true);
+  assert.notStrictEqual(noMatch.hasUnsavedChanges, true);
+});
+
+test('replaceAllInAllChapters also searches reference chapters', function(){
+  var chap = makeChapter(textDelta('no match here'));
+  var refChap = makeChapter(textDelta('the cat sat'));
+
+  var project = makeProject([chap], [refChap]);
+
+  var numReplaced = replaceAllInAllChapters(project, 'cat', 'dog', true);
+
+  assert.strictEqual(numReplaced, 1);
+  assert.strictEqual(refChap.hasUnsavedChanges, true);
+});
+
+//Regression: replaceAllInAllChapters marked individual chapters dirty but never told the project,
+//so Replace All never tripped the exit/open-project unsaved-changes confirmation.
+test('replaceAllInAllChapters sets project.hasUnsavedChanges when a chapter changes', function(){
+  var project = makeProject([makeChapter(textDelta('the cat sat'))]);
+
+  replaceAllInAllChapters(project, 'cat', 'dog', true);
+
+  assert.strictEqual(project.hasUnsavedChanges, true);
+});
+
+test('replaceAllInAllChapters leaves project.hasUnsavedChanges alone when nothing changes', function(){
+  var project = makeProject([makeChapter(textDelta('the dog sat'))]);
+
+  replaceAllInAllChapters(project, 'cat', 'dog', true);
+
+  assert.notStrictEqual(project.hasUnsavedChanges, true);
 });

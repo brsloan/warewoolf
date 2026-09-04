@@ -1,22 +1,39 @@
 const { getTempQuill } = require('./quill-utils');
 
 function indentAllParasInAllChaps(project){
+    var anyChanged = false;
+
     project.chapters.forEach(function(chap){
-        chap.contents = indentAllParas(chap.getContentsOrFile());
-        chap.hasUnsavedChanges = true;
+        var result = indentAllParas(chap.getContentsOrFile());
+        if(result.changed > 0){
+            chap.contents = result.delta;
+            chap.hasUnsavedChanges = true;
+            anyChanged = true;
+        }
     });
+
+    if(anyChanged)
+        project.hasUnsavedChanges = true;
 }
 
 function indentAllParas(delt){
     var tempQuill = getTempQuill();
     tempQuill.setContents(delt);
     var lines = tempQuill.getLines();
+    var changes = 0;
+
     lines.forEach(function(line){
         var insertIndex = tempQuill.getIndex(line);
-        if(needsIndenting(tempQuill, line, insertIndex))
+        if(needsIndenting(tempQuill, line, insertIndex)){
             tempQuill.insertText(insertIndex, '\t');
+            changes++;
+        }
     });
-    return tempQuill.getContents();
+
+    return {
+        changed: changes,
+        delta: tempQuill.getContents()
+    };
 }
 
 //Headings are not indented, list items carry their own indenting, and a blank line has nothing to

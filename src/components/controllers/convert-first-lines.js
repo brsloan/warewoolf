@@ -4,15 +4,20 @@ function convertFirstLinesToTitles(project){
   console.log('converting');
   //var tempQuill = getTempQuill();
 
+  var anyChanged = false;
+
   project.chapters.forEach(function(chap){
     var result = convertFirstLineToTitle(chap.contents ? chap.contents : chap.getFile());
 
     if(result.changed > 0){
       chap.contents = result.delta;
       chap.hasUnsavedChanges = true;
+      anyChanged = true;
     }
   });
 
+  if(anyChanged)
+    project.hasUnsavedChanges = true;
 }
 
 function convertFirstLineToTitle(delt){

@@ -1,4 +1,23 @@
 //Shared helpers for the converter tests.
+const newChapter = require('../src/components/models/chapter');
+
+//A real chapter model rather than a hand-rolled stub, so getContentsOrFile() behaves exactly like
+//it does in the app. filename stays null, so getContentsOrFile() always returns `contents` as-is.
+function makeChapter(contents){
+  var chap = newChapter();
+  chap.contents = contents;
+  return chap;
+}
+
+//The controllers under test only ever touch chapters, reference and hasUnsavedChanges, so the fake
+//project needs nothing else.
+function makeProject(chapters, reference){
+  return {
+    chapters: chapters || [],
+    reference: reference || [],
+    hasUnsavedChanges: false
+  };
+}
 
 //A delta that has been through convertDeltaToMDF -> parseMDF comes back semantically equal to the
 //original but not literally identical: parseMDF emits zero-length inserts where a paragraph ends,
@@ -26,4 +45,4 @@ function normalizeAttributes(attributes){
   return normalized;
 }
 
-module.exports = { normalizeDelta };
+module.exports = { normalizeDelta, makeChapter, makeProject };
