@@ -1,6 +1,10 @@
 const archiver = require('archiver');
 const fs = require('fs');
+const path = require('path');
 const { logError } = require('./error-log');
+
+const TIMESTAMP_LENGTH = 14;
+const ARCHIVE_EXTENSION = '.zip';
 
 function backupProject(project, userSettings, docsDir, updatesFunction){
   updatesFunction('Backing up project...');
@@ -19,9 +23,14 @@ function backupProject(project, userSettings, docsDir, updatesFunction){
     }
 
     updatesFunction('Creating project archive...');
-    archiveProject(project, userSettings.backupDirectory, function(archName){
+    archiveProject(project, userSettings.backupDirectory, function(err, archName){
+      if(err){
+        logError(err);
+        updatesFunction(err);
+        return;
+      }
       updatesFunction('Archive saved. Deleting old archives...');
-      deleteOldBackups();
+      deleteOldBackups(project, userSettings);
       updatesFunction('Backup finished.');
     });
   }
@@ -31,68 +40,61 @@ function backupProject(project, userSettings, docsDir, updatesFunction){
   }
 }
 
-function deleteOldBackups(){
+function deleteOldBackups(project, userSettings){
   if(userSettings.backupsToKeep > 0){
     var backups = getFileList(userSettings.backupDirectory).map(function(ob){
       return ob.name;
     }).filter(function(filename){
       //remove the file extension and the 14-digit timestamp from filenames to filter to only this project's backups
-      return filename.split('.')[0].slice(0,-14) == project.filename.replace('.woolf','');
+      return filename.slice(0, -(ARCHIVE_EXTENSION.length + TIMESTAMP_LENGTH)) == project.filename.replace('.woolf','');
     }).sort();
 
     if(backups.length > userSettings.backupsToKeep){
       var backupsToDel = backups.slice(0,userSettings.backupsToKeep * -1);
       backupsToDel.forEach(fn => {
-        deleteFile(userSettings.backupDirectory + '/' + fn);
+        deleteFile(path.join(userSettings.backupDirectory, fn));
       });
     }
   }
 }
 
 function createBackupsDirectory(docsDir){
-  const backupsDir = docsDir + "/backups";
-  try{
-    if(!fs.existsSync(backupsDir))
+  const backupsDir = path.join(docsDir, "backups");
+  if(!fs.existsSync(backupsDir))
     fs.mkdirSync(backupsDir);
-  }
-  catch(err){
-    logError(err);
-  }
   return backupsDir;
 }
 
 function archiveProject(project, archiveDir, callback){
-  if(project.filename != null && project.filename != ""){
-    const archiveName = project.filename.replace('.woolf','') + getTimeStamp() + '.zip';
-    const output = fs.createWriteStream(archiveDir + "/" + archiveName);
-    const archive = archiver('zip', {
-      zlib: { level: 9 }
-    });
-
-    archive.on('warning', function(err) {
-      if (err.code === 'ENOENT') {
-        logError(err);
-      } else {
-        throw err;
-      }
-    });
-
-    archive.on('error', function(err) {
-      callback('error');
-      throw err;
-    });
-
-    archive.on('finish', function(){
-      callback(archiveName);
-    })
-
-    archive.pipe(output);
-
-    archive.file(project.directory + project.filename, { name: project.filename });
-    archive.directory(project.directory + project.chapsDirectory, project.chapsDirectory);
-
-    archive.finalize();
+  if(project.filename == null || project.filename == ""){
+    callback(new Error('Cannot back up a project with no filename.'));
+    return;
   }
+
+  const archiveName = project.filename.replace('.woolf','') + getTimeStamp() + ARCHIVE_EXTENSION;
+  const output = fs.createWriteStream(path.join(archiveDir, archiveName));
+  const archive = archiver('zip', {
+    zlib: { level: 9 }
+  });
+
+  archive.on('warning', function(err) {
+    logError(err);
+  });
+
+  archive.on('error', function(err) {
+    callback(err);
+  });
+
+  archive.on('finish', function(){
+    callback(null, archiveName);
+  })
+
+  archive.pipe(output);
+
+  archive.file(path.join(project.directory, project.filename), { name: project.filename });
+  archive.directory(path.join(project.directory, project.chapsDirectory), project.chapsDirectory);
+
+  archive.finalize();
 }
 
 function getTimeStamp(){
@@ -125,10 +127,12 @@ function getFileList(dirPath){
       return fs.readdirSync(dirPath, {withFileTypes: true});
   } catch (err) {
       logError(err);
+      return [];
   }
 }
 
 module.exports = {
-  backupProject, 
-  archiveProject
+  backupProject,
+  archiveProject,
+  deleteOldBackups
 }

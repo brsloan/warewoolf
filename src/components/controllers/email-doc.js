@@ -1,4 +1,5 @@
 const os = require('os');
+const path = require('path');
 const nodemailer = require('nodemailer');
 const { archiveProject } = require('./backup-project');
 const { compileChapterDeltas } = require('./compile');
@@ -115,18 +116,20 @@ function emailDeltaAsTxt(filename, delt, sender, pass, receiver, callback){
 
 function emailAsZip(project, sender, pass, receiver, callback){
   console.log('about to archive project');
-  archiveProject(project, os.tmpdir(), function(archName){
-    if(archName != 'error'){
-      var attachments = [
-        {
-          filename: archName,
-          path: os.tmpdir() + '/' + archName,
-          contentType: 'application/javascript'
-        }
-      ];
-
-      emailFile(sender, pass, receiver, attachments, callback);
+  archiveProject(project, os.tmpdir(), function(err, archName){
+    if(err){
+      callback(err);
+      return;
     }
+    var attachments = [
+      {
+        filename: archName,
+        path: path.join(os.tmpdir(), archName),
+        contentType: 'application/zip'
+      }
+    ];
+
+    emailFile(sender, pass, receiver, attachments, callback);
   });
 }
 
@@ -158,7 +161,7 @@ function emailAsEpub(filename, project, compileOptions, delt, sender, pass, rece
         {
           filename: filename + '.epub',
           path: generatedFilepath,
-          contentType: 'application/javascript'
+          contentType: 'application/epub+zip'
         }
       ];
 
