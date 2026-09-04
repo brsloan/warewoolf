@@ -57,16 +57,24 @@ function saveCards(cards, chaptersPath){
 }
 
 function parseCardsString(str){
-    //Cards saved as one markdown file with labels as headings and descriptions as pargraphs. Colors can be indicated 
+    //Cards saved as one markdown file with labels as headings and descriptions as pargraphs. Colors can be indicated
     //immediately after heading marker and checkmarks directly after that
     //in this way: "# [1] [x] Label Text". Number corresponds to preset color, 0=default, which doesn't have to be included.
     //The bracketed X indicates the card is checked off.
+    //A description line starting with "# " would otherwise be mistaken for the next card's heading, and a label
+    //starting with "[x] "/"[<digit>] " would be mistaken for markers, so generateCardsString escapes those with a
+    //leading backslash and we undo that here.
 
     let firstLabel = /^# (.*)\n\n/;
     let label = /^# (.*)\n\n/gm;
     let newLines = /\r|\n/gm;
-    let colorNum = /^\[(\d)\] /; 
-    let checkMarker = /^\[[xX]\] /; 
+    let colorNum = /^\[(\d)\] /;
+    let checkMarker = /^\[[xX]\] /;
+    let escapedHeading = /^\\# /gm;
+    let escapedBracket = /^\\\[/;
+
+    if(!str.trim())
+        return [];
 
     str = convertWindowsToLinuxLineEndings(str);
 
@@ -83,7 +91,7 @@ function parseCardsString(str){
 
     var rawCards = JSON.parse(str);
 
-    for(i=0;i<rawCards.length;i++){
+    for(let i=0;i<rawCards.length;i++){
         var color = rawCards[i].label.match(colorNum);
         if(color){
             rawCards[i].label = rawCards[i].label.replace(colorNum, '');
@@ -100,8 +108,9 @@ function parseCardsString(str){
         else {
             rawCards[i].checked = false;
         }
+        rawCards[i].label = rawCards[i].label.replace(escapedBracket, '[');
 
-        rawCards[i].descr = rawCards[i].descr.trim();
+        rawCards[i].descr = rawCards[i].descr.replace(escapedHeading, '# ').trim();
     }
 
     return rawCards;
@@ -109,8 +118,13 @@ function parseCardsString(str){
 
 function generateCardsString(cards){
     var cardsString = '';
+    //A label starting with "[x] "/"[<digit>] " would otherwise be mistaken by parseCardsString for a
+    //checkmark/color marker, so escape it with a leading backslash.
+    let riskyLabelStart = /^(\[\d\]|\[[xX]\]) /;
+    //A description line starting with "# " would otherwise be mistaken for the next card's heading.
+    let riskyDescrLine = /^# /gm;
 
-    for(i=0;i<cards.length;i++){
+    for(let i=0;i<cards.length;i++){
         let card = cards[i];
 
         cardsString += '# ';
@@ -118,11 +132,15 @@ function generateCardsString(cards){
             cardsString += '[' + card.color + '] ';
         if(card.checked == true)
             cardsString += '[x] ';
-        cardsString += card.label + '\n\n';
 
-        cardsString += card.descr + '\n\n';
+        let label = card.label;
+        if(riskyLabelStart.test(label))
+            label = '\\' + label;
+        cardsString += label + '\n\n';
+
+        cardsString += card.descr.replace(riskyDescrLine, '\\# ') + '\n\n';
     }
-    
+
     return cardsString;
 }
 

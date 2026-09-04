@@ -17,7 +17,7 @@ function showCorkboard(project){
     document.body.appendChild(popup);
 
     loadedCards = getCardsFromFile(project.directory + project.chapsDirectory);
-    if(!loadedCards)
+    if(!loadedCards || loadedCards.length === 0)
       loadedCards = generateStarterCard();
 
     fillCorkboard(project.corkboardColumns);
