@@ -5,6 +5,8 @@ const { logError } = require('./error-log');
 
 function runSpellcheck(editorQuill, sysDirectories, startingIndex = 0, wordsToIgnore){
     var spellchecker = loadDictionaries(sysDirectories);
+    if(!spellchecker)
+      return null;
     return findInvalidWord(editorQuill, spellchecker, startingIndex, wordsToIgnore)
 }
 
@@ -25,6 +27,7 @@ function loadDictionaries(sysDirectories){
   }
   catch(err){
     logError(err);
+    return null;
   }
 
 }
@@ -52,7 +55,7 @@ function findInvalidWord(editorQuill, spellchecker, startingIndex = 0, wordsToIg
 
     var text = editorQuill.getText().slice(startingIndex);
 
-    var wordRegx = /(\w'*)+/;
+    var wordRegx = /\w+(?:'\w+)*/;
     var numberRegx = /'*\d+'*s*/;
     var nextWord = {};
     var masterIndex = 0;
@@ -87,7 +90,7 @@ function findInvalidWord(editorQuill, spellchecker, startingIndex = 0, wordsToIg
 
 function getPersonalDict(sysDirectories){
   try{
-    return fs.readFileSync(convertFilepath(sysDirectories.userData) + '/dictionaries/personal.dic', 'utf8').split("\n");
+    return fs.readFileSync(convertFilepath(sysDirectories.userData) + '/dictionaries/personal.dic', 'utf8').split("\n").filter(word => word.trim() !== "");
   }
   catch(err){
     logError(err);
