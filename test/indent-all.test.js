@@ -33,6 +33,14 @@ test('indentAllParas does not indent a list item', function(){
   assert.strictEqual(result.changed, 0);
 });
 
+//Regression: blockquotes get their own marker at export time (quill-utils.js and markdownFic.js
+//both add one based on the blockquote attribute), so tabbing the text here would double it up.
+test('indentAllParas does not indent a blockquote', function(){
+  var delt = { ops: [ { insert: 'A quoted line.' }, { insert: '\n', attributes: { blockquote: true } } ] };
+  var result = indentAllParas(delt);
+  assert.strictEqual(result.changed, 0);
+});
+
 test('indentAllParas leaves a blank line alone', function(){
   var delt = { ops: [ { insert: 'Para one.' }, { insert: '\n' }, { insert: '\n' } ] };
   var result = indentAllParas(delt);

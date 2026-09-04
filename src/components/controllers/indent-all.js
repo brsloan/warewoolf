@@ -36,14 +36,15 @@ function indentAllParas(delt){
     };
 }
 
-//Headings are not indented, list items carry their own indenting, and a blank line has nothing to
-//indent: tabbing it just leaves a stray tab in the middle of the chapter. Everything else is a
-//paragraph of prose. The first character is read back through Quill rather than from the line's DOM
-//node, which is not rendered here and reports an empty string for a blank line either way.
+//Headings are not indented, list items carry their own indenting, blockquotes get their own marker
+//at export time (a tab or a "> ", never both), and a blank line has nothing to indent: tabbing it
+//just leaves a stray tab in the middle of the chapter. Everything else is a paragraph of prose. The
+//first character is read back through Quill rather than from the line's DOM node, which is not
+//rendered here and reports an empty string for a blank line either way.
 function needsIndenting(tempQuill, line, insertIndex){
     var blotName = line.statics.blotName;
 
-    if(blotName == 'header' || blotName == 'list-item')
+    if(blotName == 'header' || blotName == 'list-item' || blotName == 'blockquote')
         return false;
 
     var firstCharacter = tempQuill.getText(insertIndex, 1);
