@@ -85,6 +85,10 @@ function showErrorLog(userSettings, credentialStore){
     sendButton.disabled = true;
     responseText.innerText = "Sending...";
 
+    userSettings.senderEmail = senderEmailInput.value;
+    userSettings.receiverEmail = receiverEmailInput.value;
+    userSettings.save();
+
     var attachments = [
       {
           filename: 'errorLog' + '.txt',
