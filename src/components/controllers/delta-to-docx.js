@@ -1,7 +1,7 @@
 const fs = require('fs');
 const docx = require('docx');
 const { logError } = require('./error-log');
-const { parseDelta } = require('./quill-utils');
+const { parseDelta, getOrderedListNumbers, getListLevel, getListMarker } = require('./quill-utils');
 const { getTotalWordCount } = require('./wordcount');
 
 function saveDocx(filepath, doc){
@@ -13,13 +13,13 @@ function saveDocx(filepath, doc){
     catch(err){
       logError(err);
     }
-  });
+  }).catch(logError);
 }
 
 function packageDocxBase64(doc, callback){
   docx.Packer.toBase64String(doc).then((docString) => {
     callback(docString);
-  });
+  }).catch(logError);
 }
 
 function convertDeltaToDocx(delt, options, project, addressInfo){
@@ -42,29 +42,19 @@ function convertDeltaToDocx(delt, options, project, addressInfo){
       var thisMarker = fnoteParRegx.exec(para.textRuns[0].text);
 
       if(thisMarker){
-        var xRuns = [];
         para.textRuns[0].text = para.textRuns[0].text.replace(thisMarker, '');
-
-        para.textRuns.forEach(function(run){
-          var xRunAttributes = convertRunAtttributes(run.attributes);
-          xRunAttributes.text = run.text;
-          xRuns.push(new docx.TextRun(xRunAttributes));
-        });
-
-        var xParaAttributes = convertParaAttributes(para.attributes);
-        xParaAttributes.children = xRuns;
 
         var matchingBody = footnoteBodies.findIndex(function(fb,i,arr){
           return fb.marker == thisMarker[0].slice(0,-1);
         });
 
         if(matchingBody > -1){
-            footnoteBodies[matchingBody].paras.push(new docx.Paragraph(xParaAttributes));
+            footnoteBodies[matchingBody].paras.push(para);
         }
         else {
           footnoteBodies.push({
             marker: thisMarker[0].slice(0,-1),
-            paras: [ new docx.Paragraph(xParaAttributes) ]
+            paras: [ para ]
           });
         }
       }
@@ -75,6 +65,33 @@ function convertDeltaToDocx(delt, options, project, addressInfo){
     else {
       nonfootnoteParas.push(para);
     }
+  });
+
+  //Word only resolves a numbered-list paragraph's numbering id when it lives in the main document
+  //body, a header, or a footer - footnotes are packaged as a separate part and the resolution pass
+  //never runs over them, so a numbered list here would keep the raw, unresolved "{reference-instance}"
+  //placeholder as its literal numId and produce an invalid .docx. Render footnote list numbers as
+  //plain text instead, the same way the plain-text/mdfc exporters already do it.
+  footnoteBodies.forEach(function(fb){
+    var listNumbers = getOrderedListNumbers(fb.paras);
+
+    fb.paras = fb.paras.map(function(para, i){
+      var xRuns = [];
+      var marker = para.attributes && para.attributes.list == 'ordered' ? getListMarker(para.attributes, listNumbers[i]) : '';
+      if(marker)
+        xRuns.push(new docx.TextRun(marker));
+
+      para.textRuns.forEach(function(run){
+        var xRunAttributes = convertRunAtttributes(run.attributes);
+        xRunAttributes.text = run.text;
+        xRuns.push(new docx.TextRun(xRunAttributes));
+      });
+
+      var xParaAttributes = convertFootnoteParaAttributes(para.attributes);
+      xParaAttributes.children = xRuns;
+
+      return new docx.Paragraph(xParaAttributes);
+    });
   });
 
   var xParagraphs = [];
@@ -100,17 +117,22 @@ function convertDeltaToDocx(delt, options, project, addressInfo){
           var text1 = textToSplit.slice(0, cutPoint);
           var text2 = textToSplit.slice(cutPoint + fnoteMarker[m].length)
           var xRun1Attr = convertRunAtttributes(run.attributes);
-          xRun1Attr.text = text1;
 
           var fnoteBodyNum = footnoteBodies.findIndex(function(fn, i, arr){
             return fn.marker == fnoteMarker[m];
           }) + 1;
 
-          var fnMarkerRun = new docx.FootnoteReferenceRun(fnoteBodyNum);
-
-
-          xRuns.push(new docx.TextRun(xRun1Attr));
-          xRuns.push(fnMarkerRun);
+          if(fnoteBodyNum > 0){
+            xRun1Attr.text = text1;
+            xRuns.push(new docx.TextRun(xRun1Attr));
+            xRuns.push(new docx.FootnoteReferenceRun(fnoteBodyNum));
+          }
+          else {
+            //No footnote body matches this marker (deleted or mistyped) - keep it as plain text
+            //rather than referencing a footnote id that does not exist in the document.
+            xRun1Attr.text = text1 + fnoteMarker[m];
+            xRuns.push(new docx.TextRun(xRun1Attr));
+          }
 
           textToSplit = text2;
 
@@ -137,7 +159,7 @@ function convertDeltaToDocx(delt, options, project, addressInfo){
 
   var footnotes = {};
 
-  for(i=0;i<footnoteBodies.length;i++){
+  for(let i=0;i<footnoteBodies.length;i++){
     footnotes[i + 1] = {
       children: footnoteBodies[i].paras
     }
@@ -242,12 +264,12 @@ function convertParaAttributes(attr, previousAttr = null, numberedList = { insta
       xAttr.alignment = docx.AlignmentType[attr.align.toUpperCase()];
     }
     if(attr.list){
-      var indentLevel = 1;
-      if(attr.indent){
-        indentLevel += attr.indent;
-      }
+      //Quill's indent has no ceiling, but the numbering config below only declares 3 levels - anything
+      //deeper needs to be folded into the last one the same way getListLevel does it for other formats,
+      //otherwise it references an unconfigured level and silently loses its intended list style.
+      var level = getListLevel(attr);
       if(attr.list == 'bullet'){
-        xAttr.bullet = {level: indentLevel - 1};
+        xAttr.bullet = {level: level};
       }
       else{
         //If start of new list, need to iterate to new list instance to restart numbering sequence
@@ -258,7 +280,7 @@ function convertParaAttributes(attr, previousAttr = null, numberedList = { insta
         //drops them back onto the default instance, which is the previous list's sequence.
         xAttr.numbering = {
           reference: 'numbered-list',
-          level: indentLevel - 1,
+          level: level,
           instance: numberedList.instance
         }
       }
@@ -267,6 +289,28 @@ function convertParaAttributes(attr, previousAttr = null, numberedList = { insta
 
   return xAttr;
 };
+
+//Footnotes are packaged separately from the main document body, and Word never resolves a numbered
+//list's numbering id there (see the comment above the footnoteBodies.forEach call), so footnote
+//paragraphs render list numbers as plain text rather than through xAttr.numbering. Bullets still work
+//natively in footnotes, so those keep using docx's own bullet formatting.
+function convertFootnoteParaAttributes(attr){
+  var xAttr = {};
+  if(attr){
+    if(attr.header){
+      var xHeadName = "HEADING_" + attr.header.toString();
+      xAttr.heading = docx.HeadingLevel[xHeadName];
+    }
+    if(attr.align){
+      xAttr.alignment = docx.AlignmentType[attr.align.toUpperCase()];
+    }
+    if(attr.list == 'bullet'){
+      xAttr.bullet = {level: getListLevel(attr)};
+    }
+  }
+
+  return xAttr;
+}
 
 function convertRunAtttributes(attr){
   var xAttr = {};

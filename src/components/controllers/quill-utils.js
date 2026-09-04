@@ -195,5 +195,6 @@ module.exports = {
   parseDelta,
   convertToPlainText,
   getOrderedListNumbers,
+  getListLevel,
   getListMarker
 }
