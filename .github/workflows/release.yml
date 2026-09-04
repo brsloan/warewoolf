@@ -82,10 +82,26 @@ jobs:
         with:
           node-version: 20
       - run: npm ci
-      - run: npx electron-forge make --platform=darwin --arch=x64 --targets=@electron-forge/maker-dmg
-      - shell: bash
+      - run: npx electron-forge package --platform=darwin --arch=x64
+      - name: Build dmg with hdiutil
+        shell: bash
+        # @electron-forge/maker-dmg pulls in the unmaintained `appdmg` package
+        # (an optional dependency with the native addon `fs-xattr`), which
+        # routinely fails to build on GitHub's macOS runners. npm treats a
+        # failed optional dependency as non-fatal, so `npm ci` succeeds but
+        # appdmg silently ends up missing, and the maker fails at runtime.
+        # hdiutil is built into macOS, so build the dmg directly with it.
         run: |
-          mv "out/make/WareWoolf.dmg" "out/make/warewoolf_${{ needs.check-version.outputs.version }}_MacOS_Intel.dmg"
+          set -euo pipefail
+          APP_PATH=$(find out -maxdepth 2 -name "*.app" -print -quit)
+          echo "Packaged app: $APP_PATH"
+          STAGING="$(mktemp -d)/WareWoolf"
+          mkdir -p "$STAGING"
+          cp -R "$APP_PATH" "$STAGING/"
+          ln -s /Applications "$STAGING/Applications"
+          mkdir -p out/make
+          hdiutil create -volname "WareWoolf" -srcfolder "$STAGING" -ov -format UDZO \
+            "out/make/warewoolf_${{ needs.check-version.outputs.version }}_MacOS_Intel.dmg"
       - uses: actions/upload-artifact@v4
         with:
           name: release-asset-macos-x64
