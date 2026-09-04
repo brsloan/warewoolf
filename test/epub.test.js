@@ -119,3 +119,68 @@ test('callback fires only once the epub file is fully readable on disk', async f
   const { dir } = await buildEpub(t, 'Title', 'Author', [{ title: 'One', html: '<p>Body</p>' }], false);
   assert.ok(dir.files.length > 0);
 });
+
+test('stray "<" and ">" typed as prose are escaped without mangling generated markup', async function(t){
+  //Regression: only bare "&" was escaped in chapter prose. A literal "<"/">" typed by the author
+  //(a comparison, an emoticon, a name in angle brackets) broke XHTML well-formedness the same way,
+  //but silently - the generated markup itself uses "<"/">" legitimately, so it can't be escaped
+  //wholesale.
+  const chapterHtml =
+    '<h1 class="center">Chapter 1</h1>' +
+    '<p>5 < 3 is false, and 3 > 5 is also false.</p>' +
+    '<p><b>Bold</b>, <i>italic</i>, <u>underline</u> and <del>strike</del> survive.</p>' +
+    '<ul><li class="ul">First</li><li class="ul">Second</li></ul>' +
+    '<blockquote>A quote with a stray < in it.</blockquote>' +
+    '<p>See<sup><a href="#fnote_1" id="fnoteRef_1">1</a></sup> the note.</p>' +
+    '<div class="footnote" id="fnote_1"></div>' +
+    '<p><sup><a href="#fnoteRef_1">1</a></sup> The note text with <3 in it.</p>';
+
+  const { readEntry } = await buildEpub(t, 'Title', 'Author', [{ title: 'One', html: chapterHtml }], false);
+  const chapter = await readEntry('OEBPS/chapter_1.xhtml');
+
+  //stray angle brackets in prose are escaped
+  assert.match(chapter, /5 &lt; 3 is false, and 3 &gt; 5 is also false\./);
+  assert.match(chapter, /A quote with a stray &lt; in it\./);
+  assert.match(chapter, /The note text with &lt;3 in it\./);
+
+  //generated markup survives untouched
+  assert.match(chapter, /<h1 class="center">Chapter 1<\/h1>/);
+  assert.match(chapter, /<b>Bold<\/b>, <i>italic<\/i>, <u>underline<\/u> and <del>strike<\/del> survive\./);
+  assert.match(chapter, /<ul><li class="ul">First<\/li><li class="ul">Second<\/li><\/ul>/);
+  assert.match(chapter, /<blockquote>A quote/);
+  assert.match(chapter, /<sup><a href="#fnote_1" id="fnoteRef_1">1<\/a><\/sup>/);
+  assert.match(chapter, /<div class="footnote" id="fnote_1"><\/div>/);
+  assert.match(chapter, /<sup><a href="#fnoteRef_1">1<\/a><\/sup>/);
+});
+
+test('insertTitlePage does not mutate the caller\'s htmlChapters array', async function(t){
+  //Regression: insertTitlePage used to Array.prototype.unshift() the title page directly onto the
+  //caller's array. Every current caller happens to build a fresh array right before calling, but a
+  //caller that reused or retained the array would see it grow a title page on every call.
+  const original = [{ title: 'One', html: '<p>Body</p>' }];
+
+  await buildEpub(t, 'Title', 'Author', original, true);
+
+  assert.strictEqual(original.length, 1, 'caller\'s array must not be mutated');
+  assert.strictEqual(original[0].title, 'One');
+});
+
+test('a write-stream failure reports the error via callback instead of crashing the process', async function(t){
+  //Regression: the write stream had no 'error' listener, so a disk-level failure (here, a parent
+  //directory that doesn't exist) surfaced as an unhandled 'error' event - which Node turns into an
+  //uncaught exception - instead of reaching the callback. Capture uncaughtException here rather
+  //than letting it propagate, since an uncaught exception would otherwise abort the whole test run.
+  const filepath = path.join(os.tmpdir(), 'epub-test-missing-dir-' + Date.now() + '-' + Math.random().toString(36).slice(2), 'out.epub');
+
+  let uncaught = null;
+  function onUncaught(err){ uncaught = err; }
+  process.on('uncaughtException', onUncaught);
+  t.after(function(){ process.removeListener('uncaughtException', onUncaught); });
+
+  const result = await new Promise(function(resolve){
+    htmlChaptersToEpub('Title', 'Author', [{ title: 'One', html: '<p>Body</p>' }], filepath, false, resolve);
+  });
+
+  assert.strictEqual(result, 'error', 'callback should report the failure');
+  assert.strictEqual(uncaught, null, 'a write-stream error must not crash the process');
+});
