@@ -1,6 +1,7 @@
 const { closePopups, createButton, removeElementsByClass, generateRow } = require('../controllers/utils');
 const { describeCredentialBackend, APP_PASSWORD_HINT } = require('../controllers/credential-help');
 const { prepareAndEmail } = require('../controllers/email-doc');
+const { showWorkingAndThen, hideWorking } = require('./working_display');
 
 function showEmailOptions(project, userSettings, credentialStore, editorQuill){
     removeElementsByClass('popup');
@@ -136,8 +137,10 @@ function showEmailOptions(project, userSettings, credentialStore, editorQuill){
     function refreshCredentialRows(){
       //While a saved password is still locked there is nothing to re-protect, so the passphrase
       //fields stay out of the way of the unlock row — until the writer types a new password over
-      //the empty field, which is them replacing what's stored rather than unlocking it.
-      var settingANewPassword = !credentials.locked || senderPassInput.value !== '';
+      //the empty field, which is them replacing what's stored rather than unlocking it. Comparing
+      //against the known value (rather than just !credentials.locked) also keeps the fields hidden
+      //right after a successful unlock, when nothing has actually changed yet.
+      var settingANewPassword = senderPassInput.value !== (savedPassword == null ? '' : savedPassword);
       var showPassphraseFields = rememberPassCheck.checked && protectCheck.checked && settingANewPassword;
       protectRow.style.display = rememberPassCheck.checked ? '' : 'none';
       newPassphraseRow.style.display = showPassphraseFields ? '' : 'none';
@@ -240,15 +243,16 @@ function showEmailOptions(project, userSettings, credentialStore, editorQuill){
 
     emailForm.appendChild(document.createElement('br'));
 
-    //set defaults
+    //set defaults - anything other than 'project'/'compiled' (including a first run with no
+    //emailType set yet) falls back to 'chapter' so a radio is always selected.
     if(userSettings.emailType == 'project'){
       projectRadio.checked = true;
       typeSelect.disabled = true;
     }
-    else if(userSettings.emailType == 'chapter')
-      chapRadio.checked = true;
     else if(userSettings.emailType == 'compiled')
       compiledRadio.checked = true;
+    else
+      chapRadio.checked = true;
     typeSelect.value = userSettings.compileType;
 
     //Rewrites the stored password only when something about it actually changed, so a writer with a
@@ -265,6 +269,14 @@ function showEmailOptions(project, userSettings, credentialStore, editorQuill){
 
         return null;
       }
+
+      //A locked passphrase-protected password has never been read into savedPassword this
+      //session, so senderPassInput.value (whatever it holds) can never legitimately match it -
+      //without this guard the "unchanged" check below always fails while locked, and a writer
+      //who responds to the resulting error by typing just a new passphrase (without unlocking)
+      //would silently overwrite the real saved password with an empty one.
+      if(credentials.locked)
+        return "Unlock the saved password first, or uncheck \"Remember Password?\" to send without it.";
 
       var passphraseWanted = protectCheck.checked;
       var passphrase = newPassphraseInput.value;
@@ -308,7 +320,10 @@ function showEmailOptions(project, userSettings, credentialStore, editorQuill){
 
       if(credentialError != null){
         responseText.innerText = credentialError;
-        newPassphraseInput.focus();
+        if(credentials.locked)
+          unlockInput.focus();
+        else
+          newPassphraseInput.focus();
         return;
       }
 
@@ -335,15 +350,21 @@ function showEmailOptions(project, userSettings, credentialStore, editorQuill){
           compile: compiledRadio.checked
         }
 
-      prepareAndEmail(project, userSettings, editorQuill, senderEmailInput.value,
-        senderPassInput.value,
-        receiverEmailInput.value,
-        projectRadio.checked ? '.zip' : typeSelect.value,
-        compileOptions,
-        function(resp){
-          responseText.innerText = resp;
-          sendButton.disabled = false;
-        });
+      //Building the attachment (compiling chapters, generating a docx/epub) runs synchronously
+      //and can be slow on a large project. Deferring it behind showWorkingAndThen gives
+      //"Sending..." a chance to paint first instead of freezing with no feedback.
+      showWorkingAndThen('Sending...', function(){
+        prepareAndEmail(project, userSettings, editorQuill, senderEmailInput.value,
+          senderPassInput.value,
+          receiverEmailInput.value,
+          projectRadio.checked ? '.zip' : typeSelect.value,
+          compileOptions,
+          function(resp){
+            hideWorking();
+            responseText.innerText = resp;
+            sendButton.disabled = false;
+          });
+      });
     };
     emailForm.appendChild(sendButton);
 
