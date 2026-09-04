@@ -1,5 +1,5 @@
 const { closePopups, createButton, removeElementsByClass, generateRow } = require('../controllers/utils');
-const renumberChaps = require('../controllers/renumber-chapters');
+const { renumberChaps } = require('../controllers/renumber-chapters');
 
 function showRenumberChapters(project, onFinish){
   removeElementsByClass('popup');

@@ -20,12 +20,12 @@ function renumberChaps(project, startIndex, endIndex, withinChaps, useNumerals, 
 }
 
 function insertChapTitle(chap){
-  var delt = chap.contents ? chap.contents : chap.getFile();
+  var delt = chap.getContentsOrFile();
 
   var tempQuill = getTempQuill();
   tempQuill.setContents(delt);
 
-  var firstLineFormat = tempQuill.getFormat(1, 1);
+  var firstLineFormat = tempQuill.getFormat(0, 1);
 
   if(firstLineFormat.header){
       //If already a header, delete it first
@@ -38,8 +38,8 @@ function insertChapTitle(chap){
     tempQuill.insertText(0, chap.title + '\n\n', 'api');
   }
 
-  tempQuill.formatLine(1, 1, 'header', 1);
-  tempQuill.formatLine(1, 1, 'align', 'center');
+  tempQuill.formatLine(0, 1, 'header', 1);
+  tempQuill.formatLine(0, 1, 'align', 'center');
 
   chap.contents = tempQuill.getContents();
 }
@@ -153,4 +153,7 @@ function integerToWord(i){
   return words[i];
 }
 
-module.exports = renumberChaps;
+module.exports = {
+  renumberChaps,
+  insertChapTitle
+}

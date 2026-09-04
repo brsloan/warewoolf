@@ -14,6 +14,10 @@ function titledFirstLine(){
   return { ops: [ { insert: 'Chapter One' }, { insert: '\n', attributes: { header: 1, align: 'center' } }, { insert: 'body text' }, { insert: '\n' } ] };
 }
 
+function emptyFirstLine(){
+  return { ops: [ { insert: '\n' }, { insert: 'Chapter One' }, { insert: '\n' }, { insert: 'body text' }, { insert: '\n' } ] };
+}
+
 test('convertFirstLineToTitle headers and centers a plain first line', function(){
   var result = convertFirstLineToTitle(plainFirstLine());
   assert.strictEqual(result.changed, 2);
@@ -32,6 +36,21 @@ test('convertFirstLineToTitle only centers when the header is already present', 
   var delt = { ops: [ { insert: 'Chapter One' }, { insert: '\n', attributes: { header: 1 } }, { insert: 'body' }, { insert: '\n' } ] };
   var result = convertFirstLineToTitle(delt);
   assert.strictEqual(result.changed, 1);
+});
+
+//Regression: getFormat/formatLine were called at index 1 instead of 0, so a blank first line
+//caused the *second* paragraph to be headered/centered instead of the actual first line.
+test('convertFirstLineToTitle formats the first line, not the second, when the first line is blank', function(){
+  var result = convertFirstLineToTitle(emptyFirstLine());
+  assert.strictEqual(result.changed, 2);
+
+  var firstOp = result.delta.ops[0];
+  assert.strictEqual(firstOp.insert, '\n');
+  assert.strictEqual(firstOp.attributes.header, 1);
+  assert.strictEqual(firstOp.attributes.align, 'center');
+
+  var secondLineOp = result.delta.ops.find(op => op.insert && op.insert.indexOf('Chapter One') > -1);
+  assert.strictEqual(secondLineOp.attributes, undefined);
 });
 
 test('convertFirstLinesToTitles only marks chapters that actually changed', function(){

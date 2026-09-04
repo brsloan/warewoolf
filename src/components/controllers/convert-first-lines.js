@@ -1,13 +1,10 @@
- const { getTempQuill } = require('./quill-utils');
+const { getTempQuill } = require('./quill-utils');
 
 function convertFirstLinesToTitles(project){
-  console.log('converting');
-  //var tempQuill = getTempQuill();
-
   var anyChanged = false;
 
   project.chapters.forEach(function(chap){
-    var result = convertFirstLineToTitle(chap.contents ? chap.contents : chap.getFile());
+    var result = convertFirstLineToTitle(chap.getContentsOrFile());
 
     if(result.changed > 0){
       chap.contents = result.delta;
@@ -26,14 +23,14 @@ function convertFirstLineToTitle(delt){
   var changes = 0;
 
   tempQuill.setContents(delt);
-  var firstLineFormat = tempQuill.getFormat(1, 1);
+  var firstLineFormat = tempQuill.getFormat(0, 1);
 
   if(!firstLineFormat.header || firstLineFormat.header != 1){
-    tempQuill.formatLine(1, 1, 'header', 1);
+    tempQuill.formatLine(0, 1, 'header', 1);
     changes++;
   }
   if(!firstLineFormat.align || firstLineFormat.align != 'center'){
-    tempQuill.formatLine(1, 1, 'align', 'center');
+    tempQuill.formatLine(0, 1, 'align', 'center');
     changes++;
   }
 
