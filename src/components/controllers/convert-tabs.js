@@ -1,14 +1,14 @@
 const { replaceAllInDelta } = require('./findreplace');
 
-function convertMarkedTabs(chap, marker){
-  return replaceAllInDelta(marker, '\t', false, chap);
+function convertMarkedTabs(delt, marker){
+  return replaceAllInDelta(marker, '\t', true, delt);
 }
 
 function convertMarkedTabsForAllChapters(project, marker){
   var anyChanged = false;
 
   project.chapters.forEach(function(chap){
-    var result = convertMarkedTabs(chap.contents ? chap.contents : chap.getFile(), marker);
+    var result = convertMarkedTabs(chap.getContentsOrFile(), marker);
     if(result.changed > 0){
       chap.contents = result.delta;
       chap.hasUnsavedChanges = true;

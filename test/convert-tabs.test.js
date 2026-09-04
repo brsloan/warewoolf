@@ -21,6 +21,14 @@ test('convertMarkedTabs reports no changes when the marker is absent', function(
   assert.strictEqual(result.changed, 0);
 });
 
+//Regression: matching used to be hardcoded case-insensitive, so a marker like "TAB" would also
+//match "tab" wherever it appeared in ordinary prose and corrupt unrelated text.
+test('convertMarkedTabs does not match a differently-cased marker', function(){
+  var result = convertMarkedTabs(markedDelta('tab indented text'), 'TAB');
+  assert.strictEqual(result.changed, 0);
+  assert.strictEqual(result.delta.ops[0].insert, 'tab indented text\n');
+});
+
 test('convertMarkedTabsForAllChapters only marks chapters that actually changed', function(){
   var hasMarker = makeChapter(markedDelta('>>indented text'));
   var noMarker = makeChapter(markedDelta('no marker here'));
