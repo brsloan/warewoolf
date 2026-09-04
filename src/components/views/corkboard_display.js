@@ -6,6 +6,7 @@ var loadedCards = [];
 var unsavedChanges = false;
 
 function showCorkboard(project){
+    unsavedChanges = false;
     removeElementsByClass('popup');
     var popup = document.createElement("div");
     popup.classList.add("popup", "popup-corkboard");
@@ -53,14 +54,14 @@ function fillCorkboard(numCols) {
   var cardCounter = 1;
 
   var cardsPerCo = Math.ceil(loadedCards.length / numCols);
-  
-  for (i = 0; i < numCols; i++) {
+
+  for (var i = 0; i < numCols; i++) {
     var col = document.createElement("div");
 
     col.classList.add("corkboard-column");
 
-    for (r = 0; r < cardsPerCo; r++) {
-      col.appendChild(createCardSpot(cardCounter, i, r));
+    for (var r = 0; r < cardsPerCo; r++) {
+      col.appendChild(createCardSpot(cardCounter, r));
       cardCounter++;
     }
 
@@ -82,7 +83,7 @@ function getTitleBar(){
   return titleBar;
 }
 
-function createCardSpot(num, owningCol, posInCol) {
+function createCardSpot(num, posInCol) {
   var card = document.createElement("div");
   card.id = "card" + num;
   card.classList.add("corkboard-card");
@@ -110,7 +111,6 @@ function createCardSpot(num, owningCol, posInCol) {
   card.appendChild(descr);
   
   card.dataset.index = num - 1;
-  card.dataset.owningCol = owningCol;
   card.dataset.posInCol = posInCol;
   card.addEventListener('keydown', cardCntrlEvents);
   card.classList.add('corkboard-card-unused');
@@ -124,7 +124,7 @@ function createCardSpot(num, owningCol, posInCol) {
 }
 
 function assignLoadedCards() {
-  for (i = 0; i < loadedCards.length; i++) {
+  for (var i = 0; i < loadedCards.length; i++) {
     var matchingCard = document.getElementById('card' + (i +1));
     
     if(matchingCard){
@@ -136,14 +136,16 @@ function assignLoadedCards() {
       thisCardLabel.dataset.cardIndex = i;
       thisCardLabel.addEventListener('keyup', function(e){
         loadedCards[parseInt(this.dataset.cardIndex)].label = this.value;
+        markUnsavedChanges();
       });
-    
+
       var thisCardDescr = document.getElementById("card-descr" + (i + 1));
       thisCardDescr.value = loadedCards[i].descr;
       thisCardDescr.disabled = false;
       thisCardDescr.dataset.cardIndex = i;
       thisCardDescr.addEventListener('keyup', function(e){
         loadedCards[parseInt(this.dataset.cardIndex)].descr = this.value;
+        markUnsavedChanges();
       });
     
       if(loadedCards[i].checked == true){
@@ -167,8 +169,8 @@ function focusCard(num){
 }  
 
 function insertBlankCard(ind){
-  var blankCard = { label: '', descr: '' };
-  
+  var blankCard = { label: '', descr: '', color: 0, checked: false };
+
   loadedCards.splice(ind, 0, blankCard);
 }
 
@@ -388,7 +390,7 @@ function cardCntrlEvents(e) {
     stopDefaultPropagation(e);
     var thisIndex = parseInt(this.dataset.index);
     loadedCards[thisIndex].color = e.key;
-    for(i=1;i<10;i++){
+    for(var i=1;i<10;i++){
       this.classList.remove('corkboard-color' + i);
     }
     if(e.key > 0)
@@ -435,6 +437,7 @@ function promptToSave(){
 
   var quit = createButton("Continue Without Saving");
   quit.onclick = function(){
+    unsavedChanges = false;
     closePopups();
   };
   popup.appendChild(quit);
