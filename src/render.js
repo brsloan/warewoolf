@@ -89,7 +89,7 @@ function disableTabbingToEditors(){
 function applyUserSettings(){
   updateFontSize();
   if(userSettings.typewriterMode)
-    enableTypewriterMode()
+    enableTypewriterMode(editorQuill)
   updateEditorWidth();
   updatePanelDisplays();
   autosaver.initiateAutosave(userSettings.autosaveIntMinutes, saveProject);
