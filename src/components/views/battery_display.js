@@ -15,17 +15,31 @@ function showBattery(){
     document.body.appendChild(batteryDiv);
 
     checkBatteryMinutely(function(newPerc){
-        batteryText.innerText = '⚡' + newPerc + '%';
-        if(parseInt(newPerc) < 10)
-            batteryDiv.classList.add('battery-emergency');
-        else
+        var percent = parseInt(newPerc);
+        //getBatteryPercent reports non-numeric strings like 'N/A' or 'no data' when no
+        //battery is present or the kernel read failed - show those as-is instead of the
+        //nonsensical "⚡N/A%".
+        if(isNaN(percent)){
+            batteryText.innerText = newPerc;
             batteryDiv.classList.remove('battery-emergency');
+        }
+        else{
+            batteryText.innerText = '⚡' + percent + '%';
+            if(percent < 10)
+                batteryDiv.classList.add('battery-emergency');
+            else
+                batteryDiv.classList.remove('battery-emergency');
+        }
     });
 }
 
 function removeBattery(){
     endAutocheck();
-    document.getElementById('battery-block').remove();
+    var batteryDiv = document.getElementById('battery-block');
+    if(batteryDiv)
+        batteryDiv.remove();
+    else
+        logError(new Error('removeBattery called with no #battery-block in the DOM'));
 }
 
 module.exports = {
