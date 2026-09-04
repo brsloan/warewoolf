@@ -90,17 +90,27 @@ function packageReleaseData(releaseData){
 
 function extractUpdateDownloadInfo(releaseData){
 
-    var binUrl = '';
     var binType = 'unsupported';
 
-    if(process.arch == 'arm64')
-        binType = 'arm64';
-    else if(process.arch == 'x64'){
-        if(process.platform == 'linux')
+    if(process.platform == 'linux'){
+        if(process.arch == 'x64')
             binType = 'amd64';
-        else if(process.platform == 'win32')
+        else if(process.arch == 'arm64')
+            binType = 'arm64';
+    }
+    else if(process.platform == 'win32'){
+        if(process.arch == 'x64')
             binType = 'Windows_x64';
     }
+    else if(process.platform == 'darwin'){
+        if(process.arch == 'x64')
+            binType = 'MacOS_Intel';
+        else if(process.arch == 'arm64')
+            binType = 'MacOS_AppleSilicon';
+    }
+
+    if(binType == 'unsupported')
+        return undefined;
 
     return releaseData.binaries.find(function(bin){
         return bin.name.includes(binType);
