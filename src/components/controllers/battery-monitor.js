@@ -10,7 +10,7 @@ function checkBatteryMinutely(callback){
     getBatteryPercent(batName, callback);
 
     //Start timed updates
-    initiateAutocheck(1, function(){
+    updateAutocheck(1, function(){
         getBatteryPercent(batName, function(newPercent){
             callback(newPercent);
         });
@@ -28,13 +28,16 @@ function updateAutocheck(minutes, updateBattery){
         initiateAutocheck(minutes, updateBattery);
     else {
         clearInterval(batteryCheckInterval);
+        batteryCheckInterval = null;
         initiateAutocheck(minutes, updateBattery);
     }
 }
 
 function endAutocheck(){
-    if(batteryCheckInterval)
+    if(batteryCheckInterval){
         clearInterval(batteryCheckInterval);
+        batteryCheckInterval = null;
+    }
 }
 
 function getBatteryPercent(batName, updateBattery){
@@ -42,11 +45,20 @@ function getBatteryPercent(batName, updateBattery){
         queryKernel(batName, function(resp){
             updateBattery(resp);
         });
+    else
+        updateBattery('N/A');
 }
 
 function getBatteryName(){
     var batteryName = null;
-    var batDirs = fs.readdirSync('/sys/class/power_supply');
+    var batDirs;
+    try{
+        batDirs = fs.readdirSync('/sys/class/power_supply');
+    }
+    catch(err){
+        logError(err);
+        return null;
+    }
     var batNames = batDirs.filter(function(val){
         return val.startsWith('BAT');
     });
@@ -60,27 +72,40 @@ function queryKernel(batName, cback){
     if(batName != null){
         const cat = spawn('cat', ['/sys/class/power_supply/' + batName + '/capacity']);
 
-        var responseHasData = false;
+        var output = '';
+        var cbackCalled = false;
+
+        function respond(value){
+            if(!cbackCalled){
+                cbackCalled = true;
+                cback(value);
+            }
+        }
 
         cat.stdout.on('data', function(data){
-            responseHasData = true;
-            cback(data.toString().trim());
+            output += data.toString();
         });
 
         cat.stderr.on('data', function(data){
-            logError(data.toString().trim());
+            logError(new Error(data.toString().trim()));
+        });
+
+        cat.on('error', function(err){
+            logError(err);
+            respond('no data');
         });
 
         cat.stdout.on('close', function(code){
-        if(!responseHasData)
-        cback('no data');
-        }); 
-        
+            respond(output.trim() || 'no data');
+        });
     }
 }
 
 module.exports = {
     getBatteryPercent,
+    getBatteryName,
     checkBatteryMinutely,
+    initiateAutocheck,
+    updateAutocheck,
     endAutocheck
 };
