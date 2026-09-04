@@ -2,6 +2,7 @@ const { ipcRenderer } = require('electron');
 const fs = require('fs');
 const Quill = require('quill');
 const sysDirectories = ipcRenderer.sendSync('get-directories');
+require('./components/controllers/error-log').setLogDirectory(sysDirectories.userData);
 const getUserSettings = require('./components/models/user-settings');
 const getCredentialStore = require('./components/models/credential-store');
 const getSecureStorage = require('./components/controllers/secure-storage');
