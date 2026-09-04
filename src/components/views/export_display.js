@@ -15,7 +15,7 @@ function showExportOptions(project, userSettings, sysDirectories){
 
     var expProjLab = document.createElement('label');
     expProjLab.innerText = 'Project';
-    expProjLab.for = 'proj-radio';
+    expProjLab.htmlFor = 'proj-radio';
     exportForm.appendChild(expProjLab);
 
     var expProjOp = document.createElement('input');
@@ -28,7 +28,7 @@ function showExportOptions(project, userSettings, sysDirectories){
 
     var expChapLab = document.createElement('label');
     expChapLab.innerText = ' | Chapter';
-    expChapLab.for = 'chap-radio';
+    expChapLab.htmlFor = 'chap-radio';
     exportForm.appendChild(expChapLab);
 
     var expChapOp = document.createElement('input');
@@ -42,10 +42,11 @@ function showExportOptions(project, userSettings, sysDirectories){
 
     var typeLabel = document.createElement("label");
     typeLabel.innerText = "File Type: ";
-    typeLabel.for = "filetype-select";
+    typeLabel.htmlFor = "filetype-select";
     exportForm.appendChild(typeLabel);
 
     var typeSelect = document.createElement("select");
+    typeSelect.id = "filetype-select";
     const typeOptions = [".docx", ".txt", ".mdfc", ".md", ".html", ".epub"];
     typeOptions.forEach(function(op){
       var txtOp = document.createElement("option");
@@ -60,7 +61,7 @@ function showExportOptions(project, userSettings, sysDirectories){
   /*
     var insertHeadLabel = document.createElement("label");
     insertHeadLabel.innerText = "Insert chapter titles as headings: ";
-    insertHeadLabel.for = "insert-head-check";
+    insertHeadLabel.htmlFor = "insert-head-check";
     exportForm.appendChild(insertHeadLabel);
 
     var insertHeadCheck = document.createElement("input");

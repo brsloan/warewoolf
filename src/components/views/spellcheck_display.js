@@ -51,7 +51,7 @@ function showSpellcheck(editorQuill, project, sysDirectories, displayChapterByIn
 
     var customLabel = document.createElement("label");
     customLabel.innerText = "Custom Replacement: ";
-    customLabel.for = "custom-input";
+    customLabel.htmlFor = "custom-input";
     popup.appendChild(customLabel);
 
     var customInput = document.createElement("input");

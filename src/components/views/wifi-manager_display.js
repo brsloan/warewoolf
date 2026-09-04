@@ -17,7 +17,7 @@ function showWifiManager(){
 
   var enableWifiLabel = document.createElement('label');
   enableWifiLabel.innerText = "Enable Wi-Fi: ";
-  enableWifiLabel.for = 'enable-wifi-check';
+  enableWifiLabel.htmlFor = 'enable-wifi-check';
 
   var enableWifiCheck = document.createElement('input');
   enableWifiCheck.type = 'checkbox';
@@ -73,15 +73,16 @@ function showWifiManager(){
 
   var networksLabel = document.createElement("label");
   networksLabel.innerText = "Available networks: ";
-  networksLabel.for = "networks-select";
+  networksLabel.htmlFor = "networks-select";
 
   var networksSelect = document.createElement("select");
+  networksSelect.id = "networks-select";
   newConTbl.appendChild(generateRow(networksLabel, networksSelect));
 
   getWifiNetworks(updateNetworksList);
 
   var networkPassLabel = document.createElement('label');
-  networkPassLabel.for = 'network-pass';
+  networkPassLabel.htmlFor = 'network-pass';
   networkPassLabel.innerText = 'Password: ';
 
   var networkPassInput = document.createElement('input');

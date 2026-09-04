@@ -19,7 +19,7 @@ function showItalicsOptions(project, onFinish){
 
     var italicsStrLabel = document.createElement("label");
     italicsStrLabel.innerText = "Marker character: ";
-    italicsStrLabel.for = "italics-str-input";
+    italicsStrLabel.htmlFor = "italics-str-input";
     italicsForm.appendChild(italicsStrLabel);
 
     var italicsStrInput = document.createElement("input");

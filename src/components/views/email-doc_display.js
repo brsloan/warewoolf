@@ -18,7 +18,7 @@ function showEmailOptions(project, userSettings, editorQuill){
     var emTbl = document.createElement('table');
 
     var senderEmailLabel = document.createElement('label');
-    senderEmailLabel.for = 'sender-email-input';
+    senderEmailLabel.htmlFor = 'sender-email-input';
     senderEmailLabel.innerText = 'Sender Email:';
 
     var senderEmailInput = document.createElement('input');
@@ -31,7 +31,7 @@ function showEmailOptions(project, userSettings, editorQuill){
     emTbl.appendChild(generateRow(senderEmailLabel, senderEmailInput));
 
     var senderPassLabel = document.createElement('label');
-    senderPassLabel.for = 'sender-email-pass';
+    senderPassLabel.htmlFor = 'sender-email-pass';
     senderPassLabel.innerText = 'Sender Password:';
 
     var senderPassInput = document.createElement('input');
@@ -47,7 +47,7 @@ function showEmailOptions(project, userSettings, editorQuill){
 
     var rememberPassLabel = document.createElement('label');
     rememberPassLabel.innerText = "Remember Password?";
-    rememberPassLabel.for = 'remember-pass-check';
+    rememberPassLabel.htmlFor = 'remember-pass-check';
 
     var rememberPassCheck = document.createElement('input');
     rememberPassCheck.type = 'checkbox';
@@ -58,7 +58,7 @@ function showEmailOptions(project, userSettings, editorQuill){
     emTbl.appendChild(generateRow(rememberPassLabel, rememberPassCheck));
 
     var receiverEmailLabel = document.createElement('label');
-    receiverEmailLabel.for = 'receiver-email-input';
+    receiverEmailLabel.htmlFor = 'receiver-email-input';
     receiverEmailLabel.innerText = 'Receiver Email:';
 
     var receiverEmailInput = document.createElement('input');
@@ -83,7 +83,7 @@ function showEmailOptions(project, userSettings, editorQuill){
 
     var chapRadioLabel = document.createElement('label');
     chapRadioLabel.innerText = "Send Chapter";
-    chapRadioLabel.for = 'email-radio-chap';
+    chapRadioLabel.htmlFor = 'email-radio-chap';
     attachSet.appendChild(chapRadioLabel);
 
     var chapRadio = document.createElement('input');
@@ -95,7 +95,7 @@ function showEmailOptions(project, userSettings, editorQuill){
 
     var compiledRadioLabel = document.createElement('label');
     compiledRadioLabel.innerText = " | Send Compiled";
-    compiledRadioLabel.for = 'email-radio-compiled';
+    compiledRadioLabel.htmlFor = 'email-radio-compiled';
     attachSet.appendChild(compiledRadioLabel);
 
     var compiledRadio = document.createElement('input');
@@ -107,7 +107,7 @@ function showEmailOptions(project, userSettings, editorQuill){
 
     var projectRadioLabel = document.createElement('label');
     projectRadioLabel.innerText = " | Send Project";
-    projectRadioLabel.for = 'email-radio-project';
+    projectRadioLabel.htmlFor = 'email-radio-project';
     attachSet.appendChild(projectRadioLabel);
 
     var projectRadio = document.createElement('input');
@@ -121,10 +121,11 @@ function showEmailOptions(project, userSettings, editorQuill){
 
     var typeLabel = document.createElement("label");
     typeLabel.innerText = "File Type: ";
-    typeLabel.for = "filetype-select";
+    typeLabel.htmlFor = "filetype-select";
     attachSet.appendChild(typeLabel);
 
     var typeSelect = document.createElement("select");
+    typeSelect.id = "filetype-select";
     const typeOptions = [".docx", ".txt", ".md", ".html", ".epub", ".mdfc"];
     typeOptions.forEach(function(op){
       var txtOp = document.createElement("option");

@@ -28,7 +28,7 @@ function showErrorLog(userSettings){
   var emlTbl = document.createElement('table');
 
   var senderEmailLabel = document.createElement('label');
-  senderEmailLabel.for = 'sender-email-input';
+  senderEmailLabel.htmlFor = 'sender-email-input';
   senderEmailLabel.innerText = 'Sender Email:';
 
   var senderEmailInput = document.createElement('input');
@@ -41,7 +41,7 @@ function showErrorLog(userSettings){
   emlTbl.appendChild(generateRow(senderEmailLabel, senderEmailInput));
 
   var senderPassLabel = document.createElement('label');
-  senderPassLabel.for = 'sender-email-pass';
+  senderPassLabel.htmlFor = 'sender-email-pass';
   senderPassLabel.innerText = 'Sender Password:';
 
   var senderPassInput = document.createElement('input');
@@ -56,7 +56,7 @@ function showErrorLog(userSettings){
   emlTbl.appendChild(generateRow(senderPassLabel, senderPassInput));
 
   var receiverEmailLabel = document.createElement('label');
-  receiverEmailLabel.for = 'receiver-email-input';
+  receiverEmailLabel.htmlFor = 'receiver-email-input';
   receiverEmailLabel.innerText = 'Receiver Email:';
 
   var receiverEmailInput = document.createElement('input');

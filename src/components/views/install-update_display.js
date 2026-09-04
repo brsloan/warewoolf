@@ -20,7 +20,7 @@ function showInstallUpdate(filepath){
 
   var passLabel = document.createElement('label');
   passLabel.innerText = "Password: ";
-  passLabel.for = 'install-pass';
+  passLabel.htmlFor = 'install-pass';
   popup.appendChild(passLabel);
 
   var passInput = document.createElement('input');

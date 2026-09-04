@@ -20,10 +20,11 @@ function showBreakHeadingsOptions(editorQuill, addImportedChapter){
 
   var headingLevelLabel = document.createElement("label");
   headingLevelLabel.innerText = "Heading Level: ";
-  headingLevelLabel.for = "heading-level-select";
+  headingLevelLabel.htmlFor = "heading-level-select";
   breakHeadingsForm.appendChild(headingLevelLabel);
 
   var headingSelect = document.createElement("select");
+  headingSelect.id = "heading-level-select";
   const headingOptions = ["1", "2", "3", "4"];
   headingOptions.forEach(function(op){
     var hdOp = document.createElement("option");

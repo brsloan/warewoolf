@@ -18,9 +18,10 @@ function showCompileOptions(project, sysDirectories, userSettings){
 
     var typeLabel = document.createElement("label");
     typeLabel.innerText = "File Type: ";
-    typeLabel.for = "filetype-select";
+    typeLabel.htmlFor = "filetype-select";
 
     var typeSelect = document.createElement("select");
+    typeSelect.id = "filetype-select";
     const typeOptions = [".docx", ".txt", ".mdfc", ".md", ".html", ".epub"];
     typeOptions.forEach(function(op){
       var txtOp = document.createElement("option");
@@ -34,7 +35,7 @@ function showCompileOptions(project, sysDirectories, userSettings){
 
     var insertStrLabel = document.createElement("label");
     insertStrLabel.innerText = "Insert string to mark chapter breaks: ";
-    insertStrLabel.for = "insert-str-input";
+    insertStrLabel.htmlFor = "insert-str-input";
 
     var insertStrInput = document.createElement("input");
     insertStrInput.type = "text";
@@ -45,7 +46,7 @@ function showCompileOptions(project, sysDirectories, userSettings){
 
     var insertHeadLabel = document.createElement("label");
     insertHeadLabel.innerText = "Insert chapter titles as headings: ";
-    insertHeadLabel.for = "insert-head-check";
+    insertHeadLabel.htmlFor = "insert-head-check";
 
     var insertHeadCheck = document.createElement("input");
     insertHeadCheck.type = "checkbox";
