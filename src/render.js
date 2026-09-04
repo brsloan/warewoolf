@@ -557,19 +557,23 @@ function addNewChapter(){
   changeChapterTitle(thisIndex);
 }
 
-function saveProject(){
+function saveProject(onComplete){
   if(project.filename != ""){
     clearCurrentChapterIfUnchanged();
     if(project.saveFile()){
       project.hasUnsavedChanges = false;
       updateFileList();
+      if(onComplete)
+        onComplete(true);
     }
+    else if(onComplete)
+      onComplete(false);
   }
   else
-    saveProjectAs();
+    saveProjectAs(onComplete);
 }
 
-function saveProjectAs() {
+function saveProjectAs(onComplete) {
   const options = {
     title: 'Save project as...',
     defaultPath: sysDirectories.docs,
@@ -590,8 +594,13 @@ function saveProjectAs() {
         project.hasUnsavedChanges = false;
         updateFileList();
         updateTitleBar();
+        if(onComplete)
+          onComplete(true);
+        return;
       }
     }
+    if(onComplete)
+      onComplete(false);
   });
 }
 

@@ -16,9 +16,12 @@ function displayExitConfirmation(saveFunc, continueFunc){
 
   var save = createButton("Save");
   save.onclick = function(){
-    saveFunc();
-    closePopups();
-    continueFunc();
+    saveFunc(function(success){
+      if(success){
+        closePopups();
+        continueFunc();
+      }
+    });
   };
   popup.appendChild(save);
 
