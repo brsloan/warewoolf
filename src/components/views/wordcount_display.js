@@ -38,7 +38,7 @@ function showWordCount(project, editorQuill){
 
     var goalLabel = document.createElement('label');
     goalLabel.innerText = "Goal: ";
-    goalLabel.for = "word-goal-input";
+    goalLabel.htmlFor = "word-goal-input";
 
     var goalInput = document.createElement('input');
     goalInput.type = "number";

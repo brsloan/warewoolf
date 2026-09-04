@@ -1,6 +1,6 @@
 const { getTempQuill } = require('./quill-utils');
 
-function find(editorQuill, project, str, caseSensitive = true, startingIndex, searchAllChapters, displayChapterByIndex){
+function find(editorQuill, project, str, caseSensitive = true, startingIndex, searchAllChapters, displayChapterByIndex, wholeWordOnly = false){
     var index = -1;
 
     if(str){
@@ -11,9 +11,9 @@ function find(editorQuill, project, str, caseSensitive = true, startingIndex, se
             str = str.toLowerCase();
         }
 
-        index = totalText.indexOf(str, startingIndex);
+        index = getNextIndex(str, totalText, startingIndex, wholeWordOnly);
         if(index == startingIndex)
-            index = totalText.indexOf(str, startingIndex + str.length);
+            index = getNextIndex(str, totalText, startingIndex + str.length, wholeWordOnly);
 
         if(index > -1)
             editorQuill.setSelection(index, str.length);
@@ -25,7 +25,9 @@ function find(editorQuill, project, str, caseSensitive = true, startingIndex, se
                 while(result < 0){
                     if(project.activeChapterIndex < project.chapters.length - 1){
                         displayChapterByIndex(project.activeChapterIndex + 1);
-                        result = find(editorQuill, project, str, caseSensitive, 0);
+                        //searchAllChapters is deliberately false here so the recursive call searches
+                        //only the chapter just displayed rather than re-entering this loop.
+                        result = find(editorQuill, project, str, caseSensitive, 0, false, displayChapterByIndex, wholeWordOnly);
                         index = result;
                     }
                     else {
@@ -43,7 +45,7 @@ function find(editorQuill, project, str, caseSensitive = true, startingIndex, se
                 }
             } else {
                 if(startingIndex != 0){
-                    index =  find(editorQuill, project, str, caseSensitive, 0);
+                    index =  find(editorQuill, project, str, caseSensitive, 0, false, displayChapterByIndex, wholeWordOnly);
                 }
 
             }
@@ -52,7 +54,7 @@ function find(editorQuill, project, str, caseSensitive = true, startingIndex, se
     return index;
 }
 
-function findInText(str, text, caseSensitive, startingIndex){
+function findInText(str, text, caseSensitive, startingIndex, wholeWordOnly = false){
     var index = -1;
 
     if(!caseSensitive){
@@ -60,9 +62,42 @@ function findInText(str, text, caseSensitive, startingIndex){
         str = str.toLowerCase();
     }
 
-    index = text.indexOf(str, startingIndex);
-
+    index = getNextIndex(str, text, startingIndex, wholeWordOnly);
+    
     return index;
+}
+
+function getNextIndex(str, text, startingIndex, wholeWordOnly){
+    var index = -1;
+    if(wholeWordOnly == false){
+        index = text.indexOf(str, startingIndex);
+    }
+    else {
+        const regex = new RegExp(getWholeWordPattern(str), 'g');
+        regex.lastIndex = startingIndex;
+        const match = regex.exec(text);
+        if(match)
+            index = match.index;
+    }
+    return index;
+}
+
+//The search term comes straight from the user, so it must be escaped before going into a
+//RegExp or characters like ( and * will either throw or match the wrong thing. \b also only
+//marks a boundary between a word and a non-word character, so a term that starts or ends with
+//punctuation (--, 'tis) would never match; those sides need a "not preceded/followed by a word
+//character" check instead.
+function getWholeWordPattern(str){
+    var escaped = escapeRegExp(str);
+    var openingBoundary = /^\w/.test(str) ? '\\b' : '(?<!\\w)';
+    var closingBoundary = /\w$/.test(str) ? '\\b' : '(?!\\w)';
+
+    return openingBoundary + escaped + closingBoundary;
+}
+
+function escapeRegExp(string){
+    const specialCharacters = /[.*+?^${}()|[\]\\]/g;
+    return string.replace(specialCharacters, '\\$&');
 }
 
 function replace(editorQuill, newStr){
@@ -73,24 +108,24 @@ function replace(editorQuill, newStr){
     }
 }
 
-function replaceAllInAllChapters(project, oldStr, newStr, caseSensitive){
+function replaceAllInAllChapters(project, oldStr, newStr, caseSensitive, wholeWordOnly = false){
   var numReplaced = 0;
 
   project.chapters.forEach(function(chap){
-    var changed = replaceAllInChapter(oldStr, newStr, caseSensitive, chap);
+    var changed = replaceAllInChapter(oldStr, newStr, caseSensitive, chap, wholeWordOnly);
     numReplaced += changed;
   });
 
   project.reference.forEach(function(chap){
-    var changed = replaceAllInChapter(oldStr, newStr, caseSensitive, chap);
+    var changed = replaceAllInChapter(oldStr, newStr, caseSensitive, chap, wholeWordOnly);
     numReplaced += changed;
   });
 
   return numReplaced;
 }
 
-function replaceAllInChapter(oldStr, newStr, caseSensitive, chap){
-  var result = replaceAllInDelta(oldStr, newStr, caseSensitive, chap.contents ? chap.contents : chap.getFile());
+function replaceAllInChapter(oldStr, newStr, caseSensitive, chap, wholeWordOnly = false){
+  var result = replaceAllInDelta(oldStr, newStr, caseSensitive, chap.contents ? chap.contents : chap.getFile(), wholeWordOnly);
   if(result.changed > 0){
     chap.contents = result.delta;
     chap.hasUnsavedChanges = true;
@@ -98,7 +133,12 @@ function replaceAllInChapter(oldStr, newStr, caseSensitive, chap){
   return result.changed;
 }
 
-function replaceAllInDelta(oldStr, newStr, caseSensitive, delt){
+function replaceAllInDelta(oldStr, newStr, caseSensitive, delt, wholeWordOnly = false){
+    //An empty search term matches at every position without ever advancing, so the loop below would
+    //never end. The Find button guards against this already, Replace All did not.
+    if(!oldStr)
+        return { changed: 0, delta: delt };
+
     var tempQuill = getTempQuill();
     var counter = 0;
 
@@ -109,7 +149,7 @@ function replaceAllInDelta(oldStr, newStr, caseSensitive, delt){
     var startingIndex = 0;
 
     while(foundIndex > -1){
-        foundIndex = findInText(oldStr, text, caseSensitive, startingIndex);
+        foundIndex = findInText(oldStr, text, caseSensitive, startingIndex, wholeWordOnly);
         if(foundIndex > -1){
             counter++;
             tempQuill.deleteText(foundIndex, oldStr.length);
@@ -129,6 +169,8 @@ function replaceAllInDelta(oldStr, newStr, caseSensitive, delt){
 
 module.exports = {
     find,
+    findInText,
+    getNextIndex,
     replace,
     replaceAllInAllChapters,
     replaceAllInChapter,

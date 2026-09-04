@@ -33,7 +33,7 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish){
     filetypeSet.appendChild(filetypeSelect);
 
     var typeLabel = document.createElement('label');
-    typeLabel.for = filetypeSelect.name;
+    typeLabel.htmlFor = filetypeSelect.id;
     typeLabel.innerText = type.name;
     filetypeSet.appendChild(typeLabel);
   });
@@ -48,7 +48,7 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish){
 
   var convertItalicsLabel = document.createElement("label");
   convertItalicsLabel.innerText = "Convert marked italics: ";
-  convertItalicsLabel.for = "convert-italics-check";
+  convertItalicsLabel.htmlFor = "convert-italics-check";
 
   var convertItalicsCheck = document.createElement("input");
   convertItalicsCheck.type = "checkbox";
@@ -59,7 +59,7 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish){
 
   var italicsStrLabel = document.createElement("label");
   italicsStrLabel.innerText = "Marker character: ";
-  italicsStrLabel.for = "italics-str-input";
+  italicsStrLabel.htmlFor = "italics-str-input";
   italicsStrLabel.classList.add('sublabel');
 
   var italicsStrInput = document.createElement("input");
@@ -73,7 +73,7 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish){
 
   var convertTabsLabel = document.createElement("label");
   convertTabsLabel.innerText = "Convert marked tabs: ";
-  convertTabsLabel.for = "convert-tabs-check";
+  convertTabsLabel.htmlFor = "convert-tabs-check";
 
   var convertTabsCheck = document.createElement("input");
   convertTabsCheck.type = "checkbox";
@@ -84,7 +84,7 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish){
 
   var tabsStrLabel = document.createElement("label");
   tabsStrLabel.innerText = "Tab string (default 4 spaces): ";
-  tabsStrLabel.for = "tabs-str-input";
+  tabsStrLabel.htmlFor = "tabs-str-input";
   tabsStrLabel.classList.add('sublabel');
 
   var tabsStrInput = document.createElement("input");
@@ -97,7 +97,7 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish){
 
   var splitChapsLabel = document.createElement("label");
   splitChapsLabel.innerText = "Split Into Chapters: ";
-  splitChapsLabel.for = "split-chaps-check";
+  splitChapsLabel.htmlFor = "split-chaps-check";
 
   var splitChapsCheck = document.createElement("input");
   splitChapsCheck.type = "checkbox";
@@ -108,7 +108,7 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish){
 
   var chapsStrLabel = document.createElement("label");
   chapsStrLabel.innerText = "Chapter Split Marker: ";
-  chapsStrLabel.for = "chaps-str-input";
+  chapsStrLabel.htmlFor = "chaps-str-input";
   chapsStrLabel.classList.add('sublabel');
 
   var chapsStrInput = document.createElement("input");
@@ -121,7 +121,7 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish){
 
   var convertFirstLinesLabel = document.createElement("label");
   convertFirstLinesLabel.innerText = "Convert First Lines To Titles: ";
-  convertFirstLinesLabel.for = "convert-first-lines-check";
+  convertFirstLinesLabel.htmlFor = "convert-first-lines-check";
 
   var convertFirstLinesCheck = document.createElement("input");
   convertFirstLinesCheck.type = "checkbox";
@@ -142,7 +142,7 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish){
 
   var docxSplitChapsLabel = document.createElement("label");
   docxSplitChapsLabel.innerText = "Split Into Chapters At Headings (Lvl 1): ";
-  docxSplitChapsLabel.for = "docx-split-chaps-check";
+  docxSplitChapsLabel.htmlFor = "docx-split-chaps-check";
 
   var docxSplitChapsCheck = document.createElement("input");
   docxSplitChapsCheck.type = "checkbox";
@@ -152,6 +152,41 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish){
   docxOpsTable.appendChild(generateRow(docxSplitChapsLabel, docxSplitChapsCheck));
   docxOptionsSet.appendChild(docxOpsTable);
   importForm.appendChild(docxOptionsSet);
+
+  importForm.appendChild(document.createElement('br'));
+
+  var chapLabelSet = document.createElement('fieldset');
+  var chapLabelLegend = document.createElement('legend');
+  chapLabelLegend.innerText = 'Chapter Label Options';
+  chapLabelSet.appendChild(chapLabelLegend);
+
+  var chapLabelFilename = document.createElement('input');
+  chapLabelFilename.type = 'radio';
+  chapLabelFilename.name = 'chapLabelSelect';
+  chapLabelFilename.value = 'filename';
+  chapLabelFilename.id = 'chapLabelFilename';
+  chapLabelSet.appendChild(chapLabelFilename);
+
+  var chapLabelFilenameLabel = document.createElement('label');
+  chapLabelFilenameLabel.htmlFor = 'chapLabelFilename';
+  chapLabelFilenameLabel.innerText = 'Filename';
+  chapLabelSet.appendChild(chapLabelFilenameLabel);
+
+  var chapLabelFirstLine = document.createElement('input');
+  chapLabelFirstLine.type = 'radio';
+  chapLabelFirstLine.name = 'chapLabelSelect';
+  chapLabelFirstLine.value = 'firstLine';
+  chapLabelFirstLine.id = 'chapLabelFirstLine';
+  chapLabelFirstLine.checked = true;
+  chapLabelSet.appendChild(chapLabelFirstLine);
+
+  var chapLabelFirstLineLabel = document.createElement('label');
+  chapLabelFirstLineLabel.htmlFor = 'chapLabelFirstLine';
+  chapLabelFirstLineLabel.innerText = 'First line';
+  chapLabelSet.appendChild(chapLabelFirstLineLabel);
+
+  importForm.appendChild(chapLabelSet);
+  
 
   importForm.appendChild(document.createElement('br'));
 
@@ -168,7 +203,7 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish){
 
   importForm.onsubmit = function(e){
     e.preventDefault();
-
+    const selectedChapLabel = document.querySelector('input[name="chapLabelSelect"]:checked').value;
     var importOptions = {
       fileType: filetypes[document.querySelector('input[name="typeSelect"]:checked').value]
     };
@@ -185,11 +220,17 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish){
       splitChapters: {
         split: splitChapsCheck.checked,
         marker: chapsStrInput.value
-      }
+      },
+      chapLabels: selectedChapLabel
     };
 
     importOptions.docxOptions = {
-      splitChapters: docxSplitChapsCheck.checked
+      splitChapters: docxSplitChapsCheck.checked,
+      chapLabels: selectedChapLabel
+    };
+
+    importOptions.mdfcOptions = {
+      chapLabels: selectedChapLabel
     };
 
     closePopups();

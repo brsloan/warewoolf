@@ -21,7 +21,7 @@ function showRenumberChapters(project, onFinish){
 
   var formatLabel = document.createElement('label');
   formatLabel.innerText = 'Rename Format ("[num]" indicates where to insert number):';
-  formatLabel.for = 'renumber-format-label';
+  formatLabel.htmlFor = 'renumber-format-input';
 
   var formatInput = document.createElement('input');
   formatInput.type = 'text';
@@ -32,7 +32,7 @@ function showRenumberChapters(project, onFinish){
 
   var useNumeralsLabel = document.createElement("label");
   useNumeralsLabel.innerText = "Use Numerals: ";
-  useNumeralsLabel.for = "use-numerals-check";
+  useNumeralsLabel.htmlFor = "use-numerals-check";
 
   var useNumeralsCheck = document.createElement("input");
   useNumeralsCheck.type = "checkbox";
@@ -42,7 +42,7 @@ function showRenumberChapters(project, onFinish){
 
   var insertReplaceLabel = document.createElement("label");
   insertReplaceLabel.innerText = "Insert/Replace In Chapter (will replace first line of every chapter): ";
-  insertReplaceLabel.for = "insert-replace-check";
+  insertReplaceLabel.htmlFor = "insert-replace-check";
 
   var insertReplaceCheck = document.createElement("input");
   insertReplaceCheck.type = "checkbox";
@@ -52,7 +52,7 @@ function showRenumberChapters(project, onFinish){
 
   var startChapLabel = document.createElement("label");
   startChapLabel.innerText = "Start Renumbering At: ";
-  startChapLabel.for = "start-chap-select";
+  startChapLabel.htmlFor = "start-chap-select";
 
   var startChapDrop = getChapterDropdown(0);
   startChapDrop.id = 'start-chap-select';
@@ -61,7 +61,7 @@ function showRenumberChapters(project, onFinish){
 
   var endChapLabel = document.createElement("label");
   endChapLabel.innerText = "End Renumbering At: ";
-  endChapLabel.for = "end-chap-select";
+  endChapLabel.htmlFor = "end-chap-select";
   renumberForm.appendChild(endChapLabel)
 
   var endChapDrop = getChapterDropdown(project.chapters.length - 1);

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, nativeTheme } = require('electron');
+const { app, BrowserWindow, Menu, nativeTheme, safeStorage } = require('electron');
 const path = require('path');
 const { ipcMain } = require('electron');
 const isLinux = process.platform === "linux";
@@ -311,6 +311,18 @@ const createWindow = () => {
             mainWindow.webContents.send('headings-to-chaps-clicked');
           }
         },
+        {
+          label: 'Indent All Paragraphs',
+          click(item, focusWindow){
+            mainWindow.webContents.send('indent-all-clicked');
+          }
+        },
+        {
+          label: 'Center All Headings',
+          click(item, focusWindow){
+            mainWindow.webContents.send('center-all-heads-clicked');
+          }
+        },
         ...(isLinux ? [
           { type: 'separator' },
           {
@@ -427,6 +439,52 @@ ipcMain.on('set-dark-mode', function(e, darkMode){
   }
   else if(darkMode == 'light') {
     nativeTheme.themeSource = 'light';
+  }
+});
+
+//safeStorage only reaches a real OS keystore when Chromium found one at startup. On Linux with no
+//keyring installed — a stripped down Raspberry Pi OS Lite, say — it quietly falls back to a
+//hardcoded key, which protects nothing. Report that case as unavailable so the credential store
+//falls back to its own per-install key file instead of trusting a keystore that isn't there.
+function isSecureStorageAvailable(){
+  try{
+    if(!safeStorage.isEncryptionAvailable())
+      return false;
+    if(process.platform !== 'linux')
+      return true;
+    //getSelectedStorageBackend arrived in Electron 25. Without it there is no way to tell a real
+    //keyring from the fallback, so don't claim the storage is secure.
+    if(typeof safeStorage.getSelectedStorageBackend !== 'function')
+      return false;
+
+    var backend = safeStorage.getSelectedStorageBackend();
+
+    return backend !== 'basic_text' && backend !== 'unknown';
+  }
+  catch(err){
+    return false;
+  }
+}
+
+ipcMain.on('secure-storage-available', function(e){
+  e.returnValue = isSecureStorageAvailable();
+});
+
+ipcMain.on('secure-storage-encrypt', function(e, text){
+  try{
+    e.returnValue = isSecureStorageAvailable() ? safeStorage.encryptString(text).toString('base64') : null;
+  }
+  catch(err){
+    e.returnValue = null;
+  }
+});
+
+ipcMain.on('secure-storage-decrypt', function(e, content){
+  try{
+    e.returnValue = safeStorage.decryptString(Buffer.from(content, 'base64'));
+  }
+  catch(err){
+    e.returnValue = null;
   }
 });
 

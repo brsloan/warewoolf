@@ -1,7 +1,7 @@
 {
   "name": "warewoolf",
   "productName": "warewoolf",
-  "version": "2.2.1",
+  "version": "2.3.0",
   "description": "A simple novel writing system designed to be usable without a mouse.",
   "main": "src/index.js",
   "scripts": {
@@ -9,6 +9,7 @@
     "package": "electron-forge package",
     "make": "electron-forge make",
     "publish": "electron-forge publish",
+    "test": "node --test",
     "lint": "echo \"No linting configured\""
   },
   "keywords": [

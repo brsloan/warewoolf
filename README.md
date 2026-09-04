@@ -1,7 +1,7 @@
 <p align="center">
 	<img src="./src/assets/logo.png" style="width: 280px"/>
 </p>
-<p align="center">v2.2.1</p>
+<p align="center">v2.3.0</p>
 <p align="center">"The only writing software I use." -Virginia Woolf</p>
 
 WareWoolf is designed for one thing: writing fiction. It is intentionally simplified: you cannot change the font, line spacing, or color. But it has everything you need to organize, edit, and revise a novel--and you don't even need a mouse.
@@ -68,6 +68,22 @@ This app was built using Electron Forge. To run it from source...
 For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.com/brsloan/warewoolf/wiki).
 
 ## Status
+
+2026-09-03: v2.3.0. Changes made:
+* Bullets and numbered lists now supported.
+* Indent all paragraphs tool
+* Center all headings tool
+* Import option to generate chapter labels from filename or first line of files
+* Find/Replace Whole Word Only option
+* Saved email password is now protected by the OS keystore (Windows DPAPI / macOS Keychain / Linux libsecret) or an opt-in passphrase, instead of a hardcoded encryption key.
+* Added "Exit Without Backup" button to the backup dialog on quit.
+* Fixed bug centered blank lines not parsed properly
+* Fixed bug spellcheck change all did not limit to whole words
+* Fixed bug exported .docx numbered lists renumbered incorrectly / merged with the previous list's sequence
+* Fixed bug "Exit Without Backup" button wrongly appeared during manual (menu-triggered) backups, skipping the unsaved-work check
+* Fixed bug single-paragraph footnotes lost their anchor link / produced duplicate IDs on export
+* Fixed bug first paragraph of a chapter kept a stray indent tab in exports
+* Fixed bug HTML export could swallow list-item text containing dialogue, and blank centered/aligned lines leaked stray markers into HTML export
 
 2025-10-09: v2.2.1. Changes made:
 * This is a patch to fix a couple bugs I introduced/missed in last update which broke restoring chapters from trash and creating new projects. (Obviously these are embarrassing to have released and I plan to implement testing scripts to catch these issues in future. I've gotten a little too excited about releasing new features this month and was careless.)

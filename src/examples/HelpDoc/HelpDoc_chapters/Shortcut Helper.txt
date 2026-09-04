@@ -1,8 +1,8 @@
 [>c] # Shortcut Helper
 
-At any time, if you press **Ctrl+H**, a popup will appear reminding you of all the shortcuts for editing text, chapters, etc. But there are not many, and you will quickly memorize the few you use often.
+At any time, if you press **Ctrl+H (Cmd+Shift+H on Mac)**, a popup will appear reminding you of all the shortcuts for editing text, chapters, etc. But there are not many, and you will quickly memorize the few you use often.
 
-Here is a summary:
+Here is a summary (Ctrl is Cmd on Mac unless otherwise noted):
 
 # Navigation
  View Previous Chapter	: **Ctrl + Up**
@@ -19,6 +19,7 @@ Here is a summary:
  Title (Heading 1, Centered)	: **Ctrl + T**
  Headings	: **Ctrl + (1-4)**
  Clear Heading	: **Ctrl + 0**
+** **Bullets/Numbered List:	**Ctrl + Shift + B** 
  Left Align	: **Ctrl + L**
  Right Align	: **Ctrl + R**
  Center Align	: **Ctrl + E**

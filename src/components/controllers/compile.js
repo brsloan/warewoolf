@@ -6,6 +6,7 @@ const { logError } = require('./error-log');
 const { convertMdfcToHtmlPage, convertMdfcToHtml } = require('./mdfc-to-html');
 const { convertMdfcToMd } = require('./mdfc-to-md');
 const { htmlChaptersToEpub } = require('./epub');
+const { convertToPlainText } = require('./quill-utils');
 
 function compileProject(project, options, filepath){
     console.log(options);
@@ -126,14 +127,6 @@ function compileChapterDeltas(project, options){
 function compileDocx(filepath, delt, options) {
   var doc = convertDeltaToDocx(delt, options, project, userSettings.addressInfo);
   saveDocx(filepath, doc);
-}
-
-function convertToPlainText(delt){
-  var text = '';
-  delt.ops.forEach(op => {
-    text += op.insert;
-  });
-  return text;
 }
 
 module.exports = {

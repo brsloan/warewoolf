@@ -128,7 +128,7 @@ function showSettings(userSettings, autosaver, sysDirectories, callback){
 
   var darkModeSysLabel = document.createElement('label');
   darkModeSysLabel.innerText = "System Default";
-  darkModeSysLabel.for = 'dark-mode-sys';
+  darkModeSysLabel.htmlFor = 'dark-mode-sys';
   appearanceSet.appendChild(darkModeSysLabel);
 
   appearanceSet.appendChild(document.createElement('br'));
@@ -144,7 +144,7 @@ function showSettings(userSettings, autosaver, sysDirectories, callback){
 
   var darkModeDarkLabel = document.createElement('label');
   darkModeDarkLabel.innerText = "Dark";
-  darkModeDarkLabel.for = 'dark-mode-dark';
+  darkModeDarkLabel.htmlFor = 'dark-mode-dark';
   appearanceSet.appendChild(darkModeDarkLabel);
 
   appearanceSet.appendChild(document.createElement('br'));
@@ -160,7 +160,7 @@ function showSettings(userSettings, autosaver, sysDirectories, callback){
 
   var darkModeLightLabel = document.createElement('label');
   darkModeLightLabel.innerText = "Light";
-  darkModeLightLabel.for = 'dark-mode-light';
+  darkModeLightLabel.htmlFor = 'dark-mode-light';
   appearanceSet.appendChild(darkModeLightLabel);
 
   settingsForm.appendChild(appearanceSet);
@@ -172,7 +172,7 @@ function showSettings(userSettings, autosaver, sysDirectories, callback){
 
   var batteryDisplayLabel = document.createElement('label');
   batteryDisplayLabel.innerText = 'Display Battery Charge ';
-  batteryDisplayLabel.for = 'battery-display-check';
+  batteryDisplayLabel.htmlFor = 'battery-display-check';
   batterySet.appendChild(batteryDisplayLabel);
 
   var batteryDisplayCheck = document.createElement('input');

@@ -10,7 +10,7 @@ function requestProjectTitle(callback){
 
   var message = document.createElement("label");
   message.innerText = "What is the title of this project?";
-  message.for = "title-input";
+  message.htmlFor = "title-input";
   titleForm.appendChild(message);
 
   titleForm.appendChild(document.createElement('br'));

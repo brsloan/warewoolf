@@ -1,9 +1,9 @@
 const { closePopups, createButton, removeElementsByClass, generateRow } = require('../controllers/utils');
 const { loadErrorLog, clearErrorLog } = require('../controllers/error-log');
-const getCrypto = require('../controllers/crypto');
+const { APP_PASSWORD_HINT } = require('../controllers/credential-help');
 const { emailFile } = require('../controllers/email-doc');
 
-function showErrorLog(userSettings){
+function showErrorLog(userSettings, credentialStore){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup");
@@ -18,7 +18,6 @@ function showErrorLog(userSettings){
   errorLogTextBox.tabIndex = 1;
   popup.appendChild(errorLogTextBox);
 
-  var crypt = getCrypto();
   var header = document.createElement('h1');
   header.innerText = "Send Via Email";
   popup.appendChild(header);
@@ -28,7 +27,7 @@ function showErrorLog(userSettings){
   var emlTbl = document.createElement('table');
 
   var senderEmailLabel = document.createElement('label');
-  senderEmailLabel.for = 'sender-email-input';
+  senderEmailLabel.htmlFor = 'sender-email-input';
   senderEmailLabel.innerText = 'Sender Email:';
 
   var senderEmailInput = document.createElement('input');
@@ -41,22 +40,22 @@ function showErrorLog(userSettings){
   emlTbl.appendChild(generateRow(senderEmailLabel, senderEmailInput));
 
   var senderPassLabel = document.createElement('label');
-  senderPassLabel.for = 'sender-email-pass';
+  senderPassLabel.htmlFor = 'sender-email-pass';
   senderPassLabel.innerText = 'Sender Password:';
 
   var senderPassInput = document.createElement('input');
   senderPassInput.type = 'password';
   senderPassInput.id = 'sender-email-pass';
-  if(userSettings.senderPass != null){
-    var decrypedPass = crypt.decrypt(userSettings.senderPass);
-    if(decrypedPass != null)
-      senderPassInput.value = decrypedPass;
-  }
+  //This dialog only reads a saved password; it never stores one. A passphrase protected password
+  //that hasn't been unlocked in this session simply isn't filled in, and gets typed by hand.
+  var savedPassword = credentialStore.getPassword();
+  if(savedPassword != null)
+    senderPassInput.value = savedPassword;
 
   emlTbl.appendChild(generateRow(senderPassLabel, senderPassInput));
 
   var receiverEmailLabel = document.createElement('label');
-  receiverEmailLabel.for = 'receiver-email-input';
+  receiverEmailLabel.htmlFor = 'receiver-email-input';
   receiverEmailLabel.innerText = 'Receiver Email:';
 
   var receiverEmailInput = document.createElement('input');
@@ -69,6 +68,11 @@ function showErrorLog(userSettings){
   emlTbl.appendChild(generateRow(receiverEmailLabel, receiverEmailInput));
 
   emailForm.appendChild(emlTbl);
+
+  var appPasswordNote = document.createElement('p');
+  appPasswordNote.classList.add('popup-text-small');
+  appPasswordNote.innerText = APP_PASSWORD_HINT;
+  emailForm.appendChild(appPasswordNote);
 
   var responseText = document.createElement('p');
   responseText.innerText = "";

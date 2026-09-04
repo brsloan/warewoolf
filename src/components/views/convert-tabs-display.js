@@ -19,7 +19,7 @@ function showTabOptions(project, onFinish){
 
     var tabStrLabel = document.createElement("label");
     tabStrLabel.innerText = "Marker string (default 4 spaces): ";
-    tabStrLabel.for = "tab-str-input";
+    tabStrLabel.htmlFor = "tab-str-input";
     tabForm.appendChild(tabStrLabel);
 
     var tabStrInput = document.createElement("input");

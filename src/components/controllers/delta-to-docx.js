@@ -80,7 +80,13 @@ function convertDeltaToDocx(delt, options, project, addressInfo){
   var xParagraphs = [];
   var fnoteMarkerRegx = /\[\^\d+]/gm;
 
-  nonfootnoteParas.forEach(function(para){
+  //Word continues the previous list's sequence unless a numbered list is given its own numbering
+  //instance, so each new list takes the next one. This lives here rather than at module scope so a
+  //document's numbering depends only on that document and not on how many were exported before it.
+  var numberedList = { instance: -1 };
+
+  nonfootnoteParas.forEach(function(para, paraIndex){
+    var previousPara = paraIndex > 0 ? nonfootnoteParas[paraIndex - 1] : null;
     var xRuns = [];
     para.textRuns.forEach(function(run){
       var fnoteMarker = run.text.match(fnoteMarkerRegx);
@@ -123,7 +129,7 @@ function convertDeltaToDocx(delt, options, project, addressInfo){
       }
     });
 
-    var xParaAttributes = convertParaAttributes(para.attributes);
+    var xParaAttributes = convertParaAttributes(para.attributes, previousPara ? previousPara.attributes : null, numberedList);
     xParaAttributes.children = xRuns;
 
     xParagraphs.push(new docx.Paragraph(xParaAttributes));
@@ -136,8 +142,6 @@ function convertDeltaToDocx(delt, options, project, addressInfo){
       children: footnoteBodies[i].paras
     }
   }
-
-  console.log(footnotes);
 
   var sections = [];
   if(options && options.generateTitlePage == true)
@@ -179,13 +183,55 @@ function convertDeltaToDocx(delt, options, project, addressInfo){
       ]
     },
     footnotes: footnotes,
-    sections: sections
+    sections: sections,
+    numbering: {
+      config: [
+        {
+          reference: 'numbered-list',
+          levels: [
+            {
+              level: 0,
+              alignment: docx.AlignmentType.START,
+              text: "%1.",
+              format: docx.LevelFormat.DECIMAL,
+              style: {
+                paragraph: {
+                    indent: { left: docx.convertInchesToTwip(0.5), hanging: docx.convertInchesToTwip(0.25) },
+                },
+            },
+            },
+            {
+              level: 1,
+              alignment: docx.AlignmentType.START,
+              text: "%2.",
+              format: docx.LevelFormat.LOWER_LETTER,
+              style: {
+                paragraph: {
+                    indent: { left: docx.convertInchesToTwip(1), hanging: docx.convertInchesToTwip(0.25) },
+                },
+            },
+            },
+            {
+              level: 2,
+              alignment: docx.AlignmentType.START,
+              text: "%3.",
+              format: docx.LevelFormat.LOWER_ROMAN,
+              style: {
+                paragraph: {
+                    indent: { left: docx.convertInchesToTwip(1.5), hanging: docx.convertInchesToTwip(0.25) },
+                },
+            },
+            }
+          ]
+        }
+      ]
+    }
   });
 
   return doc;
 }
 
-function convertParaAttributes(attr){
+function convertParaAttributes(attr, previousAttr = null, numberedList = { instance: -1 }){
   var xAttr = {};
   if(attr){
     if(attr.header){
@@ -194,6 +240,28 @@ function convertParaAttributes(attr){
     }
     if(attr.align){
       xAttr.alignment = docx.AlignmentType[attr.align.toUpperCase()];
+    }
+    if(attr.list){
+      var indentLevel = 1;
+      if(attr.indent){
+        indentLevel += attr.indent;
+      }
+      if(attr.list == 'bullet'){
+        xAttr.bullet = {level: indentLevel - 1};
+      }
+      else{
+        //If start of new list, need to iterate to new list instance to restart numbering sequence
+        if(!previousAttr || !previousAttr.list || previousAttr.list == 'bullet')
+          numberedList.instance++;
+
+        //Every item carries the instance, not just the first. Leaving it off the rest of the list
+        //drops them back onto the default instance, which is the previous list's sequence.
+        xAttr.numbering = {
+          reference: 'numbered-list',
+          level: indentLevel - 1,
+          instance: numberedList.instance
+        }
+      }
     }
   }
 

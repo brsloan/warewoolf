@@ -3,6 +3,8 @@ const fs = require('fs');
 const Quill = require('quill');
 const sysDirectories = ipcRenderer.sendSync('get-directories');
 const getUserSettings = require('./components/models/user-settings');
+const getCredentialStore = require('./components/models/credential-store');
+const getSecureStorage = require('./components/controllers/secure-storage');
 const newChapter = require('./components/models/chapter');
 const newProject = require('./components/models/project');
 const autosaver = require('./components/controllers/autosave');
@@ -21,7 +23,7 @@ var editorQuill = new Quill('#editor-container', {
     }
   },
   placeholder: '',
-  formats: ['bold', 'italic', 'strike', 'underline', 'blockquote', 'header', 'align']
+  formats: ['bold', 'italic', 'strike', 'underline', 'blockquote', 'header', 'align', 'list', 'indent']
 });
 
 var notesQuill = new Quill('#notes-editor', {
@@ -31,12 +33,16 @@ var notesQuill = new Quill('#notes-editor', {
     }
   },
   placeholder: 'Notes...',
-  formats: ['bold', 'italic', 'strike', 'underline', 'blockquote', 'header', 'align']
+  formats: ['bold', 'italic', 'strike', 'underline', 'blockquote', 'header', 'align', 'list', 'indent']
 });
 
 var project = newProject();
 
 var userSettings = getUserSettings(sysDirectories.userData + "/user-settings.json").load();
+var credentialStore = getCredentialStore(sysDirectories.userData, getSecureStorage());
+//Lift any password saved by an older version out of user-settings.json, where it sat under a
+//key that shipped in the source, and re-seal it with whatever this machine can actually offer.
+credentialStore.migrateLegacyPassword(userSettings);
 
 initialize();
 
@@ -442,6 +448,22 @@ function displayNextChapter(){
 
 }
 
+function chapIndexIs(ind){
+  return {
+    //Second part of chapter "or" statement is to catch when the very first chapter is added to a new project
+    chapter: ind < project.chapters.length || (project.chapters.length == 0 && project.reference.length == 0 && project.trash.length == 0), 
+    firstChapter: ind == 0,
+    lastChapter: ind == project.chapters.length - 1,
+    reference: ind > project.chapters.length - 1 && ind < project.chapters.length + project.reference.length && project.reference.length > 0,
+    firstReference: ind == project.chapters.length && project.reference.length > 0,
+    lastReference: ind == project.chapters.length + project.reference.length - 1 && project.reference.length > 0,
+    trash: ind > project.chapters.length + project.reference.length - 1 && project.trash.length > 0,
+    firstTrash: ind == project.chapters.length + project.reference.length,
+    lastTrash: ind == project.chapters.length + project.reference.length + project.trash.length - 1 && project.trash.length > 0,
+    lastAll: ind == project.chapters.length + project.reference.length + project.trash.length - 1
+  }
+}
+
 function moveChapUp(chapInd){
   var indexIs = chapIndexIs(chapInd);
   if(indexIs.chapter && !indexIs.firstChapter){
@@ -732,22 +754,6 @@ function verifyToDelete(ind){
   }
 }
 
-function chapIndexIs(ind){
-  return {
-    //Second part of chapter "or" statement is to catch when the very first chapter is added to a new project
-    chapter: ind < project.chapters.length || (project.chapters.length == 0 && project.reference.length == 0 && project.trash.length == 0), 
-    firstChapter: ind == 0,
-    lastChapter: ind == project.chapters.length - 1,
-    reference: ind > project.chapters.length - 1 && ind < project.chapters.length + project.reference.length && project.reference.length > 0,
-    firstReference: ind == project.chapters.length && project.reference.length > 0,
-    lastReference: ind == project.chapters.length + project.reference.length - 1 && project.reference.length > 0,
-    trash: ind > project.chapters.length + project.reference.length - 1 && project.trash.length > 0,
-    firstTrash: ind == project.chapters.length + project.reference.length,
-    lastTrash: ind == project.chapters.length + project.reference.length + project.trash.length - 1 && project.trash.length > 0,
-    lastAll: ind == project.chapters.length + project.reference.length + project.trash.length - 1
-  }
-}
-
 function restoreFromTrash(ind){
   if(chapIndexIs(ind).trash){
     var fromTrash = project.trash.splice(ind - project.chapters.length - project.reference.length, 1)[0];
@@ -850,10 +856,10 @@ function openHelpDoc(){
 
 function exitApp(){
   if(userSettings.autoBackup == true && project.filename != ''){
-    alertBackupResult('Loading backup tools...');
+    alertBackupResult('Loading backup tools...', true);
     const { backupProject } = require('./components/controllers/backup-project');
     backupProject(project, userSettings, sysDirectories.docs, function(update){
-      alertBackupResult(update);
+      alertBackupResult(update, true);
       if(update == 'Backup finished.')
         ipcRenderer.send('exit-app-confirmed');
     });
@@ -862,7 +868,7 @@ function exitApp(){
   }
 }
 
-function alertBackupResult(msg){
+function alertBackupResult(msg, allowExitWithoutBackup = false){
   var backupAlert = document.getElementById('backup-alert');
   var backupAlertText = document.getElementById('backup-alert-text');
 
@@ -879,8 +885,29 @@ function alertBackupResult(msg){
 
   backupAlertText.innerText = msg;
 
+  setExitWithoutBackupButton(backupAlert, allowExitWithoutBackup);
+
   if(msg == 'Backup finished.')
     backupAlert.remove();
+}
+
+//This same alert reports backups started from the menu, where the app is not on its way out and a
+//button that quits it, skipping the usual check for unsaved work, has no business being. So it is
+//only added when the backup is the one running on exit.
+function setExitWithoutBackupButton(backupAlert, show){
+  var exitBtn = document.getElementById('backup-alert-exit');
+
+  if(show && exitBtn == null){
+    exitBtn = document.createElement('button');
+    exitBtn.id = 'backup-alert-exit';
+    exitBtn.innerText = 'Exit Without Backup';
+    exitBtn.onclick = function(e){
+      ipcRenderer.send('exit-app-confirmed');
+    }
+    backupAlert.appendChild(exitBtn);
+  }
+  else if(!show && exitBtn != null)
+    exitBtn.remove();
 }
 
 function addImportedChapter(chapDelta, title){
@@ -898,6 +925,52 @@ function addImportedChapter(chapDelta, title){
   
   updateFileList();
   displayChapterByIndex(project.activeChapterIndex + 1);
+}
+
+function toggleChapterNotes(){
+  userSettings.displayChapNotes = !userSettings.displayChapNotes;
+  userSettings.save();
+  refreshNotesDisplay();
+}
+
+function goPageDown(quillObj){
+  var selectedRange = quillObj.getSelection();
+
+  if(selectedRange){
+    var startingScrolltop = 0 + quillObj.root.scrollTop;
+    var destinationY = quillObj.root.clientHeight;
+    var textIndex = selectedRange.index + 1;
+
+    var found = false;
+    
+    while(!found){
+      var bounds = quillObj.selection.getBounds(textIndex, 1);
+
+      if(bounds.y >= destinationY){
+        found = true;
+        quillObj.setSelection(textIndex);
+        quillObj.root.scrollTop = startingScrolltop + bounds.y - bounds.height;
+      }
+      else if(bounds == undefined || bounds.y == undefined){
+        found = true;
+        quillObj.setSelection(textIndex - 1);
+      }
+      textIndex += 1;
+    }
+  }
+}
+
+function editorHasFocus(){
+  return editorIsVisible() && document.querySelector(".ql-editor") === document.activeElement;
+}
+
+function editorIsVisible(){
+  return document.getElementById('writing-field').classList.contains('visible');
+}
+
+function stopDefaultPropagation(keyEvent){
+  keyEvent.preventDefault();
+  keyEvent.stopPropagation();
 }
 
 ///////////////////////////////////////////////////////////////////
@@ -1006,8 +1079,21 @@ function addBindingsToQuill(q){
     }
   });
 
-};
+  q.keyboard.addBinding({
+    key: 'b',
+    shortKey: true,
+    shiftKey: true,
+    handler: function(range, context){
+      if(q.getFormat().list == 'bullet')
+        q.format('list', 'ordered', 'user');
+      else if(q.getFormat().list == 'ordered')
+        q.format('list', null, 'user');
+      else
+        q.format('list', 'bullet', 'user');
+    }
+  })
 
+};
 
 document.addEventListener ("keydown", function (e) {
     if((e.ctrlKey || e.metaKey) && e.key === "ArrowLeft"){
@@ -1071,12 +1157,6 @@ document.addEventListener ("keydown", function (e) {
     }
 } );
 
-function toggleChapterNotes(){
-  userSettings.displayChapNotes = !userSettings.displayChapNotes;
-  userSettings.save();
-  refreshNotesDisplay();
-}
-
 document.getElementById('editor-container').addEventListener('keydown', editorControlEvents);
 document.getElementById('chapter-list-sidebar').addEventListener('keydown', editorControlEvents);
 document.getElementById('notes-editor').addEventListener('keydown', editorControlEvents);
@@ -1120,38 +1200,6 @@ function editorControlEvents(e){
     else
       goPageDown(editorQuill);
   }
-}
-
-function goPageDown(quillObj){
-  var selectedRange = quillObj.getSelection();
-
-  if(selectedRange){
-    var startingScrolltop = 0 + quillObj.root.scrollTop;
-    var destinationY = quillObj.root.clientHeight;
-    var textIndex = selectedRange.index + 1;
-
-    var found = false;
-    
-    while(!found){
-      var bounds = quillObj.selection.getBounds(textIndex, 1);
-
-      if(bounds.y >= destinationY){
-        found = true;
-        quillObj.setSelection(textIndex);
-        quillObj.root.scrollTop = startingScrolltop + bounds.y - bounds.height;
-      }
-      else if(bounds == undefined || bounds.y == undefined){
-        found = true;
-        quillObj.setSelection(textIndex - 1);
-      }
-      textIndex += 1;
-    }
-  }
-}
-
-function stopDefaultPropagation(keyEvent){
-  keyEvent.preventDefault();
-  keyEvent.stopPropagation();
 }
 
 ipcRenderer.on("save-clicked", function(e){
@@ -1319,12 +1367,12 @@ ipcRenderer.on('renumber-chapters-clicked', function(e){
 
 ipcRenderer.on('send-via-email-clicked', function(e){
   const showEmailOptions = require('./components/views/email-doc_display');
-  showEmailOptions(project, userSettings, editorQuill);
+  showEmailOptions(project, userSettings, credentialStore, editorQuill);
 });
 
 ipcRenderer.on('view-error-log-clicked', function(e){
   const showErrorLog = require('./components/views/error-log_display');
-  showErrorLog(userSettings);
+  showErrorLog(userSettings, credentialStore);
 });
 
 ipcRenderer.on('file-manager-clicked', function(e){
@@ -1370,13 +1418,14 @@ ipcRenderer.on('file-opened-from-outside-warewoolf', function(event, fPath){
 
 });
 
-//**** utils ***/
+ipcRenderer.on('indent-all-clicked', function(e){
+  const { indentAllParasInAllChaps } = require('./components/controllers/indent-all');
+  indentAllParasInAllChaps(project);
+  displayChapterByIndex(project.activeChapterIndex);
+});
 
-
-function editorHasFocus(){
-  return editorIsVisible() && document.querySelector(".ql-editor") === document.activeElement;
-}
-
-function editorIsVisible(){
-  return document.getElementById('writing-field').classList.contains('visible');
-}
+ipcRenderer.on('center-all-heads-clicked', function(e){
+  const { centerAllHeadingsInAllChaps } = require('./components/controllers/center-all-heads');
+  centerAllHeadingsInAllChaps(project);
+  displayChapterByIndex(project.activeChapterIndex);
+});

@@ -15,7 +15,7 @@ function showProperties(project, userSettings){
 
     var titleLabel = document.createElement("label");
     titleLabel.innerText = "Title: ";
-    titleLabel.for = "title-input";
+    titleLabel.htmlFor = "title-input";
 
     var titleInput = document.createElement("input");
     titleInput.type = "text";
@@ -26,7 +26,7 @@ function showProperties(project, userSettings){
 
     var authorLabel = document.createElement("label");
     authorLabel.innerText = "Author: ";
-    authorLabel.for = "author-input";
+    authorLabel.htmlFor = "author-input";
 
     var authorInput = document.createElement("input");
     authorInput.type = "text";

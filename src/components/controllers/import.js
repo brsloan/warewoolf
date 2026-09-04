@@ -39,10 +39,11 @@ function importFilesAsync(filepaths, options, addImportedChapter, cback, importe
   var path = filepaths.shift();
 
   if(options.fileType.id == 'docxSelect'){
+    var filename = getFilenameFromFilepath(path);
     importDocx(path, options.docxOptions.splitChapters, function(delts){
         recurse(delts.map(function(delt, i, arr){
           return {
-            title: generateChapTitleFromFirstLine(delt),
+            title: options.docxOptions.chapLabels == 'filename' ? filename : generateChapTitleFromFirstLine(delt),
             delta: delt
           };
         }));
@@ -54,7 +55,7 @@ function importFilesAsync(filepaths, options, addImportedChapter, cback, importe
     });
   }
   else if(options.fileType.id == 'mdfcSelect')
-    importMDF(path, function(delts){
+    importMDF(path, options.mdfcOptions, function(delts){
       recurse(delts);
     });
 
@@ -86,7 +87,7 @@ function importPlainText(filepath, options, callback){
         var chapTxts = inText.split(new RegExp(options.splitChapters.marker + '\r?\n'));
         chapTxts.forEach(function(txt, i){
           packagedDeltas.push({
-            title: generateTitleFromFirstLineText(txt),
+            title: options.chapLabels == 'filename' ? filename : generateTitleFromFirstLineText(txt),
             delta: {
               ops:[{ insert: txt }]
             }
@@ -95,7 +96,7 @@ function importPlainText(filepath, options, callback){
       }
       else {
         packagedDeltas.push({
-          title: generateTitleFromFirstLineText(inText),
+          title: options.chapLabels == 'filename' ? filename : generateTitleFromFirstLineText(inText),
           delta: {
             ops: [{ insert: inText }]
           }
@@ -124,14 +125,14 @@ function generateTitleFromFirstLineText(str){
   return str.split(/\r?\n/)[0].slice(0,titleCharacterLimit).replaceAll(/<|>/g,'');
 }
 
-function importMDF(filepath, callback){
+function importMDF(filepath, options, callback){
   try{
     fs.readFile(filepath, 'utf8', function(err, data){
       var delta = parseMDF(data);
       var filename = getFilenameFromFilepath(filepath);
 
       callback([{
-        title: filename,
+        title: options.chapLabels == 'filename' ? filename : generateChapTitleFromFirstLine(delta), 
         delta: delta
       }]);
     });

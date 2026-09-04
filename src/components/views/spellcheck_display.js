@@ -51,7 +51,7 @@ function showSpellcheck(editorQuill, project, sysDirectories, displayChapterByIn
 
     var customLabel = document.createElement("label");
     customLabel.innerText = "Custom Replacement: ";
-    customLabel.for = "custom-input";
+    customLabel.htmlFor = "custom-input";
     popup.appendChild(customLabel);
 
     var customInput = document.createElement("input");
@@ -109,7 +109,9 @@ function showSpellcheck(editorQuill, project, sysDirectories, displayChapterByIn
         selectedReplacement = customInput;
 
       if(invalidWord && selectedReplacement != null){
-        replaceAllInAllChapters(project, invalidWord.word, selectedReplacement.value, true);
+        const caseSensitive = true;
+        const wholeWordOnly = true;
+        replaceAllInAllChapters(project, invalidWord.word, selectedReplacement.value, caseSensitive, wholeWordOnly);
         displayChapterByIndex(project.activeChapterIndex);
         ignoreBtn.click();
       }

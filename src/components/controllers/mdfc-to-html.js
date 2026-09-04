@@ -1,29 +1,61 @@
 function convertMdfcToHtml(str){
-    let header1 = /^# (.+)/gm;
-    let header2 = /^## (.+)/gm;
-    let header3 = /^### (.+)/gm;
-    let header4 = /^#### (.+)/gm;
-    let centeredHeader1 = /^\[>c] # (.+)/gm
-    let centeredHeader2 = /^\[>c] ## (.+)/gm
-    let centeredHeader3 = /^\[>c] ### (.+)/gm
-    let centeredHeader4 = /^\[>c] #### (.+)/gm
-    let rightHeader1 = /^\[>r] # (.+)/gm
-    let rightHeader2 = /^\[>r] ## (.+)/gm
-    let rightHeader3 = /^\[>r] ### (.+)/gm
-    let rightHeader4 = /^\[>r] #### (.+)/gm
+    str = convertWindowsToLinuxLineEndings(str);
+
+    //These use (.*) rather than (.+) to match markdownFic.js: a blank line that carries a heading
+    //or alignment attribute is written out as a bare marker with no text after it, and it still
+    //has to be recognised here or the marker itself leaks into the exported HTML.
+    let header1 = /^# (.*)/gm;
+    let header2 = /^## (.*)/gm;
+    let header3 = /^### (.*)/gm;
+    let header4 = /^#### (.*)/gm;
+    let centeredHeader1 = /^\[>c] # (.*)/gm
+    let centeredHeader2 = /^\[>c] ## (.*)/gm
+    let centeredHeader3 = /^\[>c] ### (.*)/gm
+    let centeredHeader4 = /^\[>c] #### (.*)/gm
+    let rightHeader1 = /^\[>r] # (.*)/gm
+    let rightHeader2 = /^\[>r] ## (.*)/gm
+    let rightHeader3 = /^\[>r] ### (.*)/gm
+    let rightHeader4 = /^\[>r] #### (.*)/gm
   
+    let unorderedListHtml = /((?:(?:<li|<ul) class="ul.*(?:<\/li>|<\/ul>)\n)+)/g;
+    let unorderedListHtmlLvl2 = /((?:(?:<li|<ul) class="ul (?:ul-two|ul-three).*(?:<\/li>|<\/ul>)\n)+)/g;
+    let unorderedListHtmlLvl3 = /((?:(?:<li|<ul) class="ul ul-three".*(?:<\/li>|<\/ul>)\n)+)/g;
+    let orderedListHtml = /((?:(?:<li|<ol) class="ol.*(?:<\/li>|<\/ol>)\n)+)/g
+    let orderedListHtmlLvl2 = /((?:(?:<li|<ol) class="ol (?:ol-two|ol-three).*(?:<\/li>|<\/ol>)\n)+)/g;
+    let orderedListHtmlLvl3 = /((?:(?:<li|<ol) class="ol ol-three".*(?:<\/li>|<\/ol>)\n)+)/g;
+    //[^"]* rather than .* so the match stops at the closing quote of the class attribute. A greedy
+    //.* runs on to the last quote on the line, which swallows the item's text whenever it contains
+    //dialogue.
+    let tempClasses = / class="(?:ol|ul)[^"]*"/g;
+
+    let listUnordered = /^(?:-|\*|\+) (.*)/gm; 
+    let listUnorderedTwo = /^(\t)(?:-|\*|\+) (.*)/gm;
+    let listUnorderedThreePlus = /^(\t){2,}(?:-|\*|\+) (.*)/gm;
+    let listOrdered = /^((?:\d+|[a-z])\.) (.*)/gm;
+    let listOrderedTwo = /^(\t)((?:\d+|[a-z])\.) (.*)/gm;
+    let listOrderedThreePlus = /^(\t){2,}((?:\d+|[a-z])\.) (.*)/gm;
     let blockquote = /^>+ {0,1}(.+)/gm;
-    let alignLeft = /^\[>l] (.+)/gm;
-    let alignRight = /^\[>r] (.+)/gm;
-    let alignCenter = /^\[>c] (.+)/gm;
-    let alignJustified = /^\[>j] (.+)/gm;
+    let alignLeft = /^\[>l] (.*)/gm;
+    let alignRight = /^\[>r] (.*)/gm;
+    let alignCenter = /^\[>c] (.*)/gm;
+    let alignJustified = /^\[>j] (.*)/gm;
     let normal = /^(?!<)(.+)/gm;
     let blankLines = /(?:\r?\n){2,}/gm;
   
     str = convertFootnotes(str);
-    //Must do references AFTER footnotes themselves to aviod replacing footnote markers
+    //Must do references AFTER footnotes themselves to avoid replacing footnote markers
     str = convertFootnoteReferences(str);
   
+
+    //Assign class to assist in discriminating between ordered and UL list items in whole list detection
+    str = str.replace(listUnorderedThreePlus, '<li class="ul ul-three">$2</li>');
+    str = str.replace(listUnorderedTwo, '<li class="ul ul-two">$2</li>');
+    str = str.replace(listUnordered, '<li class="ul">$1</li>');
+    str = str.replace(listOrderedThreePlus, '<li class="ol ol-three">$3</li>');
+    str = str.replace(listOrderedTwo, '<li class="ol ol-two">$3</li>');
+    str = str.replace(listOrdered, '<li class="ol">$2</li>');
+    
+
     str = str.replace(centeredHeader1, '<h1 class="center">$1</h1>');
     str = str.replace(centeredHeader2, '<h2 class="center">$1</h2>');
     str = str.replace(centeredHeader3, '<h3 class="center">$1</h3>');
@@ -42,7 +74,19 @@ function convertMdfcToHtml(str){
     str = str.replace(alignJustified, '<p class="justified">$1</p>');
     str = str.replace(blockquote, '<blockquote>$1</blockquote>');
     str = str.replace(normal, '<p>$1</p>');
-    str = str.replace(blankLines, '<br/>');
+    str = str.replace(blankLines, '\n<br/>\n');
+
+    //Now add outer list tags for entire lists
+    str = str.replace(unorderedListHtml, '<ul>$1</ul>\n');
+    str = str.replace(orderedListHtml, '<ol>$1</ol>\n');
+    str = str.replace(unorderedListHtmlLvl2, '<ul>$1</ul>\n');
+    str = str.replace(unorderedListHtmlLvl3, '<ul>$1</ul>\n');
+    str = str.replace(orderedListHtmlLvl2, '<ol>$1</ol>\n');
+    str = str.replace(orderedListHtmlLvl3, '<ol>$1</ol>\n');
+
+    //Clean up temp classes used for grouping lists
+    str = str.replace(tempClasses, '');
+
   
     let bold = /(?<!\\|\\\*\*)\*\*([^\*\*]+)\*\*/g;
     let italic = /(?<!\\|\\\*)\*([^\*]+)\*/g;
@@ -54,7 +98,9 @@ function convertMdfcToHtml(str){
     str = str.replace(underline, '<u>$1</u>');
     str = str.replace(strike, '<del>$1</del>');
   
-    let escapedMarkers = /\\(\*\*|\*|~~|__|#|\[>|>|\[\^)/g;
+    //List markers are in this set to match markdownFic.js. Without them a line of prose that
+    //happens to open with "- " or "1984. " keeps the backslash it was escaped with.
+    let escapedMarkers = /\\(\*\*|\*|~~|__|#|\[>|>|\[\^|-|\+|(?:\d+|[a-z])\. )/g;
     str = str.replace(escapedMarkers, '$1');
   
     return str;
@@ -71,13 +117,17 @@ function convertFootnotes(text){
 
     var allMarkers = text.match(footnoteMarker);
 
-    if(checkIfDuplicateExists(allMarkers)){
-        text = consolidateMultiParaFootnotes(text, allMarkers);
+    //Every footnote needs its div, not just the ones written across several paragraphs. Without it
+    //there is no #fnote_N for the reference in the body to link to, and the definition line falls
+    //through to convertFootnoteReferences, which turns it into a second element carrying the same
+    //id as the reference itself.
+    if(allMarkers && allMarkers.length > 0){
+        text = consolidateFootnotes(text, allMarkers);
     }
     return text;
 }
 
-function consolidateMultiParaFootnotes(text, allMarkers){
+function consolidateFootnotes(text, allMarkers){
     var uniqueMarkers = [...new Set(allMarkers)];
 
     uniqueMarkers.forEach(function(val,i,arr){
@@ -176,15 +226,15 @@ function convertMdfcToHtmlPage(text, title, author = null, insertTitle = false){
       "</html>";
   }
 
-function checkIfDuplicateExists(arr) {
-    if(arr && arr.length > 0)
-        return new Set(arr).size !== arr.length
-}
-
 function escapeRegExp(string) {
   const specialCharacters = /[.*+?^${}()|[\]\\]/g; 
   return string.replace(specialCharacters, '\\$&');
 }
+
+function convertWindowsToLinuxLineEndings(text) {
+    // Replace all occurrences of '\r\n' with '\n'
+    return text.replace(/\r\n/g, '\n');
+  }
 
 module.exports = {
     convertMdfcToHtml,
