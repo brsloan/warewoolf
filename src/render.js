@@ -3,6 +3,8 @@ const fs = require('fs');
 const Quill = require('quill');
 const sysDirectories = ipcRenderer.sendSync('get-directories');
 const getUserSettings = require('./components/models/user-settings');
+const getCredentialStore = require('./components/models/credential-store');
+const getSecureStorage = require('./components/controllers/secure-storage');
 const newChapter = require('./components/models/chapter');
 const newProject = require('./components/models/project');
 const autosaver = require('./components/controllers/autosave');
@@ -37,6 +39,10 @@ var notesQuill = new Quill('#notes-editor', {
 var project = newProject();
 
 var userSettings = getUserSettings(sysDirectories.userData + "/user-settings.json").load();
+var credentialStore = getCredentialStore(sysDirectories.userData, getSecureStorage());
+//Lift any password saved by an older version out of user-settings.json, where it sat under a
+//key that shipped in the source, and re-seal it with whatever this machine can actually offer.
+credentialStore.migrateLegacyPassword(userSettings);
 
 initialize();
 
@@ -1361,12 +1367,12 @@ ipcRenderer.on('renumber-chapters-clicked', function(e){
 
 ipcRenderer.on('send-via-email-clicked', function(e){
   const showEmailOptions = require('./components/views/email-doc_display');
-  showEmailOptions(project, userSettings, editorQuill);
+  showEmailOptions(project, userSettings, credentialStore, editorQuill);
 });
 
 ipcRenderer.on('view-error-log-clicked', function(e){
   const showErrorLog = require('./components/views/error-log_display');
-  showErrorLog(userSettings);
+  showErrorLog(userSettings, credentialStore);
 });
 
 ipcRenderer.on('file-manager-clicked', function(e){
