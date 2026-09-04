@@ -1,4 +1,4 @@
-const { parseDelta } = require('./quill-utils');
+const { parseDelta, getOrderedListNumbers, getListMarker } = require('./quill-utils');
 
 function parseMDF(str){
   let header1 = /^# (.*)/gm;
@@ -107,51 +107,13 @@ function convertDeltaToMDF(delt){
   var mdf = '';
 
   var parsedQuill = parseDelta(delt);
-
-  //This function was much simpler before I decided to support nested, numbered lists...
-  //The numbering has to restart at each level within the list, but remain continuous across breaks in level.
-  var listItemNum = 0;
-  var listItemNumLvl2 = 0;
-  var listItemNumLvl3 = 0;
-  var listNumToSubmit = 0; //To be assigned the value of one of the above depending on which needs used for each list item
+  var listNumbers = getOrderedListNumbers(parsedQuill.paragraphs);
 
   parsedQuill.paragraphs.forEach((para, i) => {
-    
-    if(para.textRuns.length > 0){
-      var lastParaWasNumList = false;
-      if(i > 0){
-        lastParaWasNumList = parsedQuill.paragraphs[i - 1].attributes && parsedQuill.paragraphs[i - 1].attributes.list && parsedQuill.paragraphs[i - 1].attributes.list == 'ordered';
-      }
-      if(para.attributes && para.attributes.list && para.attributes.list == 'ordered'){
-        if(lastParaWasNumList == false){ //Start of new numbered list, so restart counters
-          listItemNum = 0;
-          listItemNumLvl2 = 0;
-          listItemNumLvl3 = 0;
-        }
-        
-        if(!para.attributes.indent || para.attributes.indent < 1){
-          listItemNum++;
-          listNumToSubmit = listItemNum;
-        }
-        else if(para.attributes.indent == 1){
-          listItemNumLvl2++;
-          listNumToSubmit = listItemNumLvl2;
-        }
-        else if(para.attributes.indent > 1){
-          listItemNumLvl3++;
-          listNumToSubmit = listItemNumLvl3;
-        }
-          
-      }
-      else{
-        listItemNum = 0;
-        listItemNumLvl2 = 0;
-        listItemNumLvl3 = 0;
-      }
-  
-      mdf += getLineMarker(para.attributes, listNumToSubmit);
-    }
-      
+
+    if(para.textRuns.length > 0)
+      mdf += getLineMarker(para.attributes, listNumbers[i]);
+
     para.textRuns.forEach((run, i) => {
       run.text = escapeAnyMarkers(run.text, i);
       mdf += getMarkedTextFromRun(run);
@@ -202,20 +164,10 @@ function getLineMarker(attr, listItemNum = 0){
     }
     if(attr.blockquote)
       marker = '> ';
-    if(attr.list && attr.list == 'bullet'){
-      let tabs = '';
-      if(attr.indent && attr.indent > 0){
-        tabs = attr.indent == 1 ? '\t' : '\t\t';
-      }
-      marker = tabs + '* ';
-    }
-    else if(attr.list && attr.list  == 'ordered'){
-      let tabs = '';
-      if(attr.indent && attr.indent > 0){
-        tabs = attr.indent == 1 ? '\t' : '\t\t';
-      }
-      marker = tabs + listItemNum + '. ';
-    }
+
+    var listMarker = getListMarker(attr, listItemNum);
+    if(listMarker)
+      marker = listMarker;
   }
 
   return marker;

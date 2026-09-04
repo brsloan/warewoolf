@@ -850,10 +850,10 @@ function openHelpDoc(){
 
 function exitApp(){
   if(userSettings.autoBackup == true && project.filename != ''){
-    alertBackupResult('Loading backup tools...');
+    alertBackupResult('Loading backup tools...', true);
     const { backupProject } = require('./components/controllers/backup-project');
     backupProject(project, userSettings, sysDirectories.docs, function(update){
-      alertBackupResult(update);
+      alertBackupResult(update, true);
       if(update == 'Backup finished.')
         ipcRenderer.send('exit-app-confirmed');
     });
@@ -862,7 +862,7 @@ function exitApp(){
   }
 }
 
-function alertBackupResult(msg){
+function alertBackupResult(msg, allowExitWithoutBackup = false){
   var backupAlert = document.getElementById('backup-alert');
   var backupAlertText = document.getElementById('backup-alert-text');
 
@@ -875,18 +875,33 @@ function alertBackupResult(msg){
     backupAlertText = document.createElement('p');
     backupAlertText.id = 'backup-alert-text';
     backupAlert.appendChild(backupAlertText);
-    var exitBtn = document.createElement('button');
+  }
+
+  backupAlertText.innerText = msg;
+
+  setExitWithoutBackupButton(backupAlert, allowExitWithoutBackup);
+
+  if(msg == 'Backup finished.')
+    backupAlert.remove();
+}
+
+//This same alert reports backups started from the menu, where the app is not on its way out and a
+//button that quits it, skipping the usual check for unsaved work, has no business being. So it is
+//only added when the backup is the one running on exit.
+function setExitWithoutBackupButton(backupAlert, show){
+  var exitBtn = document.getElementById('backup-alert-exit');
+
+  if(show && exitBtn == null){
+    exitBtn = document.createElement('button');
+    exitBtn.id = 'backup-alert-exit';
     exitBtn.innerText = 'Exit Without Backup';
     exitBtn.onclick = function(e){
       ipcRenderer.send('exit-app-confirmed');
     }
     backupAlert.appendChild(exitBtn);
   }
-
-  backupAlertText.innerText = msg;
-
-  if(msg == 'Backup finished.')
-    backupAlert.remove();
+  else if(!show && exitBtn != null)
+    exitBtn.remove();
 }
 
 function addImportedChapter(chapDelta, title){

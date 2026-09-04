@@ -134,6 +134,11 @@ function replaceAllInChapter(oldStr, newStr, caseSensitive, chap, wholeWordOnly 
 }
 
 function replaceAllInDelta(oldStr, newStr, caseSensitive, delt, wholeWordOnly = false){
+    //An empty search term matches at every position without ever advancing, so the loop below would
+    //never end. The Find button guards against this already, Replace All did not.
+    if(!oldStr)
+        return { changed: 0, delta: delt };
+
     var tempQuill = getTempQuill();
     var counter = 0;
 

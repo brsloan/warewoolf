@@ -34,9 +34,11 @@ function showFindReplace(project, editorQuill, displayChapterByIndex){
 
     var wholeWordOnly = document.createElement("input");
     wholeWordOnly.type = "checkbox";
+    wholeWordOnly.id = "whole-word-check";
     findForm.appendChild(wholeWordOnly);
 
     var wholeWordLabel = document.createElement("label");
+    wholeWordLabel.htmlFor = "whole-word-check";
     wholeWordLabel.innerText = "Whole Word Only";
     findForm.appendChild(wholeWordLabel);
 

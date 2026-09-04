@@ -89,55 +89,80 @@ function flattenInserts(ops){
   return flattened;
 }
 
+//Numbered lists restart at one for each new list and count independently at each nesting level, so
+//an item's number depends on every paragraph before it rather than on the paragraph alone. Walking
+//the paragraphs once up front hands each one the number to print, which leaves the callers with
+//nothing to do but render it. Paragraphs that are not numbered list items get a 0 they ignore.
+function getOrderedListNumbers(paragraphs){
+  var numbers = [];
+  var counters = [0, 0, 0];
+
+  paragraphs.forEach(function(para, i){
+    numbers.push(0);
+
+    if(para.textRuns.length == 0)
+      return;
+
+    if(!isOrderedListItem(para)){
+      counters = [0, 0, 0];
+      return;
+    }
+
+    //A new list begins wherever the paragraph before it was not a numbered list item.
+    if(i == 0 || !isOrderedListItem(paragraphs[i - 1]))
+      counters = [0, 0, 0];
+
+    var level = getListLevel(para.attributes);
+    counters[level]++;
+    numbers[i] = counters[level];
+  });
+
+  return numbers;
+}
+
+function isOrderedListItem(para){
+  return Boolean(para.attributes && para.attributes.list && para.attributes.list == 'ordered');
+}
+
+//Quill tracks nesting as an indent count with no ceiling, but the export formats only carry three
+//levels, so anything deeper is folded into the last one.
+function getListLevel(attr){
+  if(!attr.indent || attr.indent < 1)
+    return 0;
+
+  return attr.indent == 1 ? 1 : 2;
+}
+
+//The marker a list item is written with is the same in every text format WareWoolf exports, so both
+//the .mdfc writer and the plain text writer take it from here. Returns '' for anything that is not
+//a list item, which is the caller's cue to keep the marker it already worked out.
+function getListMarker(attr, listItemNum = 0){
+  if(!attr || !attr.list)
+    return '';
+
+  var tabs = '';
+  if(attr.indent && attr.indent > 0)
+    tabs = attr.indent == 1 ? '\t' : '\t\t';
+
+  if(attr.list == 'bullet')
+    return tabs + '* ';
+  if(attr.list == 'ordered')
+    return tabs + listItemNum + '. ';
+
+  return '';
+}
+
 function convertToPlainText(delt){
   var plaintext = '';
 
   var parsedQuill = parseDelta(delt);
-
-  //This function was much simpler before I decided to support nested, numbered lists...
-  //The numbering has to restart at each level within the list, but remain continuous across breaks in level.
-  var listItemNum = 0;
-  var listItemNumLvl2 = 0;
-  var listItemNumLvl3 = 0;
-  var listNumToSubmit = 0; //To be assigned the value of one of the above depending on which needs used for each list item
+  var listNumbers = getOrderedListNumbers(parsedQuill.paragraphs);
 
   parsedQuill.paragraphs.forEach((para, i) => {
-    
-    if(para.textRuns.length > 0){
-      var lastParaWasNumList = false;
-      if(i > 0){
-        lastParaWasNumList = parsedQuill.paragraphs[i - 1].attributes && parsedQuill.paragraphs[i - 1].attributes.list && parsedQuill.paragraphs[i - 1].attributes.list == 'ordered';
-      }
-      if(para.attributes && para.attributes.list && para.attributes.list == 'ordered'){
-        if(lastParaWasNumList == false){ //Start of new numbered list, so restart counters
-          listItemNum = 0;
-          listItemNumLvl2 = 0;
-          listItemNumLvl3 = 0;
-        }
-        
-        if(!para.attributes.indent || para.attributes.indent < 1){
-          listItemNum++;
-          listNumToSubmit = listItemNum;
-        }
-        else if(para.attributes.indent == 1){
-          listItemNumLvl2++;
-          listNumToSubmit = listItemNumLvl2;
-        }
-        else if(para.attributes.indent > 1){
-          listItemNumLvl3++;
-          listNumToSubmit = listItemNumLvl3;
-        }
-          
-      }
-      else{
-        listItemNum = 0;
-        listItemNumLvl2 = 0;
-        listItemNumLvl3 = 0;
-      }
-  
-      plaintext += getLineMarkerForPlaintextExport(para.attributes, listNumToSubmit);
-    }
-      
+
+    if(para.textRuns.length > 0)
+      plaintext += getLineMarkerForPlaintextExport(para.attributes, listNumbers[i]);
+
     para.textRuns.forEach((run, i) => {
       plaintext += run.text;
     });
@@ -154,20 +179,10 @@ function getLineMarkerForPlaintextExport(attr, listItemNum = 0){
   if(attr){
     if(attr.blockquote)
       marker = '\t';
-    if(attr.list && attr.list == 'bullet'){
-      let tabs = '';
-      if(attr.indent && attr.indent > 0){
-        tabs = attr.indent == 1 ? '\t' : '\t\t';
-      }
-      marker = tabs + '* ';
-    }
-    else if(attr.list && attr.list  == 'ordered'){
-      let tabs = '';
-      if(attr.indent && attr.indent > 0){
-        tabs = attr.indent == 1 ? '\t' : '\t\t';
-      }
-      marker = tabs + listItemNum + '. ';
-    }
+
+    var listMarker = getListMarker(attr, listItemNum);
+    if(listMarker)
+      marker = listMarker;
   }
 
   return marker;
@@ -178,5 +193,7 @@ module.exports = {
   splitDeltaAtIndices,
   generateChapTitleFromFirstLine,
   parseDelta,
-  convertToPlainText
+  convertToPlainText,
+  getOrderedListNumbers,
+  getListMarker
 }

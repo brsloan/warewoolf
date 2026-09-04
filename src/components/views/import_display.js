@@ -169,7 +169,7 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish){
   chapLabelSet.appendChild(chapLabelFilename);
 
   var chapLabelFilenameLabel = document.createElement('label');
-  chapLabelFilenameLabel.for = 'chapLabelFilename';
+  chapLabelFilenameLabel.htmlFor = 'chapLabelFilename';
   chapLabelFilenameLabel.innerText = 'Filename';
   chapLabelSet.appendChild(chapLabelFilenameLabel);
 
@@ -181,7 +181,7 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish){
   chapLabelSet.appendChild(chapLabelFirstLine);
 
   var chapLabelFirstLineLabel = document.createElement('label');
-  chapLabelFirstLineLabel.for = 'chapLabelFirstLine';
+  chapLabelFirstLineLabel.htmlFor = 'chapLabelFirstLine';
   chapLabelFirstLineLabel.innerText = 'First line';
   chapLabelSet.appendChild(chapLabelFirstLineLabel);
 
@@ -204,7 +204,6 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish){
   importForm.onsubmit = function(e){
     e.preventDefault();
     const selectedChapLabel = document.querySelector('input[name="chapLabelSelect"]:checked').value;
-    console.log('on submit: ' + selectedChapLabel);
     var importOptions = {
       fileType: filetypes[document.querySelector('input[name="typeSelect"]:checked').value]
     };

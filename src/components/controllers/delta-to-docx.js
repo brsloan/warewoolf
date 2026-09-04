@@ -80,6 +80,11 @@ function convertDeltaToDocx(delt, options, project, addressInfo){
   var xParagraphs = [];
   var fnoteMarkerRegx = /\[\^\d+]/gm;
 
+  //Word continues the previous list's sequence unless a numbered list is given its own numbering
+  //instance, so each new list takes the next one. This lives here rather than at module scope so a
+  //document's numbering depends only on that document and not on how many were exported before it.
+  var numberedList = { instance: -1 };
+
   nonfootnoteParas.forEach(function(para, paraIndex){
     var previousPara = paraIndex > 0 ? nonfootnoteParas[paraIndex - 1] : null;
     var xRuns = [];
@@ -124,7 +129,7 @@ function convertDeltaToDocx(delt, options, project, addressInfo){
       }
     });
 
-    var xParaAttributes = convertParaAttributes(para.attributes, previousPara ? previousPara.attributes : null);
+    var xParaAttributes = convertParaAttributes(para.attributes, previousPara ? previousPara.attributes : null, numberedList);
     xParaAttributes.children = xRuns;
 
     xParagraphs.push(new docx.Paragraph(xParaAttributes));
@@ -226,9 +231,7 @@ function convertDeltaToDocx(delt, options, project, addressInfo){
   return doc;
 }
 
-var numListInstance = 0;
-
-function convertParaAttributes(attr, previousAttr = null){
+function convertParaAttributes(attr, previousAttr = null, numberedList = { instance: -1 }){
   var xAttr = {};
   if(attr){
     if(attr.header){
@@ -247,15 +250,16 @@ function convertParaAttributes(attr, previousAttr = null){
         xAttr.bullet = {level: indentLevel - 1};
       }
       else{
+        //If start of new list, need to iterate to new list instance to restart numbering sequence
+        if(!previousAttr || !previousAttr.list || previousAttr.list == 'bullet')
+          numberedList.instance++;
+
+        //Every item carries the instance, not just the first. Leaving it off the rest of the list
+        //drops them back onto the default instance, which is the previous list's sequence.
         xAttr.numbering = {
           reference: 'numbered-list',
-          level: indentLevel - 1
-        }
-        //If start of new list, need to iterate to new list instance to restart numbering sequence
-        if(!previousAttr || !previousAttr.list || previousAttr.list == 'bullet'){
-          numListInstance++;
-          if(numListInstance > 1)
-            xAttr.numbering.instance = numListInstance;
+          level: indentLevel - 1,
+          instance: numberedList.instance
         }
       }
     }
