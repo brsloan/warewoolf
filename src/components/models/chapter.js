@@ -177,8 +177,9 @@ function newChapter(){
 
         if(chap.notes != null)
           fs.writeFileSync(filepathRoot + notesNamePrepend + chap.filename, convertDeltaToMDF(chap.notes), "utf8")
-        
+
         chap.notes = null;
+        chap.hasUnsavedChanges = false;
       }
       catch(err){
         logError(err);

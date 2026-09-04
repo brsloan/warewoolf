@@ -532,7 +532,7 @@ function createNewProject(){
       project = newProject();
       project.title = title;
       project.author = userSettings.defaultAuthor;
-      project.notesChap = newChapter();
+      project.initNotesChap();
       addNewChapter();
       displayProject();
     }
@@ -560,9 +560,10 @@ function addNewChapter(){
 function saveProject(){
   if(project.filename != ""){
     clearCurrentChapterIfUnchanged();
-    project.saveFile();
-    project.hasUnsavedChanges = false;
-    updateFileList();
+    if(project.saveFile()){
+      project.hasUnsavedChanges = false;
+      updateFileList();
+    }
   }
   else
     saveProjectAs();
@@ -582,12 +583,14 @@ function saveProjectAs() {
   const showFileDialog = require('./components/views/file-dialog_display');
   showFileDialog(options, function(filepath){
     if (filepath){
-      filepath = project.saveAs(filepath);
-      userSettings.lastProject = filepath;
-      userSettings.save();
-      project.hasUnsavedChanges = false;
-      updateFileList();
-      updateTitleBar();
+      var savedPath = project.saveAs(filepath);
+      if(savedPath){
+        userSettings.lastProject = savedPath;
+        userSettings.save();
+        project.hasUnsavedChanges = false;
+        updateFileList();
+        updateTitleBar();
+      }
     }
   });
 }

@@ -24,7 +24,8 @@ function newProject(){
         loadFile: loadFile,
         saveFile: saveFile,
         saveAs: saveAs,
-        testChapsDirectory: testChapsDirectory
+        testChapsDirectory: testChapsDirectory,
+        initNotesChap: initNotesChap
     };
 
     function getActiveChapter(){
@@ -70,16 +71,21 @@ function newProject(){
         });
         this.trash = trashChaps;
 
-        var notesChap = newChapter();
-        notesChap.filename = defaultProjectNotesName;
-        this.notesChap = notesChap;
+        this.initNotesChap();
 
         this.hasUnsavedChanges = false;
-        return testChapsDirectory();
+        return this.testChapsDirectory();
       }
       catch(err){
         logError(err);
       }
+    }
+
+    function initNotesChap(){
+      var notesChap = newChapter();
+      notesChap.filename = defaultProjectNotesName;
+      this.notesChap = notesChap;
+      return this.notesChap;
     }
 
     function saveFile(){
@@ -107,12 +113,14 @@ function newProject(){
 
           fs.writeFileSync(proj.directory + proj.filename, fileString, 'utf8');
 
+          return true;
         }
         else
-          throw("Cannot save without filepath. Use Save As.");
+          throw new Error("Cannot save without filepath. Use Save As.");
       }
       catch(err){
         logError(err);
+        return false;
       }
     }
 
@@ -138,7 +146,8 @@ function newProject(){
         var filepathParts = filepath.split('/');
         var newFilename = filepathParts.pop();
         var newDirectory = filepathParts.join('/').concat("/");
-        var newSubDir = newFilename.split(".")[0].concat("_chapters/");
+        var extIndex = newFilename.lastIndexOf(".");
+        var newSubDir = (extIndex > -1 ? newFilename.substring(0, extIndex) : newFilename).concat("_chapters/");
 
         //Create new directories
         if(!fs.existsSync(newDirectory))
@@ -146,33 +155,26 @@ function newProject(){
         if(!fs.existsSync(newDirectory + newSubDir))
           fs.mkdirSync(newDirectory + newSubDir);
 
-        //Copy any existing chapters over to new location and change name accordingly
-        proj.chapters.forEach(function(chap){
-          if(chap.filename != null){
-            var newChapFilename =  chap.filename.split("/").pop();
-            fs.copyFileSync(proj.directory + proj.chapsDirectory + chap.filename,
-              newDirectory + newSubDir + newChapFilename);
-            if(useSaveCopy == false)
-              chap.filename = newChapFilename;
-          }
-        });
-        proj.reference.forEach(function(chap){
-          if(chap.filename != null){
-            var newChapFilename =  chap.filename.split("/").pop();
-            fs.copyFileSync(proj.directory + proj.chapsDirectory + chap.filename,
-              newDirectory + newSubDir + newChapFilename);
-            if(useSaveCopy == false)
-              chap.filename = newChapFilename;
-          }
-        })
-        proj.trash.forEach(function(chap){
+        //Copy any existing chapters over to new location and change name accordingly.
+        //A chapter whose file is missing from disk (flagged by testChapsDirectory) shouldn't
+        //abort the whole Save As - log it and move on to the rest.
+        function copyChapterToNewLocation(chap){
           if(chap.filename != null){
             var newChapFilename = chap.filename.split("/").pop();
-            fs.copyFileSync(proj.directory + proj.chapsDirectory + chap.filename, newDirectory + newSubDir + newChapFilename);
-            if(useSaveCopy == false)
-              chap.filename = newChapFilename;
+            try{
+              fs.copyFileSync(proj.directory + proj.chapsDirectory + chap.filename,
+                newDirectory + newSubDir + newChapFilename);
+              if(useSaveCopy == false)
+                chap.filename = newChapFilename;
+            }
+            catch(copyErr){
+              logError(copyErr);
+            }
           }
-        });
+        }
+        proj.chapters.forEach(copyChapterToNewLocation);
+        proj.reference.forEach(copyChapterToNewLocation);
+        proj.trash.forEach(copyChapterToNewLocation);
 
         //Save old values for re-assignment with SaveCopy
         var oldFn = proj.filename;
@@ -229,14 +231,15 @@ function newProject(){
       }
       catch(err){
         logError(err);
+        return false;
       }
     }
 
     function testChapsDirectory(){
       var missingChaps = [];
-      for(let i=0;i<project.chapters.length;i++){
-        if(!fs.existsSync(project.directory + project.chapsDirectory + project.chapters[i].filename))
-          missingChaps.push(project.chapters[i]);
+      for(let i=0;i<this.chapters.length;i++){
+        if(!fs.existsSync(this.directory + this.chapsDirectory + this.chapters[i].filename))
+          missingChaps.push(this.chapters[i]);
       }
       return missingChaps;
     }
