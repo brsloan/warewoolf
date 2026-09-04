@@ -3,7 +3,7 @@ require('./quill-dom-setup');
 const test = require('node:test');
 const assert = require('node:assert');
 
-const { makeChapter, makeProject } = require('./helpers');
+const { makeChapter, makeUnloadableChapter, makeProject } = require('./helpers');
 const { convertFirstLineToTitle, convertFirstLinesToTitles } = require('../src/components/controllers/convert-first-lines');
 
 function plainFirstLine(){
@@ -80,4 +80,31 @@ test('convertFirstLinesToTitles leaves project.hasUnsavedChanges alone when noth
   convertFirstLinesToTitles(project);
 
   assert.notStrictEqual(project.hasUnsavedChanges, true);
+});
+
+//Regression: a chapter whose file failed to load has null contents, which getContentsOrFile()
+//passed straight through. Quill reads that as an empty document, which has no header/align at
+//index 0, so convertFirstLineToTitle reported it as "changed" and the chapter's real content
+//(still intact on disk) was overwritten with a lone blank titled line.
+test('convertFirstLinesToTitles leaves an unloadable chapter untouched', function(){
+  var unloadable = makeUnloadableChapter();
+  var project = makeProject([unloadable]);
+
+  convertFirstLinesToTitles(project);
+
+  assert.strictEqual(unloadable.contents, null);
+  assert.notStrictEqual(unloadable.hasUnsavedChanges, true);
+  assert.notStrictEqual(project.hasUnsavedChanges, true);
+});
+
+test('convertFirstLinesToTitles still converts other chapters when one chapter is unloadable', function(){
+  var unloadable = makeUnloadableChapter();
+  var plain = makeChapter(plainFirstLine());
+  var project = makeProject([unloadable, plain]);
+
+  convertFirstLinesToTitles(project);
+
+  assert.strictEqual(unloadable.contents, null);
+  assert.strictEqual(plain.hasUnsavedChanges, true);
+  assert.strictEqual(project.hasUnsavedChanges, true);
 });

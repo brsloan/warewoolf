@@ -3,7 +3,7 @@ require('./quill-dom-setup');
 const test = require('node:test');
 const assert = require('node:assert');
 
-const { makeChapter, makeProject } = require('./helpers');
+const { makeChapter, makeUnloadableChapter, makeProject } = require('./helpers');
 const { renumberChaps, insertChapTitle } = require('../src/components/controllers/renumber-chapters');
 
 function untitledFirstLine(){
@@ -64,6 +64,19 @@ test('insertChapTitle preserves the blank first line instead of swallowing it wh
 
   var text = chap.contents.ops.map(op => op.insert).join('');
   assert.strictEqual(text, 'New Title\n\n\nOld Chapter Title\nbody text\n');
+});
+
+//Regression: insertChapTitle has no "anything to change?" check - it always writes chap.contents
+//from whatever tempQuill built. A chapter whose file failed to load has null contents, which
+//Quill reads as an empty document, so this used to unconditionally overwrite the chapter's real
+//(still intact on disk) content with a lone title line.
+test('insertChapTitle leaves an unloadable chapter untouched', function(){
+  var chap = makeUnloadableChapter();
+  chap.title = 'Chapter One';
+
+  insertChapTitle(chap);
+
+  assert.strictEqual(chap.contents, null);
 });
 
 test('renumberChaps sets sequential titles from the template', function(){

@@ -9,6 +9,17 @@ function makeChapter(contents){
   return chap;
 }
 
+//Simulates a chapter whose file failed to load (missing file, corrupt encoding, bad JSON, etc.):
+//getFile() already catches and logs that case and returns undefined, so getContentsOrFile() does
+//too. filename must be set or getContentsOrFile() would just treat null contents as a blank chapter.
+function makeUnloadableChapter(){
+  var chap = newChapter();
+  chap.filename = 'unreadable.txt';
+  chap.contents = null;
+  chap.getFile = function(){ return undefined; };
+  return chap;
+}
+
 //The controllers under test only ever touch chapters, reference, activeChapterIndex and
 //hasUnsavedChanges, so the fake project needs nothing else.
 function makeProject(chapters, reference, activeChapterIndex){
@@ -46,4 +57,4 @@ function normalizeAttributes(attributes){
   return normalized;
 }
 
-module.exports = { normalizeDelta, makeChapter, makeProject };
+module.exports = { normalizeDelta, makeChapter, makeUnloadableChapter, makeProject };

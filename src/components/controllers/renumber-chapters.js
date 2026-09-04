@@ -26,6 +26,12 @@ function renumberChaps(project, startIndex, endIndex, withinChaps, useNumerals, 
 
 function insertChapTitle(chap){
   var delt = chap.getContentsOrFile();
+  //A chapter whose file failed to load reads back as null/undefined. Unlike the other converters,
+  //this function has no "anything to change?" check - it unconditionally writes back whatever it
+  //builds, so without this guard a failed load would silently replace the chapter's real content
+  //with a lone title line.
+  if(delt == null)
+    return;
 
   var tempQuill = getTempQuill();
   tempQuill.setContents(delt);

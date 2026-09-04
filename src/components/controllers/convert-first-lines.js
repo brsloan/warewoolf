@@ -4,7 +4,15 @@ function convertFirstLinesToTitles(project){
   var anyChanged = false;
 
   project.chapters.forEach(function(chap){
-    var result = convertFirstLineToTitle(chap.getContentsOrFile());
+    //A chapter whose file failed to load reads back as null/undefined, which Quill treats as an
+    //empty document - one with no header/align formatting at index 0. Without this check that
+    //looks indistinguishable from a real chapter needing conversion, and the chapter's actual
+    //content would be overwritten with a blank titled line below.
+    var contents = chap.getContentsOrFile();
+    if(contents == null)
+      return;
+
+    var result = convertFirstLineToTitle(contents);
 
     if(result.changed > 0){
       chap.contents = result.delta;
