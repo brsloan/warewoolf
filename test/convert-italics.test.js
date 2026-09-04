@@ -29,6 +29,26 @@ test('convertMarkedItalics handles multiple marked runs in one line', function()
   assert.strictEqual(result.changed, 2);
 });
 
+//Regression: an empty marker turned the delimiter regex into /([^]+)/, which matches the whole
+//text on every pass, so the delete/reinsert loop never terminated and hung the app.
+test('convertMarkedItalics makes no changes and does not hang when the marker is empty', function(){
+  var result = convertMarkedItalics(markedDelta('hello world.'), '');
+  assert.strictEqual(result.changed, 0);
+  assert.strictEqual(result.delta.ops[0].insert, 'hello world.\n');
+});
+
+//Regression: a multi-character marker was spliced into a [^...] character class, which excludes
+//each individual character of the marker rather than the marker sequence. Any of those characters
+//appearing inside the marked text (even as part of an unrelated word) broke the match entirely.
+test('convertMarkedItalics handles multi-character markers whose characters also appear inside the marked text', function(){
+  var result = convertMarkedItalics(markedDelta('ab banana ab end.'), 'ab');
+  assert.strictEqual(result.changed, 1);
+
+  var italicOp = result.delta.ops.find(op => op.attributes && op.attributes.italic);
+  assert.strictEqual(italicOp.insert, ' banana ');
+  assert.ok(!result.delta.ops.some(op => op.insert.includes('ab')));
+});
+
 test('convertMarkedItalicsForAllChapters only marks chapters that actually changed', function(){
   var hasMarker = makeChapter(markedDelta('a *word* here.'));
   var noMarker = makeChapter(markedDelta('nothing marked.'));

@@ -26,6 +26,7 @@ function showItalicsOptions(project, onFinish){
     italicsStrInput.type = "text";
     italicsStrInput.value = "*";
     italicsStrInput.id = "italics-str-input";
+    italicsStrInput.required = true;
     italicsForm.appendChild(italicsStrInput);
 
     italicsForm.appendChild(document.createElement('br'));

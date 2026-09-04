@@ -17,17 +17,18 @@ function convertMarkedItalicsForAllChapters(project, marker){
 }
 
 function convertMarkedItalics(delt, marker){
+  if(!marker)
+    return { changed: 0, delta: delt };
+
   marker = marker.replace(/[|\\{}()[\]^$+*?.]/g, '\\$&');
-  var italRegx = new RegExp(marker + '([^' + marker + ']+)' + marker);
+  var italRegx = new RegExp(marker + '((?:(?!' + marker + ')[\\s\\S])+)' + marker);
 
   var tempQuill = getTempQuill();
   tempQuill.setContents(delt);
   var text = tempQuill.getText();
 
   var foundIndex = 0;
-  var startingIndex = 0;
   var matchResult;
-  var markedText = "";
   var counter = 0;
 
   while(foundIndex > -1){
@@ -41,7 +42,6 @@ function convertMarkedItalics(delt, marker){
           tempQuill.deleteText(foundIndex, matchResult[0].length);
           tempQuill.insertText(foundIndex, matchResult[1]);
           tempQuill.formatText(matchResult.index, matchResult[1].length, 'italic', true);
-          startingIndex = foundIndex + matchResult[1].length;
           text = tempQuill.getText();
       }
   }
