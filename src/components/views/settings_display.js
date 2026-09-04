@@ -195,7 +195,7 @@ function showSettings(userSettings, autosaver, sysDirectories, callback){
     }
     userSettings.autoBackup = autoBackupCheck.checked;
     userSettings.backupsToKeep = backupLimitInput.value;
-    userSettings.autosaveIntMinutes = autosaveIntervalInput.value;
+    userSettings.autosaveIntMinutes = Number(autosaveIntervalInput.value) || 0;
     userSettings.darkMode = document.querySelector('input[type=radio][name=dark-mode]:checked').value;
     userSettings.defaultAuthor = defAuthIn.value;
     userSettings.addressInfo = addressIn.value;
