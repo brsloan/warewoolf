@@ -165,7 +165,6 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish){
   chapLabelFilename.name = 'chapLabelSelect';
   chapLabelFilename.value = 'filename';
   chapLabelFilename.id = 'chapLabelFilename';
-  chapLabelFilename.checked = true;
   chapLabelSet.appendChild(chapLabelFilename);
 
   var chapLabelFilenameLabel = document.createElement('label');
@@ -178,6 +177,7 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish){
   chapLabelFirstLine.name = 'chapLabelSelect';
   chapLabelFirstLine.value = 'firstLine';
   chapLabelFirstLine.id = 'chapLabelFirstLine';
+  chapLabelFirstLine.checked = true;
   chapLabelSet.appendChild(chapLabelFirstLine);
 
   var chapLabelFirstLineLabel = document.createElement('label');
