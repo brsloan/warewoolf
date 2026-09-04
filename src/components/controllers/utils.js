@@ -37,13 +37,12 @@ function removeElementsByClass(className){
   function convertFilepath(fpath){
     //Convert Windows filepaths to maintain linux/windows compatibility
     try{
-      var converted = fpath.replaceAll('\\', '/');
+      return fpath.replaceAll('\\', '/');
     }
     catch(err){
       logError(err);
+      return fpath;
     }
-  
-    return converted;
   }
   
 
@@ -92,12 +91,17 @@ function generateRow(elOne, elTwo){
 
   function sanitizeFilenameWithExt(str){
     try{
-      var parts = str.split('.');
-      var ext = parts.pop();
-      return sanitizeFilename(parts.join('')) + '.' + ext;
+      var dotIndex = str.lastIndexOf('.');
+      if(dotIndex === -1){
+        return sanitizeFilename(str);
+      }
+      var base = str.slice(0, dotIndex);
+      var ext = str.slice(dotIndex + 1);
+      return sanitizeFilename(base) + '.' + ext;
     }
     catch(err){
       logError(err);
+      return str;
     }
   }
 
@@ -107,7 +111,7 @@ function generateRow(elOne, elTwo){
       var illegalRe = /[\/\?<>\\:\*\|":]/g;
       var controlRe = /[\x00-\x1f\x80-\x9f]/g;
       var reservedRe = /^\.+$/;
-      var windowsReservedRe = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\..*)?$/i;
+      var windowsReservedRe = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/i;
 
       var sanitized = str.replace(illegalRe,'').replace(controlRe,'').replace(reservedRe,'').replace(windowsReservedRe, '');
 
@@ -118,6 +122,7 @@ function generateRow(elOne, elTwo){
     }
     catch(err){
       logError(err);
+      return str;
     }
   }
 
