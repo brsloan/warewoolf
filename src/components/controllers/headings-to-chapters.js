@@ -1,20 +1,23 @@
-const {addImportedChapter} = require('../controllers/utils');
 const { generateChapTitleFromFirstLine } = require('./quill-utils');
 const { hideWorking } = require('../views/working_display');
 
 function breakHeadingsIntoChapters(editorQuill, addImportedChapter, headingLevel = 1){
   var opsIn = editorQuill.getContents().ops;
-  console.log(opsIn);
 
   var chaps = [];
   var chapBuilder = [];
 
+  //i != 0 is intentional, not an off-by-one: it means a heading at the very start of the
+  //document is never split off. The content up through the first heading match stays in
+  //chapBuilder and becomes chaps[0], which is kept as the current document below rather than
+  //imported as a new chapter - so the first heading section is deliberately left in place
+  //instead of being spun out on its own.
   for(let i=0;i < opsIn.length;i++){
     if(i != 0 && i < opsIn.length - 1 && opsIn[i + 1].attributes && opsIn[i + 1].attributes.header && opsIn[i + 1].attributes.header == headingLevel){
-      var splitPoint = opsIn[i].insert.lastIndexOf('\n');
+      var splitPoint = typeof opsIn[i].insert === 'string' ? opsIn[i].insert.lastIndexOf('\n') : -1;
       if(splitPoint > -1){
         chapBuilder.push({
-          insert: opsIn[i].insert.slice(0, splitPoint),
+          insert: opsIn[i].insert.slice(0, splitPoint + 1),
           attributes: opsIn[i].attributes
         });
       }

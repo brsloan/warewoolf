@@ -32,7 +32,10 @@ function splitDeltaAtIndices(delt, splitPoints){
 
 function generateChapTitleFromFirstLine(delt){
     const titleCharacterLimit = 100;
-    return delt.ops[0].insert.split(/\r\n|\r|\n/)[0].slice(0,titleCharacterLimit).replaceAll(/<|>/g,'');
+    var firstInsert = delt.ops[0].insert;
+    if(typeof firstInsert !== 'string')
+      return '';
+    return firstInsert.split(/\r\n|\r|\n/)[0].slice(0,titleCharacterLimit).replaceAll(/<|>/g,'');
 }
 
 function parseDelta(delta){
