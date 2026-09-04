@@ -1,10 +1,16 @@
 const https = require('https');
+const fs = require('node:fs');
 const { logError } = require('./error-log');
 const process = require('node:process');
 const { spawn } = require('node:child_process');
 
 function getUpdates(thisAppVersion, callback){
     fetchLatestReleaseData(function(latest){
+        if(!latest){
+            callback(null);
+            return;
+        }
+
         if(isUpdateAvailable(latest.tag, thisAppVersion)){
             latest.downloadInfo = extractUpdateDownloadInfo(latest);
             callback(latest);
@@ -22,10 +28,11 @@ function fetchLatestReleaseData(callback){
         method: 'GET',
         headers: {
             'User-Agent': 'warewoolf'
-        }
+        },
+        timeout: 10000
     };
 
-    https.request(options, function(res){
+    const req = https.request(options, function(res){
         let data = '';
 
         res.on('data', function(chunk){
@@ -33,43 +40,51 @@ function fetchLatestReleaseData(callback){
         });
 
         res.on('end', function(){
-            var packagedData = packageReleaseData(JSON.parse(data));
+            if(res.statusCode !== 200){
+                logError(new Error('GitHub release check failed with status ' + res.statusCode + ': ' + data));
+                callback(null);
+                return;
+            }
+
+            var parsed;
+            try {
+                parsed = JSON.parse(data);
+            }
+            catch(err){
+                logError(err);
+                callback(null);
+                return;
+            }
+
+            var packagedData = packageReleaseData(parsed);
+
+            if(!packagedData){
+                logError(new Error('Unexpected release data shape from GitHub API'));
+                callback(null);
+                return;
+            }
+
             callback(packagedData);
         });
 
+    });
 
-    }).on('error', function(err){
+    req.on('timeout', function(){
+        req.destroy(new Error('Update check timed out'));
+    });
+
+    req.on('error', function(err){
         logError(err);
-    }).end();
+        callback(null);
+    });
 
-}
-
-function fetchLatestReleaseDataTest(callback){
-    var testData = {
-        "tag": "v1.0.1",
-        "prerelease": false,
-        "description": "2024-03-03: We have reached version 1.0.0! All the basic features I had originally envisioned are now implemented and working. I use it daily for my own novel writing. Features added/changed since last release:\r\n* Built-in Wi-Fi Manager (on Linux) for use as writerDeck\r\n* Import .docx files\r\n* Footnote support (import and export/compile)\r\n* Auto-save at set intervals (if desired)\r\n* Auto-backup with single zip file on close\r\n* Email zipped project file\r\n* Built-in File Manager now can unzip zip files\r\n* Dark Mode support/options\r\n* Markdown improvements\r\n* Docx export drastically improved, with automatic cover page generation, page number headers in Standard Manuscript Format, etc. Can now export ready-to-submit manuscript documents\r\n* Retains more settings user sets for email attachments, etc.\r\n* Replaced native file dialogs with custom in-app for better keyboard-only workflow\r\n* Bug fixes\r\n* 70% less ugly",
-        "date": "2024-03-04T04:45:26Z",
-        "binaries": [
-            {
-                "name": "warewoolf_1.0.0_amd64.deb",
-                "url": "https://github.com/brsloan/warewoolf/releases/download/v1.0.0/warewoolf_1.0.0_amd64.deb"
-            },
-            {
-                "name": "warewoolf_1.0.0_arm64.deb",
-                "url": "https://github.com/brsloan/warewoolf/releases/download/v1.0.0/warewoolf_1.0.0_arm64.deb"
-            },
-            {
-                "name": "warewoolf_1.0.0_Windows_x64.zip",
-                "url": "https://github.com/brsloan/warewoolf/releases/download/v1.0.0/warewoolf_1.0.0_Windows_x64.zip"
-            }
-        ]
-    }
-
-    callback(testData);
+    req.end();
 }
 
 function packageReleaseData(releaseData){
+    if(!releaseData || !Array.isArray(releaseData.assets))
+        return null;
+
     var packagedData = {
         tag: releaseData.tag_name,
         prerelease: releaseData.prerelease,
@@ -120,24 +135,26 @@ function extractUpdateDownloadInfo(releaseData){
 function isUpdateAvailable(latestTag, thisAppVersion = '1.0.0'){
     var avail = false;
 
-    if(latestTag.replace('v','') != thisAppVersion){
-        var thisDigits = thisAppVersion.replace('v','').split('.').map(function(str){
-            return parseInt(str);
+    var parseVersion = function(tag){
+        return tag.replace('v','').split('.').map(function(str){
+            return parseInt(str, 10);
         });
+    };
 
-        var latestDigits = latestTag.replace('v','').split('.').map(function(str){
-            return parseInt(str);
-        });
+    var thisDigits = parseVersion(thisAppVersion);
+    var latestDigits = parseVersion(latestTag);
 
-        if(latestDigits[0] > thisDigits[0])
+    if(thisDigits.some(isNaN) || latestDigits.some(isNaN))
+        return false;
+
+    if(latestDigits[0] > thisDigits[0])
+        avail = true;
+    else if(latestDigits[0] == thisDigits[0]){
+        if(latestDigits[1] > thisDigits[1])
             avail = true;
-        else if(latestDigits[0] == thisDigits[0]){
-            if(latestDigits[1] > thisDigits[1])
+        else if(latestDigits[1] == thisDigits[1]){
+            if(latestDigits[2] > thisDigits[2])
                 avail = true;
-            else if(latestDigits[1] == thisDigits[1]){
-                if(latestDigits[2] > thisDigits[2])
-                    avail = true;
-            }
         }
     }
 
@@ -145,6 +162,11 @@ function isUpdateAvailable(latestTag, thisAppVersion = '1.0.0'){
 }
 
 function downloadUpdate(sysDirectories, downloadInfo, callback){
+    if(!downloadInfo){
+        logError(new Error('No compatible update binary found for this platform/architecture.'));
+        return;
+    }
+
     var filePath = '';
 
     if(process.platform == 'linux')
@@ -174,30 +196,34 @@ function downloadUpdate(sysDirectories, downloadInfo, callback){
 
 function downloadRequest(file, filePath, url){
     const request = https.get(url, response => {
-        if(response.statusCode !== 200 && response.statusCode !== 302){
+        if(response.statusCode == 302){
+            response.resume();
+            downloadRequest(file, filePath, response.headers.location);
+            return;
+        }
+
+        if(response.statusCode !== 200){
+            response.resume();
+            file.close();
             fs.unlink(filePath, () => {
-                console.log('Download failed: ' + response.statusCode);
+                logError(new Error('Download failed: ' + response.statusCode));
             });
             return;
         }
 
-        if(response.statusCode == 302){
-            downloadRequest(file, filePath, response.headers.location);
-        }
-        else{
-            response.pipe(file);
-        }
+        response.pipe(file);
     });
 
     request.on('error', function(err){
+        file.close();
         fs.unlink(filePath, function(){
-            console.log(err);
+            logError(err);
         })
     });
 
     file.on('error', function(err){
         fs.unlink(filePath, function(){
-            console.log(err);
+            logError(err);
         })
     });
 
@@ -207,10 +233,12 @@ function downloadRequest(file, filePath, url){
 
 function installUpdate(pass, filePath, statusElement){
 
-  const updater = spawn(' sudo -S <<< "' + pass + '" apt install ' + filePath, {
-    stdio: 'pipe',
-    shell: '/bin/bash'
+  const updater = spawn('sudo', ['-S', 'apt', 'install', filePath], {
+    stdio: 'pipe'
   });
+
+  updater.stdin.write(pass + '\n');
+  updater.stdin.end();
 
   updater.stdout.on('data', function(data){
     console.log('updater: ' + data);
