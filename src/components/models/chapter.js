@@ -29,6 +29,8 @@ function newChapter(){
       try{
         if(fs.existsSync(project.directory + project.chapsDirectory + chap.filename))
           fs.unlinkSync(project.directory + project.chapsDirectory + chap.filename);
+        if(fs.existsSync(project.directory + project.chapsDirectory + notesNamePrepend + chap.filename))
+          fs.unlinkSync(project.directory + project.chapsDirectory + notesNamePrepend + chap.filename);
       }
       catch(err){
         logError(err);
@@ -82,9 +84,12 @@ function newChapter(){
     function saveCopy(){
       try{
         var chap = this;
-        chap.filename = getNewFilename(chap.title); 
+        var newFilename = getNewFilename(chap.title);
 
-        fs.writeFileSync(project.directory + project.chapsDirectory + chap.filename, convertDeltaToMDF(chap.contents), "utf8")
+        fs.writeFileSync(project.directory + project.chapsDirectory + newFilename, convertDeltaToMDF(chap.contents), "utf8")
+
+        //Only point the chapter at the new file once the write has actually succeeded
+        chap.filename = newFilename;
       }
       catch(err){
         logError(err);
@@ -97,7 +102,7 @@ function newChapter(){
         var chap = this;
         const filepathRoot = project.directory + project.chapsDirectory;
 
-        if(chap.contents == null)
+        if(chap.contents == null && chap.filename != null)
           chap.contents = chap.getFile();
 
         //Because I'm paranoid about the tiny possibility of something going wrong between deleting old verison of file and creating new,
@@ -106,12 +111,23 @@ function newChapter(){
         if(oldFilename != undefined && oldFilename != null && fs.existsSync(filepathRoot + oldFilename))
           fs.renameSync(filepathRoot + oldFilename, filepathRoot + oldVersionFlag + oldFilename);
 
-        chap.filename = getNewFilename(chap.title);
+        var newFilename = getNewFilename(chap.title);
 
-        fs.writeFileSync(filepathRoot + chap.filename, convertDeltaToMDF(chap.contents), "utf8")
-        
+        try{
+          fs.writeFileSync(filepathRoot + newFilename, convertDeltaToMDF(chap.contents), "utf8")
+        }
+        catch(writeErr){
+          //Write failed - put the old version back so the chapter isn't left without a file on disk
+          if(oldFilename != undefined && oldFilename != null && fs.existsSync(filepathRoot + oldVersionFlag + oldFilename))
+            fs.renameSync(filepathRoot + oldVersionFlag + oldFilename, filepathRoot + oldFilename);
+          throw writeErr;
+        }
+
+        //Only point the chapter at the new file once the write has actually succeeded
+        chap.filename = newFilename;
+
         //If filename has changed and new file successfully created, delete old file
-        if(oldFilename != undefined && oldFilename != null && fs.existsSync(filepathRoot + chap.filename) && fs.existsSync(filepathRoot + oldVersionFlag + oldFilename))
+        if(oldFilename != undefined && oldFilename != null && fs.existsSync(filepathRoot + oldVersionFlag + oldFilename))
           fs.unlink(filepathRoot + oldVersionFlag + oldFilename, function(err){
             if(err)
               logError(err);
@@ -158,9 +174,6 @@ function newChapter(){
       try{
         var chap = this;
         const filepathRoot = project.directory + project.chapsDirectory;
-
-        if(chap.notes == null)
-          chap.notes = chap.getNotesFile();
 
         if(chap.notes != null)
           fs.writeFileSync(filepathRoot + notesNamePrepend + chap.filename, convertDeltaToMDF(chap.notes), "utf8")
