@@ -1,6 +1,8 @@
 
 
 function convertMdfcToMd(mdfText){
+    mdfText = convertWindowsToLinuxLineEndings(mdfText);
+
     const alignmentMarker = /\[>.\] ?/gm;
     //regex below looks for paragraphs that begin with a tab but are not list items, and it includes 1 to 2 newlines before the indented
     //paragaph so that any matches can be replaced with two new lines, which will standardize paragraphs to have 1 empty line between them
@@ -38,19 +40,20 @@ function consolidateMultiParaFootnotes(text, allMarkers){
 
     var uniqueMarkers = [...new Set(allMarkers)];
 
-    uniqueMarkers.forEach(function(val,i,arr){
+    uniqueMarkers.forEach(function(val){
         const footnoteMarkerWithSpace = /^\[\^\d+\]: ?/gm;
         const thisFootnoteParas = new RegExp('^' + escapeRegExp(val) + ' ?(.*)\n?', 'gm');
         var fnMatches = text.match(thisFootnoteParas);
 
         var indexCounter = text.indexOf(fnMatches[0]) + fnMatches[0].length;
-        
-        for(i=1;i<fnMatches.length;i++){
+
+        for(var i=1;i<fnMatches.length;i++){
             //remove secondary paras from original text
             text = text.replace(fnMatches[i], '');
 
-            //remove marker 
-            fnMatches[i] = fnMatches[i].replace(footnoteMarkerWithSpace, '');
+            //remove marker, plus any indent the source already put after it, so the
+            //fnParaMarker we add below doesn't end up stacked on top of a second tab
+            fnMatches[i] = fnMatches[i].replace(footnoteMarkerWithSpace, '').replace(/^\t/, '');
 
             //add to first para of this footnote
             text = text.slice(0,indexCounter) + fnParaMarker + fnMatches[i] + text.slice(indexCounter);
@@ -64,11 +67,16 @@ function consolidateMultiParaFootnotes(text, allMarkers){
 function checkIfDuplicateExists(arr) {
     if(arr && arr.length > 0)
         return new Set(arr).size !== arr.length
+    return false;
 }
 
 function escapeRegExp(string) {
-  const specialCharacters = /[.*+?^${}()|[\]\\]/g; 
+  const specialCharacters = /[.*+?^${}()|[\]\\]/g;
   return string.replace(specialCharacters, '\\$&');
+}
+
+function convertWindowsToLinuxLineEndings(text) {
+  return text.replace(/\r\n/g, '\n');
 }
 
   module.exports = {

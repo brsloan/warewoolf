@@ -67,3 +67,38 @@ test('footnotes are renumbered into markdown reference form', function(){
   assert.ok(md.includes('[^1]'), 'footnote reference missing from markdown output');
   assert.ok(md.includes('The note.'), 'footnote text missing from markdown output');
 });
+
+//Regression: MDFC's own convention writes multi-paragraph footnote continuations with a tab
+//already after the marker ("[^1]: \tSecond para."). consolidateMultiParaFootnotes was blindly
+//prepending its own tab on top of that, producing a double tab instead of one.
+test('a multi-paragraph footnote is consolidated with a single tab, even when the source already indents the continuation', function(){
+  assert.strictEqual(
+    convertMdfcToMd('Body.[^1]\n[^1]: First para.\n[^1]: \tSecond para.\n'),
+    'Body.[^1]\n[^1]: First para.\n\tSecond para.\n'
+  );
+});
+
+test('a multi-paragraph footnote is consolidated correctly when the source has no extra indent', function(){
+  assert.strictEqual(
+    convertMdfcToMd('Body.[^1]\n[^1]: First para.\n[^1]: Second para.\n[^1]: Third para.\n'),
+    'Body.[^1]\n[^1]: First para.\n\tSecond para.\n\tThird para.\n'
+  );
+});
+
+//Regression: the paragraph-indent and footnote-consolidation regexes assumed bare \n line
+//endings. With \r\n input (as produced by Windows editors, and as shipped in the example .mdfc
+//file), the footnote continuation was glued onto the same line as the first paragraph instead
+//of becoming its own indented paragraph.
+test('CRLF line endings do not break footnote consolidation', function(){
+  assert.strictEqual(
+    convertMdfcToMd('Body.[^1]\r\n[^1]: First para.\r\n[^1]: \tSecond para.\r\n'),
+    'Body.[^1]\n[^1]: First para.\n\tSecond para.\n'
+  );
+});
+
+test('CRLF line endings do not break indented-paragraph conversion', function(){
+  assert.strictEqual(
+    convertMdfcToMd('First para.\r\n\tSecond para.\r\n\tThird para.\r\n'),
+    'First para.\n\nSecond para.\n\nThird para.\n'
+  );
+});
