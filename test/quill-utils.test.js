@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const { getOrderedListNumbers, getListMarker } = require('../src/components/controllers/quill-utils');
+const { getOrderedListNumbers, getListMarker, parseDelta, generateChapTitleFromFirstLine } = require('../src/components/controllers/quill-utils');
 
 //getOrderedListNumbers works on the paragraph shape parseDelta produces. Building them by hand here
 //keeps these tests on the numbering rule itself rather than on delta parsing.
@@ -90,4 +90,56 @@ test('getListMarker returns nothing for anything that is not a list item', funct
   assert.strictEqual(getListMarker({}), '');
   assert.strictEqual(getListMarker({header: 1}), '');
   assert.strictEqual(getListMarker({blockquote: true}), '');
+});
+
+test('parseDelta gives each real paragraph a single run holding its text', function(){
+  var parsed = parseDelta({ ops: [{ insert: 'Hello\n\nWorld\n' }] });
+
+  assert.deepStrictEqual(parsed.paragraphs, [
+    { textRuns: [{ text: 'Hello' }] },
+    { textRuns: [{ text: '' }] },
+    { textRuns: [{ text: 'World' }] }
+  ]);
+});
+
+test('parseDelta preserves per-run attributes and paragraph (line) attributes', function(){
+  var parsed = parseDelta({
+    ops: [
+      { insert: 'Bold', attributes: { bold: true } },
+      { insert: 'Plain' },
+      { insert: '\n', attributes: { header: 1 } }
+    ]
+  });
+
+  assert.deepStrictEqual(parsed.paragraphs, [
+    {
+      textRuns: [
+        { text: 'Bold', attributes: { bold: true } },
+        { text: 'Plain' }
+      ],
+      attributes: { header: 1 }
+    }
+  ]);
+});
+
+test('parseDelta on an empty delta produces no paragraphs', function(){
+  assert.deepStrictEqual(parseDelta({ ops: [] }), { paragraphs: [] });
+});
+
+test('generateChapTitleFromFirstLine takes the first line of the first insert', function(){
+  assert.strictEqual(
+    generateChapTitleFromFirstLine({ ops: [{ insert: 'Chapter One\nSome body text\n' }] }),
+    'Chapter One'
+  );
+});
+
+test('generateChapTitleFromFirstLine returns an empty string instead of throwing on an empty delta', function(){
+  assert.strictEqual(generateChapTitleFromFirstLine({ ops: [] }), '');
+});
+
+test('generateChapTitleFromFirstLine returns an empty string when the first insert is not text', function(){
+  assert.strictEqual(
+    generateChapTitleFromFirstLine({ ops: [{ insert: { image: 'foo.png' } }] }),
+    ''
+  );
 });
