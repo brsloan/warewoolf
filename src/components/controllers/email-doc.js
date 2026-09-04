@@ -1,3 +1,4 @@
+const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const nodemailer = require('nodemailer');
@@ -24,7 +25,7 @@ function prepareAndEmail(project, userSettings, editorQuill, sender, pass, recei
   }
   else {
     delt = editorQuill.getContents();
-    let chapTitle = project.chapters[project.activeChapterIndex].title;
+    let chapTitle = project.getActiveChapter().title;
     filename = chapTitle == "" ? "untitled" : chapTitle;
   }
 
@@ -80,8 +81,8 @@ function emailDeltaAsMd(filename, delt, sender, pass, receiver, callback){
 
 function emailDeltaAsHtml(filename, project, compileOptions, delt, sender, pass, receiver, callback){
   var generateTitle = compileOptions ? compileOptions.generateTitlePage : false;
-  var title = compileOptions ? project.title : project.chapters[project.activeChapterIndex].title;
-  
+  var title = compileOptions.compile ? project.title : project.getActiveChapter().title;
+
   var attachments = [
     {
       filename: filename + '.html',
@@ -115,29 +116,35 @@ function emailDeltaAsTxt(filename, delt, sender, pass, receiver, callback){
 }
 
 function emailAsZip(project, sender, pass, receiver, callback){
-  console.log('about to archive project');
   archiveProject(project, os.tmpdir(), function(err, archName){
     if(err){
-      callback(err);
+      logError(err);
+      callback('Error archiving project: ' + err.message);
       return;
     }
+    var archPath = path.join(os.tmpdir(), archName);
     var attachments = [
       {
         filename: archName,
-        path: path.join(os.tmpdir(), archName),
+        path: archPath,
         contentType: 'application/zip'
       }
     ];
 
-    emailFile(sender, pass, receiver, attachments, callback);
+    emailFile(sender, pass, receiver, attachments, function(resp){
+      fs.unlink(archPath, function(unlinkErr){
+        if(unlinkErr)
+          logError(unlinkErr);
+        callback(resp);
+      });
+    });
   });
 }
 
 function emailAsEpub(filename, project, compileOptions, delt, sender, pass, receiver, callback){
   var generateTitle = compileOptions ? compileOptions.generateTitlePage : false;
-  var title = compileOptions ? project.title : project.chapters[project.activeChapterIndex].title;
+  var title = compileOptions.compile ? project.title : project.getActiveChapter().title;
   var filePath = os.tmpdir() + '/' + filename + '.epub';
-  console.log('filepath: ' + filePath);
   var htmlChapters = [];
 
   if(compileOptions.compile){
@@ -156,17 +163,26 @@ function emailAsEpub(filename, project, compileOptions, delt, sender, pass, rece
   }
   
   htmlChaptersToEpub(title, project.author, htmlChapters, filePath, generateTitle, function(generatedFilepath){
-    if(generatedFilepath != 'error'){
-      var attachments = [
-        {
-          filename: filename + '.epub',
-          path: generatedFilepath,
-          contentType: 'application/epub+zip'
-        }
-      ];
-
-      emailFile(sender, pass, receiver, attachments, callback);
+    if(generatedFilepath == 'error'){
+      callback('Error generating EPUB.');
+      return;
     }
+
+    var attachments = [
+      {
+        filename: filename + '.epub',
+        path: generatedFilepath,
+        contentType: 'application/epub+zip'
+      }
+    ];
+
+    emailFile(sender, pass, receiver, attachments, function(resp){
+      fs.unlink(generatedFilepath, function(unlinkErr){
+        if(unlinkErr)
+          logError(unlinkErr);
+        callback(resp);
+      });
+    });
   });
 }
 
@@ -190,7 +206,7 @@ function emailFile(sender, pass, receiver, attachments, callback){
   transporter.sendMail(mailOptions, function(error, info){
     if (error) {
       logError(error);
-      callback(error);
+      callback('Error sending email: ' + error.message);
     } else {
       console.log('Email sent: ' + info.response);
       callback('Email sent successfully.');
