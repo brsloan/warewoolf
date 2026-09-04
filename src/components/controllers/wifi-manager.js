@@ -1,24 +1,42 @@
 const { spawn } = require("child_process");
 const { logError } = require('./error-log');
 
+//nmcli's -t (terse) output escapes literal ':' and '\' inside a field as '\:' and '\\',
+//so a plain split(':') misaligns fields whenever a value (e.g. an SSID) contains a colon.
+function splitNmcliFields(line){
+  return line.split(/(?<!\\):/).map(function(field){
+    return field.replace(/\\(.)/g, '$1');
+  });
+}
+
 function getIpAddress(cback){
   const hostname = spawn('hostname', ['-I']);
+  var body = [];
+  var called = false;
 
-  var responseHasData = false;
+  function finish(result){
+    if(called) return;
+    called = true;
+    cback(result);
+  }
 
   hostname.stdout.on('data', function(data){
-    responseHasData = true;
-    cback(data.toString().trim().split(' ')[0]);
+    body.push(data);
   });
 
   hostname.stderr.on('data', function(data){
     logError(data.toString().trim());
   })
 
+  hostname.on('error', function(err){
+    logError(err);
+    finish('no data');
+  });
+
   hostname.stdout.on('close', function(code){
-    if(!responseHasData)
-      cback('no data');
-  });  
+    var text = Buffer.concat(body).toString().trim().split(' ')[0];
+    finish(text || 'no data');
+  });
 }
 
 function getConnectionState(cback){
@@ -27,10 +45,15 @@ function getConnectionState(cback){
   nmcliMulti(args, function(body){
     var statusData = body.split('\n');
     var wifiDataLine = statusData.find(function(line, index, arr){
-      return line.split(':')[1] == 'wifi';
+      return splitNmcliFields(line)[1] == 'wifi';
     });
-    var splitData = wifiDataLine.split(':');
 
+    if(!wifiDataLine){
+      cback({state: 'unknown', connection: null});
+      return;
+    }
+
+    var splitData = splitNmcliFields(wifiDataLine);
     cback({state: splitData[2], connection: splitData[3]});
   });
 }
@@ -38,6 +61,14 @@ function getConnectionState(cback){
 function nmcliMulti(args, cback){
   const nmcli = spawn('nmcli', args);
   var body = [];
+  var called = false;
+
+  function finish(result){
+    if(called) return;
+    called = true;
+    cback(result);
+  }
+
   nmcli.stdout.on('data', function(data){
     body.push(data);
   });
@@ -46,28 +77,43 @@ function nmcliMulti(args, cback){
     logError(data.toString());
   });
 
+  nmcli.on('error', function(err){
+    logError(err);
+    finish('');
+  });
+
   nmcli.on('close', function(code){
-    cback(body.join());
+    finish(Buffer.concat(body).toString());
   });
 }
 
 function nmcliSingle(args, cback){
   const nmcli = spawn('nmcli', args);
+  var body = [];
+  var called = false;
 
-  var responseHasData = false;
+  function finish(result){
+    if(called) return;
+    called = true;
+    cback(result);
+  }
 
   nmcli.stdout.on('data', function(data){
-    responseHasData = true;
-    cback(data.toString().trim());
+    body.push(data);
   });
 
   nmcli.stderr.on('data', function(data){
     logError(data.toString().trim());
   })
 
-  nmcli.stdout.on('close', function(code){
-    if(!responseHasData)
-      cback('no data');
+  nmcli.on('error', function(err){
+    logError(err);
+    finish('no data');
+  });
+
+  nmcli.on('close', function(code){
+    var text = Buffer.concat(body).toString().trim();
+    finish(text || 'no data');
   });
 }
 
@@ -80,7 +126,7 @@ function getWifiNetworks(cback){
     var dataLines = body.split('\n');
 
     var connections = dataLines.map(function(line, index, arr){
-      var splitLine = line.split(':');
+      var splitLine = splitNmcliFields(line);
       return {
         ssid: splitLine[7],
         isConnected: splitLine[0] == '*'
