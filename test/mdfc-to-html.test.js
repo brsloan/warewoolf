@@ -151,3 +151,38 @@ test('several footnotes each get their own div and anchor', function(){
 test('text with no footnotes is left alone', function(){
   assert.strictEqual(convertMdfcToHtml('Just prose.\n'), '<p>Just prose.</p>\n');
 });
+
+//Regression: bold and italic both use "*", so a naive regex for bold ("**...**") can't span an
+//italic marker nested inside it - the exclusion class blocks on any asterisk, the outer match fails
+//entirely, and its asterisks leak into the output as literal text instead of a <b> tag.
+test('italic nested inside bold produces properly nested tags', function(){
+  assert.strictEqual(
+    convertMdfcToHtml('**bold *italic inside* more bold**\n'),
+    '<p><b>bold <i>italic inside</i> more bold</b></p>\n'
+  );
+});
+
+test('an escaped asterisk inside a bold span does not break the span', function(){
+  assert.strictEqual(
+    convertMdfcToHtml('**bold with a literal \\* char**\n'),
+    '<p><b>bold with a literal * char</b></p>\n'
+  );
+});
+
+//Regression: when an outer style (bold) closes while an inner style opened after it (italic) stays
+//active, the tags must be closed and reopened at the divergence point or they cross into invalid
+//HTML (e.g. "<b>...<i>...</b>...</i>").
+test('a style that outlives an outer style it was nested in stays validly nested', function(){
+  assert.strictEqual(
+    convertMdfcToHtml('***AAA**BBB*\n'),
+    '<p><b><i>AAA</i></b><i>BBB</i></p>\n'
+  );
+});
+
+//Regression: blockquote required at least one character of text ((.+)), unlike the header/alignment
+//markers, which use (.*) so a bare marker on an otherwise empty line still produces an element
+//instead of leaking the marker itself into the output.
+test('a bare blockquote marker produces an empty element, not literal text', function(){
+  assert.strictEqual(convertMdfcToHtml('>\n'), '<blockquote></blockquote>\n');
+  assert.strictEqual(convertMdfcToHtml('> \n'), '<blockquote></blockquote>\n');
+});

@@ -318,5 +318,6 @@ function escapeListMarkers(text){
 
 module.exports = {
   parseMDF,
-  convertDeltaToMDF
+  convertDeltaToMDF,
+  tokenizeInline
 };

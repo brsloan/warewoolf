@@ -1,3 +1,5 @@
+const { tokenizeInline } = require('./markdownFic');
+
 function convertMdfcToHtml(str){
     str = convertWindowsToLinuxLineEndings(str);
 
@@ -34,7 +36,10 @@ function convertMdfcToHtml(str){
     let listOrdered = /^((?:\d+|[a-z])\.) (.*)/gm;
     let listOrderedTwo = /^(\t)((?:\d+|[a-z])\.) (.*)/gm;
     let listOrderedThreePlus = /^(\t){2,}((?:\d+|[a-z])\.) (.*)/gm;
-    let blockquote = /^>+ {0,1}(.+)/gm;
+    //(.*) rather than (.+), matching the header/alignment markers above, so a bare ">" marker with
+    //no text after it (a blank blockquote line) produces an empty element instead of either leaking
+    //the literal ">" into the output or capturing a stray space as its content.
+    let blockquote = /^>+ ?(.*)/gm;
     let alignLeft = /^\[>l] (.*)/gm;
     let alignRight = /^\[>r] (.*)/gm;
     let alignCenter = /^\[>c] (.*)/gm;
@@ -88,24 +93,79 @@ function convertMdfcToHtml(str){
     str = str.replace(tempClasses, '');
 
   
-    let bold = /(?<!\\|\\\*\*)\*\*([^\*\*]+)\*\*/g;
-    let italic = /(?<!\\|\\\*)\*([^\*]+)\*/g;
-    let underline = /(?<!\\|\\__)__([^__]+)__/g;
-    let strike = /(?<!\\|\\~~)~~([^~~]+)~~/g;
-  
-    str = str.replace(bold, '<b>$1</b>');
-    str = str.replace(italic, '<i>$1</i>');
-    str = str.replace(underline, '<u>$1</u>');
-    str = str.replace(strike, '<del>$1</del>');
-  
-    //List markers are in this set to match markdownFic.js. Without them a line of prose that
-    //happens to open with "- " or "1984. " keeps the backslash it was escaped with.
-    let escapedMarkers = /\\(\*\*|\*|~~|__|#|\[>|>|\[\^|-|\+|(?:\d+|[a-z])\. )/g;
+    //Bold/italic/underline/strike share tokenizeInline with the MDF writer (markdownFic.js) rather
+    //than being matched as four independent regexes. Independent regexes can't correctly handle
+    //markers nested inside a *different* style that reuses the same character (e.g. italic inside
+    //bold, since both use "*"): the outer marker's exclusion class can't span the inner marker, so
+    //the whole outer span fails to match and its asterisks leak into the output as literal text.
+    str = convertInlineStyles(str);
+
+    //Bold/italic/underline/strike escapes (\**, \*, \~~, \__) are already stripped by
+    //convertInlineStyles above, via tokenizeInline. This handles what's left: headings, alignment/
+    //blockquote markers, footnote refs, and list markers. List markers are in this set to match
+    //markdownFic.js - without them a line of prose that happens to open with "- " or "1984. " keeps
+    //the backslash it was escaped with.
+    let escapedMarkers = /\\(#|\[>|>|\[\^|-|\+|(?:\d+|[a-z])\. )/g;
     str = str.replace(escapedMarkers, '$1');
   
     return str;
   }
-  
+
+const INLINE_STYLE_TAGS = { bold: 'b', italic: 'i', underline: 'u', strike: 'del' };
+const INLINE_STYLE_ORDER = ['bold', 'italic', 'underline', 'strike'];
+
+function inlineStyleSet(attributes){
+  var styles = { bold: false, italic: false, underline: false, strike: false };
+  if(attributes){
+    INLINE_STYLE_ORDER.forEach(function(name){
+      styles[name] = Boolean(attributes[name]);
+    });
+  }
+  return styles;
+}
+
+//Converts tokenizeInline's runs into HTML, always opening tags outermost-to-innermost in
+//INLINE_STYLE_ORDER and closing in reverse. A style that stays active across a run boundary is left
+//untouched, but when an outer style (say bold) closes while an inner one opened after it (italic)
+//stays active, every style from that divergence point in, including the ones still active, is
+//closed and then reopened - otherwise the tags would cross (e.g. "<b>...<i>...</b>...</i>"), which
+//is not valid HTML nesting.
+function styleTransition(from, to){
+  var divergeAt = INLINE_STYLE_ORDER.findIndex(function(name){ return from[name] !== to[name]; });
+  if(divergeAt === -1)
+    return '';
+
+  var out = '';
+  for(let i = INLINE_STYLE_ORDER.length - 1; i >= divergeAt; i--){
+    let name = INLINE_STYLE_ORDER[i];
+    if(from[name])
+      out += '</' + INLINE_STYLE_TAGS[name] + '>';
+  }
+  for(let i = divergeAt; i < INLINE_STYLE_ORDER.length; i++){
+    let name = INLINE_STYLE_ORDER[i];
+    if(to[name])
+      out += '<' + INLINE_STYLE_TAGS[name] + '>';
+  }
+  return out;
+}
+
+function convertInlineStyles(str){
+  var runs = tokenizeInline(str);
+  var out = '';
+  var openStyles = inlineStyleSet(null);
+
+  runs.forEach(function(run){
+    var styles = inlineStyleSet(run.attributes);
+    out += styleTransition(openStyles, styles);
+    out += run.text;
+    openStyles = styles;
+  });
+
+  out += styleTransition(openStyles, inlineStyleSet(null));
+
+  return out;
+}
+
 function convertFootnoteReferences(text){
     const footnoteRefMarker = /\[\^(\d+)\]/gm;
     text = text.replace(footnoteRefMarker, '<sup><a href="#fnote_$1" id="fnoteRef_$1">$1</a></sup>');
