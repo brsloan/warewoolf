@@ -129,7 +129,7 @@ function showCompileOptions(project, sysDirectories, userSettings){
     showFileDialog(dialogOptions, function(filepath){
       if(filepath){
         showWorking();
-        compileProject(project, options, filepath);
+        compileProject(project, userSettings, options, filepath);
         hideWorking();
         cback();
       }

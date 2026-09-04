@@ -8,9 +8,7 @@ const { convertMdfcToMd } = require('./mdfc-to-md');
 const { htmlChaptersToEpub } = require('./epub');
 const { convertToPlainText } = require('./quill-utils');
 
-function compileProject(project, options, filepath){
-    console.log(options);
-    console.log(filepath);
+function compileProject(project, userSettings, options, filepath){
     var allChaps = compileChapterDeltas(project, options);
 
     switch(options.type){
@@ -18,7 +16,7 @@ function compileProject(project, options, filepath){
             compilePlainText(filepath, allChaps);
             break;
         case ".docx":
-            compileDocx(filepath, allChaps, options);
+            compileDocx(filepath, allChaps, options, project, userSettings);
             break;
         case ".mdfc":
             compileMDF(filepath, allChaps);
@@ -30,21 +28,21 @@ function compileProject(project, options, filepath){
             compileHtml(filepath, allChaps, project.title, project.author, options.generateTitlePage);
             break;
           case ".epub":
-            compileEpub(filepath, project.chapters, project.title, project.author, options.generateTitlePage);
+            compileEpub(filepath, project.chapters, project.title, project.author, options.generateTitlePage, options.insertHead);
             break;
         default:
             console.log("No valid filetype selected for compile.");
     }
 }
 
-function compileEpub(dir, allChaps, title, author, insertTitle){
+function compileEpub(dir, chapters, title, author, insertTitle, insertHead){
   try {
     var htmlChaps = [];
 
-    allChaps.forEach(function(chap){
+    chapters.forEach(function(chap){
       htmlChaps.push({
         title: chap.title,
-        html: convertMdfcToHtml(convertDeltaToMDF(chap.getContentsOrFile()))
+        html: convertMdfcToHtml(convertDeltaToMDF(chapterDeltaWithHeader(chap, insertHead)))
       })
     })
 
@@ -98,35 +96,38 @@ function compilePlainText(dir, allChaps){
   }
 }
 
+function chapterDeltaWithHeader(chapter, insertHead){
+  var Delta = Quill.import('delta');
+  var compiled = new Delta();
+  if(insertHead){
+    compiled.insert(chapter.title);
+    compiled.insert('\n', { header: 1 } );
+  }
+  return compiled.concat(new Delta(chapter.getContentsOrFile()));
+}
+
 function compileChapterDeltas(project, options){
     var divider = options.insertStrng;
     var Delta = Quill.import('delta');
-    var compiled = new Delta();
-    if(options.insertHead){
-      compiled.insert(project.chapters[0].title);
-      compiled.insert('\n', { header: 1 } );
-    }
-    compiled = compiled.concat(new Delta(project.chapters[0].getContentsOrFile()));
+    var compiled = new Delta().concat(chapterDeltaWithHeader(project.chapters[0], options.insertHead));
 
-    for(i=1; i<project.chapters.length; i++){
-        var thisDelta = new Delta(project.chapters[i].getContentsOrFile());
+    for(let i=1; i<project.chapters.length; i++){
         compiled.insert(divider + '\n');
-
-        if(options.insertHead){
-          compiled.insert(project.chapters[i].title);
-          compiled.insert('\n', { header: 1 } );
-        }
-
-        compiled = compiled.concat(thisDelta);
+        compiled = compiled.concat(chapterDeltaWithHeader(project.chapters[i], options.insertHead));
     }
 
     return compiled;
 }
 
 
-function compileDocx(filepath, delt, options) {
-  var doc = convertDeltaToDocx(delt, options, project, userSettings.addressInfo);
-  saveDocx(filepath, doc);
+function compileDocx(filepath, delt, options, project, userSettings) {
+  try{
+    var doc = convertDeltaToDocx(delt, options, project, userSettings.addressInfo);
+    saveDocx(filepath, doc);
+  }
+  catch(err){
+    logError(err);
+  }
 }
 
 module.exports = {
