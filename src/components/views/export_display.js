@@ -1,6 +1,7 @@
 const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
 const showFileDialog = require('./file-dialog_display');
 const { exportProject } = require('../controllers/export');
+const { showWorkingAndThen, showWorking, hideWorking } = require('./working_display');
 
 function showExportOptions(project, userSettings, sysDirectories){
     removeElementsByClass('popup');
@@ -112,9 +113,32 @@ function showExportOptions(project, userSettings, sysDirectories){
     };
 
     showFileDialog(saveOptions, function(dirpath){
-      if(dirpath)
-        exportProject(project, userSettings, options, dirpath);
-      cback();
+      if(dirpath){
+        //Exporting can be slow on projects with many/large chapters, and .docx/.epub chapters
+        //finish writing asynchronously - so show a working indicator (deferred via
+        //showWorkingAndThen so it has a chance to paint first) instead of freezing with no
+        //feedback, and wait for exportProject's completion callback before closing anything.
+        showWorkingAndThen('Exporting...', function(){
+          exportProject(project, userSettings, options, dirpath, function(errorCount){
+            if(errorCount > 0){
+              //Give the user a moment to see that something went wrong instead of the popup
+              //just vanishing as if the export fully succeeded.
+              showWorking(errorCount + (errorCount == 1 ? ' file' : ' files') + ' failed to export - see the Error Log for details.');
+              setTimeout(function(){
+                hideWorking();
+                cback();
+              }, 2500);
+            }
+            else{
+              hideWorking();
+              cback();
+            }
+          });
+        });
+      }
+      else{
+        cback();
+      }
     });
   }
 

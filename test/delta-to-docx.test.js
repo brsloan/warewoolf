@@ -1,5 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const docx = require('docx');
 const unzipper = require('unzipper');
 
@@ -212,4 +215,41 @@ test('packageDocxBase64 logs a packing failure instead of leaving it an unhandle
   assert.strictEqual(logErrorMock.mock.calls.length, 1);
   assert.strictEqual(logErrorMock.mock.calls[0].arguments[0], packError);
   assert.strictEqual(callbackCalled, false, 'callback should not fire when packing failed');
+});
+
+//Regression: saveDocx had no way to signal completion at all, so callers (export.js) that write
+//one .docx per chapter could not tell when the write had actually finished and had to treat the
+//call as fire-and-forget - the doc could still be mid-write when the caller reported the export
+//as done. saveDocx now takes an optional completion callback.
+test('saveDocx calls its completion callback with the filepath once the file has actually been written', async function(t){
+  const filepath = path.join(os.tmpdir(), 'delta-to-docx-test-' + Date.now() + '-' + Math.random().toString(36).slice(2) + '.docx');
+  t.after(function(){
+    if(fs.existsSync(filepath))
+      fs.unlinkSync(filepath);
+  });
+
+  const { saveDocx } = freshDeltaToDocx();
+  const doc = convertDeltaToDocx({ ops: [{insert: 'x'}, {insert: '\n'}] }, {}, project, null);
+
+  const result = await new Promise(function(resolve){
+    saveDocx(filepath, doc, resolve);
+  });
+
+  assert.strictEqual(result, filepath);
+  assert.ok(fs.existsSync(filepath), 'expected the .docx file to exist once the callback fired');
+});
+
+test('saveDocx calls its completion callback with \'error\' instead of throwing when packing fails', async function(t){
+  t.mock.method(errorLog, 'logError', function(){});
+  const packError = new Error('packing failed');
+  t.mock.method(docx.Packer, 'toBuffer', function(){ return Promise.reject(packError); });
+
+  const { saveDocx } = freshDeltaToDocx();
+  const doc = convertDeltaToDocx({ ops: [{insert: 'x'}, {insert: '\n'}] }, {}, project, null);
+
+  const result = await new Promise(function(resolve){
+    saveDocx('unused-path.docx', doc, resolve);
+  });
+
+  assert.strictEqual(result, 'error');
 });

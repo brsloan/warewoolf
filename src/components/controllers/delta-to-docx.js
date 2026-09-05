@@ -4,16 +4,21 @@ const { logError } = require('./error-log');
 const { parseDelta, getOrderedListNumbers, getListLevel, getListMarker } = require('./quill-utils');
 const { getTotalWordCount } = require('./wordcount');
 
-function saveDocx(filepath, doc){
+function saveDocx(filepath, doc, cback = function(){}){
   docx.Packer.toBuffer(doc).then((buffer) => {
     try{
       fs.writeFileSync(filepath, buffer)
       console.log("Document created successfully");
+      cback(filepath);
     }
     catch(err){
       logError(err);
+      cback('error');
     }
-  }).catch(logError);
+  }).catch((err) => {
+    logError(err);
+    cback('error');
+  });
 }
 
 function packageDocxBase64(doc, callback){
