@@ -24,9 +24,11 @@ function showFindReplace(project, editorQuill, displayChapterByIndex){
 
     var caseSensitive = document.createElement("input");
     caseSensitive.type = "checkbox";
+    caseSensitive.id = "case-sensitive-check";
     findForm.appendChild(caseSensitive);
 
     var caseSensLabel = document.createElement("label");
+    caseSensLabel.htmlFor = "case-sensitive-check";
     caseSensLabel.innerText = "Case Sensitive";
     findForm.appendChild(caseSensLabel);
 
@@ -46,9 +48,11 @@ function showFindReplace(project, editorQuill, displayChapterByIndex){
 
     var inAllChapters = document.createElement("input");
     inAllChapters.type = "checkbox";
+    inAllChapters.id = "in-all-chapters-check";
     findForm.appendChild(inAllChapters)
 
     var inAllChapLabel = document.createElement("label");
+    inAllChapLabel.htmlFor = "in-all-chapters-check";
     inAllChapLabel.innerText = "In All Chapters";
     findForm.appendChild(inAllChapLabel);
 
@@ -81,7 +85,16 @@ function showFindReplace(project, editorQuill, displayChapterByIndex){
     replaceBtn.id = "replace-btn";
     replaceBtn.onclick = function(){
       replacementCount.innerText = "";
-      replace(editorQuill, replaceIn.value);
+      //Only replace if the current selection is still the match Find highlighted - the editor
+      //stays interactive while this popup is open, so the user can click/select elsewhere in it
+      //between Find and Replace, and Replace must not clobber whatever ends up selected.
+      var selection = editorQuill.getSelection(true);
+      var selectedText = editorQuill.getText(selection.index, selection.length);
+      var isMatch = caseSensitive.checked
+        ? selectedText === findIn.value
+        : selectedText.toLowerCase() === findIn.value.toLowerCase();
+      if(findIn.value && isMatch)
+        replace(editorQuill, replaceIn.value);
       findBtn.click();
       replaceBtn.focus();
     };
@@ -122,9 +135,16 @@ function showFindReplace(project, editorQuill, displayChapterByIndex){
     findForm.appendChild(replacementCount);
 
     findIn.addEventListener("keyup", function(event){
-      event.preventDefault();
       if (event.key == "Enter") {
+          event.preventDefault();
           findBtn.click();
+      }
+    });
+
+    replaceIn.addEventListener("keyup", function(event){
+      if (event.key == "Enter") {
+          event.preventDefault();
+          replaceBtn.click();
       }
     });
 
