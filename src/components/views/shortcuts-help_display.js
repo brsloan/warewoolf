@@ -98,6 +98,14 @@ function showShortcutsHelp(isMac){
     };
     popup.appendChild(closeBtn);
 
+    popup.addEventListener('keydown', function(e){
+      if(e.key === "Escape"){
+        e.preventDefault();
+        e.stopPropagation();
+        closePopups();
+      }
+    });
+
     document.body.appendChild(popup);
     closeBtn.focus();
     popup.scrollTop = 0;
