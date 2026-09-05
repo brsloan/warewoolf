@@ -95,3 +95,26 @@ test('getCardsFromFile returns an empty array for an existing empty corkboard fi
 
   assert.deepStrictEqual(getCardsFromFile(chaptersPath), []);
 });
+
+//A project with no corkboard file is the ordinary case, not a failure. getCorkboardForExport()
+//used to run getCardsFile()'s undefined straight into .replace() for .docx, and export.js counted
+//the throw as a failed export - so exporting a corkboard-less project to .docx always reported
+//that it had finished with errors.
+test('getCorkboardForExport returns nothing instead of throwing when there is no corkboard file', function(t){
+  const { getCorkboardForExport } = require('../src/components/controllers/corkboard');
+  const chaptersPath = makeTempChaptersPath(t);
+
+  assert.strictEqual(getCorkboardForExport(chaptersPath, { type: '.docx' }), undefined);
+  assert.strictEqual(getCorkboardForExport(chaptersPath, { type: '.txt' }), undefined);
+});
+
+test('getCorkboardForExport still strips the blank line after headings for .docx', function(t){
+  const { getCorkboardForExport } = require('../src/components/controllers/corkboard');
+  const chaptersPath = makeTempChaptersPath(t);
+  saveCards([{ label: 'Card One', descr: 'Body text.', color: 0, checked: false }], chaptersPath);
+
+  const docx = getCorkboardForExport(chaptersPath, { type: '.docx' });
+
+  assert.ok(docx.includes('Card One'));
+  assert.ok(!/^(# .*\n)\n/m.test(docx), 'no blank line left directly after a heading');
+});

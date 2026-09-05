@@ -4,6 +4,15 @@ const cardsFilename = 'project_corkboard.txt';
 
 function getCorkboardForExport(chaptersPath, options){
     var returnText = getCorkboardAsMd(chaptersPath);
+
+    //Most projects have no corkboard file at all, which getCardsFile() reports as undefined. That
+    //is the ordinary case, not a failure: hand it straight back so export.js's own `if(corkboardMd)`
+    //skips the corkboard document. Falling through to .replace() below threw instead, and export.js
+    //counted the throw as a failed export - so every .docx export of a project without a corkboard
+    //told the reader it had finished with errors.
+    if(!returnText)
+        return returnText;
+
     if(options.type == '.docx'){
         //Remove extra blank lines after headings
         var headingsWithExtraBlank = /^(# .*\n)\n/gm;

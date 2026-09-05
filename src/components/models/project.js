@@ -34,6 +34,9 @@ function newProject(){
     }
 
     function loadFile(projPath){
+      //Cleared up front so it always describes this load, not an earlier one.
+      this.loadError = null;
+
       try{
         //Convert Windows filepaths to maintain linux/windows compatibility
         projPath = projPath.replaceAll('\\', '/');
@@ -74,6 +77,14 @@ function newProject(){
       }
       catch(err){
         logError(err);
+        //Every caller does missingChaps.length on this return value, so a failed load has to hand
+        //back an array like every other path. Returning undefined here threw instead, and on the
+        //startup path (loadInitialProject -> setProject) that killed render.js before it had
+        //registered a single ipcRenderer handler - including the exit-app-clicked one that
+        //index.js's close guard waits for, leaving a window nothing but the task manager could
+        //close. Callers tell a failed load from a clean one by checking loadError.
+        this.loadError = err;
+        return [];
       }
     }
 
@@ -132,6 +143,9 @@ function newProject(){
         else if (k == "wordCountOnLoad") return undefined;
         else if (k == "notes") return undefined;
         else if (k == "notesChap") return undefined;
+        //Records why the last load failed, for the caller that has to report it - never part of
+        //the saved project.
+        else if (k == "loadError") return undefined;
         else return v;
       }, '\t');
     }
@@ -234,12 +248,28 @@ function newProject(){
       }
     }
 
+    //Scans all three lists, not just chapters. A reference document or a trashed chapter is a real
+    //file this project manages - saveAs() copies all three, saveFile() writes all three - but a
+    //missing one used to go unreported, so the repair screen never opened and the reader only found
+    //out on navigating onto it, by way of a blank editor and an ENOENT in the error log. The usual
+    //cause (a renamed or mistyped chapters subdirectory) breaks all three at once, and that is
+    //exactly what the repair screen fixes, so it needs the whole set to work from.
     function testChapsDirectory(){
+      var proj = this;
       var missingChaps = [];
-      for(let i=0;i<this.chapters.length;i++){
-        if(!fs.existsSync(this.directory + this.chapsDirectory + this.chapters[i].filename))
-          missingChaps.push(this.chapters[i]);
-      }
+
+      chapterList.LIST_ORDER.forEach(function(listName){
+        chapterList.listOf(proj, listName).forEach(function(chap){
+          //A chapter that has never been saved has no file yet, so there is no missing one to
+          //report - only a filename that was expected on disk and is not there counts.
+          if(chap.filename == null)
+            return;
+
+          if(!fs.existsSync(proj.directory + proj.chapsDirectory + chap.filename))
+            missingChaps.push(chap);
+        });
+      });
+
       return missingChaps;
     }
 }

@@ -1102,3 +1102,231 @@ test('PageDown in the notes pane pages down notesQuill rather than editorQuill',
   assert.strictEqual(err, null, err && err.message);
   assert.strictEqual(r.notesQuill.getSelection().index, 0);
 });
+
+//---------------------------------------------------------------------------
+// restoreFromTrash
+//---------------------------------------------------------------------------
+
+test('restoreFromTrash follows the restored chapter to its new place in the list', function(){
+  var r = freshRender();
+  var A = makeChap('A'), B = makeChap('B'), R = makeChap('R');
+  var T1 = makeChap('T1'), T2 = makeChap('T2');
+  r.project.chapters = [A, B];
+  r.project.reference = [R];
+  r.project.trash = [T1, T2];
+  r.displayChapterByIndex(4); //T2
+
+  r.restoreFromTrash(4);
+
+  //T2 is now the last chapter, so its combined index is 2 - not the 4 it was restored from, which
+  //by then names T1 (chapters A,B,T2 | reference R | trash T1).
+  assert.deepStrictEqual(r.project.chapters.map(function(c){ return c.title; }), ['A', 'B', 'T2']);
+  assert.strictEqual(r.project.activeChapterIndex, 2);
+  var active = document.querySelector('.activeChapter');
+  assert.strictEqual(active && active.textContent, 'T2');
+});
+
+//The reason the index above matters: activeChapterIndex is what the editor's text-change handler
+//routes a keystroke through. Left pointing at the wrong document, the text on screen was written
+//into a chapter the reader never opened, and saved over its file.
+test('typing after a restore edits the restored chapter, not the one that took its index', function(){
+  var r = freshRender();
+  var A = makeChap('A'), T1 = makeChap('T1', { text: 'T1 body' }), T2 = makeChap('T2', { text: 'T2 body' });
+  r.project.chapters = [A];
+  r.project.reference = [makeChap('R')];
+  r.project.trash = [T1, T2];
+  r.displayChapterByIndex(3); //T2
+
+  r.restoreFromTrash(3);
+  r.editorQuill.insertText(0, 'X', 'user');
+
+  assert.strictEqual(T1.hasUnsavedChanges, false, 'T1 was never opened and must stay untouched');
+  assert.ok(!T1.contents || JSON.stringify(T1.contents).indexOf('T2 body') === -1,
+    'T2 text leaked into T1: ' + JSON.stringify(T1.contents));
+  assert.strictEqual(T2.hasUnsavedChanges, true);
+  assert.match(JSON.stringify(T2.contents), /XT2 body/);
+});
+
+test('restoreFromTrash keeps a different active chapter pointing at the same document', function(){
+  var r = freshRender();
+  var A = makeChap('A'), R = makeChap('R'), T1 = makeChap('T1');
+  r.project.chapters = [A];
+  r.project.reference = [R];
+  r.project.trash = [T1];
+  r.displayChapterByIndex(1); //R, the reference doc
+
+  r.restoreFromTrash(2); //restore T1 while R is the active document
+
+  //T1 joins the chapters list ahead of R, pushing R's combined index from 1 to 2.
+  assert.strictEqual(r.project.activeChapterIndex, 2);
+  var active = document.querySelector('.activeChapter');
+  assert.strictEqual(active && active.textContent, 'R');
+});
+
+test('restoreFromTrash ignores an index that is not in the trash', function(){
+  var r = freshRender();
+  r.project.chapters = [makeChap('A')];
+  r.project.trash = [];
+  r.project.activeChapterIndex = 0;
+
+  r.restoreFromTrash(0);
+
+  assert.deepStrictEqual(r.project.chapters.map(function(c){ return c.title; }), ['A']);
+  assert.strictEqual(r.project.activeChapterIndex, 0);
+});
+
+//---------------------------------------------------------------------------
+// editor enable/disable across projects
+//---------------------------------------------------------------------------
+
+//Emptying a project disables the editor; nothing on the load path used to switch it back on, so
+//opening a project that did have chapters left the reader unable to type into it.
+test('displaying a chapter re-enables an editor that an emptied project disabled', function(){
+  var r = freshRender();
+  r.project.chapters = [makeChap('only')];
+  r.project.activeChapterIndex = 0;
+  r.updateFileList();
+
+  r.moveToTrash(0);
+  r.deleteChapter(0);
+  assert.strictEqual(r.editorQuill.isEnabled(), false, 'nothing left to edit');
+
+  //As displayProject() would after opening another project.
+  r.project.chapters = [makeChap('fresh')];
+  r.project.activeChapterIndex = 0;
+  r.displayChapterByIndex(0);
+
+  assert.strictEqual(r.editorQuill.isEnabled(), true);
+});
+
+test('the editor stays disabled while the project has nothing in any list', function(){
+  var r = freshRender();
+  r.project.chapters = [];
+  r.project.reference = [];
+  r.project.trash = [];
+
+  r.displayChapterByIndex(0);
+
+  assert.strictEqual(r.editorQuill.isEnabled(), false);
+});
+
+//The notes handler has always been guarded this way; the editor's was not.
+test('a user edit with no chapter to attach it to is dropped rather than throwing', function(){
+  var r = freshRender();
+  r.project.chapters = [];
+  r.project.reference = [];
+  r.project.trash = [];
+  r.updateFileList();
+
+  r.editorQuill.enable();
+  assert.doesNotThrow(function(){
+    r.editorQuill.insertText(0, 'hello', 'user');
+  });
+});
+
+//---------------------------------------------------------------------------
+// opening a project file that cannot be read
+//---------------------------------------------------------------------------
+
+//Same as freshRender(), but hands back the fake ipcRenderer as well and leaves any popup in place,
+//so these tests can check what render.js registered and what it put on screen.
+function renderWithLastProject(lastProject){
+  fs.writeFileSync(path.join(userDataDir, 'user-settings.json'),
+    JSON.stringify({ lastProject: lastProject }), 'utf8');
+
+  if(previousKeybindingsTeardown)
+    previousKeybindingsTeardown();
+
+  delete require.cache[renderPath];
+  delete require.cache[keybindingsPath];
+  var ipc = makeIpcRenderer();
+  require.cache[electronPath] = {
+    id: electronPath,
+    filename: electronPath,
+    loaded: true,
+    exports: { ipcRenderer: ipc }
+  };
+
+  var thrown = null;
+  var mod = null;
+  try{
+    mod = require(renderPath);
+  }
+  catch(err){
+    thrown = err;
+  }
+  if(mod)
+    previousKeybindingsTeardown = mod._unregisterKeybindings;
+
+  return { module: mod, ipc: ipc, thrown: thrown };
+}
+
+function writeDamagedProject(name){
+  var projPath = path.join(userDataDir, name);
+  //What a .woolf looks like after the machine loses power part-way through writing it.
+  fs.writeFileSync(projPath, '{\n\t"title": "My Novel",\n\t"chapters": [', 'utf8');
+  return projPath;
+}
+
+//A damaged project file used to throw out of loadInitialProject() at require-time, which aborted
+//render.js before it reached any of its ipcRenderer.on registrations - including exit-app-clicked,
+//the one index.js's close guard blocks every window close waiting for.
+test('a damaged lastProject does not stop render.js from loading', function(){
+  var loaded = renderWithLastProject(writeDamagedProject('damaged.woolf'));
+
+  assert.strictEqual(loaded.thrown, null,
+    'render.js threw at startup: ' + (loaded.thrown && loaded.thrown.message));
+});
+
+test('a damaged lastProject still leaves the exit handler registered, so the window can close', function(){
+  var loaded = renderWithLastProject(writeDamagedProject('damaged.woolf'));
+
+  assert.ok(loaded.ipc.handlers['exit-app-clicked'],
+    'without this handler index.js never lets the window close');
+  assert.ok(loaded.ipc.handlers['open-clicked'], 'the rest of the menu works too');
+});
+
+//index.js's close guard only hands a window close to the renderer once this has arrived; without
+//it the guard closes the window itself rather than waiting on a renderer that may not be there.
+test('the renderer reports itself ready once its handlers are registered', function(){
+  var loaded = renderWithLastProject(writeDamagedProject('damaged.woolf'));
+
+  assert.ok(loaded.ipc.sent.indexOf('renderer-ready') > -1,
+    'sent: ' + JSON.stringify(loaded.ipc.sent));
+});
+
+test('a damaged lastProject tells the reader which file failed', function(){
+  var projPath = writeDamagedProject('damaged.woolf');
+  renderWithLastProject(projPath);
+
+  var popup = document.querySelector('.popup');
+  assert.ok(popup, 'a popup explains the failure');
+
+  //jsdom does not derive textContent from innerText assignments, so each element is read the way
+  //it was written - same as missing-pups_display.test.js does.
+  var headings = Array.from(popup.querySelectorAll('h1')).map(function(h){ return h.innerText; });
+  assert.ok(headings.some(function(h){ return /could not be read/i.test(h || ''); }),
+    'headings were: ' + JSON.stringify(headings));
+
+  var paragraphs = Array.from(popup.querySelectorAll('p')).map(function(el){ return el.innerText; });
+  assert.ok(paragraphs.some(function(t){ return (t || '').indexOf(path.basename(projPath)) > -1; }),
+    'the failing file is named');
+  assert.ok(paragraphs.some(function(t){ return /have not been touched/i.test(t || ''); }),
+    'the reader is told their chapters are safe');
+});
+
+test('a damaged lastProject leaves an empty but working project rather than a half-loaded one', function(){
+  var loaded = renderWithLastProject(writeDamagedProject('damaged.woolf'));
+  var r = loaded.module;
+
+  //render.js swaps in a fresh project on failure, so this is the new one, not the module's
+  //originally exported object.
+  assert.deepStrictEqual(r.project.chapters, []);
+  //A blank project still needs its notes chapter, or the notes pane throws the moment it refreshes.
+  assert.strictEqual(typeof r.project.notesChap.getNotesContentOrFile, 'function');
+
+  //And the app is usable from there: adding a chapter works and turns the editor back on.
+  Array.from(document.querySelectorAll('.popup')).forEach(function(p){ p.remove(); });
+  r.addNewChapter();
+  assert.strictEqual(r.editorQuill.isEnabled(), true);
+});

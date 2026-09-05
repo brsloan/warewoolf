@@ -122,6 +122,8 @@ function setDarkMode(){
 function setProject(filepath){
   if(filepath && filepath != null){
     var missingChaps = project.loadFile(filepath);
+    if(projectFailedToLoad(filepath))
+      return;
     if(missingChaps.length > 0){
       console.log('could not find all chapters.');
       const promptForMissingPups = require('./components/views/missing-pups_display');
@@ -137,6 +139,28 @@ function setProject(filepath){
       displayProject();
     }
   }
+}
+
+//Every path that opens a project file runs its result through this. Returns true when the file
+//could not be read at all - truncated by a power loss mid-save, or simply not a .woolf - in which
+//case the failure has already been dealt with here and the caller should stop rather than go on to
+//display a project that is not there.
+function projectFailedToLoad(filepath){
+  if(!project.loadError)
+    return false;
+
+  var loadError = project.loadError;
+
+  //loadFile() assigns the parsed file onto the project before it walks the chapter lists, so a
+  //failure partway through leaves chapters that were never turned into chapter objects behind on
+  //it. Start from a clean project rather than trying to display a half-loaded one.
+  project = newProject();
+  project.initNotesChap();
+  displayProject();
+
+  const reportProjectLoadFailure = require('./components/views/project-load-error_display');
+  reportProjectLoadFailure(filepath, loadError);
+  return true;
 }
 
 function convertLegacyProject(){
@@ -199,6 +223,12 @@ function displayChapterByIndex(ind){
   }
 
   project.activeChapterIndex = chapterList.toCombinedIndex(project, loc);
+
+  //The mirror of the disable() above. Emptying a project disables the editor, and nothing on the
+  //load path used to turn it back on again - so opening a project that did have chapters, after
+  //deleting every chapter of the last one, left the reader looking at their book unable to type a
+  //word into it, with nothing short of adding a chapter or restarting to get out of it.
+  editorQuill.enable();
 
   var chap = chapterList.resolve(project, loc);
 
@@ -501,6 +531,8 @@ function openAProject() {
   showFileDialog(options, function(filepath){
     if (filepath) {
       var missingChaps = project.loadFile(filepath[0]);
+      if(projectFailedToLoad(filepath[0]))
+        return;
       if(missingChaps.length > 0){
         const promptForMissingPups = require('./components/views/missing-pups_display');
         promptForMissingPups(project, function(resp){
@@ -528,10 +560,14 @@ function clearCurrentChapterIfUnchanged(){
 
 editorQuill.on('text-change', function(delta, oldDelta, source) {
   if(source == "user"){
+    //Guarded the same way the notes handler below already is: getActiveChapter() is undefined once
+    //every chapter has been permanently deleted, and there is nothing to attach this text to.
     var chap = project.getActiveChapter();
-    chap.contents = editorQuill.getContents();
-    chap.hasUnsavedChanges = true;
-    project.hasUnsavedChanges = true;
+    if(chap){
+      chap.contents = editorQuill.getContents();
+      chap.hasUnsavedChanges = true;
+      project.hasUnsavedChanges = true;
+    }
   }
 });
 
@@ -635,9 +671,29 @@ function verifyToDelete(ind){
 function restoreFromTrash(ind){
   var loc = chapterList.toLocator(project, ind);
 
-  if(loc && loc.list == 'trash'){
-    project.hasUnsavedChanges = true;
-    chapterList.append(project, 'chapters', chapterList.remove(project, loc));
+  if(!loc || loc.list != 'trash')
+    return;
+
+  var wasActive = ind == project.activeChapterIndex;
+  //Where the selection points has to be remembered as a locator rather than as the number it is
+  //stored as: restoring appends to Chapters, which renumbers every reference and trash item after
+  //it, so the number would go on naming a different document once the move is done.
+  var activeLoc = wasActive ? null : chapterList.activeLocator(project);
+  if(activeLoc && activeLoc.list == 'trash' && activeLoc.index > loc.index)
+    activeLoc.index -= 1;
+
+  project.hasUnsavedChanges = true;
+  var landed = chapterList.append(project, 'chapters', chapterList.remove(project, loc));
+
+  if(wasActive){
+    //Follow the restored chapter to its new place. Leaving activeChapterIndex where it was left
+    //the editor still showing this chapter while the index named whatever slid into its old slot -
+    //so the next keystroke was written into that other chapter, and saved over its file.
+    displayChapterByIndex(chapterList.toCombinedIndex(project, landed));
+  }
+  else{
+    if(activeLoc)
+      project.activeChapterIndex = chapterList.toCombinedIndex(project, activeLoc);
     updateFileList();
   }
 }
@@ -716,6 +772,8 @@ function scrollChapterListToActiveChapter(){
 function openHelpDoc(){
   const helpDocPath = sysDirectories.app + "/examples/HelpDoc/HelpDoc.woolf";
   project.loadFile(helpDocPath);
+  if(projectFailedToLoad(helpDocPath))
+    return;
   displayProject();
 }
 
@@ -985,6 +1043,8 @@ Object.keys(menuCommands).forEach(function(channel){
 ipcRenderer.on('file-opened-from-outside-warewoolf', function(event, fPath){
   if (fPath) {
     var missingChaps = project.loadFile(fPath);
+    if(projectFailedToLoad(fPath))
+      return;
     if(missingChaps.length > 0){
       const promptForMissingPups = require('./components/views/missing-pups_display');
       promptForMissingPups(project, function(resp){
@@ -999,6 +1059,12 @@ ipcRenderer.on('file-opened-from-outside-warewoolf', function(event, fPath){
   }
 
 });
+
+//Every handler above is registered by the time this runs, so it is safe for index.js's close guard
+//to hand a window close over to this renderer and wait. Anything at this file's top level throwing
+//before here - a damaged project file used to - means the guard never gets this and lets closes
+//through itself instead, rather than holding a dead window open.
+ipcRenderer.send('renderer-ready');
 
 //Exposed for testing only - nothing in the app itself reads this module's exports, since it's
 //loaded as a plain <script> tag rather than required. Limited to the chapter/reference/trash

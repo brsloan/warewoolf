@@ -8,6 +8,15 @@ var currentWindow = null;
 //Set once the renderer has confirmed it's safe to quit (see 'exit-app-confirmed' below), so the
 //'close' guard on the window lets that specific close through instead of re-intercepting it.
 var closeConfirmed = false;
+//True once render.js has run all the way through and registered its IPC handlers, the
+//'exit-app-clicked' one below included. It does not always get there: the whole script aborts if
+//anything at its top level throws, which a damaged project file used to do. The close guard checks
+//this before handing a window close over to the renderer, because otherwise it would block every X,
+//Alt+F4 and Cmd+Q waiting for a confirmation nothing was left alive to send - a window only the
+//task manager could shut. Deliberately a readiness flag rather than a timeout on the reply: a
+//renderer part-way through a long synchronous save or export can be slow to answer, and forcing
+//that window closed would destroy the very work the guard exists to protect.
+var rendererReady = false;
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) { // eslint-disable-line global-require
@@ -56,6 +65,11 @@ const createWindow = () => {
   //mainWindow.maximize();
 
   currentWindow = mainWindow;
+  //A window built after a previous one was closed (the dock re-activate path on macOS) starts out
+  //guarded again rather than inheriting the last window's confirmation, and waits for its own
+  //renderer to report in.
+  closeConfirmed = false;
+  rendererReady = false;
   mainWindow.on('closed', () => {
     if(currentWindow === mainWindow)
       currentWindow = null;
@@ -65,10 +79,21 @@ const createWindow = () => {
   //unsaved-changes check the File > Exit menu item already uses, instead of only the menu item
   //being guarded while every other path quits unchecked.
   mainWindow.on('close', (event) => {
-    if(!closeConfirmed){
-      event.preventDefault();
-      mainWindow.webContents.send('exit-app-clicked');
-    }
+    if(closeConfirmed)
+      return;
+
+    //No renderer to ask, so there is no unsaved work it could be protecting and no confirmation
+    //ever coming. Let the close through rather than trapping the window.
+    if(!rendererReady)
+      return;
+
+    event.preventDefault();
+    mainWindow.webContents.send('exit-app-clicked');
+  });
+
+  //A renderer that dies after it reported in leaves nothing to answer the prompt either.
+  mainWindow.webContents.on('render-process-gone', () => {
+    rendererReady = false;
   });
 
   // and load the index.html of the app.
@@ -455,6 +480,11 @@ app.on('window-all-closed', () => {
 ipcMain.on('exit-app-confirmed', function(e){
   closeConfirmed = true;
   app.quit();
+});
+
+//Sent by render.js as the last thing it does, once every handler is registered.
+ipcMain.on('renderer-ready', function(e){
+  rendererReady = true;
 });
 
 ipcMain.on('get-directories', function(e){

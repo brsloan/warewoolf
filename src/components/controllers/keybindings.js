@@ -105,6 +105,14 @@ function registerKeybindings(context){
   }
 
   function editorControlEvents(e){
+    //The chapter rename box is a plain text field living inside the sidebar pane, so these bubble
+    //up through it. Ctrl/Cmd+Shift+Arrow is the native extend-selection-by-word there, and every
+    //other shortcut below (chapter navigation, reordering, PageDown) would tear the box down in
+    //the middle of a rename and throw away what had been typed. Leave a text field to handle its
+    //own keys, the same way handleGlobalKeydown does above.
+    if(e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")
+      return;
+
     if((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "ArrowUp"){
       stopDefaultPropagation(e);
       context.actions.moveChapUp(project().activeChapterIndex);

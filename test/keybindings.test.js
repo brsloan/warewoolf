@@ -330,3 +330,78 @@ test('unregister() removes all four listeners, so a later keydown does nothing',
   delete require.cache[keybindingsPath];
   delete require.cache[electronPath];
 });
+
+//---------------------------------------------------------------------------
+// Text fields inside the panes
+//---------------------------------------------------------------------------
+
+//The chapter rename box is a real <input> living inside the sidebar pane, so the pane's own
+//keydown listener sees everything typed into it. The global listener already stepped aside for
+//Ctrl/Cmd+Left/Right there; the pane listener did not, so the shortcuts below still fired - and
+//since each of them re-renders the sidebar, they tore the rename box down mid-edit.
+function renameBoxInSidebar(){
+  var box = document.createElement('input');
+  box.type = 'text';
+  box.classList.add('name-box');
+  document.getElementById('chapter-list-sidebar').appendChild(box);
+  return box;
+}
+
+test('Ctrl/Cmd+Shift+Left in the chapter rename box is left to the text field', function(){
+  var env = setup();
+  document.getElementById('chapter-list-sidebar').classList.add('visible');
+  var box = renameBoxInSidebar();
+
+  var evt = keydown(box, 'ArrowLeft', ctrl({ shiftKey: true }));
+
+  assert.deepStrictEqual(env.actions.calls, [], 'no shortcut should have fired');
+  assert.strictEqual(evt.defaultPrevented, false,
+    'the field keeps its native extend-selection-by-word');
+  teardown(env);
+});
+
+test('Ctrl/Cmd+Shift+Up in the chapter rename box does not reorder chapters', function(){
+  var env = setup();
+  var box = renameBoxInSidebar();
+
+  keydown(box, 'ArrowUp', ctrl({ shiftKey: true }));
+
+  assert.deepStrictEqual(env.actions.calls, []);
+  teardown(env);
+});
+
+test('Ctrl/Cmd+Up in the chapter rename box does not change chapters', function(){
+  var env = setup();
+  var box = renameBoxInSidebar();
+
+  keydown(box, 'ArrowUp', ctrl());
+
+  assert.deepStrictEqual(env.actions.calls, []);
+  teardown(env);
+});
+
+test('PageDown in the chapter rename box is left to the text field', function(){
+  var env = setup();
+  var box = renameBoxInSidebar();
+  var before = env.editorQuill.setSelectionCallCount;
+
+  var evt = keydown(box, 'PageDown');
+
+  assert.strictEqual(env.editorQuill.setSelectionCallCount, before);
+  assert.strictEqual(evt.defaultPrevented, false);
+  teardown(env);
+});
+
+test('the same shortcuts still work when the pane itself has focus', function(){
+  var env = setup();
+  document.getElementById('chapter-list-sidebar').classList.add('visible');
+
+  keydown('chapter-list-sidebar', 'ArrowUp', ctrl({ shiftKey: true }));
+  keydown('chapter-list-sidebar', 'ArrowLeft', ctrl({ shiftKey: true }));
+
+  assert.deepStrictEqual(env.actions.calls, [
+    ['moveChapUp', 0],
+    ['changeChapterTitle', 0]
+  ]);
+  teardown(env);
+});

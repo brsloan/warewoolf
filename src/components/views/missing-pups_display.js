@@ -1,6 +1,11 @@
 const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
 const fs = require('fs');
 const { getFileList } = require('../controllers/file-manager');
+//Each document's notes are saved beside it under this prefix (chapter.js owns the convention), and
+//the corkboard has its own fixed name (corkboard.js). Both live in the chapters directory, so the
+//listing below has to know about them or it reports the project's own files as strays.
+const notesNamePrepend = '-notes_';
+const corkboardFilename = 'project_corkboard.txt';
 
 function promptForMissingPups(project, callback){
   removeElementsByClass('popup');
@@ -124,7 +129,7 @@ function fillMissingChapsList(project, missingChapsList, fileList, chapsDirIn){
         deleteBtn.innerText = 'Click Again To DELETE';
       }
       else{
-        project.chapters.splice(project.chapters.indexOf(chap), 1);
+        removeChapterFromProject(project, chap);
         fillMissingChapsList(project, missingChapsList, fileList, chapsDirIn);
         fillFileList(project, fileList, chapsDirIn);
       }
@@ -134,9 +139,55 @@ function fillMissingChapsList(project, missingChapsList, fileList, chapsDirIn){
   });
 }
 
+//A missing document can be in any of the project's three lists, so it has to come out of the one
+//it is actually in. Reaching for project.chapters.indexOf() alone returned -1 for a reference or
+//trashed document, and splice(-1, 1) then quietly removed the last real chapter instead of it.
+function removeChapterFromProject(project, chap){
+  var lists = [project.chapters, project.reference, project.trash];
+
+  for(let i = 0; i < lists.length; i++){
+    if(!lists[i])
+      continue;
+
+    var ind = lists[i].indexOf(chap);
+    if(ind > -1){
+      lists[i].splice(ind, 1);
+      return true;
+    }
+  }
+
+  return false;
+}
+
+//Every list the project keeps files for, so a reference or trashed document is not mistaken for an
+//unexpected file on disk or missed when checking whether two documents claim the same filename.
+//Each list is defaulted because concat() would otherwise splice a bare undefined into the result
+//for a project that is missing one.
+function allChapters(project){
+  return (project.chapters || []).concat(project.reference || [], project.trash || []);
+}
+
+//Every filename this project is expected to keep in its chapters directory: each document's own
+//file, the notes file that sits alongside it under the '-notes_' prefix, and the corkboard. The
+//project-wide notes belong to notesChap, which is not in any of the three lists, so it is added
+//here as well - without it the reader was told their project notes file was an unexpected stray.
+function expectedFilenames(project){
+  var filenames = [corkboardFilename];
+
+  allChapters(project).concat(project.notesChap || []).forEach(function(chap){
+    if(!chap || chap.filename == null)
+      return;
+
+    filenames.push(chap.filename);
+    filenames.push(notesNamePrepend + chap.filename);
+  });
+
+  return filenames;
+}
+
 function updateChapExistsCheck(project, chapExistsCheck, chap){
   if(fs.existsSync(project.directory + project.chapsDirectory + chap.filename)){
-    if(project.chapters.concat(project.reference).filter(function(ch){
+    if(allChapters(project).filter(function(ch){
       return ch.filename == chap.filename;
     }).length > 1){
       chapExistsCheck.classList.add('unsure-check');
@@ -177,9 +228,7 @@ function fillFileList(project, fileList, chapsDirIn){
 
       let fileExpected = document.createElement('label');
       fileList.appendChild(fileExpected);
-      if(project.chapters.concat(project.reference).map(function(chap){
-        return chap.filename;
-      }).includes(file.name) || file.name == 'project_corkboard.txt'){
+      if(expectedFilenames(project).includes(file.name)){
         fileExpected.innerText = ' ✔';
         fileExpected.classList.add('good-check');
       }

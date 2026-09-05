@@ -277,3 +277,134 @@ test('saving a project does not choke on the reference each chapter holds back t
   assert.strictEqual(saved.chapters[0].parentProject, undefined);
   assert.strictEqual(saved.chapters[0].title, 'Chapter One');
 });
+
+//---------------------------------------------------------------------------
+// loadFile on an unreadable project file
+//---------------------------------------------------------------------------
+
+//Every caller does `missingChaps.length` on what loadFile() hands back. It used to fall off the
+//end of its catch block and return undefined, so a damaged .woolf threw there instead - and on the
+//startup path that killed render.js before it registered the IPC handler index.js's close guard
+//waits for, leaving a window that could not be closed at all.
+test('loadFile returns an empty array rather than undefined when the file is not valid JSON', function(t){
+  const dir = tempDir(t);
+  const projPath = dir + 'damaged.woolf';
+  fs.writeFileSync(projPath, '{"title": "Half a proj', 'utf8');
+
+  const proj = newProject();
+  const missingChaps = proj.loadFile(projPath);
+
+  assert.ok(Array.isArray(missingChaps));
+  assert.strictEqual(missingChaps.length, 0);
+});
+
+test('loadFile records why a load failed so the caller can tell it from a clean load', function(t){
+  const dir = tempDir(t);
+  const projPath = dir + 'damaged.woolf';
+  fs.writeFileSync(projPath, 'not a project file at all', 'utf8');
+
+  const proj = newProject();
+  proj.loadFile(projPath);
+
+  assert.ok(proj.loadError instanceof Error);
+});
+
+test('loadFile clears a previous failure once a good project loads', function(t){
+  const dir = tempDir(t);
+  fs.writeFileSync(dir + 'damaged.woolf', '#', 'utf8');
+  fs.mkdirSync(dir + 'good_chapters');
+  fs.writeFileSync(dir + 'good.woolf', JSON.stringify({
+    title: 'Good', author: 'A', chapsDirectory: 'good_chapters/',
+    chapters: [], reference: [], trash: []
+  }), 'utf8');
+
+  const proj = newProject();
+  proj.loadFile(dir + 'damaged.woolf');
+  assert.ok(proj.loadError);
+
+  proj.loadFile(dir + 'good.woolf');
+  assert.strictEqual(proj.loadError, null);
+});
+
+test('loadError never reaches the saved project file', function(t){
+  const dir = tempDir(t);
+  fs.mkdirSync(dir + 'p_chapters');
+  const proj = newProject();
+  proj.loadFile(dir + 'missing.woolf');
+  assert.ok(proj.loadError, 'load of a nonexistent file failed as expected');
+
+  proj.filename = 'p.woolf';
+  proj.directory = dir;
+  proj.chapsDirectory = 'p_chapters/';
+  proj.initNotesChap();
+  assert.strictEqual(proj.saveFile(), true);
+
+  const written = JSON.parse(fs.readFileSync(dir + 'p.woolf', 'utf8'));
+  assert.strictEqual(written.loadError, undefined);
+});
+
+//---------------------------------------------------------------------------
+// testChapsDirectory across all three lists
+//---------------------------------------------------------------------------
+
+//Only the chapters list used to be scanned, so a reference document or trashed chapter whose file
+//had gone missing was never reported - the repair screen stayed shut and the reader found out by
+//navigating onto it and getting a blank editor with an ENOENT in the error log.
+function projectWithMissingFileIn(dir, listName){
+  const chapsDir = 'p_chapters/';
+  fs.mkdirSync(dir + chapsDir, { recursive: true });
+  fs.writeFileSync(dir + chapsDir + 'present.txt', 'Here.\n', 'utf8');
+
+  const lists = { chapters: [], reference: [], trash: [] };
+  lists.chapters.push({ title: 'Present', filename: 'present.txt' });
+  lists[listName].push({ title: 'New Chap', filename: 'new chap.txt' });
+
+  fs.writeFileSync(dir + 'p.woolf', JSON.stringify({
+    title: 'P', author: 'A', chapsDirectory: chapsDir,
+    chapters: lists.chapters, reference: lists.reference, trash: lists.trash
+  }), 'utf8');
+
+  return newProject().loadFile(dir + 'p.woolf');
+}
+
+test('loadFile flags a reference document whose file is missing', function(t){
+  const missing = projectWithMissingFileIn(tempDir(t), 'reference');
+
+  assert.strictEqual(missing.length, 1);
+  assert.strictEqual(missing[0].title, 'New Chap');
+});
+
+test('loadFile flags a trashed chapter whose file is missing', function(t){
+  const missing = projectWithMissingFileIn(tempDir(t), 'trash');
+
+  assert.strictEqual(missing.length, 1);
+  assert.strictEqual(missing[0].title, 'New Chap');
+});
+
+test('loadFile reports nothing missing when every list is intact', function(t){
+  const dir = tempDir(t);
+  const chapsDir = 'p_chapters/';
+  fs.mkdirSync(dir + chapsDir);
+  ['a.txt', 'b.txt', 'c.txt'].forEach(function(f){
+    fs.writeFileSync(dir + chapsDir + f, 'Text.\n', 'utf8');
+  });
+  fs.writeFileSync(dir + 'p.woolf', JSON.stringify({
+    title: 'P', author: 'A', chapsDirectory: chapsDir,
+    chapters: [{ title: 'A', filename: 'a.txt' }],
+    reference: [{ title: 'B', filename: 'b.txt' }],
+    trash: [{ title: 'C', filename: 'c.txt' }]
+  }), 'utf8');
+
+  assert.deepStrictEqual(newProject().loadFile(dir + 'p.woolf'), []);
+});
+
+//A chapter added but never saved has no file yet, so there is no missing one to report.
+test('testChapsDirectory ignores a chapter that has no filename', function(t){
+  const dir = tempDir(t);
+  const proj = newProject();
+  proj.directory = dir;
+  proj.chapsDirectory = 'p_chapters/';
+  proj.chapters = [newChapter(proj)];
+
+  assert.deepStrictEqual(proj.testChapsDirectory(), []);
+});

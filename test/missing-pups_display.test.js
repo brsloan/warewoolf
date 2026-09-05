@@ -255,3 +255,199 @@ test('a missing chapter\'s filename is flagged as already used when it collides 
   assert.strictEqual(filenameInput.nextElementSibling.innerText, ' !! File Already Used By Another Chapter');
   assert.ok(filenameInput.nextElementSibling.classList.contains('unsure-check'));
 });
+
+//---------------------------------------------------------------------------
+// Missing documents outside the chapters list
+//---------------------------------------------------------------------------
+
+//Deleting used to splice project.chapters at project.chapters.indexOf(chap), which is -1 for a
+//reference or trashed document - and splice(-1, 1) removes the last element, so confirming Delete
+//on a missing reference document quietly threw away the project's last real chapter instead.
+test('Delete removes a missing reference document without touching the chapters list', function(t){
+  t.mock.method(fs, 'existsSync', function(){ return false; });
+  t.mock.method(fs, 'readdirSync', function(){ return []; });
+  var keeper = makeChap('Chapter One', 'ch1.txt');
+  var lastChap = makeChap('Chapter Two', 'ch2.txt');
+  var refDoc = makeChap('New Chap', 'new chap.txt');
+  var project = makeProject({
+    chapters: [keeper, lastChap],
+    reference: [refDoc],
+    trash: [],
+    testChapsDirectory: function(){ return project.reference.includes(refDoc) ? [refDoc] : []; }
+  });
+  var promptForMissingPups = freshMissingPupsDisplay({});
+
+  promptForMissingPups(project, function(){});
+  var deleteBtn = findButton('Delete');
+  deleteBtn.innerText = 'Delete';
+  deleteBtn.onclick();
+  deleteBtn.onclick();
+
+  assert.deepStrictEqual(project.reference, []);
+  assert.deepStrictEqual(project.chapters, [keeper, lastChap],
+    'no chapter should have been removed');
+});
+
+test('Delete removes a missing trashed chapter from the trash', function(t){
+  t.mock.method(fs, 'existsSync', function(){ return false; });
+  t.mock.method(fs, 'readdirSync', function(){ return []; });
+  var keeper = makeChap('Chapter One', 'ch1.txt');
+  var trashed = makeChap('Old Draft', 'old.txt');
+  var project = makeProject({
+    chapters: [keeper],
+    reference: [],
+    trash: [trashed],
+    testChapsDirectory: function(){ return project.trash.includes(trashed) ? [trashed] : []; }
+  });
+  var promptForMissingPups = freshMissingPupsDisplay({});
+
+  promptForMissingPups(project, function(){});
+  var deleteBtn = findButton('Delete');
+  deleteBtn.innerText = 'Delete';
+  deleteBtn.onclick();
+  deleteBtn.onclick();
+
+  assert.deepStrictEqual(project.trash, []);
+  assert.deepStrictEqual(project.chapters, [keeper]);
+});
+
+test('a filename collision with a trashed chapter is flagged like any other', function(t){
+  t.mock.method(fs, 'existsSync', function(){ return true; });
+  t.mock.method(fs, 'readdirSync', function(){ return []; });
+  var missing = makeChap('Chapter One', 'ch1.txt');
+  var project = makeProject({
+    chapters: [missing],
+    reference: [],
+    trash: [makeChap('Old Draft', 'ch1.txt')],
+    testChapsDirectory: function(){ return [missing]; }
+  });
+  var promptForMissingPups = freshMissingPupsDisplay({});
+
+  promptForMissingPups(project, function(){});
+
+  var filenameInput = Array.from(document.querySelectorAll('input')).find(function(i){
+    return i.value === 'ch1.txt';
+  });
+  assert.strictEqual(filenameInput.nextElementSibling.innerText,
+    ' !! File Already Used By Another Chapter');
+});
+
+test('a trashed chapter\'s file is not listed as an unexpected file in the subdirectory', function(t){
+  t.mock.method(fs, 'existsSync', function(){ return true; });
+  //fillSubdirsList() reads the project directory through fs directly, unlike the file listing
+  //below, which goes through the mocked getFileList.
+  t.mock.method(fs, 'readdirSync', function(){ return []; });
+  var project = makeProject({
+    chapters: [makeChap('Chapter One', 'ch1.txt')],
+    reference: [],
+    trash: [makeChap('Old Draft', 'old.txt')],
+    testChapsDirectory: function(){ return []; }
+  });
+  var promptForMissingPups = freshMissingPupsDisplay({
+    getFileList: function(){
+      return [
+        { name: 'ch1.txt', isDirectory: function(){ return false; } },
+        { name: 'old.txt', isDirectory: function(){ return false; } }
+      ];
+    }
+  });
+
+  promptForMissingPups(project, function(){});
+
+  var labels = Array.from(document.querySelectorAll('#missing-file-list label'))
+    .map(function(l){ return l.innerText; });
+  assert.ok(labels.indexOf(' ??? Unexpected File') === -1,
+    'trashed chapter files belong to the project: ' + JSON.stringify(labels));
+});
+
+//---------------------------------------------------------------------------
+// Which files in the chapters directory count as the project's own
+//---------------------------------------------------------------------------
+
+//The listing pairs each filename label with a verdict label, in order.
+function listedFiles(){
+  var labels = Array.from(document.querySelectorAll('#missing-file-list label'));
+  var pairs = {};
+  for(var i = 0; i + 1 < labels.length; i += 2){
+    pairs[labels[i].innerText] = labels[i + 1].innerText;
+  }
+  return pairs;
+}
+
+function fileEntry(name){
+  return { name: name, isDirectory: function(){ return false; } };
+}
+
+//Every document's notes are saved beside it as '-notes_<filename>', and the project-wide notes as
+//'-notes_project_.txt' - none of which the listing knew about, so correcting the chapters
+//subdirectory left the reader looking at their own notes files flagged as unexpected strays.
+test('notes files and the corkboard are recognised as the project\'s own files', function(t){
+  t.mock.method(fs, 'existsSync', function(){ return true; });
+  t.mock.method(fs, 'readdirSync', function(){ return []; });
+  var project = makeProject({
+    chapters: [makeChap('Chapter One', 'ch1.txt')],
+    reference: [makeChap('New Chap', 'new chap.txt')],
+    trash: [makeChap('Old Draft', 'old.txt')],
+    notesChap: makeChap('Project Notes', 'project_.txt'),
+    testChapsDirectory: function(){ return []; }
+  });
+  var promptForMissingPups = freshMissingPupsDisplay({
+    getFileList: function(){
+      return [
+        fileEntry('ch1.txt'), fileEntry('-notes_ch1.txt'),
+        fileEntry('new chap.txt'), fileEntry('-notes_new chap.txt'),
+        fileEntry('old.txt'),
+        fileEntry('-notes_project_.txt'),
+        fileEntry('project_corkboard.txt')
+      ];
+    }
+  });
+
+  promptForMissingPups(project, function(){});
+
+  var listed = listedFiles();
+  Object.keys(listed).forEach(function(name){
+    assert.strictEqual(listed[name], ' ✔', name + ' should be recognised');
+  });
+});
+
+test('a file that is not part of the project is still flagged as unexpected', function(t){
+  t.mock.method(fs, 'existsSync', function(){ return true; });
+  t.mock.method(fs, 'readdirSync', function(){ return []; });
+  var project = makeProject({
+    chapters: [makeChap('Chapter One', 'ch1.txt')],
+    reference: [],
+    trash: [],
+    notesChap: makeChap('Project Notes', 'project_.txt'),
+    testChapsDirectory: function(){ return []; }
+  });
+  var promptForMissingPups = freshMissingPupsDisplay({
+    getFileList: function(){
+      return [fileEntry('ch1.txt'), fileEntry('holiday-photo.jpg')];
+    }
+  });
+
+  promptForMissingPups(project, function(){});
+
+  var listed = listedFiles();
+  assert.strictEqual(listed['ch1.txt'], ' ✔');
+  assert.strictEqual(listed['holiday-photo.jpg'], ' ??? Unexpected File');
+});
+
+test('the file listing copes with a project whose notes chapter is not set up yet', function(t){
+  t.mock.method(fs, 'existsSync', function(){ return true; });
+  t.mock.method(fs, 'readdirSync', function(){ return []; });
+  var project = makeProject({
+    chapters: [makeChap('Chapter One', 'ch1.txt')],
+    reference: [],
+    trash: [],
+    notesChap: {},
+    testChapsDirectory: function(){ return []; }
+  });
+  var promptForMissingPups = freshMissingPupsDisplay({
+    getFileList: function(){ return [fileEntry('ch1.txt')]; }
+  });
+
+  assert.doesNotThrow(function(){ promptForMissingPups(project, function(){}); });
+  assert.strictEqual(listedFiles()['ch1.txt'], ' ✔');
+});
