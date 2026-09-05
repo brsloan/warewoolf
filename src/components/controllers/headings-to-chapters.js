@@ -1,5 +1,4 @@
 const { generateChapTitleFromFirstLine } = require('./quill-utils');
-const { hideWorking } = require('../views/working_display');
 
 function breakHeadingsIntoChapters(editorQuill, addImportedChapter, headingLevel = 1){
   var opsIn = editorQuill.getContents().ops;
@@ -47,8 +46,9 @@ function breakHeadingsIntoChapters(editorQuill, addImportedChapter, headingLevel
     chaps.forEach(function(chap){
       addImportedChapter(chap, generateChapTitleFromFirstLine(chap));
     });
+    return true;
   }
-  hideWorking();
+  return false;
 }
 
 module.exports = breakHeadingsIntoChapters;

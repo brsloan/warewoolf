@@ -1,5 +1,5 @@
 const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
-const { showWorkingAndThen } = require('./working_display');
+const { showWorking, showWorkingAndThen, hideWorking } = require('./working_display');
 const breakHeadingsIntoChapters = require('../controllers/headings-to-chapters');
 
 function showBreakHeadingsOptions(editorQuill, addImportedChapter){
@@ -49,10 +49,25 @@ function showBreakHeadingsOptions(editorQuill, addImportedChapter){
 
   breakHeadingsForm.onsubmit = function(e){
     e.preventDefault();
-    showWorkingAndThen('Breaking headings into chapters...', function(){
-      breakHeadingsIntoChapters(editorQuill, addImportedChapter, headingSelect.value);
-    });
+
+    var headingLevel = parseInt(headingSelect.value, 10);
     closePopups();
+    //Breaking can be slow on projects with many/large chapters, so show a working
+    //indicator (deferred via showWorkingAndThen) instead of blocking with no feedback.
+    showWorkingAndThen('Breaking headings into chapters...', function(){
+      var didSplit = breakHeadingsIntoChapters(editorQuill, addImportedChapter, headingLevel);
+      if(didSplit){
+        hideWorking();
+      }
+      else{
+        //Give the user a moment to see that nothing happened instead of the popup
+        //just vanishing as if chapters were created.
+        showWorking('No heading ' + headingLevel + ' found - nothing to split.');
+        setTimeout(function(){
+          hideWorking();
+        }, 2500);
+      }
+    });
   };
 
   popup.appendChild(breakHeadingsForm);
