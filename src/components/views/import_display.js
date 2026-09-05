@@ -67,7 +67,6 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish){
   italicsStrInput.value = "*";
   italicsStrInput.id = "italics-str-input";
   italicsStrInput.classList.add('sublabel');
-  plainTextOptionsSet.appendChild(italicsStrInput);
 
   opsTable.appendChild(generateRow(italicsStrLabel, italicsStrInput));
 
@@ -243,6 +242,7 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish){
   var docxSelect = document.getElementById('docxSelect');
   docxSelect.checked = true;
   plainTextOptionsSet.disabled = true;
+  docxOptionsSet.disabled = false;
 
   var textSelect = document.getElementById('txtSelect');
   importForm.onchange = function(){
