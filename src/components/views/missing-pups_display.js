@@ -77,10 +77,7 @@ function promptForMissingPups(project, callback){
   fillMissingChapsList(project, missingChapsList, fileList, chapsDirIn);
 
   chapsDirIn.onkeyup = function(ev){
-    if(chapsDirIn.value[chapsDirIn.value.length - 1] != '/')
-      chapsDirIn.value += '/';
-
-    project.chapsDirectory = chapsDirIn.value;
+    project.chapsDirectory = normalizeTrailingSlash(chapsDirIn.value);
     updateDirExists(project, dirExistsCheck);
     fillSubdirsList(project, subdirsList);
     fillFileList(project, fileList, chapsDirIn);
@@ -139,7 +136,7 @@ function fillMissingChapsList(project, missingChapsList, fileList, chapsDirIn){
 
 function updateChapExistsCheck(project, chapExistsCheck, chap){
   if(fs.existsSync(project.directory + project.chapsDirectory + chap.filename)){
-    if(project.chapters.filter(function(ch){
+    if(project.chapters.concat(project.reference).filter(function(ch){
       return ch.filename == chap.filename;
     }).length > 1){
       chapExistsCheck.classList.add('unsure-check');
@@ -170,8 +167,9 @@ function fillFileList(project, fileList, chapsDirIn){
   fileListTitle.innerText = 'Files In Subdirectory: ';
   fileList.appendChild(fileListTitle);
 
-  if(fs.existsSync(project.directory + chapsDirIn.value)){
-    var files = getFileList(project.directory + chapsDirIn.value);
+  var chapsDir = normalizeTrailingSlash(chapsDirIn.value);
+  if(fs.existsSync(project.directory + chapsDir)){
+    var files = getFileList(project.directory + chapsDir);
     files.forEach(function(file){
       let filename = document.createElement('label');
       filename.innerText = file.isDirectory() ? '> ' + file.name : file.name;
@@ -229,6 +227,12 @@ function fillSubdirsList(project, subdirsList){
     }
     subdirsList.appendChild(document.createElement('br'));
   }
+}
+
+function normalizeTrailingSlash(value){
+  if(value.length > 0 && value[value.length - 1] != '/')
+    return value + '/';
+  return value;
 }
 
 function updateDirExists(project, dirExistsCheck){

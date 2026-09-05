@@ -643,7 +643,9 @@ function openAProject() {
       var missingChaps = project.loadFile(filepath[0]);
       if(missingChaps.length > 0){
         const promptForMissingPups = require('./components/views/missing-pups_display');
-        promptForMissingPups(project, missingChaps);
+        promptForMissingPups(project, function(resp){
+          displayProject();
+        });
       }
       else{
         displayProject();
@@ -1420,7 +1422,9 @@ ipcRenderer.on('file-opened-from-outside-warewoolf', function(event, fPath){
     var missingChaps = project.loadFile(fPath);
     if(missingChaps.length > 0){
       const promptForMissingPups = require('./components/views/missing-pups_display');
-      promptForMissingPups(project, missingChaps);
+      promptForMissingPups(project, function(resp){
+        displayProject();
+      });
     }
     else{
       displayProject();
