@@ -702,7 +702,7 @@ function moveToTrash(ind){
 }
 
 function deleteChapter(ind){
-  var deletedChap = project.trash.splice(ind - project.chapters.length, 1)[0];
+  var deletedChap = project.trash.splice(ind - project.chapters.length - project.reference.length, 1)[0];
 
   //Always save project file after deleting a chapter
   //so if user closes without saving it won't expect
@@ -711,7 +711,7 @@ function deleteChapter(ind){
 
   if(ind == project.activeChapterIndex){
     if(project.trash.length > 0){
-      var newInd = ind < project.trash.length + project.chapters.length || ind - project.chapters.length == 0 ? ind : ind - 1;
+      var newInd = ind < project.trash.length + project.chapters.length + project.reference.length || ind - project.chapters.length - project.reference.length == 0 ? ind : ind - 1;
       displayChapterByIndex(newInd);
     }
     else{
@@ -735,8 +735,13 @@ function deleteChapter(ind){
 
 function verifyToDelete(ind){
   if(chapIndexIs(ind).trash){
+    //Avoid stacking a second confirmation popup if this one is already showing.
+    if(document.querySelector('.delete-confirm-popup'))
+      return;
+
     var popup = document.createElement("div");
     popup.classList.add("popup");
+    popup.classList.add("delete-confirm-popup");
 
     var warningTitle = document.createElement('h1');
     warningTitle.innerText = 'WARNING:'
@@ -766,6 +771,7 @@ function verifyToDelete(ind){
 
 function restoreFromTrash(ind){
   if(chapIndexIs(ind).trash){
+    project.hasUnsavedChanges = true;
     var fromTrash = project.trash.splice(ind - project.chapters.length - project.reference.length, 1)[0];
     project.chapters.push(fromTrash);
     updateFileList();
@@ -1441,3 +1447,28 @@ ipcRenderer.on('center-all-heads-clicked', function(e){
   centerAllHeadingsInAllChaps(project);
   displayChapterByIndex(project.activeChapterIndex);
 });
+
+//Exposed for testing only - nothing in the app itself reads this module's exports, since it's
+//loaded as a plain <script> tag rather than required. Limited to the chapter/reference/trash
+//list engine, the most bug-prone and highest-value part of this file to unit test directly.
+module.exports = {
+  project,
+  userSettings,
+  editorQuill,
+  notesQuill,
+  chapIndexIs,
+  moveChapUp,
+  moveChapDown,
+  moveToTrash,
+  deleteChapter,
+  verifyToDelete,
+  restoreFromTrash,
+  updateFileList,
+  displayChapterByIndex,
+  addNewChapter,
+  addImportedChapter,
+  changeChapterTitle,
+  splitChapter,
+  editorHasFocus,
+  editorIsVisible
+};
