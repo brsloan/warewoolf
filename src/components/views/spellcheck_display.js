@@ -33,9 +33,11 @@ function showSpellcheck(editorQuill, project, sysDirectories, displayChapterByIn
         var sugLi = document.createElement("input");
         sugLi.type = "radio";
         sugLi.name = "suggestions";
+        sugLi.id = "suggestion-" + i;
         sugLi.value = invalidWord.suggestions[i];
         suggestions.appendChild(sugLi);
         var sugLabel = document.createElement("label");
+        sugLabel.htmlFor = sugLi.id;
         sugLabel.innerText = (i + 1) + ": " + invalidWord.suggestions[i];
         if(i==0)
           sugLi.checked = true;
@@ -123,8 +125,10 @@ function showSpellcheck(editorQuill, project, sysDirectories, displayChapterByIn
 
     var addToDic = createButton("<span class='access-key'>A</span>dd To Dictionary");
     addToDic.onclick = function(){
-      addWordToPersonalDictFile(invalidWord.word, sysDirectories);
-      ignoreBtn.click();
+      if(invalidWord){
+        addWordToPersonalDictFile(invalidWord.word, sysDirectories);
+        ignoreBtn.click();
+      }
     }
     addToDic.accessKey = "a";
     popup.appendChild(addToDic);
