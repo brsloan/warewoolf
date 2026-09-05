@@ -41,7 +41,7 @@ function showFileDialog(options, callback){
     if(options.dialogType == 'save'){
       //Only append filenameInput if in save mode
       filenameIn.type = 'text';
-      filenameIn.value = "." + options.filters[0].extensions[0];
+      filenameIn.value = (options.filters && options.filters.length > 0) ? "." + options.filters[0].extensions[0] : "";
       popup.appendChild(filenameIn);
 
       fileListSelect.onchange = function(){
@@ -52,8 +52,7 @@ function showFileDialog(options, callback){
       filenameIn.addEventListener('keydown', function(e){
         if(e.key === 'Enter'){
           stopDefaultPropagation(e);
-          closePopupDialogs();
-          callback(currentDirDisplay.innerText + '/' + filenameIn.value);
+          saveSelectedFile();
         }
       });
 
@@ -111,7 +110,7 @@ function showFileDialog(options, callback){
             else if(fileListSelect.value == "uplevel"){
                 populateFileList(getParentDirectory(currentDirDisplay.innerText), fileListSelect, currentDirDisplay, options.filters[filterSelect.value]);
             }
-            else if(selectedFiletype = 'file'){
+            else if(selectedFiletype == 'file'){
               if(options.dialogType == 'open')
                 openSelectedFile();
               else if(options.dialogType == 'save')
@@ -168,7 +167,7 @@ function checkFilenameForExtension(filename, filter){
     console.log(fnameParts);
     if(filter.extensions.includes(fnameParts[fnameParts.length - 1]) == false){
       fnameParts.pop();
-      checkedFilename = fnameParts.join() + '.' + filter.extensions[0];
+      checkedFilename = fnameParts.join('.') + '.' + filter.extensions[0];
     }
     else {
       checkedFilename = filename;
@@ -186,7 +185,7 @@ function populateShortcutsList(shortcuts, listElement){
     if(cleanedProjDir != "" && shortcuts.includes(cleanedProjDir) == false)
         shortcuts.push(cleanedProjDir);
 
-    for(i=0;i<shortcuts.length;i++){
+    for(var i=0;i<shortcuts.length;i++){
         var shortcut = document.createElement("option");
         shortcut.value = shortcuts[i];
         shortcut.innerText = "> " + shortcuts[i].split("/").pop();
@@ -227,7 +226,7 @@ function populateFileList(directoryPath, listElement, currentDirDisplay, filter 
     listElement.appendChild(parentDir);
 
 
-    for(i=0;i<files.length;i++){
+    for(var i=0;i<files.length;i++){
         var filename = document.createElement("option");
         filename.value = files[i].name;
         filename.innerText = (files[i].isDirectory() ? "> " : "") + files[i].name;
@@ -249,7 +248,7 @@ function getFilterSelect(filters){
     filterSelect.appendChild(filterOp);
   }
   else {
-    for(i=0;i<filters.length;i++){
+    for(var i=0;i<filters.length;i++){
       var filterOp = document.createElement('option');
       filterOp.value = i;
       filterOp.innerText = filters[i].name + ' (*.' + filters[i].extensions.join(', *.') + ')';
@@ -267,7 +266,7 @@ function getFileExtension(fname){
 
 function collectionToArray(coll, pre = ''){
   var arr = [];
-  for(i=0;i<coll.length;i++){
+  for(var i=0;i<coll.length;i++){
     arr.push(pre + coll[i].value)
   }
   return arr;
