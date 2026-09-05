@@ -1,5 +1,10 @@
 const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
-const { createNewDirectory, renameFiles, moveFiles, getFileList, deleteFile, getParentDirectory } = require('../controllers/file-manager');
+const { createNewDirectory, renameFiles, moveFiles, copyFiles, getFileList, deleteFile, getParentDirectory } = require('../controllers/file-manager');
+
+function stopDefaultPropagation(keyEvent){
+  keyEvent.preventDefault();
+  keyEvent.stopPropagation();
+}
 
 function showFileManager(sysDir, projDir){
     removeElementsByClass('popup');
@@ -138,6 +143,9 @@ function showFileManager(sysDir, projDir){
     var renameBtn = createButton("<span class='access-key'>R</span>ename");
     renameBtn.accessKey = "r";
     renameBtn.onclick = function(){
+      if(fileListSelect.selectedOptions.length === 0)
+        return;
+
       newDirInputPanel.style.display = "none";
       deleteVerifyPanel.style.display = "none";
       renamePanel.style.display = "block";
@@ -175,6 +183,9 @@ function showFileManager(sysDir, projDir){
     var unzipBtn = createButton("<span class='access-key'>U</span>nzip");
     unzipBtn.accessKey = "u";
     unzipBtn.onclick = function(){
+      if(fileListSelect.selectedOptions.length === 0)
+        return;
+
       const { unzipProject } = require('../controllers/file-manager');
       unzipProject(currentDirDisplay.innerText + '/' + fileListSelect.selectedOptions[0].value, function(){
           populateFMFileList(currentDirDisplay.innerText, fileListSelect, currentDirDisplay);
@@ -217,8 +228,13 @@ function showFileManager(sysDir, projDir){
           filesToBeCut = [];
           filesToBeCopied = [];
 
+          var allOpsForCut = fileListSelect.options;
+          for(var i=0;i<allOpsForCut.length;i++){
+            allOpsForCut[i].classList.remove('to-be-cut');
+          }
+
           var selectedOps = fileListSelect.selectedOptions;
-          for(i=0;i<selectedOps.length;i++){
+          for(var i=0;i<selectedOps.length;i++){
             if(selectedOps[i].value != "uplevel"){
               selectedOps[i].classList.add('to-be-cut');
               filesToBeCut.push(currentDirDisplay.innerText + "/" + selectedOps[i].value);
@@ -231,7 +247,7 @@ function showFileManager(sysDir, projDir){
           if(filesToBeCut.length > 0){
             filesToBeCut = [];
             var allOps = fileListSelect.options;
-            for(i=0;i<allOps.length;i++){
+            for(var i=0;i<allOps.length;i++){
               allOps[i].classList.remove('to-be-cut');
             }
           }
@@ -239,7 +255,7 @@ function showFileManager(sysDir, projDir){
           filesToBeCopied = [];
 
           var selectedOps = fileListSelect.selectedOptions;
-          for(i=0;i<selectedOps.length;i++){
+          for(var i=0;i<selectedOps.length;i++){
             if(selectedOps[i].value != "uplevel"){
               filesToBeCopied.push(currentDirDisplay.innerText + "/" + selectedOps[i].value);
             }
@@ -284,7 +300,7 @@ function populateFMShortcutsList(projDir, sysDir, listElement){
     if(cleanedProjDir != "" && shortcuts.includes(cleanedProjDir) == false)
         shortcuts.push(cleanedProjDir);
 
-    for(i=0;i<shortcuts.length;i++){
+    for(var i=0;i<shortcuts.length;i++){
         var shortcut = document.createElement("option");
         shortcut.value = shortcuts[i];
         shortcut.innerText = "> " + shortcuts[i].split("/").pop();
@@ -308,7 +324,7 @@ function populateFMFileList(directoryPath, listElement, currentDirDisplay){
     listElement.appendChild(parentDir);
 
 
-    for(i=0;i<files.length;i++){
+    for(var i=0;i<files.length;i++){
         var filename = document.createElement("option");
         filename.value = files[i].name;
         filename.innerText = (files[i].isDirectory() ? "> " : "") + files[i].name;
