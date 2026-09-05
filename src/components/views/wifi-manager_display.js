@@ -1,7 +1,18 @@
 const { closePopups, createButton, removeElementsByClass, generateRow, removeOptions } = require('../controllers/utils');
 const { enableWifi, disableWifi, getWifiStatus, getWifiNetworks, getConnectionState, connectToNewWifi, getIpAddress } = require('../controllers/wifi-manager');
 
+//Bumped on every showWifiManager() call and again when the popup is closed, so the
+//recursive updateStateUntilConnected() poll below can tell a stale instance apart from the
+//current one and stop rescheduling itself instead of polling nmcli forever in the background.
+var wifiManagerGeneration = 0;
+
 function showWifiManager(){
+
+  wifiManagerGeneration++;
+  var myGeneration = wifiManagerGeneration;
+  function isCurrent(){
+    return myGeneration === wifiManagerGeneration;
+  }
 
   removeElementsByClass('popup');
   var popup = document.createElement("div");
@@ -25,6 +36,7 @@ function showWifiManager(){
 
   networkTbl.appendChild(generateRow(enableWifiLabel, enableWifiCheck));
   enableWifiCheck.onclick = function(){
+    setNewConnectionEnabled(enableWifiCheck.checked);
     if(enableWifiCheck.checked){
       enableWifi(alertWifiEnabled);
     }
@@ -32,7 +44,6 @@ function showWifiManager(){
       disableWifi(alertWifiDisabled);
     }
   }
-  getWifiStatus(updateWifiStatus);
 
   var ipLabel = document.createElement('label');
   ipLabel.innerText = 'IP: ';
@@ -41,7 +52,6 @@ function showWifiManager(){
   ipDisplay.innerText = 'checking...';
 
   networkTbl.appendChild(generateRow(ipLabel, ipDisplay));
-  getIpAddress(updateIpDisplay);
 
   var connectionStateLabel = document.createElement('label');
   connectionStateLabel.innerText = "State: ";
@@ -50,7 +60,6 @@ function showWifiManager(){
   connectionStateText.innerText = "checking...";
 
   networkTbl.appendChild(generateRow(connectionStateLabel, connectionStateText));
-  getConnectionState(updateConnectionState);
 
   var connectedNetworkLabel = document.createElement('label');
   connectedNetworkLabel.innerText = "Network: ";
@@ -63,7 +72,12 @@ function showWifiManager(){
   networkForm.appendChild(networkTbl);
 
   var newConnectionSet = document.createElement("fieldset");
+  newConnectionSet.disabled = true;
   networkForm.appendChild(newConnectionSet);
+
+  function setNewConnectionEnabled(enabled){
+    newConnectionSet.disabled = !enabled;
+  }
 
   var newConnectionLegend = document.createElement("legend");
   newConnectionLegend.innerText = "New Connection";
@@ -79,8 +93,6 @@ function showWifiManager(){
   networksSelect.id = "networks-select";
   newConTbl.appendChild(generateRow(networksLabel, networksSelect));
 
-  getWifiNetworks(updateNetworksList);
-
   var networkPassLabel = document.createElement('label');
   networkPassLabel.htmlFor = 'network-pass';
   networkPassLabel.innerText = 'Password: ';
@@ -95,6 +107,11 @@ function showWifiManager(){
 
   var connectBtn = createButton("Connect");
   connectBtn.onclick = function(){
+    if(!networksSelect.value){
+      connectingStatus.innerText = "Select a network first.";
+      return;
+    }
+    connectBtn.disabled = true;
     connectingStatus.innerText = "Connecting...";
     connectToNewWifi(networksSelect.value, networkPassInput.value, alertNewConnection);
   }
@@ -110,6 +127,7 @@ function showWifiManager(){
 
   var closeBtn = createButton("Close");
   closeBtn.onclick = function(){
+    wifiManagerGeneration++;
     closePopups();
   };
   popup.appendChild(closeBtn);
@@ -118,12 +136,22 @@ function showWifiManager(){
 
   closeBtn.focus();
 
+  //Kicked off only once every element a callback might touch has been created - each of these
+  //controller calls can resolve synchronously in principle, and used to run interleaved with the
+  //DOM setup above, so a same-tick callback could reference a var (e.g. connectedNetworkText)
+  //that hadn't been assigned yet.
+  getWifiStatus(updateWifiStatus);
+  getIpAddress(updateIpDisplay);
+  getConnectionState(updateConnectionState);
+  getWifiNetworks(updateNetworksList);
+
   function updateWifiStatus(statData){
     if(statData == 'enabled')
       enableWifiCheck.checked = true;
     else {
       enableWifiCheck.checked = false;
     }
+    setNewConnectionEnabled(enableWifiCheck.checked);
   }
 
   function updateNetworksList(listData){
@@ -148,12 +176,14 @@ function showWifiManager(){
   }
 
   function updateStateUntilConnected(stateData){
+    if(!isCurrent()) return;
     if(stateData.state == 'connected'){
       connectionStateText.innerText = stateData.state;
       connectedNetworkText.innerText = stateData.connection;
     }
     else {
       setTimeout(function(){
+        if(!isCurrent()) return;
         getConnectionState(updateStateUntilConnected);
       }, 250);
     }
@@ -161,6 +191,7 @@ function showWifiManager(){
 
   function alertWifiEnabled(msg){
     setTimeout(function(){
+      if(!isCurrent()) return;
       getConnectionState(updateStateUntilConnected);
     }, 500);
   }
@@ -170,6 +201,7 @@ function showWifiManager(){
   }
 
   function alertNewConnection(connectData){
+    connectBtn.disabled = false;
     connectingStatus.innerText = connectData;
     getConnectionState(updateConnectionState);
   }
