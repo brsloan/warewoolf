@@ -58,6 +58,7 @@ Clear Color - **Cmd/Ctrl + 0**
 ### Presentation
 Add Board Divisions - **Cmd/Ctrl + \>**
 Remove Board Divisions - **Cmd/Ctrl + <**
+Change Card Size - **Cmd/Ctrl + - or +**
 
 ### Most Important
 Save Changes - **Cmd/Ctrl + S**

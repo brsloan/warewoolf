@@ -96,7 +96,7 @@ function showProperties(project, userSettings){
     advancedArea.appendChild(pupDirLabel);
 
     var pupDirWarning = document.createElement('p');
-    pupDirWarning.innerText = "(DO NOT CHANGE THIS UNLESS YOU KNOW WHAT YOU ARE DOING. This is the relative filepath that tells your project file where to find the individual .pup files that are its chapters.)";
+    pupDirWarning.innerText = "(DO NOT CHANGE THIS UNLESS YOU KNOW WHAT YOU ARE DOING. This is the relative filepath that tells your project file where to find the individual .txt files that are its chapters.)";
     pupDirWarning.classList.add('popup-text-small');
     advancedArea.appendChild(pupDirWarning);
 

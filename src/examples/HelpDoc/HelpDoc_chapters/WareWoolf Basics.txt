@@ -26,7 +26,7 @@ When you choose a tool from the File Menu, it will pop up with a tool menu dialo
 These all live under "File" in the File Menu. Please note that "Export" exports separate files for each chapter, while "Compile" saves one file with all chapters compiled together.
 
 ### Compile/Export options
-Currently you can compile/export your work in plain text, .docx, MarkdownFic, Markdown, or HTML, with some helpful options regarding headings and chapter breaks.
+Currently you can compile/export your work in plain text, .docx, MarkdownFic, Markdown, HTML, or EPUB, with some helpful options regarding headings and chapter breaks.
 
 ## WareWoolf's File Format
 WareWoolf saves its chapters as plain text files with light markup. There is a primary .woolf project file (which is just a JSON file that carries project metadata), and individual .txt files for each chapter in a subdirectory. 
