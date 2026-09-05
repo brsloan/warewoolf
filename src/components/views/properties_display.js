@@ -44,6 +44,7 @@ function showProperties(project, userSettings){
       e.preventDefault();
       project.title = titleInput.value;
       project.author = authorInput.value;
+      project.hasUnsavedChanges = true;
       closePopups();
     }
     propForm.appendChild(apply);
@@ -105,14 +106,18 @@ function showProperties(project, userSettings){
     advancedArea.appendChild(pupDirInput);
 
     var pupDirSubmit = createButton("Save Changes To Chaps Directory");
+    var pupDirConfirm = document.createElement('p');
+    pupDirConfirm.classList.add('popup-text-small');
     pupDirSubmit.onclick = function(){
-      if(!pupDirInput.value.endsWith('/')){
+      if(pupDirInput.value.length > 0 && !pupDirInput.value.endsWith('/')){
         pupDirInput.value += "/";
       }
       project.chapsDirectory = pupDirInput.value;
       project.saveFile();
+      pupDirConfirm.innerText = "Saved.";
     };
     advancedArea.appendChild(pupDirSubmit);
+    advancedArea.appendChild(pupDirConfirm);
 
     var settingsFilepathLabel = document.createElement('p');
     settingsFilepathLabel.innerText = "User Settings Filepath:";
