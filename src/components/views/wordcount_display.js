@@ -42,6 +42,7 @@ function showWordCount(project, editorQuill){
 
     var goalInput = document.createElement('input');
     goalInput.type = "number";
+    goalInput.min = "0";
     goalInput.value = project.wordGoal;
     goalInput.id = "word-goal-input";
 
@@ -72,8 +73,9 @@ function showWordCount(project, editorQuill){
     var total = getTotalWordCount(project);
     updateProgressBar();
 
-    goalInput.onkeyup = function(){
-      project.wordGoal = goalInput.value;
+    goalInput.oninput = function(){
+      var parsedGoal = Number(goalInput.value);
+      project.wordGoal = Number.isFinite(parsedGoal) ? parsedGoal : 0;
       updateProgressBar();
     };
 
