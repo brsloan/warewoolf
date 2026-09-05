@@ -191,30 +191,43 @@ function downloadUpdate(sysDirectories, downloadInfo, callback){
       console.log('commence downloading at: ' + downloadInfo.url + ' to ' + filePath);
 
       const file = fs.createWriteStream(filePath);
+      var downloadErr = null;
 
       file.on('finish', function(){
           console.log("finished download: " + filePath);
           callback(filePath);
       });
 
-      downloadRequest(file, filePath, downloadInfo.url);
+      //fs.createWriteStream opens its fd asynchronously, so calling file.destroy() the moment an
+      //error occurs can race ahead of that open actually creating the file on disk - deleting
+      //too early leaves the file to reappear once the open finally completes. Waiting for 'close'
+      //(which destroy() guarantees fires only after any pending open has been resolved) before
+      //removing the file avoids that race.
+      file.on('close', function(){
+          if(downloadErr){
+            removePartialFile(filePath);
+            logError(downloadErr);
+          }
+      });
+
+      downloadRequest(file, filePath, downloadInfo.url, function(err){
+          downloadErr = err;
+      });
     }
 }
 
-function downloadRequest(file, filePath, url){
+function downloadRequest(file, filePath, url, onError){
     const request = https.get(url, response => {
         if(response.statusCode == 302){
             response.resume();
-            downloadRequest(file, filePath, response.headers.location);
+            downloadRequest(file, filePath, response.headers.location, onError);
             return;
         }
 
         if(response.statusCode !== 200){
             response.resume();
+            onError(new Error('Download failed: ' + response.statusCode));
             file.destroy();
-            fs.unlink(filePath, () => {
-                logError(new Error('Download failed: ' + response.statusCode));
-            });
             return;
         }
 
@@ -222,20 +235,23 @@ function downloadRequest(file, filePath, url){
     });
 
     request.on('error', function(err){
+        onError(err);
         file.destroy();
-        fs.unlink(filePath, function(){
-            logError(err);
-        })
     });
 
     file.on('error', function(err){
-        fs.unlink(filePath, function(){
-            logError(err);
-        })
+        onError(err);
     });
 
 
     request.end();
+}
+
+function removePartialFile(filePath){
+    try{
+        fs.unlinkSync(filePath);
+    }
+    catch(unlinkErr){}
 }
 
 function installUpdate(pass, filePath, statusElement, onDone){

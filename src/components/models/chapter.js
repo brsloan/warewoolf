@@ -127,11 +127,14 @@ function newChapter(){
         chap.filename = newFilename;
 
         //If filename has changed and new file successfully created, delete old file
-        if(oldFilename != undefined && oldFilename != null && fs.existsSync(filepathRoot + oldVersionFlag + oldFilename))
-          fs.unlink(filepathRoot + oldVersionFlag + oldFilename, function(err){
-            if(err)
-              logError(err);
-          });
+        if(oldFilename != undefined && oldFilename != null && fs.existsSync(filepathRoot + oldVersionFlag + oldFilename)){
+          try{
+            fs.unlinkSync(filepathRoot + oldVersionFlag + oldFilename);
+          }
+          catch(unlinkErr){
+            logError(unlinkErr);
+          }
+        }
 
         //If filename has changed and notes exist, rename notes to match
         if(oldFilename != undefined && oldFilename != null && oldFilename != chap.filename){
