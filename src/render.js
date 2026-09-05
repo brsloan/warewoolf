@@ -9,6 +9,7 @@ const getSecureStorage = require('./components/controllers/secure-storage');
 const newChapter = require('./components/models/chapter');
 const newProject = require('./components/models/project');
 const autosaver = require('./components/controllers/autosave');
+const { enableTypewriterMode, disableTypewriterMode } = require('./components/controllers/typewriter-mode');
 const {
   removeElementsByClass,
   createButton,
