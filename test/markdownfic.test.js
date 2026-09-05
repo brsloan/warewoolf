@@ -87,6 +87,14 @@ test('a tab indented paragraph round trips', function(){
     '\tIndented paragraph.\r\n');
 });
 
+//Regression: the escaping backslash written before a line-start list marker sits right after the
+//paragraph's leading tabs, not at index 0 of the run - a tab-indented paragraph that merely opens
+//like a list item used to come back with a literal backslash still in the text.
+test('a tab indented paragraph that opens like a list marker is escaped and comes back intact', function(){
+  assertRoundTrip({ ops: [ {insert: '\t- Blah'}, {insert: '\n'} ] },
+    '\t\\- Blah\r\n');
+});
+
 test('a blockquote round trips', function(){
   assertRoundTrip({ ops: [
     {insert: 'Quoted line.'}, {insert: '\n', attributes: {blockquote: true}}

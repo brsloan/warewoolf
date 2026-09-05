@@ -62,7 +62,11 @@ function tokenizeInline(text){
     var ch = text[i];
 
     if(ch === '\\'){
-      var escaped = consumeEscape(text, i, i === 0);
+      //Line-start list markers ("- ", "1. ") are only ever written with a leading backslash right
+      //after a paragraph's leading tabs (see escapeListMarkers), never after any other character -
+      //so "at line start" here means "nothing but tabs precedes this backslash", not literally i===0.
+      var atLineStart = /^\t*$/.test(text.slice(0, i));
+      var escaped = consumeEscape(text, i, atLineStart);
       if(escaped !== null){
         buffer += escaped;
         i += 1 + escaped.length;
