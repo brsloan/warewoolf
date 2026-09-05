@@ -4,23 +4,35 @@ const { ipcMain } = require('electron');
 const isLinux = process.platform === "linux";
 const isMac = process.platform === "darwin";
 var fileRequestedOnOpen = null;
+var currentWindow = null;
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) { // eslint-disable-line global-require
   app.quit();
+  process.exit(0);
 }
 
 //Detect file to be opened on non-mac
 if(!isMac){
-  //File passed as argument but index differs in development vs production environments
-  var relativePath = app.isPackaged ? process.argv[1] : process.argv[2];
+  //File passed as argument but index differs in development vs production environments.
+  //Scan from that index rather than reading a fixed slot, since an extra flag ahead of the
+  //file path (e.g. a Chromium/Electron switch) would otherwise shift it out of place.
+  var argStartIndex = app.isPackaged ? 1 : 2;
+  var relativePath = process.argv.slice(argStartIndex).find((arg) => !arg.startsWith('-'));
   if(relativePath)
     fileRequestedOnOpen = path.resolve(relativePath);
 }
-//Detect file to be open on mac
+//Detect file to be open on mac. Registered once here (not per-window) so listeners don't
+//pile up across repeated createWindow() calls (e.g. dock re-activate on macOS), which used
+//to leak destroyed windows and could throw when sending to an already-closed webContents.
 app.on('open-file', (event, fPath) => {
   event.preventDefault();
-  fileRequestedOnOpen = fPath;
+  if(currentWindow && !currentWindow.isDestroyed()){
+    currentWindow.webContents.send('file-opened-from-outside-warewoolf', fPath);
+  }
+  else{
+    fileRequestedOnOpen = fPath;
+  }
 });
 
 const createWindow = () => {
@@ -40,9 +52,10 @@ const createWindow = () => {
 
   //mainWindow.maximize();
 
-  app.on('open-file', (event, fPath) => {
-    event.preventDefault();
-    mainWindow.webContents.send('file-opened-from-outside-warewoolf', fPath);
+  currentWindow = mainWindow;
+  mainWindow.on('closed', () => {
+    if(currentWindow === mainWindow)
+      currentWindow = null;
   });
 
   // and load the index.html of the app.
@@ -481,7 +494,7 @@ ipcMain.on('secure-storage-encrypt', function(e, text){
 
 ipcMain.on('secure-storage-decrypt', function(e, content){
   try{
-    e.returnValue = safeStorage.decryptString(Buffer.from(content, 'base64'));
+    e.returnValue = isSecureStorageAvailable() ? safeStorage.decryptString(Buffer.from(content, 'base64')) : null;
   }
   catch(err){
     e.returnValue = null;
