@@ -1,4 +1,7 @@
+const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
+
 function requestProjectTitle(callback){
+  removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup");
 
@@ -21,22 +24,29 @@ function requestProjectTitle(callback){
   titleInput.id = "title-input";
   titleForm.appendChild(titleInput);
 
-  var createButton = document.createElement("input");
-  createButton.type = "submit";
-  createButton.value = "Create"
+  var createSubmit = document.createElement("input");
+  createSubmit.type = "submit";
+  createSubmit.value = "Create"
   titleForm.onsubmit = function(e){
     e.preventDefault();
 
     var title;
-    if(titleInput.value != "")
-      title = titleInput.value;
+    if(titleInput.value.trim() != "")
+      title = titleInput.value.trim();
     else
       title = "New Project";
-    popup.remove();
+    closePopups();
     callback(title);
   }
 
-  titleForm.appendChild(createButton);
+  titleForm.appendChild(createSubmit);
+
+  var cancel = createButton("Cancel");
+  cancel.onclick = function(){
+    closePopups();
+  };
+  titleForm.appendChild(cancel);
+
   popup.appendChild(titleForm);
   document.body.appendChild(popup);
   titleInput.focus();
