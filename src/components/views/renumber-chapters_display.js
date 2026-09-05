@@ -41,7 +41,7 @@ function showRenumberChapters(project, onFinish){
   renumTable.appendChild(generateRow(useNumeralsLabel, useNumeralsCheck));
 
   var insertReplaceLabel = document.createElement("label");
-  insertReplaceLabel.innerText = "Insert/Replace In Chapter (will replace first line of every chapter): ";
+  insertReplaceLabel.innerText = "Insert/Replace In Chapter (will replace first line of each selected chapter): ";
   insertReplaceLabel.htmlFor = "insert-replace-check";
 
   var insertReplaceCheck = document.createElement("input");
@@ -62,18 +62,28 @@ function showRenumberChapters(project, onFinish){
   var endChapLabel = document.createElement("label");
   endChapLabel.innerText = "End Renumbering At: ";
   endChapLabel.htmlFor = "end-chap-select";
-  renumberForm.appendChild(endChapLabel)
 
   var endChapDrop = getChapterDropdown(project.chapters.length - 1);
   endChapDrop.id = 'end-chap-select';
-  renumberForm.appendChild(endChapDrop);
 
   renumTable.appendChild(generateRow(endChapLabel, endChapDrop));
 
   renumberForm.appendChild(renumTable);
 
+  var errorText = document.createElement('p');
+  errorText.classList.add('warning-text');
+  renumberForm.appendChild(errorText);
+
   var submit = createButton("Submit");
   submit.onclick = function(){
+    if(project.chapters.length === 0){
+      errorText.innerText = 'There are no chapters to renumber.';
+      return;
+    }
+    if(parseInt(startChapDrop.value) > parseInt(endChapDrop.value)){
+      errorText.innerText = 'Start chapter must come before end chapter.';
+      return;
+    }
     renumberChaps(project, parseInt(startChapDrop.value), parseInt(endChapDrop.value), insertReplaceCheck.checked, useNumeralsCheck.checked, formatInput.value);
     closePopups();
     onFinish();
