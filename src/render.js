@@ -1407,7 +1407,7 @@ ipcRenderer.on('save-backup-clicked', function(e){
 
 ipcRenderer.on('settings-clicked', function(e){
   const showSettings = require('./components/views/settings_display');
-  showSettings(userSettings, autosaver, sysDirectories, function(){
+  showSettings(userSettings, autosaver, sysDirectories, saveProject, function(){
     setDarkMode();
   });
 });

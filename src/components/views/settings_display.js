@@ -1,7 +1,8 @@
 const { closePopups, createButton, removeElementsByClass, convertFilepath, generateRow } = require('../controllers/utils');
 const { showBattery, removeBattery } = require('./battery_display');
+const showFileDialog = require('./file-dialog_display');
 
-function showSettings(userSettings, autosaver, sysDirectories, callback){
+function showSettings(userSettings, autosaver, sysDirectories, saveProject, callback){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup");
@@ -122,7 +123,7 @@ function showSettings(userSettings, autosaver, sysDirectories, callback){
   darkModeSys.name = 'dark-mode';
   darkModeSys.value = 'system';
   darkModeSys.id = 'dark-mode-sys';
-  if(userSettings.darkMode == 'system')
+  if(userSettings.darkMode == 'system' || (userSettings.darkMode != 'dark' && userSettings.darkMode != 'light'))
     darkModeSys.checked = true;
   appearanceSet.appendChild(darkModeSys);
 
@@ -194,7 +195,7 @@ function showSettings(userSettings, autosaver, sysDirectories, callback){
       userSettings.backupDirectory = convertFilepath(backupDirInput.value);
     }
     userSettings.autoBackup = autoBackupCheck.checked;
-    userSettings.backupsToKeep = backupLimitInput.value;
+    userSettings.backupsToKeep = Number(backupLimitInput.value) || 0;
     userSettings.autosaveIntMinutes = Number(autosaveIntervalInput.value) || 0;
     userSettings.darkMode = document.querySelector('input[type=radio][name=dark-mode]:checked').value;
     userSettings.defaultAuthor = defAuthIn.value;
