@@ -1,6 +1,11 @@
 const { closePopupDialogs, createButton, sanitizeFilenameWithExt } = require('../controllers/utils');
 const { getFileList, getParentDirectory } = require('../controllers/file-manager');
 
+function stopDefaultPropagation(keyEvent){
+  keyEvent.preventDefault();
+  keyEvent.stopPropagation();
+}
+
 function showFileDialog(options, callback){
     var popup = document.createElement("div");
     popup.classList.add("popup-dialog");
@@ -124,7 +129,7 @@ function showFileDialog(options, callback){
         }
     });
 
-    populateShortcutsList(options.bookmarkedPaths, dirShortcutSelect);
+    populateShortcutsList(options.bookmarkedPaths, options.projectDirectory, dirShortcutSelect);
     populateFileList(options.defaultPath, fileListSelect, currentDirDisplay, options.filters[filterSelect.value]);
 
     document.body.appendChild(popup);
@@ -177,10 +182,13 @@ function checkFilenameForExtension(filename, filter){
   return checkedFilename;
 }
 
-function populateShortcutsList(shortcuts, listElement){
-    var cleanedProjDir = project.directory;
-    if(project.directory.endsWith("/"))
-        cleanedProjDir = project.directory.slice(0,-1);
+//The open project's own folder is offered alongside the standing bookmarks. It arrives as an
+//option rather than being read off a bare `project` global, which is what this used to do - the
+//app supplied one only as a side effect of render.js being loaded as a plain <script> tag.
+function populateShortcutsList(shortcuts, projectDirectory, listElement){
+    var cleanedProjDir = projectDirectory || "";
+    if(cleanedProjDir.endsWith("/"))
+        cleanedProjDir = cleanedProjDir.slice(0,-1);
 
     if(cleanedProjDir != "" && shortcuts.includes(cleanedProjDir) == false)
         shortcuts.push(cleanedProjDir);

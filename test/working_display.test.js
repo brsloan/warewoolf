@@ -88,3 +88,68 @@ test('hideWorking removes the popup', function(){
 
   assert.strictEqual(document.getElementsByClassName('working-popup').length, 0);
 });
+
+//---------------------------------------------------------------------------
+// showBackupAlert / hideBackupAlert
+//---------------------------------------------------------------------------
+
+test('showBackupAlert puts up one popup and updates its text on later messages', function(){
+  var { showBackupAlert } = require(workingDisplayPath);
+
+  showBackupAlert('Backing up project...');
+  showBackupAlert('Creating project archive...');
+
+  assert.strictEqual(document.querySelectorAll('#backup-alert').length, 1);
+  assert.strictEqual(document.getElementById('backup-alert-text').innerText, 'Creating project archive...');
+});
+
+test('showBackupAlert only offers a way out when the caller gives it something to do', function(){
+  var { showBackupAlert } = require(workingDisplayPath);
+
+  showBackupAlert('Backing up project...');
+  assert.strictEqual(document.getElementById('backup-alert-exit'), null, 'a backup from the menu is not on its way out of the app');
+
+  var exited = false;
+  showBackupAlert('Backing up project...', function(){ exited = true; });
+  var exitBtn = document.getElementById('backup-alert-exit');
+  assert.ok(exitBtn);
+
+  exitBtn.onclick();
+  assert.strictEqual(exited, true);
+});
+
+test('showBackupAlert takes the exit button away again when the alert is reused without one', function(){
+  var { showBackupAlert } = require(workingDisplayPath);
+
+  showBackupAlert('Backing up project...', function(){});
+  assert.ok(document.getElementById('backup-alert-exit'));
+
+  showBackupAlert('Backing up project...');
+  assert.strictEqual(document.getElementById('backup-alert-exit'), null);
+});
+
+test('hideBackupAlert removes the popup and does nothing when there is none', function(){
+  var { showBackupAlert, hideBackupAlert } = require(workingDisplayPath);
+
+  showBackupAlert('Backing up project...');
+  hideBackupAlert();
+
+  assert.strictEqual(document.getElementById('backup-alert'), null);
+  assert.doesNotThrow(hideBackupAlert);
+});
+
+//The two popups used to share the 'working-popup' class, so each one broke the other: hideWorking()
+//swept the backup alert away mid-backup, and showWorking() found the backup alert, took it for its
+//own popup, and threw looking for the #working-status it does not contain.
+test('the backup alert and the working popup no longer interfere with each other', function(){
+  var { showWorking, hideWorking, showBackupAlert } = require(workingDisplayPath);
+
+  showBackupAlert('Backing up project...');
+
+  assert.doesNotThrow(function(){ showWorking('Exporting...'); });
+  assert.strictEqual(document.getElementById('working-status').innerText, 'Exporting...');
+
+  hideWorking();
+  assert.ok(document.getElementById('backup-alert'), 'hiding the working popup must leave the backup alert alone');
+  assert.strictEqual(document.getElementById('backup-alert-text').innerText, 'Backing up project...');
+});

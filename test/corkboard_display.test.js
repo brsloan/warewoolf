@@ -28,10 +28,8 @@ function bodyShell(){
     '<div id="writing-field"></div>';
 }
 
-//corkboard_display.js reads/writes a bare `project` identifier in every function except
-//showCorkboard() itself (which takes it as a parameter) - it relies on Electron sharing a single
-//global `project` between render.js and every required view module. We reproduce that by setting
-//global.project to the exact same object passed into showCorkboard(), just like render.js does.
+//showCorkboard() holds on to the project it is given, so every later keyboard handler acts on the
+//same object these tests pass in - no global involved.
 function makeProject(overrides){
   return Object.assign({
     directory: '/proj/',
@@ -60,7 +58,6 @@ test.afterEach(function(){
   delete require.cache[corkboardControllerPath];
   delete global.window;
   delete global.document;
-  delete global.project;
 });
 
 test('renders loaded cards into the requested number of columns with their label/description/color/checkmark', function(t){
@@ -75,7 +72,6 @@ test('renders loaded cards into the requested number of columns with their label
     saveCards: function(){}
   });
   var project = makeProject({ corkboardColumns: 2 });
-  global.project = project;
 
   showCorkboard(project);
 
@@ -94,7 +90,6 @@ test('shows a single blank starter card when no cards exist yet', function(t){
     saveCards: function(){}
   });
   var project = makeProject({ corkboardColumns: 1 });
-  global.project = project;
 
   showCorkboard(project);
 
@@ -111,7 +106,6 @@ test('focuses the last checked card on open, when it is not the final card', fun
   ];
   var showCorkboard = freshCorkboardDisplay({ getCardsFromFile: function(){ return cards; }, saveCards: function(){} });
   var project = makeProject({ corkboardColumns: 1 });
-  global.project = project;
 
   showCorkboard(project);
 
@@ -125,7 +119,6 @@ test('focuses the first card when the last card is the last one checked', functi
   ];
   var showCorkboard = freshCorkboardDisplay({ getCardsFromFile: function(){ return cards; }, saveCards: function(){} });
   var project = makeProject({ corkboardColumns: 1 });
-  global.project = project;
 
   showCorkboard(project);
 
@@ -139,7 +132,6 @@ test('typing in a card marks unsaved changes immediately, so Escape prompts to s
   var cards = [{ label: 'A', descr: 'a', color: 0, checked: false }];
   var showCorkboard = freshCorkboardDisplay({ getCardsFromFile: function(){ return cards; }, saveCards: function(){} });
   var project = makeProject({ corkboardColumns: 1 });
-  global.project = project;
   showCorkboard(project);
 
   var label = document.getElementById('card-label1');
@@ -156,7 +148,6 @@ test('Escape with no unsaved changes closes the corkboard immediately, without p
   var cards = [{ label: 'A', descr: 'a', color: 0, checked: false }];
   var showCorkboard = freshCorkboardDisplay({ getCardsFromFile: function(){ return cards; }, saveCards: function(){} });
   var project = makeProject({ corkboardColumns: 1 });
-  global.project = project;
   showCorkboard(project);
 
   keydown(document.querySelector('.popup-corkboard'), 'Escape', {});
@@ -174,7 +165,6 @@ test('Ctrl+S saves the cards and the project, then clears the unsaved-changes fl
     saveCards: function(cardsArg, path){ saveCardsCalls.push({ cardsArg: cardsArg, path: path }); }
   });
   var project = makeProject({ corkboardColumns: 1, saveFile: function(){ saveFileCalls++; } });
-  global.project = project;
   showCorkboard(project);
 
   var label = document.getElementById('card-label1');
@@ -201,7 +191,6 @@ test('Continue Without Saving clears the unsaved flag instead of leaving it stuc
   var cards = [{ label: 'A', descr: 'a', color: 0, checked: false }];
   var showCorkboard = freshCorkboardDisplay({ getCardsFromFile: function(){ return cards; }, saveCards: function(){} });
   var project = makeProject({ corkboardColumns: 1 });
-  global.project = project;
   showCorkboard(project);
 
   var label = document.getElementById('card-label1');
@@ -233,7 +222,6 @@ test('Ctrl+I inserts a full-schema blank card after the current one and focuses 
     saveCards: function(cardsArg){ savedCardsArg = cardsArg; }
   });
   var project = makeProject({ corkboardColumns: 1 });
-  global.project = project;
   showCorkboard(project);
 
   keydown(document.getElementById('card1'), 'i', { ctrlKey: true });
@@ -256,7 +244,6 @@ test('Ctrl+Backspace deletes a card but refuses to delete the last remaining one
   ];
   var showCorkboard = freshCorkboardDisplay({ getCardsFromFile: function(){ return cards; }, saveCards: function(){} });
   var project = makeProject({ corkboardColumns: 1 });
-  global.project = project;
   showCorkboard(project);
 
   keydown(document.getElementById('card1'), 'Backspace', { ctrlKey: true });
@@ -273,7 +260,6 @@ test('Ctrl+Enter toggles a card checked/unchecked', function(t){
   var cards = [{ label: 'A', descr: '', color: 0, checked: false }];
   var showCorkboard = freshCorkboardDisplay({ getCardsFromFile: function(){ return cards; }, saveCards: function(){} });
   var project = makeProject({ corkboardColumns: 1 });
-  global.project = project;
   showCorkboard(project);
 
   keydown(document.getElementById('card1'), 'Enter', { ctrlKey: true });
@@ -287,7 +273,6 @@ test('Ctrl+<digit> sets the card color class and Ctrl+0 clears it', function(t){
   var cards = [{ label: 'A', descr: '', color: 0, checked: false }];
   var showCorkboard = freshCorkboardDisplay({ getCardsFromFile: function(){ return cards; }, saveCards: function(){} });
   var project = makeProject({ corkboardColumns: 1 });
-  global.project = project;
   showCorkboard(project);
 
   var card1 = document.getElementById('card1');
@@ -304,7 +289,6 @@ test('Ctrl+, and Ctrl+. adjust the number of board columns, never going below 1'
   var cards = [{ label: 'A', descr: '' }, { label: 'B', descr: '' }];
   var showCorkboard = freshCorkboardDisplay({ getCardsFromFile: function(){ return cards; }, saveCards: function(){} });
   var project = makeProject({ corkboardColumns: 1 });
-  global.project = project;
   showCorkboard(project);
 
   assert.strictEqual(document.getElementsByClassName('corkboard-column').length, 1);
@@ -325,7 +309,6 @@ test('Ctrl+Shift+ArrowRight reorders cards, and moving the last card right inser
   ];
   var showCorkboard = freshCorkboardDisplay({ getCardsFromFile: function(){ return cards; }, saveCards: function(){} });
   var project = makeProject({ corkboardColumns: 1 });
-  global.project = project;
   showCorkboard(project);
 
   keydown(document.getElementById('card1'), 'ArrowRight', { ctrlKey: true, shiftKey: true });
@@ -345,7 +328,6 @@ test('Ctrl+ArrowRight/ArrowLeft move focus between cards without reordering them
   var cards = [{ label: 'A', descr: '' }, { label: 'B', descr: '' }];
   var showCorkboard = freshCorkboardDisplay({ getCardsFromFile: function(){ return cards; }, saveCards: function(){} });
   var project = makeProject({ corkboardColumns: 1 });
-  global.project = project;
   showCorkboard(project);
 
   keydown(document.getElementById('card1'), 'ArrowRight', { ctrlKey: true });

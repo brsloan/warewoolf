@@ -5,6 +5,9 @@ const isLinux = process.platform === "linux";
 const isMac = process.platform === "darwin";
 var fileRequestedOnOpen = null;
 var currentWindow = null;
+//Set once the renderer has confirmed it's safe to quit (see 'exit-app-confirmed' below), so the
+//'close' guard on the window lets that specific close through instead of re-intercepting it.
+var closeConfirmed = false;
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) { // eslint-disable-line global-require
@@ -58,11 +61,36 @@ const createWindow = () => {
       currentWindow = null;
   });
 
+  //Route every way of closing the window (titlebar X, Alt+F4, Cmd+Q, Cmd+W) through the same
+  //unsaved-changes check the File > Exit menu item already uses, instead of only the menu item
+  //being guarded while every other path quits unchecked.
+  mainWindow.on('close', (event) => {
+    if(!closeConfirmed){
+      event.preventDefault();
+      mainWindow.webContents.send('exit-app-clicked');
+    }
+  });
+
   // and load the index.html of the app.
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
 
-  // Open the DevTools.
-  mainWindow.webContents.openDevTools();
+  //Nothing in the renderer opens a new window or navigates away today - the one <a> tag in the
+  //About popup does not even set an href - but nodeIntegration is on for this window, so a
+  //navigation or new-window request succeeding here would run with full Node access rather than
+  //being sandboxed the way a browser tab would be. Deny both outright rather than leaving that
+  //open for whatever a future feature (or a bug in a dependency parsing an imported .docx/.epub)
+  //might one day attempt.
+  mainWindow.webContents.setWindowOpenHandler(() => {
+    return { action: 'deny' };
+  });
+  mainWindow.webContents.on('will-navigate', (event) => {
+    event.preventDefault();
+  });
+
+  // Open the DevTools, except in a packaged build - devTools:false above already disables the
+  // capability there, but calling this unconditionally regardless muddies what that flag is for.
+  if(!app.isPackaged)
+    mainWindow.webContents.openDevTools();
 
   var menu = Menu.buildFromTemplate([
     ...(isMac
@@ -425,6 +453,7 @@ app.on('window-all-closed', () => {
 // In this file you can include the rest of your app's specific main process
 // code. You can also put them in separate files and import them here.
 ipcMain.on('exit-app-confirmed', function(e){
+  closeConfirmed = true;
   app.quit();
 });
 

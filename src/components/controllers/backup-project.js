@@ -3,6 +3,9 @@ const fs = require('fs');
 const path = require('path');
 const { logError } = require('./error-log');
 
+//The message backupProject() sends once it is done. Callers watch for it to know the run has
+//finished, so it is named here rather than string-matched at each of them.
+const BACKUP_FINISHED = 'Backup finished.';
 const TIMESTAMP_LENGTH = 14;
 const ARCHIVE_EXTENSION = '.zip';
 
@@ -31,7 +34,7 @@ function backupProject(project, userSettings, docsDir, updatesFunction){
       }
       updatesFunction('Archive saved. Deleting old archives...');
       deleteOldBackups(project, userSettings);
-      updatesFunction('Backup finished.');
+      updatesFunction(BACKUP_FINISHED);
     });
   }
   catch(err){
@@ -132,6 +135,7 @@ function getFileList(dirPath){
 }
 
 module.exports = {
+  BACKUP_FINISHED,
   backupProject,
   archiveProject,
   deleteOldBackups

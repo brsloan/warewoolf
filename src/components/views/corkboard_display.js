@@ -4,8 +4,15 @@ const isMac = process.platform === "darwin";
 
 var loadedCards = [];
 var unsavedChanges = false;
+//The board outlives the call that opened it - every keyboard handler below runs later, from a
+//sibling function with no argument to reach for. This used to be read as a bare `project`, which
+//resolved only because render.js is loaded as a plain <script> tag and left its own `project` on
+//the renderer's global. Held here instead, alongside the board's other state, and set from the
+//project the caller actually passed in.
+var openProject = null;
 
 function showCorkboard(project){
+    openProject = project;
     unsavedChanges = false;
     removeElementsByClass('popup');
     var popup = document.createElement("div");
@@ -41,7 +48,7 @@ function generateStarterCard(){
 }
 
 function resetCorkboard(){
-  fillCorkboard(project.corkboardColumns);
+  fillCorkboard(openProject.corkboardColumns);
   assignLoadedCards();
 }
 
@@ -222,7 +229,7 @@ function moveCardDown(card){
 function getAboveCardNum(currentCard){
   var thisIndex = parseInt(currentCard.dataset.index);
   var cardsPerRow = getCardsPerRow();
-  var cardsPerGroup = Math.ceil(loadedCards.length / project.corkboardColumns);
+  var cardsPerGroup = Math.ceil(loadedCards.length / openProject.corkboardColumns);
   var cardsBefore = parseInt(currentCard.dataset.posInCol);
   var aboveCardNum = thisIndex + 1;//Default to current card num
 
@@ -244,7 +251,7 @@ function getAboveCardNum(currentCard){
 function getBelowCardNum(currentCard){
   var thisIndex = parseInt(currentCard.dataset.index);
   var cardsPerRow = getCardsPerRow();
-  var cardsPerGroup = Math.ceil(loadedCards.length / project.corkboardColumns);
+  var cardsPerGroup = Math.ceil(loadedCards.length / openProject.corkboardColumns);
   var cardsLeft = cardsPerGroup - parseInt(currentCard.dataset.posInCol) - 1;
   var belowCardNum = thisIndex + 1;//Default to current card num
 
@@ -281,8 +288,8 @@ function getElementWidthWithMargin(element) {
 function boardCntrlEvents(e){
   if((e.ctrlKey || e.metaKey) && (e.key === "s")){
     stopDefaultPropagation(e);
-    saveCards(loadedCards, project.directory + project.chapsDirectory);
-    project.saveFile();
+    saveCards(loadedCards, openProject.directory + openProject.chapsDirectory);
+    openProject.saveFile();
     unmarkUnsavedChanges();
   }
   else if(e.key === "Escape"){
@@ -372,8 +379,8 @@ function cardCntrlEvents(e) {
   else if((e.ctrlKey || e.metaKey) && (e.key === ",")){
     stopDefaultPropagation(e);
     var thisIndex = parseInt(this.dataset.index);
-    if(project.corkboardColumns > 1)
-      project.corkboardColumns--;
+    if(openProject.corkboardColumns > 1)
+      openProject.corkboardColumns--;
     resetCorkboard();
     focusCard(thisIndex + 1);
     markUnsavedChanges();
@@ -381,7 +388,7 @@ function cardCntrlEvents(e) {
   else if((e.ctrlKey || e.metaKey) && (e.key === ".")){
     stopDefaultPropagation(e);
     var thisIndex = parseInt(this.dataset.index);
-    project.corkboardColumns++;
+    openProject.corkboardColumns++;
     resetCorkboard();
     focusCard(thisIndex + 1);
     markUnsavedChanges();
@@ -428,8 +435,8 @@ function promptToSave(){
 
   var save = createButton("Save");
   save.onclick = function(){
-    saveCards(loadedCards, project.directory + project.chapsDirectory);
-    project.saveFile();
+    saveCards(loadedCards, openProject.directory + openProject.chapsDirectory);
+    openProject.saveFile();
     unsavedChanges = false;
     closePopups();
   };

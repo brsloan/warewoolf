@@ -1,5 +1,6 @@
 const fs = require('fs');
 const newChapter = require('./chapter');
+const chapterList = require('../controllers/chapter-list');
 const { logError } = require('../controllers/error-log');
 const defaultProjectNotesName = 'project_.txt'; //Will have default notes prepend ('-notes_') as well (added by Chapter object's save function)
 
@@ -29,14 +30,7 @@ function newProject(){
     };
 
     function getActiveChapter(){
-      var chap;
-        if(this.activeChapterIndex < this.chapters.length)
-            chap =  this.chapters[this.activeChapterIndex];
-        else if(this.activeChapterIndex < this.chapters.length + this.reference.length && this.reference.length > 0)
-            chap = this.reference[this.activeChapterIndex - this.chapters.length];
-        else
-            chap = this.trash[this.activeChapterIndex - this.chapters.length - this.reference.length];
-        return chap;
+      return chapterList.chapterAt(this, this.activeChapterIndex);
     }
 
     function loadFile(projPath){
@@ -52,22 +46,24 @@ function newProject(){
         this.filename = projPathParts.pop();
         this.directory = projPathParts.join('/').concat("/");
 
+        //Named rather than reached for as `this`, which inside these callbacks is not the project.
+        var proj = this;
 
         var chaps = [];
         this.chapters.forEach(function (chap) {
-          chaps.push(newChapter().parseChapter(chap));
+          chaps.push(newChapter(proj).parseChapter(chap));
         });
         this.chapters = chaps;
 
         var refChaps = [];
         this.reference.forEach(function(rf){
-          refChaps.push(newChapter().parseChapter(rf));
+          refChaps.push(newChapter(proj).parseChapter(rf));
         })
         this.reference = refChaps;
 
         var trashChaps = [];
         this.trash.forEach(function (tr) {
-          trashChaps.push(newChapter().parseChapter(tr));
+          trashChaps.push(newChapter(proj).parseChapter(tr));
         });
         this.trash = trashChaps;
 
@@ -82,7 +78,7 @@ function newProject(){
     }
 
     function initNotesChap(){
-      var notesChap = newChapter();
+      var notesChap = newChapter(this);
       notesChap.filename = defaultProjectNotesName;
       this.notesChap = notesChap;
       return this.notesChap;
@@ -127,6 +123,9 @@ function newProject(){
     function stringifyProject(proj){
       return JSON.stringify(proj, function(k,v){
         if (k == "contents") return undefined;
+        //Each chapter points back at the project it belongs to, so this has to come out or
+        //JSON.stringify walks in a circle.
+        else if (k == "parentProject") return undefined;
         else if (k == "hasUnsavedChanges") return undefined;
         //else if (k == "filename") return undefined;
         else if (k == "directory") return undefined;

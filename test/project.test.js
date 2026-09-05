@@ -33,14 +33,6 @@ function tempDir(t){
   return dir;
 }
 
-//project.saveFile()/saveAs() call chap.saveFile()/saveNotesFile(), and chapter.js reads a bare
-//`project` identifier rather than taking it as a parameter - in the real app this is the same
-//object the project methods run on (`this`), set up as a global by render.js. Mirror that here.
-function setGlobalProject(t, proj){
-  global.project = proj;
-  t.after(function(){ delete global.project; });
-}
-
 //---------------------------------------------------------------------------
 // initNotesChap
 //---------------------------------------------------------------------------
@@ -59,8 +51,6 @@ test('initNotesChap regression: project notes typed into a brand-new project sur
   proj.directory = dir;
   proj.filename = 'test.woolf';
   proj.chapsDirectory = '';
-  setGlobalProject(t, proj);
-
   //Mirrors what render.js's createNewProject() does for a brand-new (never loaded) project.
   proj.initNotesChap();
   proj.notesChap.notes = textDelta('hello notes');
@@ -70,8 +60,6 @@ test('initNotesChap regression: project notes typed into a brand-new project sur
 
   const reloaded = newProject();
   const missingChaps = reloaded.loadFile(dir + 'test.woolf');
-  setGlobalProject(t, reloaded);
-
   assert.deepStrictEqual(missingChaps, []);
   const reloadedNotes = reloaded.notesChap.getNotesContentOrFile();
   assert.strictEqual(reloadedNotes.ops[0].insert, 'hello notes');
@@ -83,7 +71,6 @@ test('initNotesChap regression: project notes typed into a brand-new project sur
 
 test('testChapsDirectory operates on the project instance it is called on, not a global', function(t){
   const dir = tempDir(t);
-  delete global.project; //prove there is no reliance on a global named `project`
 
   const proj = newProject();
   proj.directory = dir;
@@ -142,7 +129,6 @@ test('loadFile flags chapters whose files are missing from the chaps directory',
   fs.writeFileSync(dir + 'test.woolf', JSON.stringify(projectJson), 'utf8');
 
   const proj = newProject();
-  setGlobalProject(t, proj);
   const missingChaps = proj.loadFile(dir + 'test.woolf');
 
   assert.strictEqual(missingChaps.length, 1);
@@ -160,8 +146,6 @@ test('saveFile returns true and writes the project file on success', function(t)
   proj.directory = dir;
   proj.filename = 'test.woolf';
   proj.chapsDirectory = '';
-  setGlobalProject(t, proj);
-
   const result = proj.saveFile();
 
   assert.strictEqual(result, true);
@@ -183,8 +167,6 @@ test('saveFile regression: returns false instead of silently reporting success w
   proj.directory = dir;
   proj.filename = 'test.woolf';
   proj.chapsDirectory = '';
-  setGlobalProject(t, proj);
-
   t.mock.method(fs, 'writeFileSync', function(){
     throw new Error('disk full');
   });
@@ -206,8 +188,6 @@ test('saveAs returns the full path of the new project file on success', function
   proj.chapters = [];
   proj.reference = [];
   proj.trash = [];
-  setGlobalProject(t, proj);
-
   const result = proj.saveAs(dir + 'MyBook.woolf');
 
   //saveAs normalizes paths to forward slashes internally (for linux/windows compatibility)
@@ -222,8 +202,6 @@ test('saveAs regression: a project title containing a period keeps its full name
   proj.chapters = [];
   proj.reference = [];
   proj.trash = [];
-  setGlobalProject(t, proj);
-
   proj.saveAs(dir + 'My.Book.woolf');
 
   assert.ok(fs.existsSync(dir + 'My.Book_chapters/'), 'chapters subdirectory should keep the whole title, not truncate at the first period');
@@ -247,12 +225,55 @@ test('saveAs regression: a chapter file missing from disk does not abort saving 
   proj.chapters = [brokenChap, goodChap];
   proj.reference = [];
   proj.trash = [];
-  setGlobalProject(t, proj);
-
   const result = proj.saveAs(newDir + 'test.woolf');
 
   assert.ok(result, 'saveAs should still succeed for the rest of the project');
   assert.ok(fs.existsSync(newDir + 'test_chapters/good.txt'), 'the chapter whose file exists should still be copied over');
   assert.ok(!fs.existsSync(newDir + 'test_chapters/missing.txt'));
   assert.strictEqual(brokenChap.filename, 'missing.txt', 'a chapter that failed to copy should not be repointed at a file that was never created');
+});
+
+//---------------------------------------------------------------------------
+// parent project references
+//---------------------------------------------------------------------------
+
+test('loadFile hands every chapter the project it was loaded into', function(t){
+  const dir = tempDir(t);
+  fs.writeFileSync(dir + 'Chapter One.txt', 'body', 'utf8');
+  fs.writeFileSync(dir + 'proj.woolf', JSON.stringify({
+    title: 'Test', chapsDirectory: '',
+    chapters: [{ title: 'Chapter One', filename: 'Chapter One.txt' }],
+    reference: [{ title: 'Ref', filename: 'Chapter One.txt' }],
+    trash: [{ title: 'Trashed', filename: 'Chapter One.txt' }]
+  }), 'utf8');
+
+  const proj = newProject();
+  proj.loadFile(dir + 'proj.woolf');
+
+  [proj.chapters[0], proj.reference[0], proj.trash[0], proj.notesChap].forEach(function(chap){
+    assert.strictEqual(chap.parentProject, proj, chap.title + ' should point back at this project');
+  });
+});
+
+//Each chapter points back at its project, so the saved form has to drop that reference - otherwise
+//JSON.stringify walks the cycle and throws.
+test('saving a project does not choke on the reference each chapter holds back to it', function(t){
+  const dir = tempDir(t);
+  const proj = newProject();
+  proj.filename = 'cycle.woolf';
+  proj.directory = dir;
+  proj.chapsDirectory = '';
+  proj.initNotesChap();
+
+  const chap = newChapter(proj);
+  chap.title = 'Chapter One';
+  chap.contents = textDelta('body');
+  chap.hasUnsavedChanges = true;
+  proj.chapters.push(chap);
+
+  assert.strictEqual(proj.saveFile(), true);
+
+  const saved = JSON.parse(fs.readFileSync(dir + 'cycle.woolf', 'utf8'));
+  assert.strictEqual(saved.chapters[0].parentProject, undefined);
+  assert.strictEqual(saved.chapters[0].title, 'Chapter One');
 });

@@ -306,7 +306,7 @@ button, input[type=submit] {
   opacity: 0.5;
 }
 
-.working-popup {
+.working-popup, .backup-alert-popup {
   z-index: 4;
   text-align: center;
 }

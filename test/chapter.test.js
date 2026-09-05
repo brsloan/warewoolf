@@ -24,12 +24,10 @@ function textDelta(text){
   return { ops: [ { insert: text }, { insert: '\n' } ] };
 }
 
-//chapter.js's methods read a bare `project` identifier rather than taking it as a parameter - in
-//the real app this is the global set up by render.js. Node resolves an unqualified free variable
-//to a property of the global object, so setting it here reproduces that.
-function setGlobalProject(t, directory){
-  global.project = { directory: directory, chapsDirectory: '' };
-  t.after(function(){ delete global.project; });
+//chapter.js resolves its file paths through the project it was built with, so each chapter under
+//test is handed one standing for a project whose chapter files sit directly in `directory`.
+function projectIn(directory){
+  return { directory: directory, chapsDirectory: '' };
 }
 
 function tempDir(t){
@@ -46,9 +44,7 @@ function tempDir(t){
 
 test('deleteChapterFile removes both the chapter file and its notes file', function(t){
   const dir = tempDir(t);
-  setGlobalProject(t, dir);
-
-  const chap = newChapter();
+  const chap = newChapter(projectIn(dir));
   chap.filename = 'chap1.txt';
   fs.writeFileSync(dir + 'chap1.txt', 'chapter text', 'utf8');
   fs.writeFileSync(dir + '-notes_chap1.txt', 'notes text', 'utf8');
@@ -61,9 +57,7 @@ test('deleteChapterFile removes both the chapter file and its notes file', funct
 
 test('deleteChapterFile does not throw when there is no notes file', function(t){
   const dir = tempDir(t);
-  setGlobalProject(t, dir);
-
-  const chap = newChapter();
+  const chap = newChapter(projectIn(dir));
   chap.filename = 'chap1.txt';
   fs.writeFileSync(dir + 'chap1.txt', 'chapter text', 'utf8');
 
@@ -77,9 +71,7 @@ test('deleteChapterFile does not throw when there is no notes file', function(t)
 
 test('saveFile writes the chapter under a new-title-derived filename and cleans up the old one', function(t){
   const dir = tempDir(t);
-  setGlobalProject(t, dir);
-
-  const chap = newChapter();
+  const chap = newChapter(projectIn(dir));
   chap.title = 'My Chapter';
   chap.filename = 'old.txt';
   chap.contents = textDelta('hello world');
@@ -97,9 +89,7 @@ test('saveFile writes the chapter under a new-title-derived filename and cleans 
 
 test('saveFile renames the notes file to match a changed chapter filename', function(t){
   const dir = tempDir(t);
-  setGlobalProject(t, dir);
-
-  const chap = newChapter();
+  const chap = newChapter(projectIn(dir));
   chap.title = 'New Title';
   chap.filename = 'old.txt';
   chap.contents = textDelta('hello world');
@@ -115,12 +105,10 @@ test('saveFile renames the notes file to match a changed chapter filename', func
 
 test('saveFile regression: a failed write restores the old file and does not repoint chap.filename at a file that was never created', function(t){
   const dir = tempDir(t);
-  setGlobalProject(t, dir);
-
   const logErrorMock = t.mock.method(errorLog, 'logError', function(){});
   const freshNewChapter = freshChapter();
 
-  const chap = freshNewChapter();
+  const chap = freshNewChapter(projectIn(dir));
   chap.title = 'My Chapter';
   chap.filename = 'old.txt';
   chap.contents = textDelta('hello world');
@@ -147,9 +135,7 @@ test('saveFile regression: a failed write restores the old file and does not rep
 
 test('saveCopy writes a new file and points the chapter at it', function(t){
   const dir = tempDir(t);
-  setGlobalProject(t, dir);
-
-  const chap = newChapter();
+  const chap = newChapter(projectIn(dir));
   chap.title = 'Copy Target';
   chap.contents = textDelta('copied text');
 
@@ -161,12 +147,10 @@ test('saveCopy writes a new file and points the chapter at it', function(t){
 
 test('saveCopy regression: a failed write leaves chap.filename unchanged instead of pointing at a nonexistent file', function(t){
   const dir = tempDir(t);
-  setGlobalProject(t, dir);
-
   const logErrorMock = t.mock.method(errorLog, 'logError', function(){});
   const freshNewChapter = freshChapter();
 
-  const chap = freshNewChapter();
+  const chap = freshNewChapter(projectIn(dir));
   chap.title = 'Copy Target';
   chap.filename = 'original.txt';
   chap.contents = textDelta('copied text');
@@ -188,9 +172,7 @@ test('saveCopy regression: a failed write leaves chap.filename unchanged instead
 
 test('saveNotesFile then getNotesFile round-trips notes content', function(t){
   const dir = tempDir(t);
-  setGlobalProject(t, dir);
-
-  const chap = newChapter();
+  const chap = newChapter(projectIn(dir));
   chap.filename = 'chap1.txt';
   chap.notes = textDelta('some notes');
 
@@ -199,4 +181,67 @@ test('saveNotesFile then getNotesFile round-trips notes content', function(t){
   assert.strictEqual(chap.notes, null);
   const reloaded = chap.getNotesFile();
   assert.strictEqual(reloaded.ops[0].insert, 'some notes');
+});
+
+//---------------------------------------------------------------------------
+// parent project
+//---------------------------------------------------------------------------
+
+//This is the case the old bare `project` global made impossible: there was one of it, so there was
+//only ever one set of directories for every chapter in the process to share.
+test('two chapters with the same title write into their own projects rather than colliding', function(t){
+  const dirOne = tempDir(t);
+  const dirTwo = tempDir(t);
+
+  const chapOne = newChapter(projectIn(dirOne));
+  chapOne.title = 'Shared Name';
+  chapOne.contents = textDelta('from project one');
+  chapOne.saveFile();
+
+  const chapTwo = newChapter(projectIn(dirTwo));
+  chapTwo.title = 'Shared Name';
+  chapTwo.contents = textDelta('from project two');
+  chapTwo.saveFile();
+
+  assert.strictEqual(chapOne.filename, 'Shared Name.txt');
+  assert.strictEqual(chapTwo.filename, 'Shared Name.txt');
+  assert.match(fs.readFileSync(dirOne + 'Shared Name.txt', 'utf8'), /from project one/);
+  assert.match(fs.readFileSync(dirTwo + 'Shared Name.txt', 'utf8'), /from project two/);
+});
+
+//The directory is resolved on each use rather than captured when the chapter is built, so Save As
+//moving a project in place takes its chapters with it.
+test('a chapter follows its project to a new directory instead of caching the old one', function(t){
+  const dirOne = tempDir(t);
+  const dirTwo = tempDir(t);
+  const proj = projectIn(dirOne);
+
+  const chap = newChapter(proj);
+  chap.title = 'Travelling';
+  chap.contents = textDelta('first home');
+  chap.saveFile();
+
+  assert.ok(fs.existsSync(dirOne + 'Travelling.txt'));
+
+  proj.directory = dirTwo;
+  chap.contents = textDelta('second home');
+  chap.saveFile();
+
+  assert.ok(fs.existsSync(dirTwo + 'Travelling.txt'));
+  assert.match(fs.readFileSync(dirTwo + 'Travelling.txt', 'utf8'), /second home/);
+});
+
+test('a chapter built without a project says so, rather than failing on an undefined lookup', function(t){
+  const logged = [];
+  t.mock.method(errorLog, 'logError', function(err){ logged.push(err); });
+  const freshNewChapter = freshChapter();
+
+  const orphan = freshNewChapter();
+  orphan.title = 'Orphan';
+  orphan.contents = textDelta('nowhere to go');
+
+  orphan.saveFile();
+
+  assert.strictEqual(logged.length, 1);
+  assert.match(logged[0].message, /has no parent project/);
 });

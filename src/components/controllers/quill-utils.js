@@ -194,6 +194,118 @@ function getLineMarkerForPlaintextExport(attr, listItemNum = 0){
   return marker;
 };
 
+//The editor and the notes pane get the same formatting shortcuts. Quill's own keyboard module
+//owns these bindings, so they are attached to each instance as it is built rather than handled by
+//render.js's document-level keydown listener.
+function addBindingsToQuill(q){
+  //Title: centre it and make it a top-level heading in one keystroke.
+  q.keyboard.addBinding({
+    key: 'T',
+    shortKey: true,
+    handler: function(range, context) {
+      this.quill.format('align', 'center', 'user');
+      this.quill.format('header', 1, 'user');
+    }
+  });
+
+  for(let i = 1; i <= 4; i++){
+    q.keyboard.addBinding({
+      key: i.toString(),
+      shortKey: true,
+      handler: function(range, context) {
+        this.quill.format('header', i, 'user');
+      }
+    });
+  }
+
+  //Left/centre/right/justify differ only in the value they set, so they are built the same way the
+  //heading levels above are.
+  var alignments = { L: null, E: 'center', R: 'right', J: 'justify' };
+  Object.keys(alignments).forEach(function(key){
+    q.keyboard.addBinding({
+      key: key,
+      shortKey: true,
+      handler: function(range, context) {
+        this.quill.format('align', alignments[key], 'user');
+      }
+    });
+  });
+
+  q.keyboard.addBinding({
+    key: '0',
+    shortKey: true,
+    handler: function(range, context){
+      this.quill.format('header', null, 'user');
+    }
+  });
+
+  q.keyboard.addBinding({
+    key: 'k',
+    shortKey: true,
+    handler: function(range, context){
+      if(q.getFormat().strike)
+        q.format('strike', false, 'user');
+      else {
+        q.format('strike', true, 'user');
+      }
+    }
+  });
+
+  //Cycles bullet -> numbered -> none.
+  q.keyboard.addBinding({
+    key: 'b',
+    shortKey: true,
+    shiftKey: true,
+    handler: function(range, context){
+      if(q.getFormat().list == 'bullet')
+        q.format('list', 'ordered', 'user');
+      else if(q.getFormat().list == 'ordered')
+        q.format('list', null, 'user');
+      else
+        q.format('list', 'bullet', 'user');
+    }
+  })
+}
+
+
+//Advances the selection roughly one screenful down, the same way native PageDown does in an
+//ordinary textarea - Quill has no built-in equivalent. Only ever called from the keyboard
+//shortcut in keybindings.js, but it is a pure function of the Quill instance it is given, so it
+//lives here with the app's other direct Quill manipulation rather than needing anything injected.
+function goPageDown(quillObj){
+  var selectedRange = quillObj.getSelection();
+
+  if(selectedRange){
+    var startingScrolltop = 0 + quillObj.root.scrollTop;
+    var destinationY = quillObj.root.clientHeight;
+    var textIndex = selectedRange.index + 1;
+    //quillObj.selection.getBounds() returns viewport-relative coordinates, but destinationY and
+    //scrollTop above are relative to the editor's own container - convert before comparing, the
+    //same subtraction Quill's own public getBounds() does (see typewriter-mode.js's use of it).
+    var containerTop = quillObj.container.getBoundingClientRect().top;
+
+    var found = false;
+
+    while(!found){
+      var rawBounds = quillObj.selection.getBounds(textIndex, 1);
+      var bounds = rawBounds ? { top: rawBounds.top - containerTop, height: rawBounds.height } : null;
+
+      //Checked before reading any property of bounds: getBounds() returns null once textIndex
+      //runs past the end of the content, which this loop always eventually reaches.
+      if(bounds == null){
+        found = true;
+        quillObj.setSelection(textIndex - 1);
+      }
+      else if(bounds.top >= destinationY){
+        found = true;
+        quillObj.setSelection(textIndex);
+        quillObj.root.scrollTop = startingScrolltop + bounds.top - bounds.height;
+      }
+      textIndex += 1;
+    }
+  }
+}
+
 module.exports = {
   getTempQuill,
   splitDeltaAtIndices,
@@ -202,5 +314,7 @@ module.exports = {
   convertToPlainText,
   getOrderedListNumbers,
   getListLevel,
-  getListMarker
+  getListMarker,
+  addBindingsToQuill,
+  goPageDown
 }

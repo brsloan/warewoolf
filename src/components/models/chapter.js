@@ -4,8 +4,15 @@ const { parseMDF, convertDeltaToMDF } = require('../controllers/markdownFic');
 const { sanitizeFilename } = require('../controllers/utils');
 const notesNamePrepend = '-notes_';
 
-function newChapter(){
+//A chapter's files live in its project's chapters directory, so every file operation below needs
+//the project that owns it. It arrives here as an argument rather than being read off a bare
+//`project` global, which is what this used to do - the app happened to supply one only because
+//render.js is loaded as a plain <script> tag, so its top-level `var project` landed on `window`.
+//Nothing outside that one arrangement could use this model at all, and the tests had to hand-set a
+//global to stand in for it.
+function newChapter(parentProject){
     return {
+      parentProject: parentProject || null,
       title: "new",
       filename: null,
       filter: null,
@@ -24,21 +31,37 @@ function newChapter(){
       saveNotesFile: saveNotesFile
     };
 
+    //Resolved on each use rather than captured once, because Save As moves a project (and every
+    //chapter in it) to a new directory in place.
+    function chaptersDirectory(chap){
+      if(!chap.parentProject)
+        throw new Error('Chapter "' + chap.title + '" has no parent project, so its file path cannot be resolved.');
+
+      return chap.parentProject.directory + chap.parentProject.chapsDirectory;
+    }
+
     function deleteChapterFile(){
       var chap = this;
       try{
-        if(fs.existsSync(project.directory + project.chapsDirectory + chap.filename))
-          fs.unlinkSync(project.directory + project.chapsDirectory + chap.filename);
-        if(fs.existsSync(project.directory + project.chapsDirectory + notesNamePrepend + chap.filename))
-          fs.unlinkSync(project.directory + project.chapsDirectory + notesNamePrepend + chap.filename);
+        const filepathRoot = chaptersDirectory(chap);
+        if(fs.existsSync(filepathRoot + chap.filename))
+          fs.unlinkSync(filepathRoot + chap.filename);
+        if(fs.existsSync(filepathRoot + notesNamePrepend + chap.filename))
+          fs.unlinkSync(filepathRoot + notesNamePrepend + chap.filename);
       }
       catch(err){
         logError(err);
       }
     }
 
+    //The saved form of a chapter carries no parentProject (project.js strips it, since it is a
+    //reference back up), but restore it explicitly so a stray one in an old file cannot replace the
+    //project this chapter was actually built for.
     function parseChapter(chap){
-      return Object.assign(this, chap);
+      var owner = this.parentProject;
+      Object.assign(this, chap);
+      this.parentProject = owner;
+      return this;
     }
 
     function getFile(){
@@ -47,7 +70,7 @@ function newChapter(){
         
         //Temporarily support both old chapter JSON files (.pup) and new markdown (.txt)
         var chapterObj;
-        var fileText = fs.readFileSync(project.directory + project.chapsDirectory + chap.filename, "utf8");
+        var fileText = fs.readFileSync(chaptersDirectory(chap) + chap.filename, "utf8");
         if(chap.filename.includes('.pup'))
           chapterObj = JSON.parse(fileText);
         else
@@ -84,9 +107,9 @@ function newChapter(){
     function saveCopy(){
       try{
         var chap = this;
-        var newFilename = getNewFilename(chap.title);
+        var newFilename = getNewFilename(chaptersDirectory(chap), chap.title);
 
-        fs.writeFileSync(project.directory + project.chapsDirectory + newFilename, convertDeltaToMDF(chap.contents), "utf8")
+        fs.writeFileSync(chaptersDirectory(chap) + newFilename, convertDeltaToMDF(chap.contents), "utf8")
 
         //Only point the chapter at the new file once the write has actually succeeded
         chap.filename = newFilename;
@@ -100,7 +123,7 @@ function newChapter(){
       try{
         const oldVersionFlag = 'old_v_temp';
         var chap = this;
-        const filepathRoot = project.directory + project.chapsDirectory;
+        const filepathRoot = chaptersDirectory(chap);
 
         if(chap.contents == null && chap.filename != null)
           chap.contents = chap.getFile();
@@ -111,7 +134,7 @@ function newChapter(){
         if(oldFilename != undefined && oldFilename != null && fs.existsSync(filepathRoot + oldFilename))
           fs.renameSync(filepathRoot + oldFilename, filepathRoot + oldVersionFlag + oldFilename);
 
-        var newFilename = getNewFilename(chap.title);
+        var newFilename = getNewFilename(filepathRoot, chap.title);
 
         try{
           fs.writeFileSync(filepathRoot + newFilename, convertDeltaToMDF(chap.contents), "utf8")
@@ -158,7 +181,7 @@ function newChapter(){
     function getNotesFile(){
       try{
         var chap = this;
-        var fullNotesPath = project.directory + project.chapsDirectory + notesNamePrepend + chap.filename;
+        var fullNotesPath = chaptersDirectory(chap) + notesNamePrepend + chap.filename;
 
         var fileText = null;
         if(fs.existsSync(fullNotesPath)){
@@ -176,7 +199,7 @@ function newChapter(){
     function saveNotesFile(){
       try{
         var chap = this;
-        const filepathRoot = project.directory + project.chapsDirectory;
+        const filepathRoot = chaptersDirectory(chap);
 
         if(chap.notes != null)
           fs.writeFileSync(filepathRoot + notesNamePrepend + chap.filename, convertDeltaToMDF(chap.notes), "utf8")
@@ -190,14 +213,14 @@ function newChapter(){
     }
     
 
-  function getNewFilename(title){
+  function getNewFilename(chaptersDir, title){
     
     const fileExt = '.txt';    
     var copyNum = 1;
     var filenameRoot = sanitizeFilename(title && title != '' ? title : 'untitled');
     var filename = filenameRoot + fileExt;
 
-    while(fs.existsSync(project.directory + project.chapsDirectory + filename)){
+    while(fs.existsSync(chaptersDir + filename)){
       copyNum++;
       filename = filenameRoot + '_' + copyNum + fileExt;
     }

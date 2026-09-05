@@ -9,14 +9,17 @@ const getSecureStorage = require('./components/controllers/secure-storage');
 const newChapter = require('./components/models/chapter');
 const newProject = require('./components/models/project');
 const autosaver = require('./components/controllers/autosave');
+const chapterList = require('./components/controllers/chapter-list');
+const { registerKeybindings } = require('./components/controllers/keybindings');
+const { addBindingsToQuill } = require('./components/controllers/quill-utils');
 const { enableTypewriterMode, disableTypewriterMode } = require('./components/controllers/typewriter-mode');
 const {
   removeElementsByClass,
-  createButton,
   disableSearchView
 } = require('./components/controllers/utils');
 const fileRequestedOnOpen = ipcRenderer.sendSync('get-file-requested-on-open');
 const { showBattery } = require('./components/views/battery_display');
+const { renderChapterList, renameChapterInList } = require('./components/views/chapter-list_display');
 
 var editorQuill = new Quill('#editor-container', {
   modules: {
@@ -172,129 +175,32 @@ function setWordCountOnLoad(){
 }
 
 function updateFileList(){
-  var list = document.getElementById("chapter-list");
-
-  clearList();
-  generateChapterList();
-  generateReferenceList();
-  generateTrashList();
-
-  function clearList() {
-    while (list.hasChildNodes()) {
-      try{
-        list.removeChild(list.firstChild);
-      }
-      catch(err){
-        console.log(err);
-      }
-    }
-  }
-
-  function generateChapterList() {
-    project.chapters.forEach(function (chap, chapIndex) {
-      var listChap = document.createElement("li");
-      listChap.textContent = (chap.title != '' ? chap.title : '(untitled)') + (chap.hasUnsavedChanges == true ? "*" : "");
-      listChap.dataset.chapIndex = chapIndex;
-      listChap.onclick = function () {
-        displayChapterByIndex(this.dataset.chapIndex);
-      };
-      listChap.ondblclick = function () {
-        changeChapterTitle(this.dataset.chapIndex);
-      };
-      list.appendChild(listChap);
-      if(chapIndex == project.activeChapterIndex){
-        listChap.classList.add("activeChapter");
-        document.getElementById('chapter-list-sidebar').scrollTop = listChap.offsetTop;
-      }
-
-    });
-  }
-
-  function generateReferenceList(){
-    var referenceList = document.getElementById('reference-list');
-    while(referenceList.hasChildNodes()){
-      try{
-        referenceList.removeChild(referenceList.firstChild);
-      }
-      catch(err){
-        console.log(err);
-      }
-    }
-    project.reference.forEach(function(chap, chapIndex){
-      var listChap = document.createElement("li");
-      listChap.textContent = (chap.title != '' ? chap.title : '(untitled)') + (chap.hasUnsavedChanges == true ? "*" : "");
-      listChap.dataset.chapIndex = project.chapters.length + chapIndex;
-      listChap.onclick = function () {
-        displayChapterByIndex(this.dataset.chapIndex);
-      };
-      listChap.ondblclick = function () {
-        changeChapterTitle(this.dataset.chapIndex);
-      };
-      if (chapIndex + project.chapters.length == project.activeChapterIndex)
-        listChap.classList.add("activeChapter");
-      referenceList.appendChild(listChap);
-    });
-
-    var refHeader = document.getElementById('reference-header');
-    if(project.reference.length > 0 )
-      refHeader.classList.remove('trash-header-empty');
-    else
-      refHeader.classList.add('trash-header-empty');
-  }
-
-  function generateTrashList() {
-    var trashList = document.getElementById("trash-list");
-    while (trashList.hasChildNodes()) {
-      try{
-        trashList.removeChild(trashList.firstChild);
-      }
-      catch(err){
-        console.log(err);
-      }
-    }
-    project.trash.forEach(function (chap, chapIndex) {
-      var listChap = document.createElement("li");
-      listChap.textContent = (chap.title != '' ? chap.title : '(untitled)') + (chap.hasUnsavedChanges == true ? "*" : "");
-      listChap.dataset.chapIndex = project.chapters.length + project.reference.length + chapIndex;
-      listChap.onclick = function () {
-        displayChapterByIndex(this.dataset.chapIndex);
-      };
-      listChap.ondblclick = function () {
-        changeChapterTitle(this.dataset.chapIndex);
-      };
-      if (chapIndex + project.chapters.length + project.reference.length == project.activeChapterIndex)
-        listChap.classList.add("activeChapter");
-      trashList.appendChild(listChap);
-    });
-
-    var trashHeader = document.getElementById('trash-header');
-    if(project.trash.length > 0 )
-      trashHeader.classList.remove('trash-header-empty');
-    else
-      trashHeader.classList.add('trash-header-empty');
-  }
+  renderChapterList(project, {
+    onSelect: displayChapterByIndex,
+    onRename: changeChapterTitle
+  });
 }
 
 function displayChapterByIndex(ind){
   clearCurrentChapterIfUnchanged();
   ind = parseInt(ind);
 
-  //If trying to go beyond last chapter, stay on last chapter
-  if(ind > project.chapters.length + project.reference.length + project.trash.length - 1)
-    ind = project.chapters.length + project.reference.length + project.trash.length - 1;
+  //An index past the last chapter stays on the last chapter; null means every chapter has been
+  //permanently deleted, so clear the editor the same way deleteChapter() already does for that
+  //case rather than trying to display something that is not there.
+  var loc = chapterList.clampedLocator(project, ind);
 
-  project.activeChapterIndex = ind;
+  if(loc == null){
+    project.activeChapterIndex = 0;
+    editorQuill.disable();
+    editorQuill.setText("");
+    updateFileList();
+    return;
+  }
 
-  var chap;
-  if(ind < project.chapters.length){
-    chap = project.chapters[ind];
-  }
-  else if(ind < project.chapters.length + project.reference.length){
-    chap = project.reference[ind - project.chapters.length]
-  }
-  else {
-    chap = project.trash[ind - project.reference.length - project.chapters.length];
-  }
+  project.activeChapterIndex = chapterList.toCombinedIndex(project, loc);
+
+  var chap = chapterList.resolve(project, loc);
 
   var contents;
   if(chap.contents != undefined && chap.contents != null){
@@ -328,20 +234,19 @@ function refreshNotesDisplay(){
 
   if(userSettings.displayChapNotes){
     var activeChapter = project.getActiveChapter();
-    var savedNotes = activeChapter ? activeChapter.getNotesContentOrFile() : null;
-    var currentNotes = savedNotes ? savedNotes : getEmptyDelta();
-    notesQuill.setContents(currentNotes);
+    let savedNotes = activeChapter ? activeChapter.getNotesContentOrFile() : null;
+    let currentNotes = savedNotes ? savedNotes : getEmptyDelta();
+    notesQuill.setContents(currentNotes, 'api');
 
     notesHeader.innerText = 'Chapter Notes';
   }
   else{
     let savedNotes = project.notesChap.getNotesContentOrFile();
-    var currentNotes = savedNotes ? savedNotes : getEmptyDelta();
+    let currentNotes = savedNotes ? savedNotes : getEmptyDelta();
     notesQuill.setContents(currentNotes, 'api');
 
     notesHeader.innerText = 'Project Notes';
   }
-    
 }
 
 function getEmptyDelta(){
@@ -436,7 +341,7 @@ function displayPreviousChapter(){
 }
 
 function displayNextChapter(){
-  if(!chapIndexIs(project.activeChapterIndex).lastAll){
+  if(!chapterList.isLastOfAll(project, chapterList.activeLocator(project))){
     displayChapterByIndex(project.activeChapterIndex + 1);
     editorQuill.setSelection(0);
     project.textCursorPosition = 0;
@@ -444,78 +349,27 @@ function displayNextChapter(){
 
 }
 
-function chapIndexIs(ind){
-  return {
-    //Second part of chapter "or" statement is to catch when the very first chapter is added to a new project
-    chapter: ind < project.chapters.length || (project.chapters.length == 0 && project.reference.length == 0 && project.trash.length == 0), 
-    firstChapter: ind == 0,
-    lastChapter: ind == project.chapters.length - 1,
-    reference: ind > project.chapters.length - 1 && ind < project.chapters.length + project.reference.length && project.reference.length > 0,
-    firstReference: ind == project.chapters.length && project.reference.length > 0,
-    lastReference: ind == project.chapters.length + project.reference.length - 1 && project.reference.length > 0,
-    trash: ind > project.chapters.length + project.reference.length - 1 && project.trash.length > 0,
-    firstTrash: ind == project.chapters.length + project.reference.length,
-    lastTrash: ind == project.chapters.length + project.reference.length + project.trash.length - 1 && project.trash.length > 0,
-    lastAll: ind == project.chapters.length + project.reference.length + project.trash.length - 1
-  }
-}
-
 function moveChapUp(chapInd){
-  var indexIs = chapIndexIs(chapInd);
-  if(indexIs.chapter && !indexIs.firstChapter){
+  var landed = chapterList.moveUp(project, chapterList.toLocator(project, chapInd));
+
+  if(landed){
     project.hasUnsavedChanges = true;
-    var chap = project.chapters.splice(chapInd, 1)[0];
-    project.chapters.splice(chapInd - 1, 0, chap);
-    project.activeChapterIndex--;
-  }
-  else if(indexIs.firstReference){
-    project.hasUnsavedChanges = true;
-    var refChap = project.reference.splice(chapInd - project.chapters.length, 1)[0];
-    project.chapters.splice(project.chapters.length,0,refChap); 
-  }
-  else if(indexIs.reference && !indexIs.firstReference){
-    project.hasUnsavedChanges = true;
-    var refChap = project.reference.splice(chapInd - project.chapters.length, 1)[0];
-    project.reference.splice(chapInd - project.chapters.length - 1, 0, refChap);
-    project.activeChapterIndex--;
-  }
-  else if(indexIs.trash && !indexIs.firstTrash){
-    project.hasUnsavedChanges = true;
-    var trashChap = project.trash.splice(chapInd - project.chapters.length - project.reference.length, 1)[0];
-    project.trash.splice(chapInd - project.chapters.length - project.reference.length - 1, 0, trashChap);
-    project.activeChapterIndex--;
+    //Follow the chapter to wherever it ended up. Reordering inside a list shifts its combined
+    //index by one; crossing the chapters/reference seam leaves it where it was.
+    project.activeChapterIndex = chapterList.toCombinedIndex(project, landed);
   }
 
   updateFileList();
 }
 
 function moveChapDown(chapInd){
-  var indexIs = chapIndexIs(chapInd);
+  var landed = chapterList.moveDown(project, chapterList.toLocator(project, chapInd));
 
-  if(indexIs.chapter && !indexIs.lastChapter){
+  if(landed){
     project.hasUnsavedChanges = true;
-    var chap = project.chapters.splice(chapInd, 1)[0];
-    project.chapters.splice(chapInd + 1, 0, chap);
-    project.activeChapterIndex++;
+    project.activeChapterIndex = chapterList.toCombinedIndex(project, landed);
   }
-  else if(indexIs.lastChapter){
-    project.hasUnsavedChanges = true;
-    var chap = project.chapters.splice(chapInd, 1)[0];
-    project.reference.splice(0,0,chap);
-  }
-  else if(indexIs.reference && !indexIs.lastReference){
-    project.hasUnsavedChanges = true;
-    var refChap = project.reference.splice(chapInd - project.chapters.length, 1)[0];
-    project.reference.splice(chapInd - project.chapters.length + 1, 0, refChap);
-    project.activeChapterIndex++;
-  }
-  else if(indexIs.trash && !indexIs.lastTrash){
-    project.hasUnsavedChanges = true;
-    var trashChap = project.trash.splice(chapInd - project.chapters.length - project.reference.length, 1)[0];
-    project.trash.splice(chapInd - project.chapters.length - project.reference.length + 1, 0, trashChap);
-    project.activeChapterIndex++;
-  }
-  
+
   updateFileList();
 }
 
@@ -535,18 +389,26 @@ function createNewProject(){
 }
 
 function addNewChapter(){
-  var currentIndexIs = chapIndexIs(project.activeChapterIndex);
-  var newChap = newChapter();
+  var currentLoc = chapterList.activeLocator(project);
+  var newChap = newChapter(project);
   newChap.hasUnsavedChanges = true;
   newChap.contents = getEmptyDelta();
-  if(currentIndexIs.chapter || currentIndexIs.trash)
-    project.chapters.splice(project.activeChapterIndex + 1, 0, newChap);
+
+  //A new chapter joins the Chapters list, right after the active one - except when a Reference
+  //document is active, where it joins Reference instead. A Trash item active, or nothing in any
+  //list yet, both fall through to appending onto the end of Chapters.
+  var landed;
+  if(currentLoc && currentLoc.list == 'reference')
+    landed = chapterList.insertAt(project, 'reference', currentLoc.index + 1, newChap);
+  else if(currentLoc && currentLoc.list == 'chapters')
+    landed = chapterList.insertAt(project, 'chapters', currentLoc.index + 1, newChap);
   else
-    project.reference.splice(project.activeChapterIndex - project.chapters.length + 1, 0, newChap);
-  
+    landed = chapterList.append(project, 'chapters', newChap);
+
   project.hasUnsavedChanges = true;
-  updateFileList();
-  var thisIndex = currentIndexIs.chapter || currentIndexIs.trash ? project.chapters.indexOf(newChap) : project.reference.indexOf(newChap);
+  //displayChapterByIndex() below renders the sidebar itself as its last step, so this used to
+  //render it a second time for nothing.
+  var thisIndex = chapterList.toCombinedIndex(project, landed);
   displayChapterByIndex(thisIndex);
   editorQuill.enable();
   changeChapterTitle(thisIndex);
@@ -576,6 +438,7 @@ function saveProjectAs(onComplete) {
       { name: 'WareWoolf Projects', extensions: ['woolf'] }
     ],
     bookmarkedPaths: [sysDirectories.docs, sysDirectories.home],
+    projectDirectory: project.directory,
     dialogType: 'save'
   };
 
@@ -607,6 +470,7 @@ function saveProjectCopy() {
       { name: 'WareWoolf Projects', extensions: ['woolf'] }
     ],
     bookmarkedPaths: [sysDirectories.docs, sysDirectories.home],
+    projectDirectory: project.directory,
     dialogType: 'save'
   };
 
@@ -629,6 +493,7 @@ function openAProject() {
       { name: 'WareWoolf Projects', extensions: ['woolf'] }
     ],
     bookmarkedPaths: [sysDirectories.docs, sysDirectories.home],
+    projectDirectory: project.directory,
     dialogType: 'open'
   };
 
@@ -661,48 +526,73 @@ function clearCurrentChapterIfUnchanged(){
   }
 };
 
-function moveToTrash(ind){
-  var chapIs = chapIndexIs(ind);
-  if(chapIs.trash == false){
+editorQuill.on('text-change', function(delta, oldDelta, source) {
+  if(source == "user"){
+    var chap = project.getActiveChapter();
+    chap.contents = editorQuill.getContents();
+    chap.hasUnsavedChanges = true;
     project.hasUnsavedChanges = true;
+  }
+});
 
-    if(chapIs.reference){
-      let toTrash = project.reference.splice(ind - project.chapters.length, 1)[0];
-      project.trash.push(toTrash);
-    }
-    else{
-      let toTrash = project.chapters.splice(ind, 1)[0];
-      project.trash.push(toTrash);
-    }
-    
-    //If deleting currently selected chapter, select next chapter if there is one, or the previous chapter if not.
-    if(ind == project.activeChapterIndex){
-      //If deleting a chapter and there are chapters left
-      if(chapIs.chapter && project.chapters.length > 0){
-        var newInd = ind < project.chapters.length || ind == 0 ? ind : ind - 1;
-        displayChapterByIndex(newInd);
-      }
-      else if(chapIs.reference && project.reference.length > 0){
-        var newInd = ind < project.chapters.length + project.reference.length || ind - project.chapters.length == 0 ? ind : ind - 1;
-        displayChapterByIndex(newInd);
-      }
-      else if(chapIs.reference && project.reference.length < 1 && project.chapters.length > 0){
-        displayChapterByIndex(project.chapters.length - 1);
-      }
-      else{
-        displayChapterByIndex(0)
-      }
-    }
-    else
-      updateFileList();
+editorQuill.on('selection-change', function(range, oldRange, source){
+  if(range){
+    project.textCursorPosition = range.index;
   }
-  else {
+})
+
+notesQuill.on('text-change', function(delta, oldDelta, source){
+  if(source == 'user'){
+    if(userSettings.displayChapNotes){
+      //getActiveChapter() is undefined once every chapter has been permanently deleted -
+      //nothing to attach these notes to in that state.
+      var chap = project.getActiveChapter();
+      if(chap){
+        chap.notes = notesQuill.getContents();
+        chap.hasUnsavedChanges = true;
+      }
+    }
+    else {
+      project.notesChap.notes = notesQuill.getContents();
+      project.notesChap.hasUnsavedChanges = true;
+    }
+
+    project.hasUnsavedChanges = true;
+  }
+});
+
+function moveToTrash(ind){
+  var loc = chapterList.toLocator(project, ind);
+
+  //Nothing at that index to trash - on an empty project this used to splice an empty list and
+  //push the resulting undefined into the trash.
+  if(loc == null)
+    return;
+
+  //Already in the trash, so the next step is permanent deletion rather than another move.
+  if(loc.list == 'trash'){
     verifyToDelete(ind);
+    return;
   }
+
+  project.hasUnsavedChanges = true;
+  var wasActive = ind == project.activeChapterIndex;
+
+  chapterList.append(project, 'trash', chapterList.remove(project, loc));
+
+  if(wasActive){
+    //Select whatever slid into the trashed chapter's place, falling back down the lists as they
+    //empty out.
+    var next = chapterList.selectionAfterRemoval(project, loc);
+    displayChapterByIndex(next ? chapterList.toCombinedIndex(project, next) : 0);
+  }
+  else
+    updateFileList();
 }
 
 function deleteChapter(ind){
-  var deletedChap = project.trash.splice(ind - project.chapters.length - project.reference.length, 1)[0];
+  var loc = chapterList.toLocator(project, ind);
+  var deletedChap = chapterList.remove(project, loc);
 
   //Always save project file after deleting a chapter
   //so if user closes without saving it won't expect
@@ -710,17 +600,15 @@ function deleteChapter(ind){
   deletedChap.deleteFile();
 
   if(ind == project.activeChapterIndex){
-    if(project.trash.length > 0){
-      var newInd = ind < project.trash.length + project.chapters.length + project.reference.length || ind - project.chapters.length - project.reference.length == 0 ? ind : ind - 1;
-      displayChapterByIndex(newInd);
-    }
+    //Same "stay on whatever slid into the gap, else fall back" rule moveToTrash() uses - this
+    //used to check only project.chapters.length, which meant deleting the last trashed chapter
+    //blanked the editor even when the project still had reference chapters to show.
+    var next = chapterList.selectionAfterRemoval(project, loc);
+    if(next)
+      displayChapterByIndex(chapterList.toCombinedIndex(project, next));
     else{
-      if(project.chapters.length > 0)
-        displayChapterByIndex(project.chapters.length - 1);
-      else{
-        editorQuill.disable();
-        editorQuill.setText("");
-      }
+      editorQuill.disable();
+      editorQuill.setText("");
     }
   }
 
@@ -734,91 +622,47 @@ function deleteChapter(ind){
 }
 
 function verifyToDelete(ind){
-  if(chapIndexIs(ind).trash){
-    //Avoid stacking a second confirmation popup if this one is already showing.
-    if(document.querySelector('.delete-confirm-popup'))
-      return;
-
-    var popup = document.createElement("div");
-    popup.classList.add("popup");
-    popup.classList.add("delete-confirm-popup");
-
-    var warningTitle = document.createElement('h1');
-    warningTitle.innerText = 'WARNING:'
-    popup.appendChild(warningTitle);
-
-    var message = document.createElement("p");
-    message.innerText = "Are you sure you want to delete this file? This is permanent.";
-    message.classList.add('warning-text');
-    popup.appendChild(message);
-
-    var yesButton = createButton("Yes");
-    yesButton.onclick = function(){
+  var loc = chapterList.toLocator(project, ind);
+  if(loc && loc.list == 'trash'){
+    const displayDeleteConfirmation = require('./components/views/delete-confirmation_display');
+    displayDeleteConfirmation(function(){
       deleteChapter(ind);
       editorQuill.focus();
-      popup.remove();
-    }
-    var noButton = createButton("No");
-    noButton.onclick = function(){
-      popup.remove();
-    }
-    popup.appendChild(yesButton);
-    popup.appendChild(noButton);
-    document.body.appendChild(popup);
-    yesButton.focus();
+    });
   }
 }
 
 function restoreFromTrash(ind){
-  if(chapIndexIs(ind).trash){
+  var loc = chapterList.toLocator(project, ind);
+
+  if(loc && loc.list == 'trash'){
     project.hasUnsavedChanges = true;
-    var fromTrash = project.trash.splice(ind - project.chapters.length - project.reference.length, 1)[0];
-    project.chapters.push(fromTrash);
+    chapterList.append(project, 'chapters', chapterList.remove(project, loc));
     updateFileList();
   }
 }
 
 function changeChapterTitle(ind){
-  var chap;
-  var chapIs = chapIndexIs(ind);
-  if(chapIs.trash)
-    chap = project.trash[ind - project.chapters.length - project.reference.length];
-  else if(chapIs.reference)
-    chap = project.reference[ind - project.chapters.length];
-  else
-    chap = project.chapters[ind];
+  var chap = chapterList.chapterAt(project, ind);
+  if(!chap)
+    return;
 
-  var listName = document.querySelector("[data-chap-index='" + ind + "']");
-  removeElementsByClass('name-box');
-  var nameBox = document.createElement("input");
-  nameBox.type = "text";
-  nameBox.classList.add("name-box");
-  nameBox.addEventListener("keydown", function(e){
-    if(e.key === "Enter" || e.key === "Tab"){
-      stopDefaultPropagation(e);
-      chap.title = nameBox.value;
+  renameChapterInList(ind, {
+    onCommit: function(newTitle){
+      chap.title = newTitle;
       project.hasUnsavedChanges = true;
       chap.hasUnsavedChanges = true;
-      removeElementsByClass('name-box');
       updateFileList();
       editorQuill.focus();
-    }
-    else if (e.key === "Escape"){
-      removeElementsByClass('name-box');
+    },
+    onCancel: function(){
       updateFileList();
       editorQuill.focus();
+    },
+    onDismiss: function(){
+      updateFileList();
     }
   });
-
-  nameBox.onblur = function(){
-      removeElementsByClass('name-box');
-      updateFileList();
-  }
-
-  listName.firstChild.remove();
-  listName.appendChild(nameBox);
-  nameBox.focus();
-
 }
 
 function splitChapter(){
@@ -859,9 +703,14 @@ function decreaseFontSizeSetting(){
 }
 
 function scrollChapterListToActiveChapter(){
-  document.getElementById('chapter-list-sidebar')
-  .scrollTop = document.querySelector('.activeChapter')
-  .offsetTop - (document.getElementById('chapters-header').offsetHeight * 3);
+  //No chapter/reference/trash item is marked active on a project with nothing in any of the
+  //three lists.
+  var activeChapter = document.querySelector('.activeChapter');
+  if(!activeChapter)
+    return;
+
+  document.getElementById('chapter-list-sidebar').scrollTop =
+    activeChapter.offsetTop - (document.getElementById('chapters-header').offsetHeight * 3);
 }
 
 function openHelpDoc(){
@@ -873,10 +722,10 @@ function openHelpDoc(){
 function exitApp(){
   if(userSettings.autoBackup == true && project.filename != ''){
     alertBackupResult('Loading backup tools...', true);
-    const { backupProject } = require('./components/controllers/backup-project');
+    const { backupProject, BACKUP_FINISHED } = require('./components/controllers/backup-project');
     backupProject(project, userSettings, sysDirectories.docs, function(update){
       alertBackupResult(update, true);
-      if(update == 'Backup finished.')
+      if(update == BACKUP_FINISHED)
         ipcRenderer.send('exit-app-confirmed');
     });
   } else {
@@ -884,63 +733,41 @@ function exitApp(){
   }
 }
 
+//Adapts backup-project.js's stream of progress messages onto the alert popup: every message is
+//shown, and the one that means the run is over takes the popup down with it.
 function alertBackupResult(msg, allowExitWithoutBackup = false){
-  var backupAlert = document.getElementById('backup-alert');
-  var backupAlertText = document.getElementById('backup-alert-text');
+  const { showBackupAlert, hideBackupAlert } = require('./components/views/working_display');
+  const { BACKUP_FINISHED } = require('./components/controllers/backup-project');
 
-  if(backupAlert == null){
-    backupAlert = document.createElement('div');
-    backupAlert.id = 'backup-alert';
-    backupAlert.classList.add('popup');
-    backupAlert.classList.add('working-popup');
-    document.body.appendChild(backupAlert);
-    backupAlertText = document.createElement('p');
-    backupAlertText.id = 'backup-alert-text';
-    backupAlert.appendChild(backupAlertText);
+  if(msg == BACKUP_FINISHED){
+    hideBackupAlert();
+    return;
   }
 
-  backupAlertText.innerText = msg;
-
-  setExitWithoutBackupButton(backupAlert, allowExitWithoutBackup);
-
-  if(msg == 'Backup finished.')
-    backupAlert.remove();
-}
-
-//This same alert reports backups started from the menu, where the app is not on its way out and a
-//button that quits it, skipping the usual check for unsaved work, has no business being. So it is
-//only added when the backup is the one running on exit.
-function setExitWithoutBackupButton(backupAlert, show){
-  var exitBtn = document.getElementById('backup-alert-exit');
-
-  if(show && exitBtn == null){
-    exitBtn = document.createElement('button');
-    exitBtn.id = 'backup-alert-exit';
-    exitBtn.innerText = 'Exit Without Backup';
-    exitBtn.onclick = function(e){
-      ipcRenderer.send('exit-app-confirmed');
-    }
-    backupAlert.appendChild(exitBtn);
-  }
-  else if(!show && exitBtn != null)
-    exitBtn.remove();
+  showBackupAlert(msg, allowExitWithoutBackup ? function(){
+    ipcRenderer.send('exit-app-confirmed');
+  } : null);
 }
 
 function addImportedChapter(chapDelta, title){
-  var newChap = newChapter();
+  var newChap = newChapter(project);
   newChap.hasUnsavedChanges = true;
   newChap.contents = chapDelta;
   newChap.title = title;
 
-  if(chapIndexIs(project.activeChapterIndex).reference){
-    project.reference.splice(project.activeChapterIndex - project.chapters.length + 1, 0, newChap);
-  }
-  else{
-    project.chapters.splice(project.activeChapterIndex + 1, 0, newChap);
-  }
-  
-  updateFileList();
-  displayChapterByIndex(project.activeChapterIndex + 1);
+  //Same placement rule as addNewChapter(): joins Reference after the active document if that's
+  //what's active, otherwise appends onto Chapters (which also covers a Trash item being active -
+  //project.activeChapterIndex + 1 used to be passed straight to displayChapterByIndex() below,
+  //which only happened to land correctly because a Chapter or Reference document being active
+  //keeps that arithmetic in sync with the insert position; a Trash item active does not).
+  var currentLoc = chapterList.activeLocator(project);
+  var landed = (currentLoc && currentLoc.list == 'reference')
+    ? chapterList.insertAt(project, 'reference', currentLoc.index + 1, newChap)
+    : chapterList.insertAt(project, 'chapters', currentLoc && currentLoc.list == 'chapters' ? currentLoc.index + 1 : project.chapters.length, newChap);
+
+  //displayChapterByIndex() below renders the sidebar itself as its last step, so this used to
+  //render it a second time for nothing.
+  displayChapterByIndex(chapterList.toCombinedIndex(project, landed));
 }
 
 function toggleChapterNotes(){
@@ -949,32 +776,6 @@ function toggleChapterNotes(){
   refreshNotesDisplay();
 }
 
-function goPageDown(quillObj){
-  var selectedRange = quillObj.getSelection();
-
-  if(selectedRange){
-    var startingScrolltop = 0 + quillObj.root.scrollTop;
-    var destinationY = quillObj.root.clientHeight;
-    var textIndex = selectedRange.index + 1;
-
-    var found = false;
-    
-    while(!found){
-      var bounds = quillObj.selection.getBounds(textIndex, 1);
-
-      if(bounds.y >= destinationY){
-        found = true;
-        quillObj.setSelection(textIndex);
-        quillObj.root.scrollTop = startingScrolltop + bounds.y - bounds.height;
-      }
-      else if(bounds == undefined || bounds.y == undefined){
-        found = true;
-        quillObj.setSelection(textIndex - 1);
-      }
-      textIndex += 1;
-    }
-  }
-}
 
 function editorHasFocus(){
   return editorIsVisible() && document.querySelector(".ql-editor") === document.activeElement;
@@ -984,440 +785,203 @@ function editorIsVisible(){
   return document.getElementById('writing-field').classList.contains('visible');
 }
 
-function stopDefaultPropagation(keyEvent){
-  keyEvent.preventDefault();
-  keyEvent.stopPropagation();
-}
-
-///////////////////////////////////////////////////////////////////
-  //Event Handlers ///////////////////////////////////////////////
-
-editorQuill.on('text-change', function(delta, oldDelta, source) {
-  if(source == "user"){
-    var chap = project.getActiveChapter();
-    chap.contents = editorQuill.getContents();
-    chap.hasUnsavedChanges = true;
-    project.hasUnsavedChanges = true;
+//Wires up every keyboard shortcut that is not a menu item - see keybindings.js for the dispatch
+//itself. context.project is a getter, not the object directly, because createNewProject() below
+//replaces it with a brand new one; capturing it here would leave every shortcut acting on the
+//project this app started with rather than whatever project is actually open.
+var unregisterKeybindings = registerKeybindings({
+  getProject: function(){ return project; },
+  userSettings: userSettings,
+  editorQuill: editorQuill,
+  notesQuill: notesQuill,
+  actions: {
+    moveChapUp: moveChapUp,
+    moveChapDown: moveChapDown,
+    changeChapterTitle: changeChapterTitle,
+    displayPreviousChapter: displayPreviousChapter,
+    displayNextChapter: displayNextChapter,
+    togglePanelDisplay: togglePanelDisplay,
+    toggleChapterNotes: toggleChapterNotes,
+    updatePanelDisplays: updatePanelDisplays,
+    increaseFontSizeSetting: increaseFontSizeSetting,
+    decreaseFontSizeSetting: decreaseFontSizeSetting,
+    increaseEditorWidthSetting: increaseEditorWidthSetting,
+    descreaseEditorWidthSetting: descreaseEditorWidthSetting
   }
 });
 
-editorQuill.on('selection-change', function(range, oldRange, source){
-  if(range){
-    project.textCursorPosition = range.index;
-  }
-})
-
-notesQuill.on('text-change', function(delta, oldDelta, source){
-  if(source == 'user'){
-    if(userSettings.displayChapNotes){
-      var chap = project.getActiveChapter();
-      chap.notes = notesQuill.getContents();
-      chap.hasUnsavedChanges = true;
-    }
-    else {
-      project.notesChap.notes = notesQuill.getContents();
-      project.notesChap.hasUnsavedChanges = true;
-    }
-    
-    project.hasUnsavedChanges = true;
-  }
-});
-
-function addBindingsToQuill(q){
-  q.keyboard.addBinding({
-    key: 'T',
-    shortKey: true,
-    handler: function(range, context) {
-      this.quill.format('align', 'center', 'user');
-      this.quill.format('header', 1, 'user');
-    }
-  });
-
-  for(let i = 1; i <= 4; i++){
-    q.keyboard.addBinding({
-      key: i.toString(),
-      shortKey: true,
-      handler: function(range, context) {
-        this.quill.format('header', i, 'user');
-      }
-    });
-  }
-
-  q.keyboard.addBinding({
-    key: 'L',
-    shortKey: true,
-    handler: function(range, context) {
-      this.quill.format('align', null, 'user');
-    }
-  });
-
-  q.keyboard.addBinding({
-    key: 'E',
-    shortKey: true,
-    handler: function(range, context) {
-      this.quill.format('align', 'center', 'user');
-    }
-  });
-
-  q.keyboard.addBinding({
-    key: 'R',
-    shortKey: true,
-    handler: function(range, context) {
-      this.quill.format('align', 'right', 'user');
-    }
-  });
-
-  q.keyboard.addBinding({
-    key: 'J',
-    shortKey: true,
-    handler: function(range, context) {
-      this.quill.format('align', 'justify', 'user');
-    }
-  });
-
-  q.keyboard.addBinding({
-    key: '0',
-    shortKey: true,
-    handler: function(range, context){
-      this.quill.format('header', null, 'user');
-    }
-  });
-
-  q.keyboard.addBinding({
-    key: 'k',
-    shortKey: true,
-    handler: function(range, context){
-      if(q.getFormat().strike)
-        q.format('strike', false, 'user');
-      else {
-        q.format('strike', true, 'user');
-      }
-    }
-  });
-
-  q.keyboard.addBinding({
-    key: 'b',
-    shortKey: true,
-    shiftKey: true,
-    handler: function(range, context){
-      if(q.getFormat().list == 'bullet')
-        q.format('list', 'ordered', 'user');
-      else if(q.getFormat().list == 'ordered')
-        q.format('list', null, 'user');
-      else
-        q.format('list', 'bullet', 'user');
-    }
-  })
-
-};
-
-document.addEventListener ("keydown", function (e) {
-    if((e.ctrlKey || e.metaKey) && e.key === "ArrowLeft"){
-      stopDefaultPropagation(e);
-      if(document.getElementById('writing-field').classList.contains('visible')){
-        removeElementsByClass('popup');
-        disableSearchView();
-        editorQuill.focus();
-      }
-    }
-    else if((e.ctrlKey || e.metaKey) && e.key === "ArrowRight"){
-      stopDefaultPropagation(e);
-      if(document.getElementById('project-notes').classList.contains('visible')){
-        removeElementsByClass('popup');
-        disableSearchView();
-        notesQuill.focus();
-      }
-    }
-    else if(e.key === "Escape"){
-      removeElementsByClass('popup');
-      removeElementsByClass('popup-dialog');
-      disableSearchView();
-      updatePanelDisplays();
-    }
-    else if((e.ctrlKey || e.metaKey) && e.key === "="){
-      increaseFontSizeSetting();
-    }
-    else if((e.ctrlKey || e.metaKey) && e.key === "-"){
-      decreaseFontSizeSetting();
-    }
-    else if((e.ctrlKey || e.metaKey) && e.altKey && e.key === "t"){
-      if(userSettings.typewriterMode){
-        disableTypewriterMode(editorQuill);
-        userSettings.typewriterMode = false;
-        userSettings.save();
-      }
-      else {
-        enableTypewriterMode(editorQuill);
-        userSettings.typewriterMode = true;
-        userSettings.save();
-      }
-    }
-    else if((e.ctrlKey || e.metaKey) && e.key === "m"){
-      ipcRenderer.send('show-menu');
-    }
-    else if(e.key === 'F1'){
-      stopDefaultPropagation(e);
-      togglePanelDisplay(1);
-    }
-    else if(!e.ctrlKey && e.key === "F2"){
-      stopDefaultPropagation(e);
-      togglePanelDisplay(2);
-    }
-    else if((e.ctrlKey || e.metaKey) && e.key === "F3"){
-      stopDefaultPropagation(e);
-      toggleChapterNotes();
-    }
-    else if(e.key ==="F3"){
-      stopDefaultPropagation(e);
-      togglePanelDisplay(3);
-    }
-} );
-
-document.getElementById('editor-container').addEventListener('keydown', editorControlEvents);
-document.getElementById('chapter-list-sidebar').addEventListener('keydown', editorControlEvents);
-document.getElementById('notes-editor').addEventListener('keydown', editorControlEvents);
-
-function editorControlEvents(e){
-  if ((e.ctrlKey || e.metaKey)  && e.shiftKey && e.key === "ArrowUp") {
-    stopDefaultPropagation(e);
-    moveChapUp(project.activeChapterIndex);
-  }
-  else if((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "ArrowDown"){
-    stopDefaultPropagation(e);
-    moveChapDown(project.activeChapterIndex);
-  }
-  else if((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "ArrowLeft"){
-    stopDefaultPropagation(e);
-    if(document.getElementById('chapter-list-sidebar').classList.contains('visible'))
-      changeChapterTitle(project.activeChapterIndex);
-  }
-  else if((e.ctrlKey || e.metaKey) && e.key === "ArrowUp"){
-    stopDefaultPropagation(e);
-    displayPreviousChapter();
-    if(e.currentTarget.id == 'notes-editor')
-      notesQuill.focus();
-  }
-  else if((e.ctrlKey || e.metaKey) && e.key === "ArrowDown"){
-    stopDefaultPropagation(e);
-    displayNextChapter();
-    if(e.currentTarget.id == 'notes-editor')
-      notesQuill.focus();
-  }
-  else if((e.ctrlKey || e.metaKey) && e.key === ","){
-    descreaseEditorWidthSetting();
-  }
-  else if((e.ctrlKey || e.metaKey) && e.key === "."){
-    increaseEditorWidthSetting();
-  }
-  else if(e.key === "PageDown"){
-    stopDefaultPropagation(e);
-    if(e.currentTarget.id == 'notes-editor')
-      goPageDown(notesQuill)
-    else
-      goPageDown(editorQuill);
-  }
-}
-
-ipcRenderer.on("save-clicked", function(e){
-  saveProject();
-});
-
-ipcRenderer.on("save-as-clicked", function(e){
-  saveProjectAs();
-});
-
-ipcRenderer.on("open-clicked", function(e){
-  const displayExitConfirmation = require('./components/views/exit-confirmation_display');
+//Both channels below show the same "you have unsaved changes - save first?" prompt before doing
+//something that would otherwise discard them; only exit-app-clicked refreshes the sidebar's
+//unsaved-change markers first (open-clicked never has, though there's no obvious reason it
+//shouldn't - preserved here rather than unified, since it's a real behaviour difference, not a
+//mechanical one).
+function proceedOrConfirmSave(continueFunc, refreshFileListFirst){
   if(project.hasUnsavedChanges){
-    displayExitConfirmation(saveProject, openAProject);
+    const displayExitConfirmation = require('./components/views/exit-confirmation_display');
+    if(refreshFileListFirst)
+      updateFileList();
+    displayExitConfirmation(saveProject, continueFunc);
   }
-  else{
-    openAProject();
-  }
-});
+  else
+    continueFunc();
+}
 
-ipcRenderer.on('new-project-clicked', function(e){
-  createNewProject();
-});
-
-ipcRenderer.on('import-clicked', function(e){
-  const showImportOptions = require('./components/views/import_display');
-  showImportOptions(sysDirectories, addImportedChapter, function(){
-    displayChapterByIndex(project.activeChapterIndex);
-    if(project.chapters.length > 0)
-      editorQuill.enable();
-  });
-});
-
-ipcRenderer.on('export-clicked', function(e){
-  const showExportOptions = require('./components/views/export_display');
-  showExportOptions(project, userSettings, sysDirectories);
-});
-
-ipcRenderer.on('properties-clicked', function(e){
-  const showProperties = require('./components/views/properties_display');
-  showProperties(project, userSettings);
-});
-
-ipcRenderer.on('compile-clicked', function(e){
-  const showCompileOptions = require('./components/views/compile_display');
-  showCompileOptions(project, sysDirectories, userSettings);
-});
-
-ipcRenderer.on('word-count-clicked', function(e){
-  const showWordCount = require('./components/views/wordcount_display');
-  showWordCount(project, editorQuill);
-});
-
-ipcRenderer.on('find-replace-clicked', function(e){
-  if(editorHasFocus()){
+//Most menu/IPC commands share one shape: lazily require a view module and call it with some
+//subset of (project, userSettings, sysDirectories, ...), sometimes only while the editor has
+//focus. Collecting them here means the focus guard - previously an ad-hoc `if(editorHasFocus())`
+//repeated at some call sites and not others, with no way to see the whole set at a glance - is now
+//one flag per entry, visible in one place. It does NOT change which channels currently have it:
+//convert-tabs/renumber-chapters/indent-all/center-all-heads all edit chapter content project-wide
+//without requiring editor focus, exactly as before, even though convert-first-lines and
+//convert-italics (equally project-wide) do require it - a real inconsistency, left exactly as it
+//was rather than resolved here, since which behaviour is correct is a product decision.
+//
+//A channel stays outside this table when it does not fit the shape above: open-clicked and
+//exit-app-clicked are folded in via proceedOrConfirmSave() since their control flow reduces to
+//that one pattern, but file-opened-from-outside-warewoolf takes its own argument (the opened
+//path) and has a distinct multi-branch shape, so it is registered separately below the table.
+const menuCommands = {
+  'save-clicked': { run: function(){ saveProject(); } },
+  'save-as-clicked': { run: function(){ saveProjectAs(); } },
+  'open-clicked': { run: function(){ proceedOrConfirmSave(openAProject); } },
+  'new-project-clicked': { run: function(){ createNewProject(); } },
+  'import-clicked': { run: function(){
+    const showImportOptions = require('./components/views/import_display');
+    showImportOptions(sysDirectories, addImportedChapter, function(){
+      displayChapterByIndex(project.activeChapterIndex);
+      if(project.chapters.length > 0)
+        editorQuill.enable();
+    });
+  } },
+  'export-clicked': { run: function(){
+    const showExportOptions = require('./components/views/export_display');
+    showExportOptions(project, userSettings, sysDirectories);
+  } },
+  'properties-clicked': { run: function(){
+    const showProperties = require('./components/views/properties_display');
+    showProperties(project, userSettings);
+  } },
+  'compile-clicked': { run: function(){
+    const showCompileOptions = require('./components/views/compile_display');
+    showCompileOptions(project, sysDirectories, userSettings);
+  } },
+  'word-count-clicked': { run: function(){
+    const showWordCount = require('./components/views/wordcount_display');
+    showWordCount(project, editorQuill);
+  } },
+  'find-replace-clicked': { requiresFocus: true, run: function(){
     const showFindReplace = require('./components/views/findreplace_display');
     showFindReplace(project, editorQuill, displayChapterByIndex);
-  }
-});
-
-ipcRenderer.on('spellcheck-clicked', function(e){
-  if(editorHasFocus()){
+  } },
+  'spellcheck-clicked': { requiresFocus: true, run: function(){
     const showSpellcheck = require('./components/views/spellcheck_display');
     const { getBeginningOfCurrentWord } = require('./components/controllers/spellcheck');
     var currentIndex = editorQuill.getSelection(true).index;
     var beginningOfWord = getBeginningOfCurrentWord(editorQuill.getText(), currentIndex);
     showSpellcheck(editorQuill, project, sysDirectories, displayChapterByIndex, beginningOfWord);
-  }
-});
-
-ipcRenderer.on('convert-first-lines-clicked', function(e){
-  const showConvertFirstLines = require('./components/views/convert-first-lines_display');
-  if(editorHasFocus()){
+  } },
+  'convert-first-lines-clicked': { requiresFocus: true, run: function(){
+    const showConvertFirstLines = require('./components/views/convert-first-lines_display');
     showConvertFirstLines(project, function(){
-        displayChapterByIndex(project.activeChapterIndex);
+      displayChapterByIndex(project.activeChapterIndex);
     });
-  }
-});
-
-ipcRenderer.on('headings-to-chaps-clicked', function(e){
-  if(editorHasFocus()){
+  } },
+  'headings-to-chaps-clicked': { requiresFocus: true, run: function(){
     const showBreakHeadingsOptions = require('./components/views/headings-to-chapters_display');
     showBreakHeadingsOptions(editorQuill, addImportedChapter);
-  }
-    
-});
-
-ipcRenderer.on('convert-italics-clicked', function(e){
-  if(editorHasFocus()){
+  } },
+  'convert-italics-clicked': { requiresFocus: true, run: function(){
     const showItalicsOptions = require('./components/views/convert-italics_display');
     showItalicsOptions(project, function(){
       displayChapterByIndex(project.activeChapterIndex);
     });
-  }
-});
-
-ipcRenderer.on('split-chapter-clicked', function(e){
-  if(editorHasFocus())
-    splitChapter();
-});
-
-ipcRenderer.on('add-chapter-clicked', function(e){
-  if(editorHasFocus())
-    addNewChapter();
-});
-
-ipcRenderer.on('delete-chapter-clicked', function(e){
-  if(editorHasFocus())
-    moveToTrash(project.activeChapterIndex);
-});
-
-ipcRenderer.on('restore-chapter-clicked', function(e){
-  if(editorHasFocus())
-    restoreFromTrash(project.activeChapterIndex);
-});
-
-ipcRenderer.on('shortcuts-clicked', function(e, isMac){
-  const showShortcutsHelp = require('./components/views/shortcuts-help_display');
-  showShortcutsHelp(isMac);
-});
-
-ipcRenderer.on('outliner-clicked', function(e){
-  const showOutliner = require('./components/views/outliner_display');
-  showOutliner(project);
-});
-
-ipcRenderer.on('convert-tabs-clicked', function(e){
-  const showTabOptions = require('./components/views/convert-tabs-display');
-  showTabOptions(project, function(){
+  } },
+  'split-chapter-clicked': { requiresFocus: true, run: function(){ splitChapter(); } },
+  'add-chapter-clicked': { requiresFocus: true, run: function(){ addNewChapter(); } },
+  'delete-chapter-clicked': { requiresFocus: true, run: function(){ moveToTrash(project.activeChapterIndex); } },
+  'restore-chapter-clicked': { requiresFocus: true, run: function(){ restoreFromTrash(project.activeChapterIndex); } },
+  'shortcuts-clicked': { run: function(isMac){
+    const showShortcutsHelp = require('./components/views/shortcuts-help_display');
+    showShortcutsHelp(isMac);
+  } },
+  'outliner-clicked': { run: function(){
+    const showOutliner = require('./components/views/outliner_display');
+    showOutliner(project);
+  } },
+  'convert-tabs-clicked': { run: function(){
+    const showTabOptions = require('./components/views/convert-tabs-display');
+    showTabOptions(project, function(){
+      displayChapterByIndex(project.activeChapterIndex);
+    });
+  } },
+  'about-clicked': { run: function(appVersion){
+    const showAbout = require('./components/views/about_display');
+    showAbout(sysDirectories, appVersion);
+  } },
+  'exit-app-clicked': { run: function(){ proceedOrConfirmSave(exitApp, true); } },
+  'save-copy-clicked': { run: function(){ saveProjectCopy(); } },
+  'help-doc-clicked': { run: function(){ openHelpDoc(); } },
+  'renumber-chapters-clicked': { run: function(){
+    const showRenumberChapters = require('./components/views/renumber-chapters_display');
+    showRenumberChapters(project, function(){
+      updateFileList();
+      displayChapterByIndex(project.activeChapterIndex);
+    });
+  } },
+  'send-via-email-clicked': { run: function(){
+    const showEmailOptions = require('./components/views/email-doc_display');
+    showEmailOptions(project, userSettings, credentialStore, editorQuill);
+  } },
+  'view-error-log-clicked': { run: function(){
+    const showErrorLog = require('./components/views/error-log_display');
+    showErrorLog(userSettings, credentialStore);
+  } },
+  'file-manager-clicked': { run: function(){
+    const showFileManager = require('./components/views/file-manager_display');
+    showFileManager(sysDirectories, project.directory);
+  } },
+  'wifi-manager-clicked': { run: function(){
+    const showWifiManager = require('./components/views/wifi-manager_display');
+    showWifiManager();
+  } },
+  'save-backup-clicked': { run: function(){
+    const { backupProject } = require('./components/controllers/backup-project');
+    backupProject(project, userSettings, sysDirectories.docs, alertBackupResult);
+  } },
+  'settings-clicked': { run: function(){
+    const showSettings = require('./components/views/settings_display');
+    showSettings(userSettings, autosaver, sysDirectories, saveProject, function(){
+      setDarkMode();
+    });
+  } },
+  'corkboard-clicked': { run: function(){
+    const showCorkboard = require('./components/views/corkboard_display');
+    showCorkboard(project);
+  } },
+  'indent-all-clicked': { run: function(){
+    const { indentAllParasInAllChaps } = require('./components/controllers/indent-all');
+    indentAllParasInAllChaps(project);
     displayChapterByIndex(project.activeChapterIndex);
-  });
-});
-
-ipcRenderer.on('about-clicked', function(e, appVersion){
-  const showAbout = require('./components/views/about_display');
-  showAbout(sysDirectories, appVersion);
-});
-
-ipcRenderer.on('exit-app-clicked', function(e){
-  if(project.hasUnsavedChanges){
-    const displayExitConfirmation = require('./components/views/exit-confirmation_display');
-    updateFileList();
-    displayExitConfirmation(saveProject, exitApp);
-  }
-  else{
-    exitApp();
-  }
-});
-
-ipcRenderer.on('save-copy-clicked', function(e){
-  saveProjectCopy();
-});
-
-ipcRenderer.on('help-doc-clicked', function(e){
-  openHelpDoc();
-});
-
-ipcRenderer.on('renumber-chapters-clicked', function(e){
-  const showRenumberChapters = require('./components/views/renumber-chapters_display');
-  showRenumberChapters(project, function(){
-    updateFileList();
+  } },
+  'center-all-heads-clicked': { run: function(){
+    const { centerAllHeadingsInAllChaps } = require('./components/controllers/center-all-heads');
+    centerAllHeadingsInAllChaps(project);
     displayChapterByIndex(project.activeChapterIndex);
+  } }
+};
+
+Object.keys(menuCommands).forEach(function(channel){
+  var command = menuCommands[channel];
+  ipcRenderer.on(channel, function(e){
+    if(command.requiresFocus && !editorHasFocus())
+      return;
+    command.run.apply(null, Array.prototype.slice.call(arguments, 1));
   });
 });
 
-ipcRenderer.on('send-via-email-clicked', function(e){
-  const showEmailOptions = require('./components/views/email-doc_display');
-  showEmailOptions(project, userSettings, credentialStore, editorQuill);
-});
-
-ipcRenderer.on('view-error-log-clicked', function(e){
-  const showErrorLog = require('./components/views/error-log_display');
-  showErrorLog(userSettings, credentialStore);
-});
-
-ipcRenderer.on('file-manager-clicked', function(e){
-  const showFileManager = require('./components/views/file-manager_display');
-  showFileManager(sysDirectories, project.directory);
-});
-
-ipcRenderer.on('wifi-manager-clicked', function(e){
-  const showWifiManager = require('./components/views/wifi-manager_display');
-  showWifiManager();
-});
-
-ipcRenderer.on('save-backup-clicked', function(e){
-  const { backupProject } = require('./components/controllers/backup-project');
-  backupProject(project, userSettings, sysDirectories.docs, alertBackupResult);
-});
-
-ipcRenderer.on('settings-clicked', function(e){
-  const showSettings = require('./components/views/settings_display');
-  showSettings(userSettings, autosaver, sysDirectories, saveProject, function(){
-    setDarkMode();
-  });
-});
-
-ipcRenderer.on('corkboard-clicked', function(e){
-  const showCorkboard = require('./components/views/corkboard_display');
-  showCorkboard(project);
-});
-
+//Takes its own argument (the opened file's path) and has a distinct multi-branch shape - handling
+//a chapter missing from disk mirrors openAProject()'s own file-dialog callback - so it is kept as
+//an ordinary handler rather than forced into the single-argument shape above.
 ipcRenderer.on('file-opened-from-outside-warewoolf', function(event, fPath){
   if (fPath) {
     var missingChaps = project.loadFile(fPath);
@@ -1436,18 +1000,6 @@ ipcRenderer.on('file-opened-from-outside-warewoolf', function(event, fPath){
 
 });
 
-ipcRenderer.on('indent-all-clicked', function(e){
-  const { indentAllParasInAllChaps } = require('./components/controllers/indent-all');
-  indentAllParasInAllChaps(project);
-  displayChapterByIndex(project.activeChapterIndex);
-});
-
-ipcRenderer.on('center-all-heads-clicked', function(e){
-  const { centerAllHeadingsInAllChaps } = require('./components/controllers/center-all-heads');
-  centerAllHeadingsInAllChaps(project);
-  displayChapterByIndex(project.activeChapterIndex);
-});
-
 //Exposed for testing only - nothing in the app itself reads this module's exports, since it's
 //loaded as a plain <script> tag rather than required. Limited to the chapter/reference/trash
 //list engine, the most bug-prone and highest-value part of this file to unit test directly.
@@ -1456,7 +1008,6 @@ module.exports = {
   userSettings,
   editorQuill,
   notesQuill,
-  chapIndexIs,
   moveChapUp,
   moveChapDown,
   moveToTrash,
@@ -1470,5 +1021,10 @@ module.exports = {
   changeChapterTitle,
   splitChapter,
   editorHasFocus,
-  editorIsVisible
+  editorIsVisible,
+  //Tears down the keyboard listeners this module attaches on load. Nothing in the app itself calls
+  //this - there is exactly one of these for the app's whole lifetime - but a test harness that
+  //re-requires render.js per test needs it to undo the previous require's listeners, or they pile
+  //up on the shared `document` across every test in the file.
+  _unregisterKeybindings: unregisterKeybindings
 };

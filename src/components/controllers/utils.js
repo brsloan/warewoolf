@@ -46,10 +46,40 @@ function removeElementsByClass(className){
   }
   
 
+//Every call site today passes a hardcoded string literal, never anything derived from a file, the
+//network, or user input - but setting innerHTML from a string parameter is exactly the shape that
+//turns into an injection point the moment that stops being true, and with nodeIntegration true
+//(see src/index.js) that means arbitrary code execution, not just a defaced popup. A handful of
+//labels mark one letter for the OS-level accessKey shortcut with a fixed
+//<span class='access-key'>X</span> pattern - ACCESS_KEY_LABEL recognises exactly that shape and
+//builds it as real DOM nodes, so nothing here ever needs to parse or trust arbitrary markup.
+const ACCESS_KEY_LABEL = /^(.*)<span class='access-key'>(.)<\/span>(.*)$/;
+
 function createButton(text){
     var btn = document.createElement("button");
-    btn.innerHTML = text;
     btn.type = "button";
+
+    var accessKeyMatch = ACCESS_KEY_LABEL.exec(text);
+    if(accessKeyMatch){
+      var before = accessKeyMatch[1];
+      var letter = accessKeyMatch[2];
+      var after = accessKeyMatch[3];
+
+      if(before)
+        btn.appendChild(document.createTextNode(before));
+
+      var accessKeySpan = document.createElement('span');
+      accessKeySpan.className = 'access-key';
+      accessKeySpan.textContent = letter;
+      btn.appendChild(accessKeySpan);
+
+      if(after)
+        btn.appendChild(document.createTextNode(after));
+    }
+    else{
+      btn.textContent = text;
+    }
+
     return btn;
 }
   

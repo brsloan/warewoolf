@@ -142,8 +142,32 @@ test('sanitizeFilenameWithExt regression: falls back to the original value and l
 test('createButton creates a button element with the given text and type', function(){
   const btn = createButton('Click me');
   assert.strictEqual(btn.tagName, 'BUTTON');
-  assert.strictEqual(btn.innerHTML, 'Click me');
+  assert.strictEqual(btn.textContent, 'Click me');
   assert.strictEqual(btn.type, 'button');
+});
+
+test('createButton sets plain text as a real text node rather than parsing it as markup', function(){
+  const btn = createButton('<b>not bold</b>');
+  assert.strictEqual(btn.textContent, '<b>not bold</b>');
+  assert.strictEqual(btn.querySelector('b'), null);
+});
+
+test('createButton renders the one recognised markup shape - an access-key letter - as a real span', function(){
+  const btn = createButton("Replace <span class='access-key'>A</span>ll");
+
+  assert.strictEqual(btn.textContent, 'Replace All');
+  const span = btn.querySelector('span.access-key');
+  assert.ok(span);
+  assert.strictEqual(span.textContent, 'A');
+  //The letter is real text, not markup that happened to parse - confirms this was built with
+  //createElement/textContent rather than by pattern-matching into an innerHTML string.
+  assert.strictEqual(span.children.length, 0);
+});
+
+test('createButton renders the access-key span alone, with no leading or trailing text nodes required', function(){
+  const btn = createButton("<span class='access-key'>F</span>ind");
+  assert.strictEqual(btn.textContent, 'Find');
+  assert.strictEqual(btn.childNodes.length, 2, 'the span, plus the trailing "ind" text node - no empty leading node');
 });
 
 test('generateRow wraps the two given elements in their own table cells in order', function(){
