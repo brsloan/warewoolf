@@ -192,7 +192,7 @@ function updateFileList(){
   function generateChapterList() {
     project.chapters.forEach(function (chap, chapIndex) {
       var listChap = document.createElement("li");
-      listChap.innerText = chap.title != '' ? chap.title : '(untitled)';
+      listChap.textContent = (chap.title != '' ? chap.title : '(untitled)') + (chap.hasUnsavedChanges == true ? "*" : "");
       listChap.dataset.chapIndex = chapIndex;
       listChap.onclick = function () {
         displayChapterByIndex(this.dataset.chapIndex);
@@ -200,8 +200,6 @@ function updateFileList(){
       listChap.ondblclick = function () {
         changeChapterTitle(this.dataset.chapIndex);
       };
-      if (chap.hasUnsavedChanges == true)
-        listChap.innerHTML += "*";
       list.appendChild(listChap);
       if(chapIndex == project.activeChapterIndex){
         listChap.classList.add("activeChapter");
@@ -223,7 +221,7 @@ function updateFileList(){
     }
     project.reference.forEach(function(chap, chapIndex){
       var listChap = document.createElement("li");
-      listChap.innerHTML = chap.title != '' ? chap.title : '(untitled)';
+      listChap.textContent = (chap.title != '' ? chap.title : '(untitled)') + (chap.hasUnsavedChanges == true ? "*" : "");
       listChap.dataset.chapIndex = project.chapters.length + chapIndex;
       listChap.onclick = function () {
         displayChapterByIndex(this.dataset.chapIndex);
@@ -233,8 +231,6 @@ function updateFileList(){
       };
       if (chapIndex + project.chapters.length == project.activeChapterIndex)
         listChap.classList.add("activeChapter");
-      if (chap.hasUnsavedChanges == true)
-        listChap.innerHTML += "*";
       referenceList.appendChild(listChap);
     });
 
@@ -257,7 +253,7 @@ function updateFileList(){
     }
     project.trash.forEach(function (chap, chapIndex) {
       var listChap = document.createElement("li");
-      listChap.innerHTML = chap.title != '' ? chap.title : '(untitled)';
+      listChap.textContent = (chap.title != '' ? chap.title : '(untitled)') + (chap.hasUnsavedChanges == true ? "*" : "");
       listChap.dataset.chapIndex = project.chapters.length + project.reference.length + chapIndex;
       listChap.onclick = function () {
         displayChapterByIndex(this.dataset.chapIndex);
@@ -267,8 +263,6 @@ function updateFileList(){
       };
       if (chapIndex + project.chapters.length + project.reference.length == project.activeChapterIndex)
         listChap.classList.add("activeChapter");
-      if (chap.hasUnsavedChanges == true)
-        listChap.innerHTML += "*";
       trashList.appendChild(listChap);
     });
 
