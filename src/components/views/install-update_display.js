@@ -16,6 +16,7 @@ function showInstallUpdate(filepath){
 
   var statusDisp = document.createElement('p');
   statusDisp.innerText = '';
+  statusDisp.style.whiteSpace = 'pre-line';
   popup.appendChild(statusDisp);
 
   var passLabel = document.createElement('label');
@@ -26,14 +27,40 @@ function showInstallUpdate(filepath){
   var passInput = document.createElement('input');
   passInput.type = 'password';
   passInput.id = "install-pass";
+  passInput.autocomplete = 'new-password';
   popup.appendChild(passInput);
 
   var installBtn = createButton('Install Update');
-  installBtn.onclick = function(){
+
+  function submitInstall(){
+    if(installBtn.disabled)
+      return;
+
+    if(passInput.value === ''){
+      statusDisp.innerText = 'Password is required.';
+      return;
+    }
+
     installBtn.disabled = true;
-    installUpdate(passInput.value, filepath, statusDisp);
+    var pass = passInput.value;
+    passInput.value = '';
+    installUpdate(pass, filepath, statusDisp, function(exitCode){
+      if(exitCode !== 0){
+        installBtn.disabled = false;
+        passInput.focus();
+      }
+    });
   }
+
+  installBtn.onclick = submitInstall;
   popup.appendChild(installBtn);
+
+  passInput.addEventListener('keydown', function(e){
+    if(e.key === 'Enter'){
+      e.preventDefault();
+      submitInstall();
+    }
+  });
 
   var close = createButton("Close");
   close.onclick = function(){

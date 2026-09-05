@@ -508,3 +508,42 @@ test('installUpdate relays stdout/stderr to the status element and appends a com
   fakeChild.emit('close', 0);
   assert.ok(statusElement.innerText.includes('Installation Finished! Reboot to complete.'));
 });
+
+//Regression: the 'close' handler used to unconditionally append "Installation Finished! Reboot
+//to complete." no matter the exit code, so a failed install (bad password, apt error, etc.)
+//still ended with a success message layered on top of the error text already shown.
+test('installUpdate regression: reports failure instead of a false success message when the process exits with a non-zero code', function(t){
+  let fakeChild;
+  t.mock.method(child_process, 'spawn', function(){
+    fakeChild = makeFakeChild();
+    return fakeChild;
+  });
+
+  const { installUpdate: freshInstallUpdate } = freshUpdates();
+  const statusElement = { innerText: '' };
+  freshInstallUpdate('wrong-password', '/tmp/pkg.deb', statusElement);
+
+  fakeChild.stderr.emit('data', 'Sorry, try again.');
+  fakeChild.emit('close', 1);
+
+  assert.ok(!statusElement.innerText.includes('Installation Finished!'), 'must not claim success on a non-zero exit code');
+  assert.ok(statusElement.innerText.includes('failed'));
+});
+
+//Regression: installUpdate had no way to tell its caller whether the install succeeded, so a
+//UI showing an "Install" button had no signal to re-enable it after a failure.
+test('installUpdate regression: invokes the onDone callback with the process exit code', function(t){
+  let fakeChild;
+  t.mock.method(child_process, 'spawn', function(){
+    fakeChild = makeFakeChild();
+    return fakeChild;
+  });
+
+  const { installUpdate: freshInstallUpdate } = freshUpdates();
+  const calls = [];
+  freshInstallUpdate('secret', '/tmp/pkg.deb', { innerText: '' }, function(exitCode){ calls.push(exitCode); });
+
+  fakeChild.emit('close', 1);
+
+  assert.deepStrictEqual(calls, [1]);
+});

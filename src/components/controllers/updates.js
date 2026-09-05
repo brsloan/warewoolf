@@ -238,7 +238,7 @@ function downloadRequest(file, filePath, url){
     request.end();
 }
 
-function installUpdate(pass, filePath, statusElement){
+function installUpdate(pass, filePath, statusElement, onDone){
 
   const updater = spawn('sudo', ['-S', 'apt', 'install', filePath], {
     stdio: 'pipe'
@@ -257,9 +257,15 @@ function installUpdate(pass, filePath, statusElement){
     statusElement.innerText = 'Error: ' + data;
   });
 
-  updater.on('close', function(data){
+  updater.on('close', function(exitCode){
     console.log('updater closed');
-    statusElement.innerText += '\nInstallation Finished! Reboot to complete.';
+    if(exitCode === 0)
+      statusElement.innerText += '\nInstallation Finished! Reboot to complete.';
+    else
+      statusElement.innerText += '\nInstallation failed (exit code ' + exitCode + ').';
+
+    if(typeof onDone === 'function')
+      onDone(exitCode);
   })
 
 }
