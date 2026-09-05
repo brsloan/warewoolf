@@ -28,5 +28,6 @@ function convertToPlainText(delt){
 
 module.exports = {
   getTotalWordCount,
-  countWords
+  countWords,
+  convertToPlainText
 }

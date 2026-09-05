@@ -1,5 +1,5 @@
 const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
-const { countWords } = require('../controllers/wordcount');
+const { countWords, convertToPlainText } = require('../controllers/wordcount');
 
 function showOutliner(project){
   removeElementsByClass('popup');
@@ -45,9 +45,10 @@ function showOutliner(project){
     summaryCell.classList.add('outliner-summary');
     var summaryInput = document.createElement('input');
     summaryInput.type = "text";
-    summaryInput.value = chap.summary;
+    summaryInput.value = chap.summary || '';
     summaryInput.onchange = function(){
       chap.summary = summaryInput.value;
+      project.hasUnsavedChanges = true;
     }
     summaryCell.appendChild(summaryInput);
     row.appendChild(summaryCell);
@@ -65,17 +66,8 @@ function showOutliner(project){
   popup.appendChild(closeBtn);
 
   document.body.appendChild(popup);
-  document.querySelector('#outliner-table input').focus();
-}
-
-function convertToPlainText(delt){
-  if(!delt || !delt.ops) return '';
-  var text = '';
-  delt.ops.forEach(op => {
-    if(typeof op.insert === 'string')
-      text += op.insert;
-  });
-  return text;
+  var firstInput = document.querySelector('#outliner-table input');
+  if(firstInput) firstInput.focus();
 }
 
 module.exports = showOutliner;
