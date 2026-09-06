@@ -1,6 +1,6 @@
 # Native Command Inventory
 
-Derived from every Node/Electron call site in the renderer as of `0aa3e3a`.
+Derived from every Node/Electron call site in the renderer as of `340d067`.
 
 This is the API surface that must exist between the UI and the OS. It serves two
 purposes at once:
@@ -57,10 +57,10 @@ Event (main → renderer): `onFileOpenedFromOutside` (`render.js:1102`).
 
 | Command | Replaces |
 |---|---|
-| `openProject(path)` | `readFileSync` + `JSON.parse` (`project.js:44`) |
-| `saveProject(project)` | `writeFileSync` (`project.js:121`, `:234`) |
-| `saveProjectAs(project, newDir, newFilename)` | the `mkdirSync`/`copyFileSync` sequence (`project.js:166-178`) |
-| `verifyProjectFiles(project)` → missing chapter filenames | `existsSync` loop (`project.js:268`); also `missing-pups_display.js:189,222,289,322` |
+| `openProject(path)` | `readFileSync` + `JSON.parse` (`project.js:49`) |
+| `saveProject(project)` | `writeFileSync` (`project.js:136`, `:251`) |
+| `saveProjectAs(project, newDir, newFilename)` | the `mkdirSync`/`copyFileSync` sequence (`project.js:183-195`) |
+| `verifyProjectFiles(project)` → missing chapter filenames | `existsSync` loop (`project.js:290`); also `missing-pups_display.js:189,222,289,322` |
 | `materializeBundledProject(bundledDir, writableDir)` → path to open | `copyExampleToUserData()` (`render.js:91-103`), called for the Frankenstein example only (`render.js:78`) |
 
 `saveProjectAs` is six filesystem operations that must succeed or fail together.
@@ -73,9 +73,9 @@ the read-only original if even that copy fails.
 
 The Help doc deliberately does **not** use it: it is reference material that has
 to describe the installed version, so it is opened in place and the project is
-marked `isReadOnly` (`render.js:806-819`). That flag is renderer-side policy, not
+marked `isReadOnly` (`render.js:822-837`). That flag is renderer-side policy, not
 a native command — `saveFile()` refuses to write while it is set
-(`project.js:99-105`), an explicit save routes to Save As, and autosave skips.
+(`project.js:107-115`), an explicit save routes to Save As, and autosave skips.
 Nothing new crosses the boundary for it.
 
 Under Tauri the bundled originals become resource-directory reads, which is a

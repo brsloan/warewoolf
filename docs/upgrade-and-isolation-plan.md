@@ -3,7 +3,7 @@
 Companion to [`native-command-inventory.md`](./native-command-inventory.md), which
 holds the command-by-command detail for Part 2.
 
-Baseline (`fc501a3`): Electron 18.3.15, Quill 1.3.7, 824 tests passing in ~22s,
+Baseline (`fc501a3`): Electron 18.3.15, Quill 1.3.7, 830 tests passing in ~22s,
 zero native modules, `src/index.js` untested.
 
 **Status as of `0aa3e3a`.** Part 1 steps 1–3 are done: baseline tagged
@@ -24,7 +24,7 @@ arm64 `.deb` installed and verified on the writerDeck — app launches under
 Matchbox, Help doc opens and behaves correctly (which also confirms
 `packagerConfig.ignore` keeps `examples/` in the package).
 
-**Part 1 is complete.** Suite is at 824. Part 2 is clear to start.
+**Part 1 is complete.** Suite is at 830. Part 2 is clear to start.
 
 **Part 2, Phase 0 is complete.** `esbuild` bundles `src/render.js` (CommonJS
 as-is, `platform: node`, `--external:electron`) into `src/render.bundle.js`,
@@ -42,7 +42,7 @@ example correctly from the bundle.
 
 **The suite does not test the bundle by default, so it is made to.** Every other
 test here exercises the source tree; the app loads only the bundle. Deleting
-`src/render.bundle.js` outright left all 824 tests green — a build regression,
+`src/render.bundle.js` outright left all 830 tests green — a build regression,
 an esbuild resolution failure, or simply never running the build would all ship
 an app that cannot start behind a clean suite. `test/render-bundle.test.js`
 closes that: it loads the built bundle through the same jsdom harness
@@ -153,14 +153,14 @@ newer Chromium leans harder on GPU compositing, so watch for a regression. On
 2GB Pi 4 units, measure memory rather than assuming the per-chapter lazy loading
 absorbs it.
 
-**Verification is manual.** `src/index.js` has no tests, and the 824 existing
+**Verification is manual.** `src/index.js` has no tests, and the 830 existing
 tests run under plain Node — they will pass regardless of the Electron version
 and prove nothing about the upgrade. The real oracle is a smoke pass on each
 target.
 
 ## Steps
 
-**1. Record the baseline.** `npm test` (expect 824 pass), then build on each
+**1. Record the baseline.** `npm test` (expect 830 pass), then build on each
 target you ship. Tag the commit so there is a known-good point to diff against.
 
 **2. Unify electron-forge first, as its own commit.** The config is currently
@@ -249,10 +249,12 @@ Two things worth carrying forward:
 - The v2.3.0 and v2.3.1 Linux debs were built by the same workflow on the same
   runners, so they are almost certainly zstd too. If anyone reports an older
   release failing to install on a Pi, this is why.
-- **The lesson generalizes to Part 2.** Phase 0 replaces how the renderer loads;
-  it will pass 824 tests and can still produce a package that does not run.
-  Every phase that changes packaging or module loading needs verifying as an
-  installed build on the writerDeck, not just as a green suite.
+- **The lesson generalizes to Part 2.** Phase 0 replaced how the renderer loads
+  and passed the whole suite while the app's actual entry point went entirely
+  untested — `test/render-bundle.test.js` closes that specific hole, but only
+  that one. Nothing in the suite still proves a *packaged* build starts. Every
+  phase that changes packaging or module loading needs verifying as an installed
+  build on the writerDeck, not just as a green suite.
 
 **`sysDirectories.app` sweep: clean.** All four consumers checked; nothing else
 writes into the install directory, and no renderer code uses `__dirname` or
@@ -327,7 +329,7 @@ builtins external for now; they still resolve through Node integration, which is
 still on.
 
 This phase changes no behavior. It ships on its own, and it is verified by the
-app running normally with 824 tests still green.
+app running normally with 830 tests still green.
 
 ## Phase 1 — Design the injectable platform facade
 
@@ -336,7 +338,7 @@ app running normally with 824 tests still green.
 The existing tests do not mock the filesystem. They create real temp directories
 and assert against real files (`chapter.test.js`, `render.test.js`, and others
 use `fs.mkdtempSync`). If modules simply start calling `window.warewoolf.*`, that
-entire suite dies — and losing 824 tests at the start of a 47-command refactor
+entire suite dies — and losing 830 tests at the start of a 47-command refactor
 is how this project fails.
 
 So the facade must be **injected, not global**. One module — `platform.js` —
@@ -344,7 +346,7 @@ exports the command surface from the inventory. It has multiple backings:
 
 | Backing | Used by | Notes |
 |---|---|---|
-| Direct `fs`/Node | the test suite | Keeps all 824 tests running against real files, unchanged in spirit |
+| Direct `fs`/Node | the test suite | Keeps all 830 tests running against real files, unchanged in spirit |
 | `ipcRenderer.invoke` | the shipped Electron app | The preload bridge |
 | Tauri `invoke` | a future Tauri build | One-file swap |
 
@@ -400,14 +402,14 @@ Full cross-platform smoke pass again, including the Pi.
 # Part 3 — Which model for which phase
 
 The useful heuristic given this repo: **Opus where the tests cannot tell you that
-you are wrong; Sonnet where they can.** With 824 fast, real-filesystem tests, that
+you are wrong; Sonnet where they can.** With 830 fast, real-filesystem tests, that
 line is unusually clear here.
 
 | Work | Model | Reasoning |
 |---|---|---|
 | Part 1, all steps | **Sonnet** | Empirical loop: bump, run, read the error, fix. The judgment is in reading release notes against a known API list. Escalate only if a failure is genuinely confusing. |
 | Support-matrix call (drop Buster? Win7?) | **You** | A product decision about your users, not a technical one. |
-| Phase 0 (bundler) | **Sonnet** | Well-trodden, and verified by "app runs, 824 tests pass". |
+| Phase 0 (bundler) | **Sonnet** | Well-trodden, and verified by "app runs, 830 tests pass". |
 | Phase 1 (facade design) | **Opus** | The contract for all 47 commands. A wrong shape is expensive and invisible to tests — exactly the failure mode Sonnet is worst at catching. |
 | Phases 2, 3, 5, 6, 8 | **Sonnet** | High-volume, repetitive sync→async conversion with a strong test oracle. This is the bulk of the hours and the best Sonnet fit in the project. |
 | Phase 4 — `saveChapterAtomic` | **Opus** | Hand-rolled rollback with ordering constraints. Failures are silent and corrupt manuscripts. |
