@@ -64,7 +64,9 @@ exchange for readable stack traces out of a user's real install.
 `contextIsolation` is on they are simply unavailable, so the flag becomes
 `--platform=browser` and every surviving builtin import fails at build time.
 That is the desired behavior (it is how the flip proves nothing was missed), but
-it should be expected rather than discovered.
+it should be expected rather than discovered. Note the limit found in Phase 2:
+this catches *imports*, not bare global reads like `process.platform`, which
+compile through and fail at runtime instead.
 
 **Part 2, Phase 1 is complete.** The contract lives in
 `src/components/controllers/platform.js`, which declares **61 commands** across
@@ -457,16 +459,50 @@ a real `PlatformError`. Nothing in Group A actually exercises that path
 today, but every later group will need it, so it is built and tested now
 rather than discovered in Phase 4.
 
-**Deferred, deliberately: `getPlatform`'s other two call sites.**
-`updates.js:117-131,179` and `about_display.js:75` read `process.platform`/
-`process.arch` directly, and the inventory names them as what `getPlatform`
-replaces. Both sit inside Group K's own synchronous helper functions
+**Group A is not fully converted, and it is five call sites rather than two.**
+`getPlatform` is implemented and working in both backings, but five renderer
+modules still read `process.platform`/`process.arch` directly. They fall into
+two groups, and only the first was recorded when Phase 2 shipped:
+
+**Deferred deliberately, to Phase 8.** `updates.js:117-130,179` and
+`about_display.js:75` sit inside Group K's own synchronous helpers
 (`extractUpdateDownloadInfo`, `downloadUpdate`, the About popup's update-check
-handler); converting them now would mean either reaching into Group K's
-control flow early or bolting an async call onto otherwise-synchronous
-functions and unwinding that again in Phase 8. Left as plain `process.*`
-reads - still correct under `nodeIntegration: true` - until Group K converts
-alongside `checkForUpdate`/`downloadUpdate`/`installUpdate`.
+handler). Converting them now would mean either reaching into Group K's control
+flow early or bolting an async call onto otherwise-synchronous functions and
+unwinding it again in Phase 8. Left as plain `process.*` reads — still correct
+under `nodeIntegration: true` — until Group K converts alongside
+`checkForUpdate`/`downloadUpdate`/`installUpdate`.
+
+**Owned by no phase at all**, which is the part worth fixing:
+`corkboard_display.js:3`, `settings_display.js:186,203`, and `render.js:206`.
+None of these are Group K; they are ordinary UI code that the Phase 2 write-up
+missed, so no later phase is currently going to touch them.
+
+**They will not fail at build time in Phase 9.** The plan's safety net there is
+that switching esbuild to `--platform=browser` makes every surviving Node
+builtin *import* fail loudly. `process.platform` is a global property read, not
+an import, so it is not covered — verified by building a one-line module that
+reads it under `--platform=browser`, which compiles clean and emits the read
+verbatim. Under `contextIsolation: true` there is no `process` in the renderer,
+so these fail at **runtime** instead:
+
+- `corkboard_display.js:3` is `const isMac = process.platform === "darwin"` at
+  **module scope**, so it throws while the bundle is being evaluated and the app
+  does not start at all.
+- `settings_display.js:186,203` and `render.js:206` are inside functions, so
+  they fail later and narrowly — when the reader opens Settings, or when the
+  battery display is enabled on a Pi. That is the worse failure of the two,
+  because it survives a smoke pass that does not happen to open Settings.
+
+Worth sweeping as its own small commit rather than waiting: `getPlatform`
+already exists in both backings, so it is roughly four lines of call-site
+change, and the module-scope one in `corkboard_display.js` needs the same
+treatment `getAppPaths` got. Doing it late means doing it during Phase 9, which
+is meant to be an audit, not a conversion.
+
+Worth a grep in the Phase 9 audit regardless: `process.`, `__dirname` and
+`process.cwd()` across renderer code, since none of them are import-shaped and
+none are caught by the build.
 
 Verified: `test/render.test.js` and `test/render-bundle.test.js` (73 render.js
 tests, 6 bundle tests) now exercise the async boot path end to end, including
@@ -502,9 +538,17 @@ Set `contextIsolation: true`, remove `nodeIntegration`, mark Node builtins as
 genuinely unavailable in the esbuild config so any survivor fails loudly at build
 time rather than silently at runtime.
 
+**That net only catches import-shaped survivors.** `--platform=browser` fails a
+surviving `require('fs')`, but a bare global read — `process.platform`,
+`__dirname`, `process.cwd()` — is not an import and compiles through verbatim
+(verified in Phase 2; see the Group A note above). Those fail at runtime
+instead, and a module-scope one stops the app from starting at all. Do not treat
+a clean build as proof the renderer is Node-free.
+
 Then audit: grep for any remaining `require` of a Node builtin in renderer code,
-and review the preload surface for anything that leaks an arbitrary-path
-primitive. Run `/security-review` over the diff.
+**and separately for `process.`, `__dirname` and `process.cwd()`**, which the
+build will not flag. Review the preload surface for anything that leaks an
+arbitrary-path primitive. Run `/security-review` over the diff.
 
 Full cross-platform smoke pass again, including the Pi.
 
