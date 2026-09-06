@@ -69,6 +69,25 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fakeroot dpkg
       - run: npm ci
       - run: npx electron-forge make --platform=linux --arch=${{ matrix.arch }} --targets=@electron-forge/maker-deb
+      # electron-installer-debian only passes dpkg-deb a -Z flag when `compression` is set in the
+      # maker options; with none set it inherits dpkg-deb's own default, and Ubuntu patches that
+      # default to zstd. dpkg 1.20 (Debian 11 Bullseye, Raspberry Pi OS Bullseye) cannot read a
+      # zstd member and fails with "unknown compression for member 'control.tar.zst'" - so the deb
+      # installed nowhere the README claims to support. package.json now pins compression to xz;
+      # this checks the built artifact rather than trusting that, since the failure only shows up
+      # on a machine none of the build matrix runs on.
+      - name: Verify the deb uses compression older dpkg can read
+        shell: bash
+        run: |
+          set -euo pipefail
+          for deb in out/make/deb/${{ matrix.arch }}/*.deb; do
+            members="$(ar t "$deb")"
+            echo "$deb contains: $(echo "$members" | tr '\n' ' ')"
+            if echo "$members" | grep -q 'zst$'; then
+              echo "::error::$deb is zstd-compressed; Debian 11 / Raspberry Pi OS Bullseye cannot install it"
+              exit 1
+            fi
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: release-asset-linux-${{ matrix.arch }}
