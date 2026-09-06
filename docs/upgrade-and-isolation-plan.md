@@ -3,8 +3,18 @@
 Companion to [`native-command-inventory.md`](./native-command-inventory.md), which
 holds the command-by-command detail for Part 2.
 
-Baseline at time of writing (`fc501a3`): Electron 18.3.15, Quill 1.3.7, 898 tests
-passing in ~27s, zero native modules, `src/index.js` untested.
+Baseline at time of writing (`fc501a3`): Electron 18.3.15, Quill 1.3.7, 813 tests
+passing in ~22s, zero native modules, `src/index.js` untested.
+
+`npm test` is bare `node --test`, which recursively discovers test files from
+cwd (excluding only `node_modules`). Run it after any `electron-forge
+package`/`make`, and it also picks up the stale copy of `test/` that forge
+writes into `out/…/resources/app/test/` — silently re-running an old copy of
+the suite against an old copy of `src/`, which can mask a real regression
+during upgrade verification. `scripts.test` is scoped to
+`node --test "test/*.test.js"` to prevent this (note: `node --test test/`
+alone does not work — it needs the quoted glob). `out/` is also excluded from
+packaged releases via `packagerConfig.ignore` in `package.json`.
 
 ---
 
@@ -79,14 +89,14 @@ newer Chromium leans harder on GPU compositing, so watch for a regression. On
 2GB Pi 4 units, measure memory rather than assuming the per-chapter lazy loading
 absorbs it.
 
-**Verification is manual.** `src/index.js` has no tests, and the 898 existing
+**Verification is manual.** `src/index.js` has no tests, and the 813 existing
 tests run under plain Node — they will pass regardless of the Electron version
 and prove nothing about the upgrade. The real oracle is a smoke pass on each
 target.
 
 ## Steps
 
-**1. Record the baseline.** `npm test` (expect 898 pass), then build on each
+**1. Record the baseline.** `npm test` (expect 813 pass), then build on each
 target you ship. Tag the commit so there is a known-good point to diff against.
 
 **2. Unify electron-forge first, as its own commit.** The config is currently
@@ -157,7 +167,7 @@ builtins external for now; they still resolve through Node integration, which is
 still on.
 
 This phase changes no behavior. It ships on its own, and it is verified by the
-app running normally with 898 tests still green.
+app running normally with 813 tests still green.
 
 ## Phase 1 — Design the injectable platform facade
 
@@ -166,7 +176,7 @@ app running normally with 898 tests still green.
 The existing tests do not mock the filesystem. They create real temp directories
 and assert against real files (`chapter.test.js`, `render.test.js`, and others
 use `fs.mkdtempSync`). If modules simply start calling `window.warewoolf.*`, that
-entire suite dies — and losing 898 tests at the start of a 46-command refactor
+entire suite dies — and losing 813 tests at the start of a 46-command refactor
 is how this project fails.
 
 So the facade must be **injected, not global**. One module — `platform.js` —
@@ -174,7 +184,7 @@ exports the command surface from the inventory. It has multiple backings:
 
 | Backing | Used by | Notes |
 |---|---|---|
-| Direct `fs`/Node | the test suite | Keeps all 898 tests running against real files, unchanged in spirit |
+| Direct `fs`/Node | the test suite | Keeps all 813 tests running against real files, unchanged in spirit |
 | `ipcRenderer.invoke` | the shipped Electron app | The preload bridge |
 | Tauri `invoke` | a future Tauri build | One-file swap |
 
@@ -230,14 +240,14 @@ Full cross-platform smoke pass again, including the Pi.
 # Part 3 — Which model for which phase
 
 The useful heuristic given this repo: **Opus where the tests cannot tell you that
-you are wrong; Sonnet where they can.** With 898 fast, real-filesystem tests, that
+you are wrong; Sonnet where they can.** With 813 fast, real-filesystem tests, that
 line is unusually clear here.
 
 | Work | Model | Reasoning |
 |---|---|---|
 | Part 1, all steps | **Sonnet** | Empirical loop: bump, run, read the error, fix. The judgment is in reading release notes against a known API list. Escalate only if a failure is genuinely confusing. |
 | Support-matrix call (drop Buster? Win7?) | **You** | A product decision about your users, not a technical one. |
-| Phase 0 (bundler) | **Sonnet** | Well-trodden, and verified by "app runs, 898 tests pass". |
+| Phase 0 (bundler) | **Sonnet** | Well-trodden, and verified by "app runs, 813 tests pass". |
 | Phase 1 (facade design) | **Opus** | The contract for all 46 commands. A wrong shape is expensive and invisible to tests — exactly the failure mode Sonnet is worst at catching. |
 | Phases 2, 3, 5, 6, 8 | **Sonnet** | High-volume, repetitive sync→async conversion with a strong test oracle. This is the bulk of the hours and the best Sonnet fit in the project. |
 | Phase 4 — `saveChapterAtomic` | **Opus** | Hand-rolled rollback with ordering constraints. Failures are silent and corrupt manuscripts. |

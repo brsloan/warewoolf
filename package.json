@@ -9,7 +9,7 @@
     "package": "electron-forge package",
     "make": "electron-forge make",
     "publish": "electron-forge publish",
-    "test": "node --test",
+    "test": "node --test \"test/*.test.js\"",
     "lint": "echo \"No linting configured\""
   },
   "keywords": [
@@ -30,7 +30,10 @@
     "forge": {
       "packagerConfig": {
         "icon": "src/assets/icon",
-        "extendInfo": "src/plist/Info.plist"
+        "extendInfo": "src/plist/Info.plist",
+        "ignore": [
+          "^/test($|/)"
+        ]
       },
       "makers": [
         {
