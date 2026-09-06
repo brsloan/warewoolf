@@ -59,7 +59,10 @@ function initialize(){
 
 function loadInitialProject(){
   //Load requested project, last project opened, or if none logged, load example project, and if example gone, create new project
-  const defaultProject = sysDirectories.app + "/examples/Frankenstein/Frankenstein.woolf";
+  const bundledExampleDir = sysDirectories.app + "/examples/Frankenstein";
+  const bundledExample = bundledExampleDir + "/Frankenstein.woolf";
+  const writableExampleDir = sysDirectories.userData + "/Projects/Frankenstein";
+  const writableExample = writableExampleDir + "/Frankenstein.woolf";
 
   if(fileRequestedOnOpen != null && fs.existsSync(fileRequestedOnOpen)){
     setProject(fileRequestedOnOpen);
@@ -67,13 +70,35 @@ function loadInitialProject(){
   }
   else if(userSettings.lastProject != null && fs.existsSync(userSettings.lastProject))
     setProject(userSettings.lastProject);
-  else if(fs.existsSync(defaultProject)){
-    setProject(defaultProject);
-    userSettings.lastProject = defaultProject;
+  else if(fs.existsSync(writableExample)){
+    setProject(writableExample);
+    userSettings.lastProject = writableExample;
+  }
+  else if(fs.existsSync(bundledExample)){
+    setProject(copyExampleToUserData(bundledExampleDir, writableExampleDir, writableExample));
+    userSettings.lastProject = project.directory + project.filename;
   }
   else {
     //Start new project
     createNewProject();
+  }
+}
+
+//The bundled copy lives inside the installed app directory (e.g. /usr/lib/... on a Linux
+//package install), which a normal user account can't write back to - editing it and letting
+//autosave or a manual save run against it in place always fails with EACCES. Copy it out to
+//userData once on first launch and open that copy instead, so the example is actually editable.
+function copyExampleToUserData(bundledDir, writableDir, writablePath){
+  try{
+    fs.cpSync(bundledDir, writableDir, { recursive: true });
+    return writablePath;
+  }
+  catch(err){
+    const { logError } = require('./components/controllers/error-log');
+    logError(err);
+    //Couldn't copy (e.g. userData itself is somehow unwritable) - fall back to the bundled,
+    //read-only copy rather than failing to open anything.
+    return bundledDir + "/Frankenstein.woolf";
   }
 }
 
