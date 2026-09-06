@@ -19,7 +19,12 @@ API surface, with nothing requiring a code change — `sandbox` stays false beca
 Step 6 is done, including a real writerDeck on Pi OS Lite + Xorg + Matchbox; the
 three bugs it surfaced are fixed in `a0a199c`, `0aa3e3a` and `bd615c7`.
 
-**Only step 7 remains.** Suite is at 824.
+Step 7 is done: `v2.4.0` tagged at `fc67c9c`, built by CI, and the resulting
+arm64 `.deb` installed and verified on the writerDeck — app launches under
+Matchbox, Help doc opens and behaves correctly (which also confirms
+`packagerConfig.ignore` keeps `examples/` in the package).
+
+**Part 1 is complete.** Suite is at 824. Part 2 is clear to start.
 
 `npm test` is bare `node --test`, which recursively discovers test files from
 cwd (excluding only `node_modules`). Run it after any `electron-forge
@@ -183,6 +188,31 @@ Two things follow from this that outlive the fix:
   `copyExampleToUserData` has no coverage in `test/`, and the failure mode it
   handles (a read-only install dir) is exactly the one a dev machine never
   reproduces. Worth a test before Part 2 starts converting this code.
+
+**A green build is not an installable artifact (fixed, `fc67c9c`).** The first
+`v2.4.0` build succeeded on every job and still produced a `.deb` that Raspberry
+Pi OS Bullseye refused outright: `dpkg-deb: error: archive uses unknown
+compression for member 'control.tar.zst'`. dpkg gained zstd support in 1.21;
+Bullseye ships 1.20.9. `electron-installer-debian` 3.2.0 only passes `dpkg-deb`
+a `-Z` flag when `compression` is set, and with none set it inherits
+`dpkg-deb`'s default — which Ubuntu patches to zstd. So building on
+`ubuntu-latest` shipped a package that could not be unpacked on the platform the
+release notes claim to support. Nothing to do with Electron or forge.
+
+Fixed by pinning `compression: "xz"` in the maker options, plus a CI step that
+inspects the built artifact with `ar t` and fails if it finds a `.zst` member —
+this failure only appears on a machine no build-matrix job runs on, which is
+exactly how it reached a tagged release.
+
+Two things worth carrying forward:
+
+- The v2.3.0 and v2.3.1 Linux debs were built by the same workflow on the same
+  runners, so they are almost certainly zstd too. If anyone reports an older
+  release failing to install on a Pi, this is why.
+- **The lesson generalizes to Part 2.** Phase 0 replaces how the renderer loads;
+  it will pass 824 tests and can still produce a package that does not run.
+  Every phase that changes packaging or module loading needs verifying as an
+  installed build on the writerDeck, not just as a green suite.
 
 **`sysDirectories.app` sweep: clean.** All four consumers checked; nothing else
 writes into the install directory, and no renderer code uses `__dirname` or
