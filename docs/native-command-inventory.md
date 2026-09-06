@@ -1,6 +1,6 @@
 # Native Command Inventory
 
-Derived from every Node/Electron call site in the renderer as of `5ea64b9`.
+Derived from every Node/Electron call site in the renderer as of `fc501a3`.
 
 This is the API surface that must exist between the UI and the OS. It serves two
 purposes at once:
@@ -19,7 +19,7 @@ return finished results.
 
 | Layer | Node-free | Total |
 |---|---|---|
-| `components/views/` | 28 | 30 |
+| `components/views/` | 29 | 31 |
 | `components/controllers/` | 18 | 36 |
 
 The only views that reach the OS directly are `about_display.js` and
@@ -27,7 +27,7 @@ The only views that reach the OS directly are `about_display.js` and
 node-free set.
 
 - 104 synchronous `fs.*Sync` calls across 18 renderer files.
-- 8 `ipcMain` handlers exist today; 5 of the renderer's IPC calls are `sendSync`.
+- 9 `ipcMain` handlers exist today; 5 of the renderer's IPC calls are `sendSync`.
 - Renderer-side Node dependencies: `fs`, `path`, `os`, `crypto`, `https`,
   `child_process`, `archiver`, `unzipper`, `nodemailer`.
 
@@ -39,14 +39,15 @@ Mostly already IPC. Small, and the first group to move.
 
 | Command | Replaces | Notes |
 |---|---|---|
-| `getAppPaths()` | `get-directories` (`index.js:460`) | userData, home, temp, docs, app, downloads. Currently `sendSync` at `render.js:4` — module-load-time and synchronous, so this one blocks the whole async conversion. Do it first. |
+| `getAppPaths()` | `get-directories` (`index.js:490`) | userData, home, temp, docs, app, downloads. Currently `sendSync` at `render.js:4` — module-load-time and synchronous, so this one blocks the whole async conversion. Do it first. |
 | `getPlatform()` | `process.platform` / `process.arch` (`updates.js:117-130`, `about_display.js:75`) | Returns `{ platform, arch }`. |
-| `getFileRequestedOnOpen()` | `get-file-requested-on-open` (`index.js:471`) | Also `sendSync`, `render.js:20`. |
-| `setTheme(mode)` | `set-dark-mode` (`index.js:475`) | Tauri: window theme API. |
-| `showAppMenu()` | `show-menu` (`index.js:533`) | `keybindings.js:87`. |
-| `confirmExit()` | `exit-app-confirmed` (`index.js:455`) | `render.js:729,732,748`. |
+| `getFileRequestedOnOpen()` | `get-file-requested-on-open` (`index.js:501`) | Also `sendSync`, `render.js:20`. |
+| `setTheme(mode)` | `set-dark-mode` (`index.js:505`) | Tauri: window theme API. |
+| `showAppMenu()` | `show-menu` (`index.js:563`) | `keybindings.js:87`. |
+| `confirmExit()` | `exit-app-confirmed` (`index.js:480`) | `render.js:796,799,815`. |
+| `notifyRendererReady()` | `renderer-ready` (`index.js:486`) | `render.js:1076`. Fire-and-forget startup signal; the only command here with no return value. |
 
-Event (main → renderer): `onFileOpenedFromOutside` (`render.js:985`).
+Event (main → renderer): `onFileOpenedFromOutside` (`render.js:1052`).
 
 ---
 
@@ -56,10 +57,10 @@ Event (main → renderer): `onFileOpenedFromOutside` (`render.js:985`).
 
 | Command | Replaces |
 |---|---|
-| `openProject(path)` | `readFileSync` + `JSON.parse` (`project.js:41`) |
-| `saveProject(project)` | `writeFileSync` (`project.js:110`, `:220`) |
-| `saveProjectAs(project, newDir, newFilename)` | the `mkdirSync`/`copyFileSync` sequence (`project.js:152-164`) |
-| `verifyProjectFiles(project)` → missing chapter filenames | `existsSync` loop (`project.js:240`); also `missing-pups_display.js:138,171,240,273` |
+| `openProject(path)` | `readFileSync` + `JSON.parse` (`project.js:44`) |
+| `saveProject(project)` | `writeFileSync` (`project.js:121`, `:234`) |
+| `saveProjectAs(project, newDir, newFilename)` | the `mkdirSync`/`copyFileSync` sequence (`project.js:166-178`) |
+| `verifyProjectFiles(project)` → missing chapter filenames | `existsSync` loop (`project.js:268`); also `missing-pups_display.js:189,222,289,322` |
 
 `saveProjectAs` is six filesystem operations that must succeed or fail together.
 It is one command, not six bridge calls.
@@ -92,7 +93,7 @@ concern.
 | Command | Replaces |
 |---|---|
 | `loadUserSettings()` / `saveUserSettings(obj)` | `user-settings.js:73`, `:83-84` |
-| `loadCorkboard(projectDir)` / `saveCorkboard(projectDir, cards)` | `corkboard.js:37-38`, `:52` |
+| `loadCorkboard(projectDir)` / `saveCorkboard(projectDir, cards)` | `corkboard.js:46-47`, `:61` |
 | `logError(text)` | append + size rotation, `error-log.js:43-46` |
 | `readErrorLog()` / `clearErrorLog()` | `error-log.js:61-62`, `:76-77` |
 | `readLicenses()` | `about_display.js:123-124` |
@@ -111,7 +112,7 @@ domain-level rule above.
 
 | Command | Replaces |
 |---|---|
-| `listDirectory(path)` → `{name, isDirectory}[]` | `readdirSync` (`file-manager.js:140`, `backup-project.js:130`, `missing-pups_display.js:273`) |
+| `listDirectory(path)` → `{name, isDirectory}[]` | `readdirSync` (`file-manager.js:140`, `backup-project.js:130`, `missing-pups_display.js:322`) |
 | `pathExists(path)` | `file-manager.js:150`, and the boot checks at `render.js:64,68,70` |
 | `statEntry(path)` | `file-manager.js:30` |
 | `createDirectory(parent, name)` | `file-manager.js:106-107` |
@@ -192,10 +193,10 @@ Collapse the group to four commands, and the renderer never touches a key:
 | `getCredential(service)` | same, decrypt path (incl. the legacy-format fallback at `crypto.js:85`) |
 | `clearCredentials()` | `credential-store.js:154-155` |
 
-The existing `secure-storage-encrypt` / `-decrypt` IPC pair (`index.js:515`,
-`:524`) disappears into these — it is an implementation detail of the store, not
+The existing `secure-storage-encrypt` / `-decrypt` IPC pair (`index.js:545`,
+`:554`) disappears into these — it is an implementation detail of the store, not
 an API. Under Tauri this maps to `keyring-rs`, plus the availability-detection
-logic already written at `index.js:487-509`, which is sound and should carry
+logic already written at `index.js:517-539`, which is sound and should carry
 over as-is.
 
 ---
@@ -221,7 +222,7 @@ hand over content and never learn a temp path.
 
 ## Summary
 
-**~45 commands.** By disposition:
+**~46 commands.** By disposition:
 
 - **Stays JS in the webview, no command needed** — `markdownFic`, `mdfc-to-html`,
   `mdfc-to-md`, `quill-utils`, `wordcount`, `renumber-chapters`, `findreplace`,

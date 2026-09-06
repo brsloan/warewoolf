@@ -3,8 +3,8 @@
 Companion to [`native-command-inventory.md`](./native-command-inventory.md), which
 holds the command-by-command detail for Part 2.
 
-Baseline at time of writing (`5ea64b9`): Electron 18.3.15, Quill 1.3.7, 863 tests
-passing in ~23s, zero native modules, `src/index.js` untested.
+Baseline at time of writing (`fc501a3`): Electron 18.3.15, Quill 1.3.7, 898 tests
+passing in ~27s, zero native modules, `src/index.js` untested.
 
 ---
 
@@ -29,7 +29,7 @@ of one.
   setWindowOpenHandler`, and `ipcMain.on`. All still exist and are stable.
 - **The renderer is already hardened.** `setWindowOpenHandler` deny,
   `will-navigate` deny, gated devTools, and the close guard are already in place
-  (`index.js:78-90`), so the upgrade does not have to introduce them.
+  (`index.js:108-118`), so the upgrade does not have to introduce them.
 
 ## What actually carries risk
 
@@ -45,15 +45,32 @@ can still ship to:
 - Windows 7/8/8.1 support ended at Electron 22.
 - macOS minimum moved to 10.15+.
 
-**Wayland, and it is not the upgrade's fault.** Raspberry Pi OS Bookworm defaults
-to Wayland (labwc on Pi 4/5), where Electron 18 was written for X11. The window
-config at `index.js:52-53` — `kiosk: isLinux` plus `fullscreen: true` — is
-exactly the surface whose semantics differ under Wayland/XWayland.
+**Window mode on the writerDeck: Ozone/X11 against Matchbox.** The documented
+writerDeck stack is Raspberry Pi OS **Lite + Xorg + matchbox-window-manager**,
+launched from `.xinitrc` via `startx`. There is no desktop image and therefore no
+Wayland session, so Wayland is not a concern for this deployment — even at
+Electron 38+, where `--ozone-platform` defaults to `auto`, "auto" resolves to X11
+with no Wayland session present.
 
-Test this on the **current** build before upgrading. The risk comes from Pi OS
-changing underneath the app, not from the version bump, and it may already be
-present at 18.3.15. Establishing that first avoids misattributing a pre-existing
-bug to the upgrade. Newer Electron generally handles Wayland better.
+The real risk is X11-side. Electron replaced its legacy X11 backend with the
+Ozone abstraction across the majors being jumped, and `kiosk: isLinux`
+(`index.js:60`) depends on the window manager honoring EWMH fullscreen hints.
+Matchbox is about as minimal a WM as exists. Verify on a real writerDeck that the
+upgraded build still comes up as a true fullscreen kiosk window.
+
+**Wayland still matters for desktop-image users.** The published arm64 `.deb` is
+generic, and users who did not follow the writerDeck wiki may be on the Bookworm
+desktop image, which does default to Wayland (labwc on Pi 4/5). Crossing Electron
+38 flips those users from XWayland to native Wayland and changes kiosk/fullscreen
+semantics. If that segment matters, pin it:
+`app.commandLine.appendSwitch('ozone-platform', 'x11')`. Note that
+`ELECTRON_OZONE_PLATFORM_HINT` was removed in Electron 38 — it must be a
+command-line switch, not an env var.
+
+**Lite has no keyring.** `isSecureStorageAvailable()` (`index.js:517-539`) is
+load-bearing on the writerDeck rather than merely defensive. Its behavior is
+already correct; do not let an upgrade regress it, and exercise the email flow on
+a real Lite install during the smoke pass.
 
 **GPU and memory on ARM.** Electron's arm64 build is stock Chromium, not the
 Pi-patched Chromium Raspberry Pi ships — no hardware video decode, and V3D
@@ -62,14 +79,14 @@ newer Chromium leans harder on GPU compositing, so watch for a regression. On
 2GB Pi 4 units, measure memory rather than assuming the per-chapter lazy loading
 absorbs it.
 
-**Verification is manual.** `src/index.js` has no tests, and the 863 existing
+**Verification is manual.** `src/index.js` has no tests, and the 898 existing
 tests run under plain Node — they will pass regardless of the Electron version
 and prove nothing about the upgrade. The real oracle is a smoke pass on each
 target.
 
 ## Steps
 
-**1. Record the baseline.** `npm test` (expect 863 pass), then build on each
+**1. Record the baseline.** `npm test` (expect 898 pass), then build on each
 target you ship. Tag the commit so there is a known-good point to diff against.
 
 **2. Unify electron-forge first, as its own commit.** The config is currently
@@ -87,11 +104,11 @@ failure, *then* bisect to an intermediate major.
 **4. Read the breaking-changes list once, filtered.** Go through Electron's
 cumulative breaking-changes doc and check only against the twenty calls above.
 Most entries will not apply. Pay attention to anything touching `safeStorage` on
-Linux, since `isSecureStorageAvailable()` (`index.js:487-509`) depends on
+Linux, since `isSecureStorageAvailable()` (`index.js:517-539`) depends on
 `getSelectedStorageBackend` behavior.
 
 **5. Confirm the webPreferences still mean what they meant.** Electron 20 made
-renderers sandboxed by default, but `nodeIntegration: true` at `index.js:46`
+renderers sandboxed by default, but `nodeIntegration: true` at `index.js:55`
 implies `sandbox: false`, so behavior should be unchanged. Verify rather than
 assume — if this silently changed, nothing in the renderer would load and the
 failure would look unrelated.
@@ -109,10 +126,11 @@ can break:
 - Dark/light/system theme switching
 - Email a draft (exercises `safeStorage` + the credential store end to end)
 - Auto-save and auto-backup
-- **On a Bookworm Pi 4, against the pre-upgrade build first, then the new one:**
-  kiosk/fullscreen behavior under Wayland, typing latency and scroll smoothness
-  in a long chapter, memory on a 2GB unit, then the wifi manager and battery
-  monitor (Pi-only paths nothing else covers)
+- **On a real writerDeck (Pi OS Lite + Xorg + Matchbox, launched via `startx`):**
+  that `kiosk` still yields a true fullscreen window under Ozone/X11, typing
+  latency and scroll smoothness in a long chapter, memory on a 2GB Pi 4, the
+  email flow (exercises the no-keyring `safeStorage` fallback), and the wifi
+  manager and battery monitor — Pi-only paths nothing else covers
 
 **7. Ship it as its own release.** Do not begin Part 2 until this is out and has
 survived contact with real use. If modern Chromium meaningfully improves Pi
@@ -127,7 +145,7 @@ performance, that also updates the Tauri calculation.
 This is the step that is easy to miss and blocks everything else.
 
 `src/index.html` loads the renderer with a single plain `<script src="render.js">`
-tag. The entire 70-module CommonJS graph — every `require('./chapter-list')`,
+tag. The entire 71-module CommonJS graph — every `require('./chapter-list')`,
 every `module.exports` — is resolved **at runtime by Node integration in the
 renderer**. Turning off `nodeIntegration` does not just remove `require('fs')`.
 It removes `require` altogether, and the app does not load at all.
@@ -139,7 +157,7 @@ builtins external for now; they still resolve through Node integration, which is
 still on.
 
 This phase changes no behavior. It ships on its own, and it is verified by the
-app running normally with 863 tests still green.
+app running normally with 898 tests still green.
 
 ## Phase 1 — Design the injectable platform facade
 
@@ -148,7 +166,7 @@ app running normally with 863 tests still green.
 The existing tests do not mock the filesystem. They create real temp directories
 and assert against real files (`chapter.test.js`, `render.test.js`, and others
 use `fs.mkdtempSync`). If modules simply start calling `window.warewoolf.*`, that
-entire suite dies — and losing 863 tests at the start of a 45-command refactor
+entire suite dies — and losing 898 tests at the start of a 46-command refactor
 is how this project fails.
 
 So the facade must be **injected, not global**. One module — `platform.js` —
@@ -156,12 +174,12 @@ exports the command surface from the inventory. It has multiple backings:
 
 | Backing | Used by | Notes |
 |---|---|---|
-| Direct `fs`/Node | the test suite | Keeps all 863 tests running against real files, unchanged in spirit |
+| Direct `fs`/Node | the test suite | Keeps all 898 tests running against real files, unchanged in spirit |
 | `ipcRenderer.invoke` | the shipped Electron app | The preload bridge |
 | Tauri `invoke` | a future Tauri build | One-file swap |
 
 Tests already prime `require.cache` to inject a fake `ipcRenderer`
-(`render.test.js:35-45`), so the injection pattern is established — this extends
+(`render.test.js:41`), so the injection pattern is established — this extends
 it rather than inventing something new.
 
 Get the shape right here. Everything downstream is mechanical only if this is
@@ -212,15 +230,15 @@ Full cross-platform smoke pass again, including the Pi.
 # Part 3 — Which model for which phase
 
 The useful heuristic given this repo: **Opus where the tests cannot tell you that
-you are wrong; Sonnet where they can.** With 863 fast, real-filesystem tests, that
+you are wrong; Sonnet where they can.** With 898 fast, real-filesystem tests, that
 line is unusually clear here.
 
 | Work | Model | Reasoning |
 |---|---|---|
 | Part 1, all steps | **Sonnet** | Empirical loop: bump, run, read the error, fix. The judgment is in reading release notes against a known API list. Escalate only if a failure is genuinely confusing. |
 | Support-matrix call (drop Buster? Win7?) | **You** | A product decision about your users, not a technical one. |
-| Phase 0 (bundler) | **Sonnet** | Well-trodden, and verified by "app runs, 863 tests pass". |
-| Phase 1 (facade design) | **Opus** | The contract for all 45 commands. A wrong shape is expensive and invisible to tests — exactly the failure mode Sonnet is worst at catching. |
+| Phase 0 (bundler) | **Sonnet** | Well-trodden, and verified by "app runs, 898 tests pass". |
+| Phase 1 (facade design) | **Opus** | The contract for all 46 commands. A wrong shape is expensive and invisible to tests — exactly the failure mode Sonnet is worst at catching. |
 | Phases 2, 3, 5, 6, 8 | **Sonnet** | High-volume, repetitive sync→async conversion with a strong test oracle. This is the bulk of the hours and the best Sonnet fit in the project. |
 | Phase 4 — `saveChapterAtomic` | **Opus** | Hand-rolled rollback with ordering constraints. Failures are silent and corrupt manuscripts. |
 | Phase 7 — credentials | **Opus** | Crypto, key handling, and a legacy-format fallback whose breakage looks like nothing until a user's stored password stops decrypting. |
