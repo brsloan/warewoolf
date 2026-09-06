@@ -116,8 +116,14 @@ var SAVED_SECRET = '\u0000warewoolf:saved-secret\u0000';
 //Main -> renderer. Absent from native-command-inventory.md, which names only the file-open event:
 //there are 36 channels, and every one of them has to cross the bridge in Phase 9 or the menu stops
 //working. Validated by name so a typo fails at subscribe time rather than never firing.
+//
+//These are the literal channel names index.js sends on, not tidied-up versions of them - the ipc
+//backing hands them straight to ipcRenderer.on(). Phase 1 wrote the first one as
+//'file-opened-from-outside' and it was wrong for exactly one release of nobody using it: subscribing
+//would have listened on a channel nothing sends, silently, which is the failure this list exists to
+//prevent. A test cross-checks the list against index.js so a name cannot drift again.
 var EVENTS = [
-  'file-opened-from-outside',
+  'file-opened-from-outside-warewoolf',
   'about-clicked', 'add-chapter-clicked', 'center-all-heads-clicked', 'compile-clicked',
   'convert-first-lines-clicked', 'convert-italics-clicked', 'convert-tabs-clicked',
   'corkboard-clicked', 'delete-chapter-clicked', 'exit-app-clicked', 'export-clicked',

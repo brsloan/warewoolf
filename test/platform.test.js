@@ -224,6 +224,21 @@ test('events are validated by name and unsubscribe cleanly', function(t){
 //The property that makes the contract survive Phase 9: platform.js requires nothing at all, so it
 //still builds once esbuild switches to --platform=browser and Node builtins stop resolving.
 //platform-node.js is the file that has to be gone by then, and this is what says so out loud.
+//The one guard standing between Phase 9 and a menu that silently stops working. EVENTS holds the
+//literal channel names index.js sends on - the ipc backing passes them straight to
+//ipcRenderer.on() - so a name that drifts from the main process subscribes to a channel nothing
+//sends, with no error anywhere. Phase 1 shipped exactly that mistake in one of the 36 entries.
+test('every event name matches a channel the main process actually sends', function(){
+  const main = fs.readFileSync(path.join(__dirname, '..', 'src', 'index.js'), 'utf8');
+  const sent = new Set(Array.from(main.matchAll(/webContents\.send\(['"]([^'"]+)['"]/g),
+    function(match){ return match[1]; }));
+
+  assert.deepStrictEqual(EVENTS.filter(function(event){ return !sent.has(event); }), [],
+    'declared events the main process never sends');
+  assert.deepStrictEqual(Array.from(sent).filter(function(channel){ return EVENTS.indexOf(channel) === -1; }), [],
+    'channels the main process sends that EVENTS does not declare');
+});
+
 test('the contract file itself reaches for nothing native', function(){
   const contract = fs.readFileSync(
     path.join(__dirname, '..', 'src', 'components', 'controllers', 'platform.js'), 'utf8');

@@ -56,9 +56,9 @@ Mostly already IPC. Small, and the first group to move.
 
 ### Events (main → renderer) — **(corrected in Phase 1)**
 
-This document originally named one event. There are **36**: `file-opened-from-outside`
-(`render.js:1102`) plus the 35 menu channels dispatched by the loop at
-`render.js:1090-1097` and sent from `index.js` (`new-project-clicked`,
+This document originally named one event. There are **36**:
+`file-opened-from-outside-warewoolf` (`render.js:1163`) plus the 35 menu channels
+dispatched by the loop at `render.js:1151-1158` and sent from `index.js` (`new-project-clicked`,
 `open-clicked`, `save-clicked` and the rest). They are not commands, but they
 cross the same boundary, and every one of them has to be carried through the
 preload bridge in Phase 9 or the menu silently stops working — no error, just a
@@ -66,7 +66,10 @@ menu item that does nothing.
 
 `platform.on(event, handler)` validates the name against the list and returns an
 unsubscribe function, so a typo fails at subscribe time rather than becoming a
-dead menu item.
+dead menu item. The list holds the **literal** channel names `index.js` sends on,
+since the ipc backing passes them straight to `ipcRenderer.on()` — Phase 1 tidied
+one of them to `file-opened-from-outside` and got it wrong, which a test now
+prevents by cross-checking the list against `index.js`.
 
 ---
 
