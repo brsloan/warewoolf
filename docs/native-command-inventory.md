@@ -1,13 +1,15 @@
 # Native Command Inventory
 
 Derived from every Node/Electron call site in the renderer as of `340d067`.
-Line references re-verified against `569cba4`.
+Line references re-verified against `569cba4`, and again for groups B and C
+before Phase 4.
 
 **Phase 1 has since turned this into executable form.**
 `src/components/controllers/platform.js` is now the authoritative contract — 61
 commands and 36 events, with the shapes below — and this document is its prose
 companion. Where the two disagree, the file wins; the three places they disagreed
-at the end of Phase 1 are corrected here and marked **(corrected in Phase 1)**.
+at the end of Phase 1 are corrected here and marked **(corrected in Phase 1)**,
+and the two Phase 4 found in group B are marked **(corrected in Phase 4)**.
 
 This is the API surface that must exist between the UI and the OS. It serves two
 purposes at once:
@@ -83,10 +85,39 @@ prevents by cross-checking the list against `index.js`.
 | `saveProject(project)` | `writeFileSync` (`project.js:136`, `:251`) |
 | `saveProjectAs(project, newDir, newFilename)` | the `mkdirSync`/`copyFileSync` sequence (`project.js:183-195`) |
 | `verifyProjectFiles(project)` → missing chapter filenames | `existsSync` loop (`project.js:290`); also `missing-pups_display.js:189,222,289,322` |
-| `materializeBundledProject(bundledDir, writableDir, filename)` → `{ path, writable }` | `copyExampleToUserData()` (`render.js:91-103`), called for the Frankenstein example only (`render.js:78`) |
+| `materializeBundledProject(bundledDir, writableDir, filename)` → `{ path, writable }` | `copyExampleToUserData()` (`render.js:178-190` — **corrected in Phase 4**, was `:91-103`; Phase 2 moved it), called for the Frankenstein example only |
 
 `saveProjectAs` is six filesystem operations that must succeed or fail together.
 It is one command, not six bridge calls.
+
+**(corrected in Phase 4)** Those six are the *path parse, the two mkdirs and the
+copy loop* — not the `.woolf` write. The signature published in `platform.js`
+took the project's `contents` as well, and it cannot, for an ordering reason
+rather than a preference:
+
+Save As has to write out every chapter with unsaved changes; those writes go
+through group C; group C **allocates** the filename. So the filenames the
+`.woolf` must list are not known until after those writes have run, and those
+writes cannot run until the new chapters directory exists. The order is forced:
+
+1. `saveProjectAs` — parse the target path, make the project and chapters
+   directories, copy every chapter file that already exists across.
+2. Group C — save the dirty chapters, into the new location.
+3. `saveProject` — write the `.woolf`, now that every filename in it is final.
+
+Passing `contents` into step 1 would mean writing a `.woolf` naming the
+*pre-save* filenames and then rewriting it. A failed rewrite would leave a
+project file pointing at chapter files whose names had since changed — worse
+than no file at all, since `saveChapterAtomic` deletes the old one on success.
+
+Nothing about the transaction is lost: the operations that must succeed or fail
+together are still one command. `copyOnly` was dropped from the signature at the
+same time, for a much simpler reason — Save a Copy does identical work on disk,
+and differs only in whether the *renderer* repoints its own chapters afterward.
+
+`saveProjectAs` returns `chapterFilenames` as an array parallel to the one it was
+given, with a `null` holding the slot of anything not copied, plus `failed` for
+the ones that were meant to copy and could not.
 
 `materializeBundledProject` exists because the Frankenstein example lives inside
 the read-only install directory, so editing it in place fails with EACCES. It
@@ -102,10 +133,41 @@ offers Save As instead of failing into the log.
 
 The Help doc deliberately does **not** use it: it is reference material that has
 to describe the installed version, so it is opened in place and the project is
-marked `isReadOnly` (`render.js:822-837`). That flag is renderer-side policy, not
-a native command — `saveFile()` refuses to write while it is set
-(`project.js:107-115`), an explicit save routes to Save As, and autosave skips.
-Nothing new crosses the boundary for it.
+marked `isReadOnly` (`openHelpDoc()`, `render.js:1000-1014` as of Phase 4). That
+flag is renderer-side policy, not a native command — `saveFile()` refuses to
+write while it is set (`project.js:107-115` before the conversion), an explicit
+save routes to Save As, and autosave skips. Nothing new crosses the boundary for
+it.
+
+**(Phase 4 decided where that guard lives, deliberately.)** It stays exactly
+where it was: at the top of `project.saveFile()`, *above* the chapter saves
+rather than merely above the project-file write. A project opened out of a
+read-only install directory cannot have its chapter files written either, and
+each of those would be a separate swallowed `EACCES`. `PERMISSION_DENIED` from
+the platform is the backstop for when the flag is wrong, not a replacement for
+it — the flag decides what the UI offers.
+
+Two ordering bugs around it surfaced only when the tests for it were written,
+both in the least obvious write path in this group — `convertLegacyProject()`,
+which runs on every `setProject()` and ends in an unconditional
+`project.saveFile()`:
+
+- **`setProject()` takes the read-only flag as an argument now.** `loadFile()`
+  clears the flag on every load, so a caller that opened a read-only copy and set
+  the flag on the way back had already let `convertLegacyProject()` save over it.
+  That is how the bundled example, opened out of the install directory when its
+  copy to userData fails, was written to before anything knew it was read-only.
+- **`convertLegacyProject()` returns early for a read-only project.** Its two
+  conversions write through `chapter.js` rather than through
+  `project.saveFile()`, so the guard above does not cover them: a legacy project
+  opened read-only would attempt a write per legacy item, each one an `EACCES`
+  swallowed into the log — and each one a write attempted against the installed
+  application.
+
+`openHelpDoc()` still loads and displays directly rather than going through
+`setProject(path, true)`, even though that now takes the flag: `setProject()`
+also runs the missing-chapters repair screen, which for a document the reader
+cannot edit would mean offering to rewrite a file in the install directory.
 
 Under Tauri the bundled originals become resource-directory reads, which is a
 different API from ordinary file access — worth noting now so it is not
@@ -163,6 +225,21 @@ sit under the old name. But the chapter's own file is the transaction: a notes
 failure comes back as `notesError` and never fails a chapter that was already
 written. That is reported rather than swallowed, which is what `saveNotesFile`
 does today (`chapter.js:210-212`).
+
+**(Phase 4 went one step further than "reported".)** The old `saveFile()` cleared
+`hasUnsavedChanges` *before* `saveNotesFile()` ran, so notes that never reached
+disk left the chapter looking saved and were dropped on exit without a prompt.
+A `notesError` now leaves the chapter dirty with the notes still in memory, so
+the reader is asked about them and the next save retries. The retry converges:
+the chapter's filename no longer changes, so no rename is attempted and the
+second pass comes back clean.
+
+**After the conversion, `chapter.js` knows nothing about how a chapter is laid
+out on disk.** The extension, the `-notes_` prefix and the stash name all live in
+the backing; a test asserts none of the three literals appears in the model any
+more, and that neither model requires `fs`, `path`, `os`, `crypto`,
+`child_process` or `electron`. Phase 9 turns that from a property into a build
+error; until then this is what holds it.
 
 ---
 
@@ -368,7 +445,12 @@ until the last one.
 2. **`logError`** (group D). Widest call graph, least logic — good calibration
    for how invasive the async conversion really is.
 3. **Groups B and C** — the core, and the best-tested (`test/render.test.js` is
-   1,104 lines). Highest value, green tests the whole way.
+   1,104 lines). Highest value, green tests the whole way. *Done in Phase 4.*
+   "Green tests the whole way" turned out to be the wrong expectation: making
+   the two models async broke 115 tests at once, because everything that reads a
+   chapter reads it through them. Almost all of that churn was `await` in test
+   bodies rather than production logic, but it cannot be staged — the models are
+   one boundary and both halves have to cross it together.
 4. **Rest of D, then I and E** — settings, spellcheck, file browser.
 5. **Groups F, G, H** — import, export, backup.
 6. **Group J** — credentials, with the collapse described above.

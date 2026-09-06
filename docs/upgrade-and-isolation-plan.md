@@ -357,19 +357,22 @@ against a file containing "USER NOTES", which the copy destroyed outright. That
 is what ruled out a timestamp check and made this a design decision rather than a
 one-line patch.
 
-**Open: the example's copy fallback silently restores the original bug.** If
-`cpSync` throws, `copyExampleToUserData` returns the read-only bundled path
-(`render.js:99-102`), so saves against the Frankenstein example fail with EACCES
-exactly as before, with no user feedback. The comment documents this as
-deliberate — better than opening nothing — but the silence is the part worth
-revisiting, since a save that appears to work and does not is the failure mode
-that lost data in the first place.
+**Resolved in Phase 4: the example's copy fallback silently restored the original
+bug.** If `cpSync` threw, `copyExampleToUserData` returned the read-only bundled
+path, so saves against the Frankenstein example failed with EACCES exactly as
+before, with no user feedback. Fixed as the finding itself predicted:
+`materializeBundledProject` returns `{ path, writable, error }` rather than a
+bare path, `loadInitialProject()` hands `writable` to `setProject()` as the
+read-only flag, and the example behaves like the Help doc — Ctrl+S offers Save As
+instead of failing into the log, and the reason the copy failed reaches the error
+log rather than disappearing into a successful-looking return.
 
-Now that `isReadOnly` exists, the fix is small: set it on the project when that
-fallback path is taken, and the example behaves like the Help doc — Ctrl+S offers
-Save As instead of failing into the log. Left undone because it needs the flag to
-be set from `loadInitialProject()` rather than inside the copy helper, and the
-smoke pass is mid-flight.
+The fix turned out to need more than "set the flag from `loadInitialProject()`":
+`loadFile()` clears the flag on every load and `convertLegacyProject()` ends in an
+unconditional save, so the flag has to be passed *into* `setProject()` rather than
+set on the way back, and `convertLegacyProject()` needs its own guard because its
+conversions write through `chapter.js` rather than through `project.saveFile()`.
+Both are covered by tests; see the Phase 4 write-up above.
 
 ---
 
@@ -571,9 +574,123 @@ untouched, exactly as planned — deferred to Phase 8.
 Verified: suite is now **876** (one new test, covering `logError` staying
 inert and non-throwing when nothing has configured a platform yet).
 
-**Phase 4 — Groups B and C (projects, chapters).** The core, and the best-tested.
-`saveChapterAtomic` (`chapter.js:134-165`) needs its transactional semantics
-preserved exactly — get this reviewed carefully rather than fast.
+**Part 2 is at Phase 4, complete. Suite is 920.** Groups A, B, C, D's error-log
+slice and J are implemented in `platform-node.js`; the rest of D, plus E, F, G,
+H, I and K, still reject with `NOT_IMPLEMENTED` naming their group. Phase 5 is
+clear to start.
+
+**Phase 4 — Groups B and C (projects, chapters) — done.** The core, and the
+best-tested. Line references were re-verified against the current tree before any
+design work, as they have gone stale twice in this project: every reference in
+group C holds exactly, every reference in group B holds, and the one that had
+drifted is `copyExampleToUserData()` — `render.js:178-190`, not `:91-103`, since
+Phase 2 moved it into `loadPlatformState()`'s orbit. Corrected in place.
+
+**`saveChapterAtomic` needed no design work — it already existed.** Phase 1 wrote
+it into `platform-node.js` because it was the command that constrained the
+contract's shape, so `chapter.js`'s hand-rolled stash/allocate/write/
+restore-on-failure sequence became one call and the three load-bearing orderings
+(stash before allocating, drop the stash last, a failed rollback is a third
+outcome) were already written down and already tested.
+
+**The real design work was `saveProjectAs`, and the contract was wrong about
+it.** It declared `contents`, so that it would write the `.woolf` itself. It
+cannot, and the reason is an ordering constraint rather than a preference: Save
+As has to write out every chapter with unsaved changes, those writes go through
+group C, and group C *allocates* the filename — so the filenames the `.woolf`
+must list are not known until after those writes, and those writes cannot happen
+until the new chapters directory exists. Three steps, forced:
+
+1. `saveProjectAs` — parse the target path, make both directories, copy across.
+2. Group C — save the dirty chapters into the new location.
+3. `saveProject` — write the `.woolf`, every filename in it now final.
+
+Passing `contents` into step 1 would mean writing a `.woolf` naming the pre-save
+filenames and then rewriting it; a failed rewrite would leave a project file
+pointing at chapter files whose names had since changed, which is worse than no
+file at all. Nothing about the transaction is lost — the operations that must
+succeed or fail together are still the two mkdirs and the copy loop, still one
+command, exactly the sequence the contract's own note cited
+(`project.js:183-195`). `copyOnly` was dropped at the same time for a simpler
+reason: Save a Copy does identical work on disk and differs only in whether the
+*renderer* repoints its own chapters afterward. Both corrections are recorded in
+`platform.js` and in the inventory.
+
+**`project.isReadOnly` stays a renderer-side UI flag**, as the contract already
+said, and stays in the same place — the top of `saveFile()`, above the chapter
+saves rather than merely above the project-file write, since a read-only
+project's chapter files are equally unwritable and each would be a separate
+swallowed `EACCES`. `PERMISSION_DENIED` is the backstop for when the flag is
+wrong.
+
+**Two ordering bugs, both found by writing the tests for that flag**, and both in
+`convertLegacyProject()` — the least obvious write path in group B, since it runs
+on every `setProject()` and ends in an unconditional `project.saveFile()`:
+
+- `setProject()` now takes the read-only flag as an argument. `loadFile()` clears
+  it on every load, so a caller that set it afterward had already let
+  `convertLegacyProject()` save over the file. That is how the bundled example,
+  opened out of the install directory when its copy fails, was written to before
+  anything knew it was read-only.
+- `convertLegacyProject()` returns early for a read-only project. Its two
+  conversions write through `chapter.js` rather than `project.saveFile()`, so the
+  guard did not cover them.
+
+**`materializeBundledProject` closes the open finding below.** The fallback that
+opens the bundled example in place now comes back `writable: false` with the
+reason, the caller sets `isReadOnly` from it, and Ctrl+S offers Save As the way
+it does for the Help doc rather than every later save dying with EACCES in
+silence.
+
+**A notes failure no longer leaves a chapter looking saved.** `saveFile()` used
+to clear `hasUnsavedChanges` before `saveNotesFile()` ran, so notes that never
+reached disk were dropped on exit without a prompt. They now keep the chapter
+dirty and are reported.
+
+**The async ripple was the bulk of the hours.** `getFile()`/`getContentsOrFile()`
+reach disk, so everything that reads a chapter became async: `wordcount`,
+`compile`, `export`, `findreplace`, `renumber-chapters`, the four `convert-*`
+controllers, `email-doc`, and the ten views that drive them. `delta-to-docx` is
+the one deliberate exception — it takes the project word count as an argument
+rather than computing it, because it is a document generator with no other I/O
+and making it async for one line of a title page would be the wrong trade. That
+also ends a quadratic re-read: `export.js` calls it once per chapter and each
+call re-counted the entire project.
+
+`render.js` gained `detached()`, applied at every boundary where something drops
+the return value on the floor — a menu channel, a keybinding, a file dialog's
+callback, the autosave timer — so an async failure is reported rather than
+becoming an unhandled rejection with nothing on screen. Only rejections are
+caught; a synchronous throw propagates exactly as before, so nothing that used to
+fail loudly starts failing quietly.
+
+Verified: **920 tests pass** (from 876). Six mutations checked for non-vacuity —
+writing the `.woolf` before the chapter saves, moving the read-only guard below
+them, marking a chapter clean when its notes failed, flagging read-only after the
+legacy conversion, reporting the copy fallback as writable, and dropping
+`convertLegacyProject`'s guard — each fails the tests written for it and nothing
+else. The sixth initially survived, which is how the legacy-read-only test came
+to be written.
+
+**And verified as a packaged build**, per the lesson recorded under
+"A green build is not an installable artifact" below. An `electron-forge package`
+build launched against a clean userData directory: it materialized the bundled
+example, opened it, rewrote the `.woolf` through `saveProject` (a marker key that
+`stringifyProject` strips was gone after a relaunch), rendered the chapter list
+and chapter text, and saved typed text into a chapter file through
+`saveChapterAtomic` — leaving no `old_v_temp` stash behind and writing nothing to
+the error log.
+
+**Also folded in: a boot failure is now reported** (`dfe017c`).
+`loadPlatformState()` had no try/catch and no rejection handler, and every part
+of startup runs inside it, so a failure anywhere became an unhandled rejection
+and a blank window — two empty editors, no keybindings, no menu, nothing on
+screen. `src/components/views/startup-error_display.js` follows
+`project-load-error_display.js`'s pattern and depends on nothing but the DOM and
+one pure helper, since anything it needed from the platform, from user settings
+or from the open project could be the very thing that failed. It has no dismiss
+button: there is no working app behind it. The rejection is re-thrown after
+reporting so `ready` still rejects.
 
 **Phase 5 — Rest of D, then I and E.** Settings, corkboard, spellcheck
 dictionaries, file browser.
