@@ -614,7 +614,11 @@ function moveToTrash(ind){
   project.hasUnsavedChanges = true;
   var wasActive = ind == project.activeChapterIndex;
 
-  chapterList.append(project, 'trash', chapterList.remove(project, loc));
+  //Remembered so restoreFromTrash() can put the chapter back where it came from - otherwise a
+  //deleted reference chapter would come back as a regular chapter.
+  var chap = chapterList.remove(project, loc);
+  chap.trashedFrom = loc.list;
+  chapterList.append(project, 'trash', chap);
 
   if(wasActive){
     //Select whatever slid into the trashed chapter's place, falling back down the lists as they
@@ -683,7 +687,12 @@ function restoreFromTrash(ind){
     activeLoc.index -= 1;
 
   project.hasUnsavedChanges = true;
-  var landed = chapterList.append(project, 'chapters', chapterList.remove(project, loc));
+  var chap = chapterList.remove(project, loc);
+  //Reference chapters were only ever trashed by moveToTrash(), which stamped this - default to
+  //chapters for anything trashed before that stamp existed.
+  var destList = chap.trashedFrom == 'reference' ? 'reference' : 'chapters';
+  delete chap.trashedFrom;
+  var landed = chapterList.append(project, destList, chap);
 
   if(wasActive){
     //Follow the restored chapter to its new place. Leaving activeChapterIndex where it was left
