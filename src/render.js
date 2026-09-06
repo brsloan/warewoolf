@@ -59,7 +59,36 @@ var sysDirectories, fileRequestedOnOpen, userSettings, credentialStore, platform
 //freshRender()) waits for loadPlatformState() below to populate the rest of this object - project,
 //userSettings, and the handful of chapter/reference/trash functions that are the most bug-prone and
 //highest-value part of this file to unit test directly - since require() itself cannot wait on it.
-module.exports.ready = loadPlatformState();
+//The rejection handler is not optional decoration. Everything below this line runs from inside
+//loadPlatformState(), so a failure anywhere in it - a platform command that rejects, unreadable
+//user settings, a throw out of initialize() - used to surface as an unhandled promise rejection and
+//nothing else: a window with two empty editors, no keybindings, no menu, and no indication that
+//anything had gone wrong. That is the silence platform.js's rule 5 exists to prevent. Reported to
+//the reader instead, and re-thrown so `ready` still rejects for a test that asserts on it.
+module.exports.ready = loadPlatformState().catch(function(err){
+  reportStartupFailure(err);
+  throw err;
+});
+
+//Kept out of loadPlatformState()'s own try/catch reasoning: this must not itself be able to throw
+//past the handler above, so it swallows a failure to report rather than replacing one unhandled
+//rejection with another.
+function reportStartupFailure(err){
+  //Logged first, since the popup below is the part most likely to fail on a badly broken boot.
+  try{
+    require('./components/controllers/error-log').logError(err);
+  }
+  catch(logErr){
+    console.log(logErr);
+  }
+
+  try{
+    require('./components/views/startup-error_display')(err);
+  }
+  catch(displayErr){
+    console.log(displayErr);
+  }
+}
 
 async function loadPlatformState(){
   sysDirectories = await platform.getAppPaths();

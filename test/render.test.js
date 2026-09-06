@@ -50,6 +50,11 @@ var appDir = '/no-such-app-dir';
 //sendSync/send, since platform.js wraps every command in a promise regardless of what the backing
 //underneath actually does - see platform-ipc.js. `invoked` records every command name so tests can
 //assert one was called without caring what it resolved with.
+//Set by failBootAt() below to make one Group A command reject, so the boot-failure path can be
+//driven the way it actually breaks - a platform command that does not resolve - rather than by
+//stubbing render.js's own internals.
+var bootFailure = null;
+
 function makeIpcRenderer(){
   var handlers = {};
   var sent = [];
@@ -65,6 +70,8 @@ function makeIpcRenderer(){
     },
     invoke: function(channel, args){
       invoked.push(channel);
+      if(bootFailure && bootFailure.command === channel)
+        return Promise.reject(bootFailure.error);
       if(channel === 'getAppPaths')
         return Promise.resolve({ app: appDir, userData: userDataDir, docs: docsDir, home: '/no-such-home-dir' });
       if(channel === 'getFileRequestedOnOpen')
@@ -1459,4 +1466,96 @@ test('opening an ordinary project after the Help doc clears the read-only flag',
 
   assert.strictEqual(r.project.isReadOnly, false);
   assert.strictEqual(r.project.saveFile(), true);
+});
+
+//---------------------------------------------------------------------------
+// startup failure
+//---------------------------------------------------------------------------
+
+//loadPlatformState() had no rejection handler at all, so any failure inside it - and every part of
+//startup runs inside it - produced an unhandled rejection and a blank window: two empty editors, no
+//keybindings, no menu, and nothing on screen saying why. platform.js's rule 5 is that failure is
+//loud, and this was the loudest place in the app for it not to be.
+function failBootAt(t, command, err){
+  bootFailure = { command: command, error: err };
+  t.after(function(){ bootFailure = null; });
+}
+
+//Deliberately not freshRender(): that awaits mod.ready, which is exactly the promise under test.
+function bootRender(){
+  if(previousKeybindingsTeardown){
+    previousKeybindingsTeardown();
+    previousKeybindingsTeardown = null;
+  }
+
+  delete require.cache[renderPath];
+  delete require.cache[keybindingsPath];
+  require.cache[electronPath] = {
+    id: electronPath,
+    filename: electronPath,
+    loaded: true,
+    exports: { ipcRenderer: makeIpcRenderer() }
+  };
+  return require(renderPath);
+}
+
+//jsdom's innerText only reads back what was assigned through innerText itself - textContent stays
+//empty for it - so the popup's text has to be gathered element by element rather than off the
+//container. Same gap missing-pups_display.test.js documents.
+function popupText(){
+  var popup = document.querySelector('.popup');
+  if(!popup)
+    return null;
+
+  return Array.from(popup.querySelectorAll('*')).map(function(el){
+    return el.innerText || '';
+  }).join(' ');
+}
+
+test('a boot failure tells the reader instead of leaving a blank window', async function(t){
+  failBootAt(t, 'getAppPaths', new Error('no paths for you'));
+
+  var mod = bootRender();
+  await assert.rejects(function(){ return mod.ready; }, /no paths for you/);
+
+  var text = popupText();
+  assert.ok(text != null, 'a startup failure must put something on screen');
+  assert.match(text, /Could Not Start/);
+  assert.match(text, /no paths for you/, 'the reader is told what actually failed');
+});
+
+//The rejection has to stay a rejection. Swallowing it would make `ready` resolve, and every test in
+//this file that awaits it would then go on to read a half-built module as though startup had
+//succeeded.
+test('a boot failure still rejects ready rather than resolving with a half-built module', async function(t){
+  failBootAt(t, 'getFileRequestedOnOpen', new Error('boom'));
+
+  var mod = bootRender();
+
+  await assert.rejects(function(){ return mod.ready; }, /boom/);
+  assert.strictEqual(mod.project, undefined,
+    'nothing after the failure should have been assigned onto the exports');
+});
+
+//A failure this late has already built the platform instances, so error-log.js has somewhere to
+//write - the popup is the part that must not depend on any of it.
+test('a boot failure after the platform is up is reported the same way', async function(t){
+  failBootAt(t, 'notifyRendererReady', new Error('never reported in'));
+
+  var mod = bootRender();
+  await assert.rejects(function(){ return mod.ready; }, /never reported in/);
+
+  assert.match(popupText(), /never reported in/);
+});
+
+//The popup renders a PlatformError's stable code, which is the part a reader can search for and the
+//part that survives an IPC boundary - see platform.js.
+test('a rejected platform command shows its code alongside the message', async function(t){
+  const { PlatformError, CODES } = require('../src/components/controllers/platform');
+  failBootAt(t, 'getAppPaths', PlatformError(CODES.UNAVAILABLE, 'main process said no'));
+
+  var mod = bootRender();
+  await assert.rejects(function(){ return mod.ready; });
+
+  assert.match(popupText(), /UNAVAILABLE: main process said no/);
 });
