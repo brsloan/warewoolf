@@ -2,7 +2,7 @@ const { closePopups, createButton, removeElementsByClass, convertFilepath, gener
 const { showBattery, removeBattery } = require('./battery_display');
 const showFileDialog = require('./file-dialog_display');
 
-function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, callback){
+function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, callback, platformInfo){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup");
@@ -183,7 +183,7 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
   batteryDisplayCheck.checked = userSettings.showBattery;
   batterySet.appendChild(batteryDisplayCheck);
 
-  if(process.platform == 'linux'){
+  if(platformInfo.platform == 'linux'){
     settingsForm.appendChild(batterySet);
   }
 
@@ -200,7 +200,7 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
     userSettings.darkMode = document.querySelector('input[type=radio][name=dark-mode]:checked').value;
     userSettings.defaultAuthor = defAuthIn.value;
     userSettings.addressInfo = addressIn.value;
-    if(process.platform == 'linux'){
+    if(platformInfo.platform == 'linux'){
       if(userSettings.showBattery && batteryDisplayCheck.checked == false){
         userSettings.showBattery = batteryDisplayCheck.checked;
         removeBattery();

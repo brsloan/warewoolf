@@ -3,7 +3,7 @@ const { loadErrorLog, clearErrorLog } = require('../controllers/error-log');
 const { APP_PASSWORD_HINT } = require('../controllers/credential-help');
 const { emailFile } = require('../controllers/email-doc');
 
-function showErrorLog(userSettings, credentialStore){
+async function showErrorLog(userSettings, credentialStore){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup");
@@ -13,7 +13,7 @@ function showErrorLog(userSettings, credentialStore){
   popup.appendChild(popupTitle);
 
   var errorLogTextBox = document.createElement("pre");
-  var errorLogText = loadErrorLog();
+  var errorLogText = await loadErrorLog();
   errorLogTextBox.innerText = errorLogText != '' ? errorLogText : '(Log Empty)';
   errorLogTextBox.tabIndex = 1;
   popup.appendChild(errorLogTextBox);
@@ -110,9 +110,9 @@ function showErrorLog(userSettings, credentialStore){
   popup.appendChild(emailForm);
 
   var clearBtn = createButton("Clear Log");
-  clearBtn.onclick = function(){
-    clearErrorLog();
-    errorLogText = loadErrorLog();
+  clearBtn.onclick = async function(){
+    await clearErrorLog();
+    errorLogText = await loadErrorLog();
     errorLogTextBox.innerText = errorLogText != '' ? errorLogText : '(Log Empty)';
   }
   popup.appendChild(clearBtn);

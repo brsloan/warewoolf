@@ -47,7 +47,7 @@ test.afterEach(function(){
 //Regression: clicking Send read senderEmail/receiverEmail from userSettings to prefill the form,
 //but never wrote the (possibly edited) values back - unlike email-doc_display.js's Send handler,
 //which does persist them. An edit made from the Error Log dialog was silently lost.
-test('clicking Send persists the sender/receiver email back to userSettings', function(t){
+test('clicking Send persists the sender/receiver email back to userSettings', async function(t){
   var userSettings = makeUserSettings();
   var credentialStore = makeCredentialStore();
 
@@ -57,12 +57,12 @@ test('clicking Send persists the sender/receiver email back to userSettings', fu
   };
 
   var showErrorLog = freshErrorLogDisplay({
-    loadErrorLog: function(){ return 'boom'; },
-    clearErrorLog: function(){},
+    loadErrorLog: function(){ return Promise.resolve('boom'); },
+    clearErrorLog: function(){ return Promise.resolve(); },
     emailFile: emailFile
   });
 
-  showErrorLog(userSettings, credentialStore);
+  await showErrorLog(userSettings, credentialStore);
 
   var senderInput = document.getElementById('sender-email-input');
   var receiverInput = document.getElementById('receiver-email-input');
@@ -80,25 +80,25 @@ test('clicking Send persists the sender/receiver email back to userSettings', fu
   assert.strictEqual(emailFileCalls[0].receiver, 'new-receiver@example.com');
 });
 
-test('the error log text box prefills from loadErrorLog and Clear Log reloads it', function(t){
+test('the error log text box prefills from loadErrorLog and Clear Log reloads it', async function(t){
   var userSettings = makeUserSettings();
   var credentialStore = makeCredentialStore();
   var logText = 'first error';
 
   var clearCalls = 0;
   var showErrorLog = freshErrorLogDisplay({
-    loadErrorLog: function(){ return logText; },
-    clearErrorLog: function(){ clearCalls++; logText = ''; },
+    loadErrorLog: function(){ return Promise.resolve(logText); },
+    clearErrorLog: function(){ clearCalls++; logText = ''; return Promise.resolve(); },
     emailFile: function(){}
   });
 
-  showErrorLog(userSettings, credentialStore);
+  await showErrorLog(userSettings, credentialStore);
 
   var pre = document.querySelector('pre');
   assert.strictEqual(pre.innerText, 'first error');
 
   var clearBtn = Array.from(document.querySelectorAll('button')).find(function(b){ return b.innerHTML === 'Clear Log'; });
-  clearBtn.onclick();
+  await clearBtn.onclick();
 
   assert.strictEqual(clearCalls, 1);
   assert.strictEqual(pre.innerText, '(Log Empty)');

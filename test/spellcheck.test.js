@@ -4,7 +4,9 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { setLogDirectory } = require('../src/components/controllers/error-log');
+const { setPlatform } = require('../src/components/controllers/error-log');
+const { createPlatform } = require('../src/components/controllers/platform');
+const { createNodeBacking } = require('../src/components/controllers/platform-node');
 const { runSpellcheck, addWordToPersonalDictFile, getBeginningOfCurrentWord } = require('../src/components/controllers/spellcheck');
 
 function tempDir(prefix){
@@ -37,7 +39,7 @@ function makeEditorQuill(text){
 }
 
 test.beforeEach(function(){
-  setLogDirectory(tempDir('warewoolf-spellcheck-log-'));
+  setPlatform(createPlatform(createNodeBacking({ paths: { userData: tempDir('warewoolf-spellcheck-log-') } })));
 });
 
 test('runSpellcheck finds the first misspelled word and its position', function(){

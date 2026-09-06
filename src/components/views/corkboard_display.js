@@ -1,6 +1,10 @@
 const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
 const { getCardsFromFile, saveCards } = require('../controllers/corkboard');
-const isMac = process.platform === "darwin";
+
+//Set from showCorkboard()'s platformInfo argument below rather than read here at module scope -
+//under contextIsolation there is no `process` in the renderer at all, and a module-scope read
+//would throw while the bundle is still being evaluated, taking the whole app down with it.
+var isMac = false;
 
 var loadedCards = [];
 var unsavedChanges = false;
@@ -11,7 +15,8 @@ var unsavedChanges = false;
 //project the caller actually passed in.
 var openProject = null;
 
-function showCorkboard(project){
+function showCorkboard(project, platformInfo){
+    isMac = platformInfo.platform === "darwin";
     openProject = project;
     unsavedChanges = false;
     removeElementsByClass('popup');

@@ -19,11 +19,12 @@ const electronPath = require.resolve('electron');
 //make it see a new test's fake ipcRenderer. Needs clearing right alongside renderPath.
 const keybindingsPath = require.resolve('../src/components/controllers/keybindings');
 
-//error-log.js appends to <userData>/error_log.txt in the background (fire-and-forget fs.appendFile)
-//whenever anything under render.js logs an error, which happens incidentally in a couple of these
-//tests (e.g. a real chapter reading its notes file out of a directory that does not exist here).
-//A real, empty directory keeps those writes harmless instead of failing with ENOENT against a
-//made-up path.
+//error-log.js routes through a node-backed platform instance pointed at this directory (see
+//render.js's loadPlatformState()) and appends to <userData>/error_log.txt in the background
+//(logError is fire-and-forget) whenever anything under render.js logs an error, which happens
+//incidentally in a couple of these tests (e.g. a real chapter reading its notes file out of a
+//directory that does not exist here). A real, empty directory keeps those writes harmless instead
+//of failing with ENOENT against a made-up path.
 const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'warewoolf-render-test-'));
 
 //The Open/Save As/Save Copy dialogs list this directory's real contents via fs.readdirSync() the

@@ -5,6 +5,8 @@ const os = require('os');
 const path = require('path');
 
 const errorLog = require('../src/components/controllers/error-log');
+const { createPlatform } = require('../src/components/controllers/platform');
+const { createNodeBacking } = require('../src/components/controllers/platform-node');
 const projectPath = require.resolve('../src/components/models/project');
 const newProject = require(projectPath);
 const newChapter = require('../src/components/models/chapter');
@@ -18,7 +20,9 @@ function freshProject(){
 }
 
 test.before(function(){
-  errorLog.setLogDirectory(fs.mkdtempSync(path.join(os.tmpdir(), 'warewoolf-project-log-')));
+  errorLog.setPlatform(createPlatform(createNodeBacking({
+    paths: { userData: fs.mkdtempSync(path.join(os.tmpdir(), 'warewoolf-project-log-')) }
+  })));
 });
 
 function textDelta(text){

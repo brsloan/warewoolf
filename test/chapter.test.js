@@ -5,6 +5,8 @@ const os = require('os');
 const path = require('path');
 
 const errorLog = require('../src/components/controllers/error-log');
+const { createPlatform } = require('../src/components/controllers/platform');
+const { createNodeBacking } = require('../src/components/controllers/platform-node');
 const chapterPath = require.resolve('../src/components/models/chapter');
 const newChapter = require(chapterPath);
 
@@ -17,7 +19,9 @@ function freshChapter(){
 }
 
 test.before(function(){
-  errorLog.setLogDirectory(fs.mkdtempSync(path.join(os.tmpdir(), 'warewoolf-chapter-log-')));
+  errorLog.setPlatform(createPlatform(createNodeBacking({
+    paths: { userData: fs.mkdtempSync(path.join(os.tmpdir(), 'warewoolf-chapter-log-')) }
+  })));
 });
 
 function textDelta(text){

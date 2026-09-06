@@ -512,24 +512,64 @@ explain why `require()` cannot do that waiting itself. Two new test files,
 `test/platform-ipc.test.js` (6 tests) and five tests added to
 `test/platform.test.js`, cover the new backing directly. Suite is now **874**.
 
-**Phase 3 — `logError`, plus the Group A sweep.** Widest call graph, least
-logic. Treat it as a calibration exercise for how invasive the async conversion
-really is before committing to the core.
+**Phase 3 — `logError`, plus the Group A sweep — done.** Widest call graph,
+least logic, and it held up as a calibration exercise: the async conversion
+itself is small, and almost all of the churn landed in test setup rather than
+in production call sites.
 
-`logError` stays **fire-and-forget**. All 98 of its call sites sit in `catch`
-blocks whose return value nobody uses, so the facade returns a promise the call
-sites do not await. Awaiting it instead would cascade async through the whole
-codebase and turn this phase into Phases 4-8 at once. Two consequences: the
-unawaited promise must never surface as an unhandled rejection (a failed log
-write cannot crash the app), and `setLogDirectory` leaves the renderer
-entirely, since the native side already knows userData. Ten test files call it
-today and switch to configuring the node backing instead.
+`logError` stayed **fire-and-forget**. All ~98 call sites sit in `catch` blocks
+whose return value nobody uses and are untouched — they still just call
+`logError(err)`. The facade's `logError`/`readErrorLog`/`clearErrorLog` went
+into `platform-node.js` (the 1MB truncate-then-append behavior moved there
+verbatim from the old `error-log.js:43-46`); `error-log.js` itself lost `fs`
+and `path` entirely and now holds a module-scope `platform` reference set once
+via `setPlatform()`, replacing `setLogDirectory()`. `logError`'s own wrapper
+still returns the promise `platform.logError()` produces — nothing in
+production reads it, but it is always internally `.catch()`-ed first, so a
+failed write can never surface as an unhandled rejection, and a test can
+`await` a specific call instead of polling the log file for it to land.
+`readErrorLog`/`clearErrorLog` are value-returning and *are* awaited, but their
+only consumer is `error-log_display.js`, so `showErrorLog()` and its Clear Log
+handler became `async` and that was the entire blast radius on the view side.
+The contract's `readErrorLog` staying named `loadErrorLog()` in the source is
+unchanged and still deliberate.
 
-Also carries the three unowned `getPlatform` call sites recorded under Phase 2
-— `corkboard_display.js:3`, `settings_display.js:186,203`, `render.js:206`.
-Folded in here rather than left standing: they are about four lines, the
-command already exists in both backings, and Phase 9's build-time check does
-not catch them.
+**Routed through a second, node-backed platform instance, not IPC.** Group D is
+plain `fs`, like groups C and J — reachable directly through nodeIntegration —
+so `render.js`'s `loadPlatformState()` now builds a second `createPlatform(
+createNodeBacking({ paths: sysDirectories }))` instance alongside the
+IPC-backed one Group A uses, and hands that to `error-log.js`. Nothing in
+`platform-ipc.js` or `index.js` changed for this phase; that second instance is
+what has to be swapped for the ipc backing at Phase 9, alongside C and J, once
+nodeIntegration goes away and `fs` stops being reachable from the renderer at
+all.
+
+**One inventory count corrected.** This document's own text above said ten test
+files call `setLogDirectory` — a grep against the actual tree found **nine**
+(`chapter.test.js:20`, `project.test.js:21`, `utils.test.js:36`,
+`user-settings.test.js:11`, `updates.test.js:38`, `spellcheck.test.js:40`,
+`import.test.js:29`, `file-manager.test.js:28`, and `error-log.test.js` itself,
+which called it throughout). All nine now configure a node-backed platform
+instance in their `test.before`/`beforeEach` instead. Eighteen test files touch
+`error-log` in total, as stated; the other nine only ever mock
+`errorLog.logError` via `t.mock.method` and never called `setLogDirectory`, so
+they needed no changes.
+
+Also carried the three unowned `getPlatform` call sites recorded under Phase 2
+— `corkboard_display.js:3`, `settings_display.js:186,203`, `render.js:206`,
+all reverified against the current tree before editing. `corkboard_display.js`'s
+module-scope `const isMac = process.platform === "darwin"` got the same
+treatment `getAppPaths` did in Phase 2: it is now a `var` defaulting to `false`,
+set from a `platformInfo` argument `showCorkboard()` takes and render.js passes
+in, rather than read at module-evaluation time. `settings_display.js`'s
+`showSettings()` and `render.js`'s own `applyUserSettings()` both gained the
+same `platformInfo` (resolved once via `platform.getPlatform()` in
+`loadPlatformState()`, alongside the pre-existing `sysDirectories`) in place of
+reading `process.platform` directly. `updates.js` and `about_display.js` are
+untouched, exactly as planned — deferred to Phase 8.
+
+Verified: suite is now **876** (one new test, covering `logError` staying
+inert and non-throwing when nothing has configured a platform yet).
 
 **Phase 4 — Groups B and C (projects, chapters).** The core, and the best-tested.
 `saveChapterAtomic` (`chapter.js:134-165`) needs its transactional semantics

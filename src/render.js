@@ -3,6 +3,7 @@ const fs = require('fs');
 const Quill = require('quill');
 const { createPlatform } = require('./components/controllers/platform');
 const { createIpcBacking } = require('./components/controllers/platform-ipc');
+const { createNodeBacking } = require('./components/controllers/platform-node');
 const getUserSettings = require('./components/models/user-settings');
 const getCredentialStore = require('./components/models/credential-store');
 const getSecureStorage = require('./components/controllers/secure-storage');
@@ -51,7 +52,7 @@ var project = newProject();
 //Populated by loadPlatformState() below, once getAppPaths()/getFileRequestedOnOpen() resolve.
 //Nothing above this line needs them; everything below runs from inside functions and reads these by
 //closure, not at define-time, so it does not matter that they start out undefined.
-var sysDirectories, fileRequestedOnOpen, userSettings, credentialStore;
+var sysDirectories, fileRequestedOnOpen, userSettings, credentialStore, platformInfo, nodePlatform;
 
 //Exposed for testing only - nothing in the app itself reads this module's exports, since it's
 //loaded as a plain <script> tag rather than required. `ready` is how a caller (render.test.js's
@@ -62,8 +63,14 @@ module.exports.ready = loadPlatformState();
 
 async function loadPlatformState(){
   sysDirectories = await platform.getAppPaths();
-  require('./components/controllers/error-log').setLogDirectory(sysDirectories.userData);
+  //Group D (error log) is plain fs, like groups C and J - reachable directly through nodeIntegration,
+  //so it gets its own node-backed platform instance here rather than crossing through the ipc
+  //backing `platform` above. That second instance is what has to be swapped for platform-ipc.js at
+  //Phase 9, alongside C and J, once nodeIntegration goes away and fs stops being reachable at all.
+  nodePlatform = createPlatform(createNodeBacking({ paths: sysDirectories }));
+  require('./components/controllers/error-log').setPlatform(nodePlatform);
   fileRequestedOnOpen = await platform.getFileRequestedOnOpen();
+  platformInfo = await platform.getPlatform();
 
   userSettings = getUserSettings(sysDirectories.userData + "/user-settings.json").load();
   credentialStore = getCredentialStore(sysDirectories.userData, getSecureStorage());
@@ -203,7 +210,7 @@ function applyUserSettings(){
   updatePanelDisplays();
   autosaver.initiateAutosave(userSettings.autosaveIntMinutes, autosaveProject);
   setDarkMode();
-  if(userSettings.showBattery && process.platform == 'linux')
+  if(userSettings.showBattery && platformInfo.platform == 'linux')
     showBattery();
 }
 
@@ -1130,11 +1137,11 @@ const menuCommands = {
     const showSettings = require('./components/views/settings_display');
     showSettings(userSettings, autosaver, sysDirectories, autosaveProject, function(){
       setDarkMode();
-    });
+    }, platformInfo);
   } },
   'corkboard-clicked': { run: function(){
     const showCorkboard = require('./components/views/corkboard_display');
-    showCorkboard(project);
+    showCorkboard(project, platformInfo);
   } },
   'indent-all-clicked': { run: function(){
     const { indentAllParasInAllChaps } = require('./components/controllers/indent-all');

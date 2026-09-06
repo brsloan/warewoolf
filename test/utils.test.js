@@ -7,6 +7,8 @@ const path = require('node:path');
 const fs = require('node:fs');
 
 const errorLog = require('../src/components/controllers/error-log');
+const { createPlatform } = require('../src/components/controllers/platform');
+const { createNodeBacking } = require('../src/components/controllers/platform-node');
 const utilsPath = require.resolve('../src/components/controllers/utils');
 const {
   closePopups,
@@ -33,7 +35,9 @@ function freshUtils(){
 //Keep any incidental real logError call out of the repo's cwd instead of the default bare
 //"error_log.txt".
 test.before(function(){
-  errorLog.setLogDirectory(fs.mkdtempSync(path.join(os.tmpdir(), 'warewoolf-utils-')));
+  errorLog.setPlatform(createPlatform(createNodeBacking({
+    paths: { userData: fs.mkdtempSync(path.join(os.tmpdir(), 'warewoolf-utils-')) }
+  })));
 });
 
 function buildEditorFixture(){

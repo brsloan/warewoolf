@@ -5,10 +5,14 @@ const os = require('node:os');
 const path = require('node:path');
 
 const errorLog = require('../src/components/controllers/error-log');
+const { createPlatform } = require('../src/components/controllers/platform');
+const { createNodeBacking } = require('../src/components/controllers/platform-node');
 const getUserSettings = require('../src/components/models/user-settings');
 
 test.before(function(){
-  errorLog.setLogDirectory(fs.mkdtempSync(path.join(os.tmpdir(), 'warewoolf-user-settings-log-')));
+  errorLog.setPlatform(createPlatform(createNodeBacking({
+    paths: { userData: fs.mkdtempSync(path.join(os.tmpdir(), 'warewoolf-user-settings-log-')) }
+  })));
 });
 
 function tempDir(t){

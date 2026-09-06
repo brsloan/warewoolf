@@ -14,6 +14,7 @@
 //says what is still outstanding.
 
 const fs = require('fs');
+const path = require('path');
 const { CODES, PlatformError, fromNodeError } = require('./platform');
 const { sanitizeFilename } = require('./utils');
 //Only the legacy-format pair is needed here. Everything else about key handling - derivation,
@@ -28,6 +29,13 @@ const getCredentialStore = require('../models/credential-store');
 const CHAPTER_EXT = '.txt';
 const NOTES_PREPEND = '-notes_';
 const OLD_VERSION_FLAG = 'old_v_temp';
+
+//Group D's error log slice. Timestamping and describing whatever was thrown are pure JS with no
+//OS dependency, so that stays in error-log.js - this is only the part that used to be
+//error-log.js:43-46: where the log lives, and the 1MB cap past which it truncates instead of
+//growing forever.
+const LOG_FILENAME = 'error_log.txt';
+const MAX_LOG_SIZE_BYTES = 1024 * 1024;
 
 //`services` maps a credential service name to the directory its store lives in. Only 'email' exists
 //today, in userData, which is exactly where credential-store.js already keeps credentials.json and
@@ -73,6 +81,11 @@ function createNodeBacking(deps){
     // --- C. Chapter I/O ---------------------------------------------------------------------
     saveChapter: saveChapter,
     saveChapterAtomic: saveChapterAtomic,
+
+    // --- D. Error log (the rest of group D is still NOT_IMPLEMENTED) ------------------------
+    logError: logError,
+    readErrorLog: readErrorLog,
+    clearErrorLog: clearErrorLog,
 
     // --- J. Credentials --------------------------------------------------------------------
     isSecureStorageAvailable: isSecureStorageAvailable,
@@ -268,6 +281,42 @@ function createNodeBacking(deps){
   function requireText(value, name){
     if(typeof value !== 'string')
       throw PlatformError(CODES.INVALID_ARGUMENT, 'Expected ' + name + ' to be text.');
+  }
+
+  // ------------------------------------------------------------------------------------------
+  // Group D (error log slice)
+  // ------------------------------------------------------------------------------------------
+
+  function errorLogPath(){
+    if(paths.userData == null)
+      throw PlatformError(CODES.UNAVAILABLE, 'No userData directory configured for the error log.');
+
+    return path.join(paths.userData, LOG_FILENAME);
+  }
+
+  //The truncate-then-append behavior error-log.js used to own directly. The renderer already
+  //formatted `text` (timestamp + description) before this call - this backing only owns where it
+  //lands and how big the file is allowed to get.
+  function logError(args){
+    requireText(args == null ? undefined : args.text, 'text');
+
+    var logLocation = errorLogPath();
+
+    if(fs.existsSync(logLocation) && fs.statSync(logLocation).size > MAX_LOG_SIZE_BYTES)
+      fs.writeFileSync(logLocation, '', 'utf8');
+
+    fs.appendFileSync(logLocation, args.text, 'utf8');
+  }
+
+  function readErrorLog(){
+    var logLocation = errorLogPath();
+    return fs.existsSync(logLocation) ? fs.readFileSync(logLocation, 'utf8') : '';
+  }
+
+  function clearErrorLog(){
+    var logLocation = errorLogPath();
+    if(fs.existsSync(logLocation))
+      fs.writeFileSync(logLocation, '', 'utf8');
   }
 
   // ------------------------------------------------------------------------------------------

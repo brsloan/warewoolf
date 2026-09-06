@@ -9,6 +9,8 @@ const { EventEmitter } = require('events');
 const { Readable } = require('stream');
 
 const errorLog = require('../src/components/controllers/error-log');
+const { createPlatform } = require('../src/components/controllers/platform');
+const { createNodeBacking } = require('../src/components/controllers/platform-node');
 const updatesPath = require.resolve('../src/components/controllers/updates');
 const { getUpdates, downloadUpdate, installUpdate } = require(updatesPath);
 
@@ -35,7 +37,7 @@ function freshTempDir(t){
 //Keep any incidental real logError call out of the repo's cwd instead of the default bare
 //"error_log.txt".
 test.before(function(){
-  errorLog.setLogDirectory(tempDir());
+  errorLog.setPlatform(createPlatform(createNodeBacking({ paths: { userData: tempDir() } })));
 });
 
 //process.platform/process.arch are read at call-time by updates.js (not captured at require
