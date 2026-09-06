@@ -81,5 +81,133 @@
     "@electron-forge/maker-zip": "^7.11.2",
     "electron": "^44.2.0",
     "jsdom": "^29.1.1"
+  },
+  "overrides": {
+    "@electron-forge/cli": {
+      "brace-expansion": "5.0.9"
+    },
+    "@electron-forge/core": {
+      "brace-expansion": "5.0.9"
+    },
+    "@electron-forge/core-utils": {
+      "brace-expansion": "5.0.9"
+    },
+    "@electron-forge/maker-base": {
+      "brace-expansion": "5.0.9"
+    },
+    "@electron-forge/maker-deb": {
+      "brace-expansion": "5.0.9"
+    },
+    "@electron-forge/maker-dmg": {
+      "brace-expansion": "5.0.9"
+    },
+    "@electron-forge/maker-rpm": {
+      "brace-expansion": "5.0.9"
+    },
+    "@electron-forge/maker-squirrel": {
+      "brace-expansion": "5.0.9"
+    },
+    "@electron-forge/maker-zip": {
+      "brace-expansion": "5.0.9"
+    },
+    "@electron-forge/plugin-base": {
+      "brace-expansion": "5.0.9"
+    },
+    "@electron-forge/publisher-base": {
+      "brace-expansion": "5.0.9"
+    },
+    "@electron-forge/shared-types": {
+      "brace-expansion": "5.0.9"
+    },
+    "@electron-forge/template-base": {
+      "brace-expansion": "5.0.9"
+    },
+    "@electron-forge/template-vite": {
+      "brace-expansion": "5.0.9"
+    },
+    "@electron-forge/template-vite-typescript": {
+      "brace-expansion": "5.0.9"
+    },
+    "@electron-forge/template-webpack": {
+      "brace-expansion": "5.0.9"
+    },
+    "@electron-forge/template-webpack-typescript": {
+      "brace-expansion": "5.0.9"
+    },
+    "@electron/asar": {
+      "brace-expansion": "5.0.9"
+    },
+    "@electron/node-gyp": {
+      "brace-expansion": "5.0.9"
+    },
+    "@electron/packager": {
+      "brace-expansion": "5.0.9"
+    },
+    "@electron/rebuild": {
+      "brace-expansion": "5.0.9"
+    },
+    "@electron/universal": {
+      "brace-expansion": "5.0.9"
+    },
+    "@npmcli/move-file": {
+      "brace-expansion": "5.0.9"
+    },
+    "archiver": {
+      "brace-expansion": "5.0.9"
+    },
+    "archiver-utils": {
+      "brace-expansion": "5.0.9"
+    },
+    "asar": {
+      "brace-expansion": "5.0.9"
+    },
+    "brace-expansion": {
+      "brace-expansion": "5.0.9"
+    },
+    "cacache": {
+      "brace-expansion": "5.0.9"
+    },
+    "dir-compare": {
+      "brace-expansion": "5.0.9"
+    },
+    "electron-installer-common": {
+      "brace-expansion": "5.0.9"
+    },
+    "electron-installer-debian": {
+      "brace-expansion": "5.0.9"
+    },
+    "electron-installer-redhat": {
+      "brace-expansion": "5.0.9"
+    },
+    "electron-winstaller": {
+      "brace-expansion": "5.0.9"
+    },
+    "fstream": {
+      "brace-expansion": "5.0.9"
+    },
+    "glob": {
+      "brace-expansion": "5.0.9"
+    },
+    "make-fetch-happen": {
+      "brace-expansion": "5.0.9"
+    },
+    "minimatch": {
+      "brace-expansion": "5.0.9"
+    },
+    "readdir-glob": {
+      "brace-expansion": "5.0.9"
+    },
+    "rimraf": {
+      "brace-expansion": "5.0.9"
+    },
+    "temp": {
+      "brace-expansion": "5.0.9"
+    },
+    "unzipper": {
+      "brace-expansion": "5.0.9"
+    },
+    "zip-stream": {
+      "brace-expansion": "5.0.9"
+    }
   }
 }
