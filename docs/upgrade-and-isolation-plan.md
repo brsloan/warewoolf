@@ -54,7 +54,7 @@ is always present and current. Verified non-vacuous by mutation: rebuilding with
 one module deliberately left external fails two of the six.
 
 `--sourcemap` is on, so renderer devtools show real source rather than 2.8mb of
-bundled output — worth having before Part 2 starts moving 47 commands through
+bundled output — worth having before Part 2 starts moving 61 commands through
 this code. The 4.9mb `.map` ships inside the package (it is not in
 `packagerConfig.ignore`), which is deliberate: ~1.5% of the installed size, in
 exchange for readable stack traces out of a user's real install.
@@ -65,6 +65,67 @@ exchange for readable stack traces out of a user's real install.
 `--platform=browser` and every surviving builtin import fails at build time.
 That is the desired behavior (it is how the flip proves nothing was missed), but
 it should be expected rather than discovered.
+
+**Part 2, Phase 1 is complete.** The contract lives in
+`src/components/controllers/platform.js`, which declares **61 commands** across
+the inventory's groups A–K and **36 events**, and requires nothing — not `fs`,
+not `electron`. That last part is the property that carries it through Phase 9:
+the contract file still builds once esbuild switches to `--platform=browser`, and
+`src/components/controllers/platform-node.js` is the file that has to be gone by
+then. A test asserts it, so the property cannot rot quietly.
+
+`createPlatform(backing)` wraps a backing in the contract: one async method per
+declared command, every rejection a `PlatformError` with a stable `code`, and
+the result frozen. Nothing outside the table is reachable — which is what makes
+"the renderer cannot read a stored secret" a checkable claim rather than a
+convention, since the node backing's `resolveSecret` is deliberately not a
+command and is therefore invisible through the facade.
+
+Four contract rules were forced by the two hard commands rather than chosen:
+
+- **One object argument, always.** Tauri's `invoke()` takes named arguments;
+  positional ones do not exist in its IPC. Discovered from the target platform,
+  not from taste, and it applies to all 61.
+- **A command returns whatever the renderer must not compute.**
+  `saveChapterAtomic` allocates the chapter filename and hands it back.
+- **Multi-step operations are one command**, so the renderer cannot mis-order
+  native steps.
+- **Failure is loud.** Both bugs this project has already shipped — a save that
+  failed with EACCES and said nothing, and a `.deb` that could not be unpacked —
+  were silence, not wrongness.
+
+Backed by `test/platform.test.js` (33 tests; suite is now **863**), verified
+non-vacuous by four mutations: allocating the filename before stashing the old
+file, dropping the rollback, letting a notes failure fail the chapter save, and
+making `describeCredential` pass the store's object straight through. Each
+fails the tests that exist for it and nothing else.
+
+No call sites were converted. Phases 2–8 fill in the backing one group at a
+time; every command not yet implemented rejects with `NOT_IMPLEMENTED` naming
+its group, so the suite says what is still outstanding.
+
+**Line references were re-verified against `569cba4` before any design work**,
+since they had gone stale twice before. Every count in the inventory holds — 106
+`fs.*Sync` calls across 18 files, 9 `ipcMain` handlers, 5 `sendSync` calls, 29/31
+node-free views, 18/36 node-free controllers — and every per-file reference
+resolves, except two: the Help doc's `sysDirectories.app` read is at
+`render.js:830`, not `:807`, and the `webPreferences` block Phase 9 flips is at
+`index.js:54-59`, not `:45-47`. Both are corrected in place.
+
+**Three findings from Phase 1, each a correction to the inventory** — recorded
+in full in [`native-command-inventory.md`](./native-command-inventory.md):
+
+1. **`saveChapterAtomic`'s published signature was wrong.** It took
+   `newFilename` as an input, which implies a separate
+   `findAvailableChapterFilename` call — splitting the transaction and opening a
+   race between the name being chosen and the write happening. It takes the
+   *title* and returns the allocated filename.
+2. **The credential group is 7 commands, not 4,** and `getCredential` is not one
+   of them. See the inventory; this is the one that would have been most
+   expensive to discover in Phase 7.
+3. **The event surface was missing entirely.** The inventory named one
+   main→renderer event; there are 36. Every one has to cross the bridge in
+   Phase 9 or the menu silently stops working.
 
 `npm test` is bare `node --test`, which recursively discovers test files from
 cwd (excluding only `node_modules`). Run it after any `electron-forge
@@ -266,7 +327,7 @@ writes into the install directory, and no renderer code uses `__dirname` or
 | `spellcheck.js:17-20` — reads `en_US-large.aff` / `.dic` | read-only (personal dict writes go to `userData`) |
 | `about_display.js:96` — reads `licenses.txt` | read-only |
 | `render.js:62` — Frankenstein example | fixed in `a0a199c` |
-| `render.js:807` — Help doc | fixed in `0aa3e3a` |
+| `render.js:830` — Help doc | fixed in `0aa3e3a` |
 
 **Resolved: the copy is never refreshed.** Fixed by making the Help doc a
 read-only reference project (option 2 of the three below). It now opens in place
@@ -331,9 +392,11 @@ still on.
 This phase changes no behavior. It ships on its own, and it is verified by the
 app running normally with 830 tests still green.
 
-## Phase 1 — Design the injectable platform facade
+## Phase 1 — Design the injectable platform facade — **done**
 
-**The key decision, and the one worth the most care.**
+**The key decision, and the one worth the most care.** Delivered as
+`platform.js` (contract) + `platform-node.js` (the node backing) +
+`test/platform.test.js`; see the Phase 1 status block above for what it settled.
 
 The existing tests do not mock the filesystem. They create real temp directories
 and assert against real files (`chapter.test.js`, `render.test.js`, and others
@@ -410,7 +473,7 @@ line is unusually clear here.
 | Part 1, all steps | **Sonnet** | Empirical loop: bump, run, read the error, fix. The judgment is in reading release notes against a known API list. Escalate only if a failure is genuinely confusing. |
 | Support-matrix call (drop Buster? Win7?) | **You** | A product decision about your users, not a technical one. |
 | Phase 0 (bundler) | **Sonnet** | Well-trodden, and verified by "app runs, 830 tests pass". |
-| Phase 1 (facade design) | **Opus** | The contract for all 47 commands. A wrong shape is expensive and invisible to tests — exactly the failure mode Sonnet is worst at catching. |
+| Phase 1 (facade design) | **Opus** | The contract for all 61 commands. A wrong shape is expensive and invisible to tests — exactly the failure mode Sonnet is worst at catching. |
 | Phases 2, 3, 5, 6, 8 | **Sonnet** | High-volume, repetitive sync→async conversion with a strong test oracle. This is the bulk of the hours and the best Sonnet fit in the project. |
 | Phase 4 — `saveChapterAtomic` | **Opus** | Hand-rolled rollback with ordering constraints. Failures are silent and corrupt manuscripts. |
 | Phase 7 — credentials | **Opus** | Crypto, key handling, and a legacy-format fallback whose breakage looks like nothing until a user's stored password stops decrypting. |
