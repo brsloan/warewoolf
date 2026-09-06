@@ -98,7 +98,7 @@ function copyExampleToUserData(bundledDir, writableDir, writablePath){
     logError(err);
     //Couldn't copy (e.g. userData itself is somehow unwritable) - fall back to the bundled,
     //read-only copy rather than failing to open anything.
-    return bundledDir + "/Frankenstein.woolf";
+    return bundledDir + "/" + writablePath.split("/").pop();
   }
 }
 
@@ -804,7 +804,14 @@ function scrollChapterListToActiveChapter(){
 }
 
 function openHelpDoc(){
-  const helpDocPath = sysDirectories.app + "/examples/HelpDoc/HelpDoc.woolf";
+  const bundledHelpDocDir = sysDirectories.app + "/examples/HelpDoc";
+  const writableHelpDocDir = sysDirectories.userData + "/Projects/HelpDoc";
+  const writableHelpDoc = writableHelpDocDir + "/HelpDoc.woolf";
+
+  const helpDocPath = fs.existsSync(writableHelpDoc) ?
+    writableHelpDoc :
+    copyExampleToUserData(bundledHelpDocDir, writableHelpDocDir, writableHelpDoc);
+
   project.loadFile(helpDocPath);
   if(projectFailedToLoad(helpDocPath))
     return;
