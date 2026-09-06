@@ -44,28 +44,53 @@ var appDir = '/no-such-app-dir';
 //so it reads `ipcRenderer` off a bare `require('electron')` at the top of the file. Outside Electron
 //that resolves to a path string, so it must be faked in require.cache before every (re-)require -
 //same require.cache-priming pattern about_display.test.js uses for its own dependencies.
+//Group A of the platform contract (getAppPaths, getFileRequestedOnOpen, setTheme, showAppMenu,
+//confirmExit, notifyRendererReady) now crosses through ipcRenderer.invoke() rather than
+//sendSync/send, since platform.js wraps every command in a promise regardless of what the backing
+//underneath actually does - see platform-ipc.js. `invoked` records every command name so tests can
+//assert one was called without caring what it resolved with.
 function makeIpcRenderer(){
   var handlers = {};
   var sent = [];
+  var invoked = [];
   return {
     handlers: handlers,
     sent: sent,
+    invoked: invoked,
     sendSync: function(channel){
-      if(channel === 'get-directories')
-        return { app: appDir, userData: userDataDir, docs: docsDir, home: '/no-such-home-dir' };
-      if(channel === 'get-file-requested-on-open')
-        return null;
       if(channel === 'secure-storage-available')
         return false;
       return undefined;
+    },
+    invoke: function(channel, args){
+      invoked.push(channel);
+      if(channel === 'getAppPaths')
+        return Promise.resolve({ app: appDir, userData: userDataDir, docs: docsDir, home: '/no-such-home-dir' });
+      if(channel === 'getFileRequestedOnOpen')
+        return Promise.resolve(null);
+      if(channel === 'getPlatform')
+        return Promise.resolve({ platform: process.platform, arch: process.arch });
+      //setTheme, showAppMenu, confirmExit, notifyRendererReady all return void.
+      return Promise.resolve(undefined);
     },
     send: function(channel){
       sent.push(channel);
     },
     on: function(channel, handler){
       handlers[channel] = handler;
+    },
+    removeListener: function(channel, handler){
+      if(handlers[channel] === handler)
+        delete handlers[channel];
     }
   };
+}
+
+//Resolving a promise still takes at least one microtask tick - platform.js's own wrapper adds a
+//second, and platform-ipc.js's .then() a third - so anything triggered outside the awaited
+//loadPlatformState() chain (a keydown, a menu click) needs this before checking what it invoked.
+function flushMicrotasks(){
+  return new Promise(function(resolve){ setImmediate(resolve); });
 }
 
 //Mirrors src/index.html's body exactly (minus the <script> tag): every id render.js reaches for
@@ -100,7 +125,11 @@ function bodyShell(){
 //the previous require's listeners first, they would pile up on `document` indefinitely.
 var previousKeybindingsTeardown = null;
 
-function freshRender(){
+//render.js's own module.exports starts out as just `{ ready: <promise> }` - getAppPaths()/
+//getFileRequestedOnOpen() are real (albeit fake-resolved) promises now, so nothing the rest of this
+//file reads off the returned object (project, userSettings, ...) exists until that promise
+//resolves. require() itself cannot wait on it, so this does instead.
+async function freshRender(){
   if(previousKeybindingsTeardown)
     previousKeybindingsTeardown();
 
@@ -113,6 +142,7 @@ function freshRender(){
     exports: { ipcRenderer: makeIpcRenderer() }
   };
   var mod = require(renderPath);
+  await mod.ready;
   previousKeybindingsTeardown = mod._unregisterKeybindings;
   Array.from(document.querySelectorAll('.popup')).forEach(function(p){ p.remove(); });
   return mod;
@@ -190,8 +220,8 @@ test.after(function(){
 // moveChapUp / moveChapDown
 //---------------------------------------------------------------------------
 
-test('moveChapUp on the first reference item folds it into the chapters list without shifting activeChapterIndex', function(){
-  var r = freshRender();
+test('moveChapUp on the first reference item folds it into the chapters list without shifting activeChapterIndex', async function(){
+  var r = await freshRender();
   var c0 = makeChap('c0'), r0 = makeChap('r0');
   r.project.chapters = [c0];
   r.project.reference = [r0];
@@ -206,8 +236,8 @@ test('moveChapUp on the first reference item folds it into the chapters list wit
   assert.strictEqual(r.project.hasUnsavedChanges, true);
 });
 
-test('moveChapDown on the last chapter spills it into the reference list without shifting activeChapterIndex', function(){
-  var r = freshRender();
+test('moveChapDown on the last chapter spills it into the reference list without shifting activeChapterIndex', async function(){
+  var r = await freshRender();
   var c0 = makeChap('c0'), c1 = makeChap('c1'), r0 = makeChap('r0');
   r.project.chapters = [c0, c1];
   r.project.reference = [r0];
@@ -220,8 +250,8 @@ test('moveChapDown on the last chapter spills it into the reference list without
   assert.strictEqual(r.project.activeChapterIndex, 1);
 });
 
-test('moveChapDown reordering within the trash list shifts activeChapterIndex by one', function(){
-  var r = freshRender();
+test('moveChapDown reordering within the trash list shifts activeChapterIndex by one', async function(){
+  var r = await freshRender();
   var t0 = makeChap('t0'), t1 = makeChap('t1'), t2 = makeChap('t2');
   r.project.trash = [t0, t1, t2];
   r.project.activeChapterIndex = 1; //t1, not last
@@ -236,8 +266,8 @@ test('moveChapDown reordering within the trash list shifts activeChapterIndex by
 // moveToTrash
 //---------------------------------------------------------------------------
 
-test('moveToTrash on a live chapter moves it to trash and keeps the display on the chapter that took its place', function(){
-  var r = freshRender();
+test('moveToTrash on a live chapter moves it to trash and keeps the display on the chapter that took its place', async function(){
+  var r = await freshRender();
   var c0 = makeChap('c0'), c1 = makeChap('c1');
   r.project.chapters = [c0, c1];
   r.project.activeChapterIndex = 0;
@@ -251,8 +281,8 @@ test('moveToTrash on a live chapter moves it to trash and keeps the display on t
   assert.strictEqual(r.editorQuill.getText().trim(), 'c1');
 });
 
-test('moveToTrash on an already-trashed chapter asks for confirmation instead of trashing it again', function(){
-  var r = freshRender();
+test('moveToTrash on an already-trashed chapter asks for confirmation instead of trashing it again', async function(){
+  var r = await freshRender();
   var t0 = makeChap('t0');
   r.project.trash = [t0];
 
@@ -262,8 +292,8 @@ test('moveToTrash on an already-trashed chapter asks for confirmation instead of
   assert.ok(document.querySelector('.delete-confirm-popup'), 'a confirmation popup should appear');
 });
 
-test('moveToTrash on a project with nothing in any list does not push an empty slot into the trash', function(){
-  var r = freshRender();
+test('moveToTrash on a project with nothing in any list does not push an empty slot into the trash', async function(){
+  var r = await freshRender();
   r.project.chapters = [];
   r.project.reference = [];
   r.project.trash = [];
@@ -280,8 +310,8 @@ test('moveToTrash on a project with nothing in any list does not push an empty s
 // dropped the restore - see render.js's exit-app-clicked handler.
 //---------------------------------------------------------------------------
 
-test('restoreFromTrash moves the chapter back and marks the project as having unsaved changes', function(){
-  var r = freshRender();
+test('restoreFromTrash moves the chapter back and marks the project as having unsaved changes', async function(){
+  var r = await freshRender();
   var c0 = makeChap('c0'), t0 = makeChap('t0');
   r.project.chapters = [c0];
   r.project.trash = [t0];
@@ -302,8 +332,8 @@ test('restoreFromTrash moves the chapter back and marks the project as having un
 // crashed on `undefined.deleteFile()`.
 //---------------------------------------------------------------------------
 
-test('confirming delete twice in a row does not stack a second confirmation popup', function(){
-  var r = freshRender();
+test('confirming delete twice in a row does not stack a second confirmation popup', async function(){
+  var r = await freshRender();
   r.project.trash = [makeChap('t0')];
 
   r.moveToTrash(0);
@@ -312,8 +342,8 @@ test('confirming delete twice in a row does not stack a second confirmation popu
   assert.strictEqual(document.querySelectorAll('.delete-confirm-popup').length, 1);
 });
 
-test('deleting a trashed chapter removes that exact chapter, not a neighboring one, when the project has reference chapters', function(){
-  var r = freshRender();
+test('deleting a trashed chapter removes that exact chapter, not a neighboring one, when the project has reference chapters', async function(){
+  var r = await freshRender();
   var deletedFiles = [];
   var c0 = makeChap('c0');
   var r0 = makeChap('r0');
@@ -336,8 +366,8 @@ test('deleting a trashed chapter removes that exact chapter, not a neighboring o
   assert.strictEqual(r.editorQuill.getText().trim(), 'TrashOne');
 });
 
-test('deleting the last trashed chapter does not crash when the project has multiple reference chapters', function(){
-  var r = freshRender();
+test('deleting the last trashed chapter does not crash when the project has multiple reference chapters', async function(){
+  var r = await freshRender();
   var deletedFiles = [];
   var c0 = makeChap('c0');
   var t0 = makeChap('t0', { deleteFile: function(){ deletedFiles.push('t0'); } });
@@ -359,8 +389,8 @@ test('deleting the last trashed chapter does not crash when the project has mult
   assert.strictEqual(r.editorQuill.getText().trim(), 'c0');
 });
 
-test('clicking No on the delete confirmation leaves the trashed chapter untouched', function(){
-  var r = freshRender();
+test('clicking No on the delete confirmation leaves the trashed chapter untouched', async function(){
+  var r = await freshRender();
   var t0 = makeChap('t0');
   r.project.trash = [t0];
 
@@ -375,8 +405,8 @@ test('clicking No on the delete confirmation leaves the trashed chapter untouche
 // updateFileList
 //---------------------------------------------------------------------------
 
-test('updateFileList renders chapters/reference/trash with titles, unsaved markers, and the active highlight', function(){
-  var r = freshRender();
+test('updateFileList renders chapters/reference/trash with titles, unsaved markers, and the active highlight', async function(){
+  var r = await freshRender();
   r.project.chapters = [makeChap('One'), makeChap('', { hasUnsavedChanges: true })];
   r.project.reference = [makeChap('Ref')];
   r.project.trash = [makeChap('Trashed')];
@@ -404,8 +434,8 @@ test('updateFileList renders chapters/reference/trash with titles, unsaved marke
   assert.ok(!document.getElementById('trash-header').classList.contains('trash-header-empty'));
 });
 
-test('updateFileList marks the reference and trash headers empty when those lists have nothing in them', function(){
-  var r = freshRender();
+test('updateFileList marks the reference and trash headers empty when those lists have nothing in them', async function(){
+  var r = await freshRender();
   r.project.chapters = [makeChap('One')];
 
   r.updateFileList();
@@ -418,8 +448,8 @@ test('updateFileList marks the reference and trash headers empty when those list
 // displayChapterByIndex
 //---------------------------------------------------------------------------
 
-test('displayChapterByIndex clamps an out-of-range index to the last chapter', function(){
-  var r = freshRender();
+test('displayChapterByIndex clamps an out-of-range index to the last chapter', async function(){
+  var r = await freshRender();
   r.project.chapters = [makeChap('c0'), makeChap('c1')];
 
   r.displayChapterByIndex(99);
@@ -431,8 +461,8 @@ test('displayChapterByIndex clamps an out-of-range index to the last chapter', f
 //The core editing loop: type in a chapter, look at a different one, come back. If this regresses,
 //edits are silently lost the moment the writer glances at another chapter - about the worst
 //possible failure mode for this app.
-test('editing a chapter, viewing another, then returning shows the edit rather than the original text', function(){
-  var r = freshRender();
+test('editing a chapter, viewing another, then returning shows the edit rather than the original text', async function(){
+  var r = await freshRender();
   var c0 = makeChap('c0'), c1 = makeChap('c1');
   r.project.chapters = [c0, c1];
   r.displayChapterByIndex(0);
@@ -448,8 +478,8 @@ test('editing a chapter, viewing another, then returning shows the edit rather t
   assert.strictEqual(r.editorQuill.getText().trim(), 'edited content');
 });
 
-test('editing a chapter marks both the chapter and the project as having unsaved changes', function(){
-  var r = freshRender();
+test('editing a chapter marks both the chapter and the project as having unsaved changes', async function(){
+  var r = await freshRender();
   var c0 = makeChap('c0');
   r.project.chapters = [c0];
   r.displayChapterByIndex(0);
@@ -460,8 +490,8 @@ test('editing a chapter marks both the chapter and the project as having unsaved
   assert.strictEqual(r.project.hasUnsavedChanges, true);
 });
 
-test('a programmatic content change (loading a chapter) does not mark it as having unsaved changes', function(){
-  var r = freshRender();
+test('a programmatic content change (loading a chapter) does not mark it as having unsaved changes', async function(){
+  var r = await freshRender();
   var c0 = makeChap('c0');
   r.project.chapters = [c0];
 
@@ -470,8 +500,8 @@ test('a programmatic content change (loading a chapter) does not mark it as havi
   assert.strictEqual(c0.hasUnsavedChanges, false);
 });
 
-test('typing in the notes pane updates the active chapter\'s own notes while per-chapter notes are shown', function(){
-  var r = freshRender();
+test('typing in the notes pane updates the active chapter\'s own notes while per-chapter notes are shown', async function(){
+  var r = await freshRender();
   var c0 = makeChap('c0');
   r.project.chapters = [c0];
   r.userSettings.displayChapNotes = true;
@@ -483,8 +513,8 @@ test('typing in the notes pane updates the active chapter\'s own notes while per
   assert.strictEqual(c0.hasUnsavedChanges, true);
 });
 
-test('typing in the notes pane updates the project-wide notes chapter while project notes are shown', function(){
-  var r = freshRender();
+test('typing in the notes pane updates the project-wide notes chapter while project notes are shown', async function(){
+  var r = await freshRender();
   r.project.initNotesChap();
   r.userSettings.displayChapNotes = false;
 
@@ -494,8 +524,8 @@ test('typing in the notes pane updates the project-wide notes chapter while proj
   assert.strictEqual(r.project.notesChap.hasUnsavedChanges, true);
 });
 
-test('displayChapterByIndex clears and disables the editor instead of throwing when chapters/reference/trash are all empty', function(){
-  var r = freshRender();
+test('displayChapterByIndex clears and disables the editor instead of throwing when chapters/reference/trash are all empty', async function(){
+  var r = await freshRender();
   r.project.chapters = [];
   r.project.reference = [];
   r.project.trash = [];
@@ -511,8 +541,8 @@ test('displayChapterByIndex clears and disables the editor instead of throwing w
 // addNewChapter / addImportedChapter
 //---------------------------------------------------------------------------
 
-test('addNewChapter inserts a blank chapter right after the active one and selects it for renaming', function(){
-  var r = freshRender();
+test('addNewChapter inserts a blank chapter right after the active one and selects it for renaming', async function(){
+  var r = await freshRender();
   r.project.chapters = [makeChap('c0')];
   r.project.activeChapterIndex = 0;
 
@@ -524,8 +554,8 @@ test('addNewChapter inserts a blank chapter right after the active one and selec
   assert.ok(document.querySelector('.name-box'), 'the new chapter should be immediately renameable');
 });
 
-test('addNewChapter with a Reference document active inserts into Reference and displays that new chapter, not an existing one', function(){
-  var r = freshRender();
+test('addNewChapter with a Reference document active inserts into Reference and displays that new chapter, not an existing one', async function(){
+  var r = await freshRender();
   r.project.chapters = [makeChap('c0'), makeChap('c1')];
   r.project.reference = [makeChap('r0'), makeChap('r1')];
   r.project.activeChapterIndex = 3; //r1, the last reference item
@@ -540,8 +570,8 @@ test('addNewChapter with a Reference document active inserts into Reference and 
   assert.ok(nameBox, 'the newly inserted reference item should be the one selected for renaming');
 });
 
-test('addNewChapter with only a trashed chapter active appends the new chapter onto Chapters', function(){
-  var r = freshRender();
+test('addNewChapter with only a trashed chapter active appends the new chapter onto Chapters', async function(){
+  var r = await freshRender();
   r.project.trash = [makeChap('t0')];
   r.project.activeChapterIndex = 0; //t0, the only thing in any list
 
@@ -553,8 +583,8 @@ test('addNewChapter with only a trashed chapter active appends the new chapter o
   assert.strictEqual(r.editorQuill.getText().trim(), '');
 });
 
-test('addImportedChapter inserts the given delta right after the active chapter and displays it', function(){
-  var r = freshRender();
+test('addImportedChapter inserts the given delta right after the active chapter and displays it', async function(){
+  var r = await freshRender();
   var c0 = makeChap('c0');
   r.project.chapters = [c0];
   r.project.activeChapterIndex = 0;
@@ -567,8 +597,8 @@ test('addImportedChapter inserts the given delta right after the active chapter 
   assert.strictEqual(r.editorQuill.getText().trim(), 'Imported');
 });
 
-test('addImportedChapter with a trashed chapter active appends onto Chapters and displays the import, not an unrelated trash item', function(){
-  var r = freshRender();
+test('addImportedChapter with a trashed chapter active appends onto Chapters and displays the import, not an unrelated trash item', async function(){
+  var r = await freshRender();
   r.project.chapters = [makeChap('c0')];
   r.project.trash = [makeChap('t0')];
   r.project.activeChapterIndex = 1; //t0's combined index: chapters.length(1) + 0
@@ -585,8 +615,8 @@ test('addImportedChapter with a trashed chapter active appends onto Chapters and
 // changeChapterTitle
 //---------------------------------------------------------------------------
 
-test('changeChapterTitle commits the new title and clears unsaved-rename state on Enter', function(){
-  var r = freshRender();
+test('changeChapterTitle commits the new title and clears unsaved-rename state on Enter', async function(){
+  var r = await freshRender();
   var c0 = makeChap('Old Title');
   r.project.chapters = [c0];
   r.updateFileList();
@@ -603,8 +633,8 @@ test('changeChapterTitle commits the new title and clears unsaved-rename state o
   assert.strictEqual(document.querySelector('#chapter-list li').textContent, 'New Title*');
 });
 
-test('changeChapterTitle discards the edit on Escape', function(){
-  var r = freshRender();
+test('changeChapterTitle discards the edit on Escape', async function(){
+  var r = await freshRender();
   var c0 = makeChap('Old Title');
   r.project.chapters = [c0];
   r.updateFileList();
@@ -622,8 +652,8 @@ test('changeChapterTitle discards the edit on Escape', function(){
 // editorHasFocus / editorIsVisible
 //---------------------------------------------------------------------------
 
-test('editorHasFocus is true only when the writing field is visible and the editor is focused', function(){
-  var r = freshRender();
+test('editorHasFocus is true only when the writing field is visible and the editor is focused', async function(){
+  var r = await freshRender();
   var writingField = document.getElementById('writing-field');
   var qlEditor = document.querySelector('.ql-editor');
 
@@ -641,8 +671,8 @@ test('editorHasFocus is true only when the writing field is visible and the edit
 // notesQuill text-change
 //---------------------------------------------------------------------------
 
-test('editing notes does not throw once every chapter has been permanently deleted', function(){
-  var r = freshRender();
+test('editing notes does not throw once every chapter has been permanently deleted', async function(){
+  var r = await freshRender();
   r.project.chapters = [];
   r.project.reference = [];
   r.project.trash = [];
@@ -657,8 +687,8 @@ test('editing notes does not throw once every chapter has been permanently delet
 // document-level keydown handler
 //---------------------------------------------------------------------------
 
-test('Ctrl/Cmd+Left inside a text field is left for native cursor movement, not hijacked for pane-switching', function(){
-  freshRender();
+test('Ctrl/Cmd+Left inside a text field is left for native cursor movement, not hijacked for pane-switching', async function(){
+  await freshRender();
   var input = document.createElement('input');
   input.type = 'text';
   document.body.appendChild(input);
@@ -670,8 +700,8 @@ test('Ctrl/Cmd+Left inside a text field is left for native cursor movement, not 
   assert.strictEqual(evt.defaultPrevented, false);
 });
 
-test('Ctrl/Cmd+Left outside a text field still switches focus to the editor as before', function(){
-  freshRender();
+test('Ctrl/Cmd+Left outside a text field still switches focus to the editor as before', async function(){
+  await freshRender();
   document.getElementById('writing-field').classList.add('visible');
 
   var evt = new window.KeyboardEvent('keydown', { key: 'ArrowLeft', ctrlKey: true, bubbles: true, cancelable: true });
@@ -681,8 +711,8 @@ test('Ctrl/Cmd+Left outside a text field still switches focus to the editor as b
   assert.strictEqual(evt.defaultPrevented, true);
 });
 
-test('increasing font size does not throw when no chapter is marked active in the sidebar', function(){
-  var r = freshRender();
+test('increasing font size does not throw when no chapter is marked active in the sidebar', async function(){
+  var r = await freshRender();
   r.project.chapters = [];
   r.project.reference = [];
   r.project.trash = [];
@@ -698,8 +728,8 @@ test('increasing font size does not throw when no chapter is marked active in th
 // goPageDown (PageDown inside the editor)
 //---------------------------------------------------------------------------
 
-test('PageDown does not dereference bounds before checking whether getBounds found a position', function(){
-  var r = freshRender();
+test('PageDown does not dereference bounds before checking whether getBounds found a position', async function(){
+  var r = await freshRender();
   r.editorQuill.setText('only one line\n');
   r.editorQuill.setSelection(0);
 
@@ -752,14 +782,14 @@ function focusEditor(){
   document.querySelector('.ql-editor').focus();
 }
 
-test('every menu channel is registered exactly once, with none missing or unexpectedly added', function(){
-  freshRender();
+test('every menu channel is registered exactly once, with none missing or unexpectedly added', async function(){
+  await freshRender();
 
   assert.deepStrictEqual(Object.keys(currentIpc().handlers).sort(), ALL_MENU_CHANNELS.slice().sort());
 });
 
-test('a focus-gated command does nothing while the editor lacks focus, and runs once it has it', function(){
-  var r = freshRender();
+test('a focus-gated command does nothing while the editor lacks focus, and runs once it has it', async function(){
+  var r = await freshRender();
   r.project.chapters = [makeChap('c0')];
   r.project.activeChapterIndex = 0;
 
@@ -775,8 +805,8 @@ test('a focus-gated command does nothing while the editor lacks focus, and runs 
 //convert-tabs-clicked is project-wide, exactly like convert-first-lines-clicked and
 //convert-italics-clicked, but (like renumber-chapters/indent-all/center-all-heads) was never
 //focus-gated - preserved as-is per the comment above the table in render.js.
-test('a command with no focus guard runs regardless of where focus is', function(){
-  var r = freshRender();
+test('a command with no focus guard runs regardless of where focus is', async function(){
+  var r = await freshRender();
   //Empty project: showOutliner()'s project.chapters.forEach() then has nothing to iterate, so this
   //stays focused on proving the guard (or lack of one), not on outliner_display.js's own rendering.
 
@@ -790,16 +820,16 @@ test('a command with no focus guard runs regardless of where focus is', function
 
 //jsdom's innerText does not create real text nodes, so document.textContent cannot see text set
 //through it - these check the specific elements the two views set it on instead.
-test('about-clicked forwards the app version it is sent to the About popup', function(){
-  freshRender();
+test('about-clicked forwards the app version it is sent to the About popup', async function(){
+  await freshRender();
 
   currentIpc().handlers['about-clicked'](null, '9.9.9');
 
   assert.strictEqual(document.querySelector('.about-version').innerText, '9.9.9');
 });
 
-test('shortcuts-clicked forwards isMac to render Mac- or Ctrl-style shortcut labels', function(){
-  freshRender();
+test('shortcuts-clicked forwards isMac to render Mac- or Ctrl-style shortcut labels', async function(){
+  await freshRender();
 
   currentIpc().handlers['shortcuts-clicked'](null, true);
   var macLabels = Array.from(document.querySelectorAll('.shortcuts-table td'));
@@ -819,8 +849,8 @@ function removeAllPopups(){
 // open-clicked / exit-app-clicked (proceedOrConfirmSave)
 //---------------------------------------------------------------------------
 
-test('open-clicked opens the file dialog directly when there are no unsaved changes', function(){
-  var r = freshRender();
+test('open-clicked opens the file dialog directly when there are no unsaved changes', async function(){
+  var r = await freshRender();
   r.project.hasUnsavedChanges = false;
 
   currentIpc().handlers['open-clicked']();
@@ -828,8 +858,8 @@ test('open-clicked opens the file dialog directly when there are no unsaved chan
   assert.ok(document.querySelector('.popup-dialog'), 'the open dialog should appear with nothing to confirm first');
 });
 
-test('open-clicked asks to save first when there are unsaved changes, and does not open the dialog until answered', function(){
-  var r = freshRender();
+test('open-clicked asks to save first when there are unsaved changes, and does not open the dialog until answered', async function(){
+  var r = await freshRender();
   r.project.hasUnsavedChanges = true;
 
   currentIpc().handlers['open-clicked']();
@@ -841,18 +871,19 @@ test('open-clicked asks to save first when there are unsaved changes, and does n
   assert.ok(document.querySelector('.popup-dialog'), 'answering the prompt should proceed to the open dialog');
 });
 
-test('exit-app-clicked quits directly when there are no unsaved changes', function(){
-  var r = freshRender();
+test('exit-app-clicked quits directly when there are no unsaved changes', async function(){
+  var r = await freshRender();
   r.project.hasUnsavedChanges = false;
   r.project.filename = ''; //no autoBackup path to route through
 
   currentIpc().handlers['exit-app-clicked']();
+  await flushMicrotasks();
 
-  assert.ok(currentIpc().sent.includes('exit-app-confirmed'));
+  assert.ok(currentIpc().invoked.includes('confirmExit'));
 });
 
-test('exit-app-clicked refreshes the sidebar and asks to save first when there are unsaved changes', function(){
-  var r = freshRender();
+test('exit-app-clicked refreshes the sidebar and asks to save first when there are unsaved changes', async function(){
+  var r = await freshRender();
   r.project.chapters = [makeChap('Unsaved', { hasUnsavedChanges: true })];
   r.project.hasUnsavedChanges = true;
 
@@ -861,10 +892,11 @@ test('exit-app-clicked refreshes the sidebar and asks to save first when there a
   //The sidebar's unsaved-change marker reflects the current state before the prompt is shown.
   assert.strictEqual(document.querySelector('#chapter-list li').textContent, 'Unsaved*');
   assert.ok(findButton('Continue Without Saving'));
-  assert.ok(!currentIpc().sent.includes('exit-app-confirmed'), 'should not quit before the prompt is answered');
+  assert.ok(!currentIpc().invoked.includes('confirmExit'), 'should not quit before the prompt is answered');
 
   findButton('Continue Without Saving').onclick();
-  assert.ok(currentIpc().sent.includes('exit-app-confirmed'));
+  await flushMicrotasks();
+  assert.ok(currentIpc().invoked.includes('confirmExit'));
 });
 
 //---------------------------------------------------------------------------
@@ -879,8 +911,8 @@ function ctrlKeydown(key, extra){
   return new window.KeyboardEvent('keydown', opts);
 }
 
-test('Ctrl/Cmd+Right moves focus to notes only while the notes pane is visible', function(){
-  var r = freshRender();
+test('Ctrl/Cmd+Right moves focus to notes only while the notes pane is visible', async function(){
+  var r = await freshRender();
   document.getElementById('project-notes').classList.remove('visible');
 
   var evt1 = ctrlKeydown('ArrowRight');
@@ -895,8 +927,8 @@ test('Ctrl/Cmd+Right moves focus to notes only while the notes pane is visible',
   assert.strictEqual(document.activeElement, r.notesQuill.root);
 });
 
-test('Escape closes popups, exits search view, and refreshes the panel layout', function(){
-  var r = freshRender();
+test('Escape closes popups, exits search view, and refreshes the panel layout', async function(){
+  var r = await freshRender();
   var popup = document.createElement('div');
   popup.className = 'popup';
   document.body.appendChild(popup);
@@ -919,8 +951,8 @@ test('Escape closes popups, exits search view, and refreshes the panel layout', 
   assert.strictEqual(document.getElementById('chapter-list-sidebar').classList.contains('visible'), true);
 });
 
-test('Ctrl/Cmd+= and Ctrl/Cmd+- change the font size setting in opposite directions', function(){
-  var r = freshRender();
+test('Ctrl/Cmd+= and Ctrl/Cmd+- change the font size setting in opposite directions', async function(){
+  var r = await freshRender();
   var startSize = r.userSettings.fontSize;
 
   dispatchAndCaptureJsdomErrors(document, ctrlKeydown('='));
@@ -931,8 +963,8 @@ test('Ctrl/Cmd+= and Ctrl/Cmd+- change the font size setting in opposite directi
   assert.strictEqual(r.userSettings.fontSize, startSize - 1);
 });
 
-test('decreasing font size does not throw when no chapter is marked active in the sidebar', function(){
-  var r = freshRender();
+test('decreasing font size does not throw when no chapter is marked active in the sidebar', async function(){
+  var r = await freshRender();
   r.project.chapters = [];
   r.project.reference = [];
   r.project.trash = [];
@@ -942,8 +974,8 @@ test('decreasing font size does not throw when no chapter is marked active in th
   assert.strictEqual(err, null, err && err.message);
 });
 
-test('Ctrl/Cmd+Alt+T toggles typewriter mode on and back off, persisting the setting each time', function(){
-  var r = freshRender();
+test('Ctrl/Cmd+Alt+T toggles typewriter mode on and back off, persisting the setting each time', async function(){
+  var r = await freshRender();
   assert.strictEqual(r.userSettings.typewriterMode, false);
 
   dispatchAndCaptureJsdomErrors(document, ctrlKeydown('t', { altKey: true }));
@@ -955,16 +987,17 @@ test('Ctrl/Cmd+Alt+T toggles typewriter mode on and back off, persisting the set
   assert.strictEqual(r.editorQuill.__typewriterHandler, undefined, 'disabling should remove the scroll handler');
 });
 
-test('Ctrl/Cmd+M asks the main process to show the menu', function(){
-  freshRender();
+test('Ctrl/Cmd+M asks the main process to show the menu', async function(){
+  await freshRender();
 
   dispatchAndCaptureJsdomErrors(document, ctrlKeydown('m'));
+  await flushMicrotasks();
 
-  assert.ok(currentIpc().sent.includes('show-menu'));
+  assert.ok(currentIpc().invoked.includes('showAppMenu'));
 });
 
-test('F1 toggles the chapter list pane, F2 (unmodified) toggles the editor pane', function(){
-  var r = freshRender();
+test('F1 toggles the chapter list pane, F2 (unmodified) toggles the editor pane', async function(){
+  var r = await freshRender();
   assert.strictEqual(r.userSettings.displayChapList, true);
   assert.strictEqual(r.userSettings.displayEditor, true);
 
@@ -976,16 +1009,16 @@ test('F1 toggles the chapter list pane, F2 (unmodified) toggles the editor pane'
   assert.strictEqual(r.userSettings.displayEditor, false);
 });
 
-test('Ctrl/Cmd+F2 does not toggle the editor pane - F2 only responds unmodified', function(){
-  var r = freshRender();
+test('Ctrl/Cmd+F2 does not toggle the editor pane - F2 only responds unmodified', async function(){
+  var r = await freshRender();
 
   dispatchAndCaptureJsdomErrors(document, ctrlKeydown('F2'));
 
   assert.strictEqual(r.userSettings.displayEditor, true, 'Ctrl+F2 should not match the plain-F2 branch');
 });
 
-test('Ctrl/Cmd+F3 toggles whether notes are per-chapter or project-wide; bare F3 toggles the notes pane', function(){
-  var r = freshRender();
+test('Ctrl/Cmd+F3 toggles whether notes are per-chapter or project-wide; bare F3 toggles the notes pane', async function(){
+  var r = await freshRender();
   //A fresh test project's notesChap starts as {} until initNotesChap() gives it a real
   //chapter.js model - toggleChapterNotes()'s project-wide branch needs that to read notes from.
   r.project.initNotesChap();
@@ -1002,8 +1035,8 @@ test('Ctrl/Cmd+F3 toggles whether notes are per-chapter or project-wide; bare F3
   assert.strictEqual(r.userSettings.displayNotes, false);
 });
 
-test('toggling back to per-chapter notes loads the active chapter\'s own notes, not the project-wide ones', function(){
-  var r = freshRender();
+test('toggling back to per-chapter notes loads the active chapter\'s own notes, not the project-wide ones', async function(){
+  var r = await freshRender();
   r.project.initNotesChap();
   var c0 = makeChap('c0', { contents: { ops: [{ insert: 'c0 body\n' }] } });
   c0.notes = { ops: [{ insert: 'c0 own notes\n' }] };
@@ -1034,8 +1067,8 @@ function paneKeydown(elementId, key, extra){
   return evt;
 }
 
-test('Ctrl/Cmd+Shift+Up and +Down reorder the active chapter', function(){
-  var r = freshRender();
+test('Ctrl/Cmd+Shift+Up and +Down reorder the active chapter', async function(){
+  var r = await freshRender();
   var c0 = makeChap('c0'), c1 = makeChap('c1');
   r.project.chapters = [c0, c1];
   r.project.activeChapterIndex = 1;
@@ -1049,8 +1082,8 @@ test('Ctrl/Cmd+Shift+Up and +Down reorder the active chapter', function(){
   assert.strictEqual(r.project.activeChapterIndex, 1);
 });
 
-test('Ctrl/Cmd+Shift+Left renames the active chapter, but only while the sidebar is visible', function(){
-  var r = freshRender();
+test('Ctrl/Cmd+Shift+Left renames the active chapter, but only while the sidebar is visible', async function(){
+  var r = await freshRender();
   r.project.chapters = [makeChap('c0')];
   r.updateFileList();
 
@@ -1063,8 +1096,8 @@ test('Ctrl/Cmd+Shift+Left renames the active chapter, but only while the sidebar
   assert.ok(document.querySelector('.name-box'));
 });
 
-test('Ctrl/Cmd+Up and +Down move between chapters, focusing notes only when triggered from the notes pane', function(){
-  var r = freshRender();
+test('Ctrl/Cmd+Up and +Down move between chapters, focusing notes only when triggered from the notes pane', async function(){
+  var r = await freshRender();
   r.project.chapters = [makeChap('c0'), makeChap('c1')];
   r.project.activeChapterIndex = 1;
 
@@ -1077,8 +1110,8 @@ test('Ctrl/Cmd+Up and +Down move between chapters, focusing notes only when trig
   assert.strictEqual(document.activeElement, r.notesQuill.root, 'triggered from notes - focus should stay there');
 });
 
-test('Ctrl/Cmd+, and Ctrl/Cmd+. shrink and grow the editor width setting', function(){
-  var r = freshRender();
+test('Ctrl/Cmd+, and Ctrl/Cmd+. shrink and grow the editor width setting', async function(){
+  var r = await freshRender();
   var startWidth = r.userSettings.editorWidth;
 
   paneKeydown('editor-container', ',');
@@ -1089,8 +1122,8 @@ test('Ctrl/Cmd+, and Ctrl/Cmd+. shrink and grow the editor width setting', funct
   assert.strictEqual(r.userSettings.editorWidth, startWidth + 1);
 });
 
-test('PageDown in the notes pane pages down notesQuill rather than editorQuill', function(){
-  var r = freshRender();
+test('PageDown in the notes pane pages down notesQuill rather than editorQuill', async function(){
+  var r = await freshRender();
   r.notesQuill.setText('only one line\n');
   r.notesQuill.setSelection(0);
 
@@ -1113,8 +1146,8 @@ test('PageDown in the notes pane pages down notesQuill rather than editorQuill',
 // restoreFromTrash
 //---------------------------------------------------------------------------
 
-test('restoreFromTrash follows the restored chapter to its new place in the list', function(){
-  var r = freshRender();
+test('restoreFromTrash follows the restored chapter to its new place in the list', async function(){
+  var r = await freshRender();
   var A = makeChap('A'), B = makeChap('B'), R = makeChap('R');
   var T1 = makeChap('T1'), T2 = makeChap('T2');
   r.project.chapters = [A, B];
@@ -1135,8 +1168,8 @@ test('restoreFromTrash follows the restored chapter to its new place in the list
 //The reason the index above matters: activeChapterIndex is what the editor's text-change handler
 //routes a keystroke through. Left pointing at the wrong document, the text on screen was written
 //into a chapter the reader never opened, and saved over its file.
-test('typing after a restore edits the restored chapter, not the one that took its index', function(){
-  var r = freshRender();
+test('typing after a restore edits the restored chapter, not the one that took its index', async function(){
+  var r = await freshRender();
   var A = makeChap('A'), T1 = makeChap('T1', { text: 'T1 body' }), T2 = makeChap('T2', { text: 'T2 body' });
   r.project.chapters = [A];
   r.project.reference = [makeChap('R')];
@@ -1153,8 +1186,8 @@ test('typing after a restore edits the restored chapter, not the one that took i
   assert.match(JSON.stringify(T2.contents), /XT2 body/);
 });
 
-test('restoreFromTrash keeps a different active chapter pointing at the same document', function(){
-  var r = freshRender();
+test('restoreFromTrash keeps a different active chapter pointing at the same document', async function(){
+  var r = await freshRender();
   var A = makeChap('A'), R = makeChap('R'), T1 = makeChap('T1');
   r.project.chapters = [A];
   r.project.reference = [R];
@@ -1169,8 +1202,8 @@ test('restoreFromTrash keeps a different active chapter pointing at the same doc
   assert.strictEqual(active && active.textContent, 'R');
 });
 
-test('restoreFromTrash ignores an index that is not in the trash', function(){
-  var r = freshRender();
+test('restoreFromTrash ignores an index that is not in the trash', async function(){
+  var r = await freshRender();
   r.project.chapters = [makeChap('A')];
   r.project.trash = [];
   r.project.activeChapterIndex = 0;
@@ -1187,8 +1220,8 @@ test('restoreFromTrash ignores an index that is not in the trash', function(){
 
 //Emptying a project disables the editor; nothing on the load path used to switch it back on, so
 //opening a project that did have chapters left the reader unable to type into it.
-test('displaying a chapter re-enables an editor that an emptied project disabled', function(){
-  var r = freshRender();
+test('displaying a chapter re-enables an editor that an emptied project disabled', async function(){
+  var r = await freshRender();
   r.project.chapters = [makeChap('only')];
   r.project.activeChapterIndex = 0;
   r.updateFileList();
@@ -1205,8 +1238,8 @@ test('displaying a chapter re-enables an editor that an emptied project disabled
   assert.strictEqual(r.editorQuill.isEnabled(), true);
 });
 
-test('the editor stays disabled while the project has nothing in any list', function(){
-  var r = freshRender();
+test('the editor stays disabled while the project has nothing in any list', async function(){
+  var r = await freshRender();
   r.project.chapters = [];
   r.project.reference = [];
   r.project.trash = [];
@@ -1217,8 +1250,8 @@ test('the editor stays disabled while the project has nothing in any list', func
 });
 
 //The notes handler has always been guarded this way; the editor's was not.
-test('a user edit with no chapter to attach it to is dropped rather than throwing', function(){
-  var r = freshRender();
+test('a user edit with no chapter to attach it to is dropped rather than throwing', async function(){
+  var r = await freshRender();
   r.project.chapters = [];
   r.project.reference = [];
   r.project.trash = [];
@@ -1236,7 +1269,7 @@ test('a user edit with no chapter to attach it to is dropped rather than throwin
 
 //Same as freshRender(), but hands back the fake ipcRenderer as well and leaves any popup in place,
 //so these tests can check what render.js registered and what it put on screen.
-function renderWithLastProject(lastProject){
+async function renderWithLastProject(lastProject){
   fs.writeFileSync(path.join(userDataDir, 'user-settings.json'),
     JSON.stringify({ lastProject: lastProject }), 'utf8');
 
@@ -1257,6 +1290,7 @@ function renderWithLastProject(lastProject){
   var mod = null;
   try{
     mod = require(renderPath);
+    await mod.ready;
   }
   catch(err){
     thrown = err;
@@ -1277,15 +1311,15 @@ function writeDamagedProject(name){
 //A damaged project file used to throw out of loadInitialProject() at require-time, which aborted
 //render.js before it reached any of its ipcRenderer.on registrations - including exit-app-clicked,
 //the one index.js's close guard blocks every window close waiting for.
-test('a damaged lastProject does not stop render.js from loading', function(){
-  var loaded = renderWithLastProject(writeDamagedProject('damaged.woolf'));
+test('a damaged lastProject does not stop render.js from loading', async function(){
+  var loaded = await renderWithLastProject(writeDamagedProject('damaged.woolf'));
 
   assert.strictEqual(loaded.thrown, null,
     'render.js threw at startup: ' + (loaded.thrown && loaded.thrown.message));
 });
 
-test('a damaged lastProject still leaves the exit handler registered, so the window can close', function(){
-  var loaded = renderWithLastProject(writeDamagedProject('damaged.woolf'));
+test('a damaged lastProject still leaves the exit handler registered, so the window can close', async function(){
+  var loaded = await renderWithLastProject(writeDamagedProject('damaged.woolf'));
 
   assert.ok(loaded.ipc.handlers['exit-app-clicked'],
     'without this handler index.js never lets the window close');
@@ -1294,16 +1328,16 @@ test('a damaged lastProject still leaves the exit handler registered, so the win
 
 //index.js's close guard only hands a window close to the renderer once this has arrived; without
 //it the guard closes the window itself rather than waiting on a renderer that may not be there.
-test('the renderer reports itself ready once its handlers are registered', function(){
-  var loaded = renderWithLastProject(writeDamagedProject('damaged.woolf'));
+test('the renderer reports itself ready once its handlers are registered', async function(){
+  var loaded = await renderWithLastProject(writeDamagedProject('damaged.woolf'));
 
-  assert.ok(loaded.ipc.sent.indexOf('renderer-ready') > -1,
-    'sent: ' + JSON.stringify(loaded.ipc.sent));
+  assert.ok(loaded.ipc.invoked.indexOf('notifyRendererReady') > -1,
+    'invoked: ' + JSON.stringify(loaded.ipc.invoked));
 });
 
-test('a damaged lastProject tells the reader which file failed', function(){
+test('a damaged lastProject tells the reader which file failed', async function(){
   var projPath = writeDamagedProject('damaged.woolf');
-  renderWithLastProject(projPath);
+  await renderWithLastProject(projPath);
 
   var popup = document.querySelector('.popup');
   assert.ok(popup, 'a popup explains the failure');
@@ -1321,8 +1355,8 @@ test('a damaged lastProject tells the reader which file failed', function(){
     'the reader is told their chapters are safe');
 });
 
-test('a damaged lastProject leaves an empty but working project rather than a half-loaded one', function(){
-  var loaded = renderWithLastProject(writeDamagedProject('damaged.woolf'));
+test('a damaged lastProject leaves an empty but working project rather than a half-loaded one', async function(){
+  var loaded = await renderWithLastProject(writeDamagedProject('damaged.woolf'));
   var r = loaded.module;
 
   //render.js swaps in a fresh project on failure, so this is the new one, not the module's
@@ -1367,9 +1401,9 @@ function withBundledHelpDoc(t, contents){
 //The whole point of opening it in place: a copy taken once and reused forever would go stale the
 //first time a release updated the Help doc, and nobody who had already launched the app would ever
 //see the new one.
-test('the Help doc opens from the install directory rather than being copied to userData', function(t){
+test('the Help doc opens from the install directory rather than being copied to userData', async function(t){
   const bundled = withBundledHelpDoc(t);
-  var r = freshRender();
+  var r = await freshRender();
 
   currentIpc().handlers['help-doc-clicked']();
 
@@ -1378,9 +1412,9 @@ test('the Help doc opens from the install directory rather than being copied to 
     'no copy of the Help doc should be made under userData');
 });
 
-test('a Help doc opened from the read-only install directory is marked read-only', function(t){
+test('a Help doc opened from the read-only install directory is marked read-only', async function(t){
   withBundledHelpDoc(t);
-  var r = freshRender();
+  var r = await freshRender();
 
   currentIpc().handlers['help-doc-clicked']();
 
@@ -1391,10 +1425,10 @@ test('a Help doc opened from the read-only install directory is marked read-only
 
 //Saving in place would fail with EACCES on a real install and be swallowed, losing whatever the
 //reader typed. Save As gives their annotated copy a home they picked instead.
-test('saving an open Help doc offers Save As instead of writing to the install directory', function(t){
+test('saving an open Help doc offers Save As instead of writing to the install directory', async function(t){
   const bundled = withBundledHelpDoc(t);
   const before = fs.readFileSync(bundled.helpDocPath, 'utf8');
-  var r = freshRender();
+  var r = await freshRender();
   currentIpc().handlers['help-doc-clicked']();
   Array.from(document.querySelectorAll('.popup, .popup-dialog')).forEach(function(p){ p.remove(); });
 
@@ -1408,9 +1442,9 @@ test('saving an open Help doc offers Save As instead of writing to the install d
 
 //Opening anything else afterwards has to come back writable, or every later save would silently
 //do nothing.
-test('opening an ordinary project after the Help doc clears the read-only flag', function(t){
+test('opening an ordinary project after the Help doc clears the read-only flag', async function(t){
   withBundledHelpDoc(t);
-  var r = freshRender();
+  var r = await freshRender();
   currentIpc().handlers['help-doc-clicked']();
   assert.strictEqual(r.project.isReadOnly, true);
 

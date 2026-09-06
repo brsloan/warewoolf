@@ -1,7 +1,13 @@
-const { ipcRenderer } = require('electron');
 const { removeElementsByClass, disableSearchView } = require('./utils');
 const { enableTypewriterMode, disableTypewriterMode } = require('./typewriter-mode');
 const { goPageDown } = require('./quill-utils');
+const { createPlatform } = require('./platform');
+const { createIpcBacking } = require('./platform-ipc');
+
+//A platform instance of its own rather than one threaded through `context`, matching how it already
+//requires 'electron' independently of render.js - createIpcBacking() resolves ipcRenderer at call
+//time (see platform-ipc.js), so this stays safe to re-require in tests the same way it always was.
+var platform = createPlatform(createIpcBacking());
 
 //Two listeners cover every keyboard shortcut that is not a menu item (those go through the main
 //process instead): one on `document` for shortcuts that make sense from anywhere, and one bound to
@@ -84,7 +90,9 @@ function registerKeybindings(context){
       context.userSettings.save();
     }
     else if((e.ctrlKey || e.metaKey) && e.key === "m"){
-      ipcRenderer.send('show-menu');
+      platform.showAppMenu().catch(function(err){
+        require('./error-log').logError(err);
+      });
     }
     else if(e.key === 'F1'){
       stopDefaultPropagation(e);

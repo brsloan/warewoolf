@@ -5,11 +5,21 @@ const assert = require('node:assert');
 const electronPath = require.resolve('electron');
 const keybindingsPath = require.resolve('../src/components/controllers/keybindings');
 
-//keybindings.js destructures `ipcRenderer` from 'electron' at require-time, same pattern (and same
-//reason) as render.js itself - faked in require.cache before every (re-)require.
+//keybindings.js creates its own platform instance (createPlatform(createIpcBacking())) at
+//require-time, same pattern (and same reason) as render.js itself - faked in require.cache before
+//every (re-)require. showAppMenu now crosses through invoke() rather than a bare send('show-menu'),
+//since platform.js wraps every command in a promise regardless of what the backing does underneath.
 function fakeIpcRenderer(){
   var sent = [];
-  return { sent: sent, send: function(channel){ sent.push(channel); } };
+  var invoked = [];
+  return {
+    sent: sent,
+    invoked: invoked,
+    send: function(channel){ sent.push(channel); },
+    invoke: function(channel, args){ invoked.push(channel); return Promise.resolve(undefined); },
+    on: function(){},
+    removeListener: function(){}
+  };
 }
 
 function freshKeybindings(){
@@ -25,6 +35,13 @@ function freshKeybindings(){
 
 function currentIpc(){
   return require('electron').ipcRenderer;
+}
+
+//Resolving a promise still takes at least one microtask tick - platform.js's own wrapper adds a
+//second, and platform-ipc.js's .then() a third - so anything triggered by a keydown needs this
+//before checking what it invoked.
+function flushMicrotasks(){
+  return new Promise(function(resolve){ setImmediate(resolve); });
 }
 
 //The five elements every shortcut below reaches for by id - the same shell render.js's own HTML
@@ -210,12 +227,13 @@ test('Ctrl/Cmd+Alt+T toggles typewriter mode and persists the setting', function
   teardown(env);
 });
 
-test('Ctrl/Cmd+M asks the main process to show the menu', function(){
+test('Ctrl/Cmd+M asks the main process to show the menu', async function(){
   var env = setup();
 
   keydown(document, 'm', ctrl());
+  await flushMicrotasks();
 
-  assert.ok(currentIpc().sent.includes('show-menu'));
+  assert.ok(currentIpc().invoked.includes('showAppMenu'));
 
   teardown(env);
 });

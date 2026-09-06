@@ -40,6 +40,19 @@ function createNodeBacking(deps){
   var log = options.logError || function(){};
   var services = options.services || (paths.userData == null ? {} : { email: paths.userData });
 
+  //Group A is the exception to this file's own rule. C and J are direct fs/crypto - exactly what
+  //nodeIntegration already gives the renderer, so this backing can run inside it unchanged. None of
+  //app.getPath, nativeTheme, the application menu, or app.quit is reachable from the renderer at
+  //all, with or without nodeIntegration - so unlike C and J, this group was never a candidate for
+  //running this file inside the shipped app. render.js uses platform-ipc.js for it instead; what
+  //follows here exists so platform.test.js can exercise the contract's shape against injected
+  //fakes, the same way it already does for secureStorage above.
+  var fileRequestedOnOpen = options.fileRequestedOnOpen == null ? null : options.fileRequestedOnOpen;
+  var onSetTheme = options.onSetTheme || function(){};
+  var onShowAppMenu = options.onShowAppMenu || function(){};
+  var onConfirmExit = options.onConfirmExit || function(){};
+  var onNotifyRendererReady = options.onNotifyRendererReady || function(){};
+
   //Stores are cached rather than rebuilt per call because a passphrase-derived session key lives in
   //the store's closure. Discarding the instance is therefore how lockCredential locks: the key has
   //nowhere else to be.
@@ -48,6 +61,15 @@ function createNodeBacking(deps){
   var listeners = {};
 
   return {
+    // --- A. Environment and shell ------------------------------------------------------------
+    getAppPaths: getAppPaths,
+    getPlatform: getPlatform,
+    getFileRequestedOnOpen: getFileRequestedOnOpen,
+    setTheme: setTheme,
+    showAppMenu: showAppMenu,
+    confirmExit: confirmExit,
+    notifyRendererReady: notifyRendererReady,
+
     // --- C. Chapter I/O ---------------------------------------------------------------------
     saveChapter: saveChapter,
     saveChapterAtomic: saveChapterAtomic,
@@ -69,6 +91,50 @@ function createNodeBacking(deps){
     on: on,
     off: off
   };
+
+  // ------------------------------------------------------------------------------------------
+  // Group A
+  // ------------------------------------------------------------------------------------------
+
+  //Field by field, not passed through - same reason describeCredential() copies below rather than
+  //returning the store's object: a field added to `paths` for some other purpose cannot leak across
+  //the boundary just by existing.
+  function getAppPaths(){
+    return {
+      userData: paths.userData,
+      home: paths.home,
+      temp: paths.temp,
+      docs: paths.docs,
+      app: paths.app,
+      downloads: paths.downloads
+    };
+  }
+
+  //process.platform/process.arch are plain Node globals, present with or without nodeIntegration -
+  //nothing to inject.
+  function getPlatform(){
+    return { platform: process.platform, arch: process.arch };
+  }
+
+  function getFileRequestedOnOpen(){
+    return fileRequestedOnOpen;
+  }
+
+  function setTheme(args){
+    onSetTheme(args == null ? null : args.mode);
+  }
+
+  function showAppMenu(){
+    onShowAppMenu();
+  }
+
+  function confirmExit(){
+    onConfirmExit();
+  }
+
+  function notifyRendererReady(){
+    onNotifyRendererReady();
+  }
 
   // ------------------------------------------------------------------------------------------
   // Group C

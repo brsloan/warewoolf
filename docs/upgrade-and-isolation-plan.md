@@ -425,8 +425,56 @@ correct.
 Order from the inventory, each shipping independently while `nodeIntegration`
 stays on:
 
-**Phase 2 — Group A (environment).** `getAppPaths` first: it is `sendSync` at
-module load (`render.js:4`), so nothing else converts cleanly until it does.
+**Phase 2 — Group A (environment) — done.** All seven commands are implemented
+in both `platform-node.js` (injected `paths`/`fileRequestedOnOpen`/four action
+hooks, exercised only by `platform.test.js` - see below) and the new
+`platform-ipc.js` (real `ipcRenderer.invoke`, one channel per command name).
+`index.js` grew a generic `handlePlatformCommand()` registering
+`ipcMain.handle` for each, replacing the old `get-directories`/
+`get-file-requested-on-open`/`set-dark-mode`/`show-menu`/`exit-app-confirmed`/
+`renderer-ready` sendSync/send handlers outright - nothing else called them.
+
+`getAppPaths` and `getFileRequestedOnOpen` were both `sendSync` at module load
+in `render.js` (`:4` and `:20`) - the plan above named only the first, but
+both block synchronous startup equally, and `createPlatform` wraps every
+command in a promise regardless of backing, so converting either forces the
+same problem. Both, plus the `userSettings`/`credentialStore` construction
+that depends on the first, now live in an async `loadPlatformState()`; the
+five module-scope statements that needed to move were `render.js`'s old
+`:4,5,20,46,47`, not four. `module.exports` starts as `{ ready: <promise> }`
+and is populated in place once `loadPlatformState()` reaches the end -
+`registerKeybindings()`'s call site had to move inside that function too,
+since it captured `userSettings` by value rather than through a getter.
+`keybindings.js`'s own `show-menu` send became a second, independent
+`createPlatform(createIpcBacking())` instance, matching how it already
+required `electron` on its own.
+
+Electron does not forward a thrown error's custom properties across
+`ipcMain.handle` - only `.message` survives serialization - so a failing
+handler resolves with a `{ __platformError, code, message }` envelope instead
+of rejecting, and `platform-ipc.js` is the one place that unwraps it back into
+a real `PlatformError`. Nothing in Group A actually exercises that path
+today, but every later group will need it, so it is built and tested now
+rather than discovered in Phase 4.
+
+**Deferred, deliberately: `getPlatform`'s other two call sites.**
+`updates.js:117-131,179` and `about_display.js:75` read `process.platform`/
+`process.arch` directly, and the inventory names them as what `getPlatform`
+replaces. Both sit inside Group K's own synchronous helper functions
+(`extractUpdateDownloadInfo`, `downloadUpdate`, the About popup's update-check
+handler); converting them now would mean either reaching into Group K's
+control flow early or bolting an async call onto otherwise-synchronous
+functions and unwinding that again in Phase 8. Left as plain `process.*`
+reads - still correct under `nodeIntegration: true` - until Group K converts
+alongside `checkForUpdate`/`downloadUpdate`/`installUpdate`.
+
+Verified: `test/render.test.js` and `test/render-bundle.test.js` (73 render.js
+tests, 6 bundle tests) now exercise the async boot path end to end, including
+`await`ing `require('../src/render').ready` in place of the old synchronous
+require - `freshRender()`'s and `renderWithLastProject()`'s own doc comments
+explain why `require()` cannot do that waiting itself. Two new test files,
+`test/platform-ipc.test.js` (6 tests) and five tests added to
+`test/platform.test.js`, cover the new backing directly. Suite is now **874**.
 
 **Phase 3 — `logError`.** Widest call graph, least logic. Treat it as a
 calibration exercise for how invasive the async conversion really is before

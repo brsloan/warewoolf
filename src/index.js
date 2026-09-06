@@ -1,6 +1,7 @@
 const { app, BrowserWindow, Menu, nativeTheme, safeStorage } = require('electron');
 const path = require('path');
 const { ipcMain } = require('electron');
+const { CODES } = require('./components/controllers/platform');
 const isLinux = process.platform === "linux";
 const isMac = process.platform === "darwin";
 var fileRequestedOnOpen = null;
@@ -477,41 +478,75 @@ app.on('window-all-closed', () => {
 
 // In this file you can include the rest of your app's specific main process
 // code. You can also put them in separate files and import them here.
-ipcMain.on('exit-app-confirmed', function(e){
-  closeConfirmed = true;
-  app.quit();
-});
+//
+//Group A of the platform contract (src/components/controllers/platform.js). ipcMain.handle, not
+//ipcMain.on/e.returnValue - the renderer's ipc backing (platform-ipc.js) calls these through
+//invoke(), which is always a promise. A handler that fails resolves with a
+//{ __platformError: true, code, message } envelope instead of rejecting, since Electron does not
+//forward a thrown error's custom properties (only .message) across this boundary - platform-ipc.js
+//is the one place that turns the envelope back into a real PlatformError, code intact.
+function handlePlatformCommand(name, fn){
+  ipcMain.handle(name, function(event, args){
+    try{
+      return fn(args == null ? {} : args);
+    }
+    catch(err){
+      return {
+        __platformError: true,
+        code: (err && err.code) || CODES.IO_ERROR,
+        message: (err && err.message) || 'Unknown platform failure.'
+      };
+    }
+  });
+}
 
-//Sent by render.js as the last thing it does, once every handler is registered.
-ipcMain.on('renderer-ready', function(e){
-  rendererReady = true;
-});
-
-ipcMain.on('get-directories', function(e){
-  e.returnValue = {
+handlePlatformCommand('getAppPaths', function(){
+  return {
     userData: app.getPath('userData').replaceAll('\\', '/'),
     home: app.getPath('home').replaceAll('\\', '/'),
     temp: app.getPath('temp').replaceAll('\\', '/'),
     docs: app.getPath('documents').replaceAll('\\', '/'),
     app: __dirname.replaceAll('\\', '/'),
     downloads: app.getPath('downloads').replaceAll('\\', '/')
-  }
+  };
 });
 
-ipcMain.on('get-file-requested-on-open', function(e){
-  e.returnValue = fileRequestedOnOpen;
+handlePlatformCommand('getPlatform', function(){
+  return { platform: process.platform, arch: process.arch };
 });
 
-ipcMain.on('set-dark-mode', function(e, darkMode){
-  if(darkMode == 'system'){
+handlePlatformCommand('getFileRequestedOnOpen', function(){
+  return fileRequestedOnOpen;
+});
+
+handlePlatformCommand('setTheme', function(args){
+  var mode = args.mode;
+  if(mode == 'system'){
     nativeTheme.themeSource = 'system';
   }
-  else if(darkMode == 'dark'){
+  else if(mode == 'dark'){
     nativeTheme.themeSource = 'dark';
   }
-  else if(darkMode == 'light') {
+  else if(mode == 'light') {
     nativeTheme.themeSource = 'light';
   }
+});
+
+handlePlatformCommand('showAppMenu', function(){
+  app.applicationMenu.popup({
+    x: 0,
+    y: 0
+  });
+});
+
+handlePlatformCommand('confirmExit', function(){
+  closeConfirmed = true;
+  app.quit();
+});
+
+//Sent by render.js as the last thing it does, once every handler is registered.
+handlePlatformCommand('notifyRendererReady', function(){
+  rendererReady = true;
 });
 
 //safeStorage only reaches a real OS keystore when Chromium found one at startup. On Linux with no
@@ -558,11 +593,4 @@ ipcMain.on('secure-storage-decrypt', function(e, content){
   catch(err){
     e.returnValue = null;
   }
-});
-
-ipcMain.on('show-menu', function(e){
-  app.applicationMenu.popup({
-    x: 0,
-    y: 0
-  });
 });

@@ -43,28 +43,36 @@ function bodyShell(){
 //None of these paths exist, so loadInitialProject() falls through to createNewProject() and leaves
 //a blank project behind a popup - the same blank slate render.test.js relies on. userData and docs
 //are real, since user-settings.js and the file dialogs read them for real.
+//getAppPaths/getFileRequestedOnOpen/etc. (platform.js's group A) now cross through
+//ipcRenderer.invoke() rather than sendSync/send - see platform-ipc.js.
 function fakeElectron(){
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'warewoolf-bundle-ud-'));
   const docsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'warewoolf-bundle-docs-'));
   return {
     ipcRenderer: {
       sendSync: function(channel){
-        if(channel === 'get-directories')
-          return { app: '/no-such-app-dir', userData: userDataDir, docs: docsDir,
-                   home: '/no-such-home-dir', temp: os.tmpdir(), downloads: '/no-such-downloads' };
-        if(channel === 'get-file-requested-on-open')
-          return null;
         if(channel === 'secure-storage-available')
           return false;
         return undefined;
       },
+      invoke: function(channel){
+        if(channel === 'getAppPaths')
+          return Promise.resolve({ app: '/no-such-app-dir', userData: userDataDir, docs: docsDir,
+                   home: '/no-such-home-dir', temp: os.tmpdir(), downloads: '/no-such-downloads' });
+        if(channel === 'getFileRequestedOnOpen')
+          return Promise.resolve(null);
+        if(channel === 'getPlatform')
+          return Promise.resolve({ platform: process.platform, arch: process.arch });
+        return Promise.resolve(undefined);
+      },
       send: function(){},
-      on: function(){}
+      on: function(){},
+      removeListener: function(){}
     }
   };
 }
 
-function loadBundle(){
+async function loadBundle(){
   const electronPath = require.resolve('electron');
   require.cache[electronPath] = {
     id: electronPath, filename: electronPath, loaded: true, exports: fakeElectron()
@@ -72,6 +80,7 @@ function loadBundle(){
   delete require.cache[bundlePath];
   document.body.innerHTML = bodyShell();
   const mod = require(bundlePath);
+  await mod.ready;
   Array.from(document.querySelectorAll('.popup')).forEach(function(p){ p.remove(); });
   return mod;
 }
@@ -83,8 +92,8 @@ test('the renderer bundle exists', function(){
 
 //The load itself is the assertion: the bundle runs initialize() at require-time, which walks
 //almost the whole module graph. Anything esbuild mangled surfaces here as a throw.
-test('the renderer bundle loads and runs its startup path', function(){
-  const mod = loadBundle();
+test('the renderer bundle loads and runs its startup path', async function(){
+  const mod = await loadBundle();
 
   assert.ok(mod, 'the bundle should export the renderer API');
   if(mod._unregisterKeybindings)
@@ -93,8 +102,8 @@ test('the renderer bundle loads and runs its startup path', function(){
 
 //Proves the graph actually executed end to end rather than merely parsing: both Quill instances
 //are constructed near the end of startup, against DOM nodes that only exist here.
-test('the renderer bundle mounts both editors', function(){
-  const mod = loadBundle();
+test('the renderer bundle mounts both editors', async function(){
+  const mod = await loadBundle();
 
   assert.ok(document.querySelector('#editor-container .ql-editor'),
     'the main editor should be mounted');
@@ -107,8 +116,8 @@ test('the renderer bundle mounts both editors', function(){
 //index.html loads the bundle with a plain <script> tag, so anything the app reaches for has to be
 //on the exported object. A bundling change that dropped exports would leave the menu wired to
 //nothing, with every other test still green.
-test('the renderer bundle exports the API the app drives it through', function(){
-  const mod = loadBundle();
+test('the renderer bundle exports the API the app drives it through', async function(){
+  const mod = await loadBundle();
 
   ['project', 'userSettings', 'editorQuill', 'notesQuill', 'updateFileList',
    'displayChapterByIndex', 'addNewChapter'].forEach(function(key){

@@ -1,8 +1,8 @@
 const { ipcRenderer } = require('electron');
 const fs = require('fs');
 const Quill = require('quill');
-const sysDirectories = ipcRenderer.sendSync('get-directories');
-require('./components/controllers/error-log').setLogDirectory(sysDirectories.userData);
+const { createPlatform } = require('./components/controllers/platform');
+const { createIpcBacking } = require('./components/controllers/platform-ipc');
 const getUserSettings = require('./components/models/user-settings');
 const getCredentialStore = require('./components/models/credential-store');
 const getSecureStorage = require('./components/controllers/secure-storage');
@@ -17,9 +17,14 @@ const {
   removeElementsByClass,
   disableSearchView
 } = require('./components/controllers/utils');
-const fileRequestedOnOpen = ipcRenderer.sendSync('get-file-requested-on-open');
 const { showBattery } = require('./components/views/battery_display');
 const { renderChapterList, renameChapterInList } = require('./components/views/chapter-list_display');
+
+//The single boundary to the OS and the main process - see platform.js. getAppPaths/
+//getFileRequestedOnOpen used to be sendSync calls made here at module load; both are now regular
+//commands, which means both are promises, which is why loadPlatformState() below exists at all -
+//nothing that depends on sysDirectories or userSettings can run until it resolves.
+var platform = createPlatform(createIpcBacking());
 
 var editorQuill = new Quill('#editor-container', {
   modules: {
@@ -43,13 +48,88 @@ var notesQuill = new Quill('#notes-editor', {
 
 var project = newProject();
 
-var userSettings = getUserSettings(sysDirectories.userData + "/user-settings.json").load();
-var credentialStore = getCredentialStore(sysDirectories.userData, getSecureStorage());
-//Lift any password saved by an older version out of user-settings.json, where it sat under a
-//key that shipped in the source, and re-seal it with whatever this machine can actually offer.
-credentialStore.migrateLegacyPassword(userSettings);
+//Populated by loadPlatformState() below, once getAppPaths()/getFileRequestedOnOpen() resolve.
+//Nothing above this line needs them; everything below runs from inside functions and reads these by
+//closure, not at define-time, so it does not matter that they start out undefined.
+var sysDirectories, fileRequestedOnOpen, userSettings, credentialStore;
 
-initialize();
+//Exposed for testing only - nothing in the app itself reads this module's exports, since it's
+//loaded as a plain <script> tag rather than required. `ready` is how a caller (render.test.js's
+//freshRender()) waits for loadPlatformState() below to populate the rest of this object - project,
+//userSettings, and the handful of chapter/reference/trash functions that are the most bug-prone and
+//highest-value part of this file to unit test directly - since require() itself cannot wait on it.
+module.exports.ready = loadPlatformState();
+
+async function loadPlatformState(){
+  sysDirectories = await platform.getAppPaths();
+  require('./components/controllers/error-log').setLogDirectory(sysDirectories.userData);
+  fileRequestedOnOpen = await platform.getFileRequestedOnOpen();
+
+  userSettings = getUserSettings(sysDirectories.userData + "/user-settings.json").load();
+  credentialStore = getCredentialStore(sysDirectories.userData, getSecureStorage());
+  //Lift any password saved by an older version out of user-settings.json, where it sat under a
+  //key that shipped in the source, and re-seal it with whatever this machine can actually offer.
+  credentialStore.migrateLegacyPassword(userSettings);
+
+  initialize();
+
+  //Wires up every keyboard shortcut that is not a menu item - see keybindings.js for the dispatch
+  //itself. context.project is a getter, not the object directly, because createNewProject() below
+  //replaces it with a brand new one; capturing it here would leave every shortcut acting on the
+  //project this app started with rather than whatever project is actually open. userSettings is
+  //held directly rather than through a getter - unlike `project` it is never reassigned - which is
+  //exactly why this call has to happen here rather than at this file's true top level: userSettings
+  //does not exist yet until the two lines above it in this function have run.
+  var unregisterKeybindings = registerKeybindings({
+    getProject: function(){ return project; },
+    userSettings: userSettings,
+    editorQuill: editorQuill,
+    notesQuill: notesQuill,
+    actions: {
+      moveChapUp: moveChapUp,
+      moveChapDown: moveChapDown,
+      changeChapterTitle: changeChapterTitle,
+      displayPreviousChapter: displayPreviousChapter,
+      displayNextChapter: displayNextChapter,
+      togglePanelDisplay: togglePanelDisplay,
+      toggleChapterNotes: toggleChapterNotes,
+      updatePanelDisplays: updatePanelDisplays,
+      increaseFontSizeSetting: increaseFontSizeSetting,
+      decreaseFontSizeSetting: decreaseFontSizeSetting,
+      increaseEditorWidthSetting: increaseEditorWidthSetting,
+      descreaseEditorWidthSetting: descreaseEditorWidthSetting
+    }
+  });
+
+  //The keybindings above are now registered, and so is everything else this file wires up on
+  //ipcRenderer directly (the per-menu-channel listeners and the file-opened-from-outside handler,
+  //both further down this file but run in the first synchronous pass through it - well before this
+  //async function ever got here). index.js's close guard only hands a window close to this renderer
+  //once this fires, so nothing above may still be pending when it does.
+  await platform.notifyRendererReady();
+
+  Object.assign(module.exports, {
+    project,
+    userSettings,
+    editorQuill,
+    notesQuill,
+    moveChapUp,
+    moveChapDown,
+    moveToTrash,
+    deleteChapter,
+    verifyToDelete,
+    restoreFromTrash,
+    updateFileList,
+    displayChapterByIndex,
+    addNewChapter,
+    addImportedChapter,
+    changeChapterTitle,
+    splitChapter,
+    editorHasFocus,
+    editorIsVisible,
+    _unregisterKeybindings: unregisterKeybindings
+  });
+}
 
 function initialize(){
   setUpQuills();
@@ -141,7 +221,9 @@ function updateEditorWidth(){
 }
 
 function setDarkMode(){
-  ipcRenderer.send('set-dark-mode', userSettings.darkMode);
+  platform.setTheme({ mode: userSettings.darkMode }).catch(function(err){
+    require('./components/controllers/error-log').logError(err);
+  });
 }
 
 function setProject(filepath){
@@ -843,11 +925,17 @@ function exitApp(){
     backupProject(project, userSettings, sysDirectories.docs, function(update){
       alertBackupResult(update, true);
       if(update == BACKUP_FINISHED)
-        ipcRenderer.send('exit-app-confirmed');
+        confirmExit();
     });
   } else {
-      ipcRenderer.send('exit-app-confirmed');
+      confirmExit();
   }
+}
+
+function confirmExit(){
+  platform.confirmExit().catch(function(err){
+    require('./components/controllers/error-log').logError(err);
+  });
 }
 
 //Adapts backup-project.js's stream of progress messages onto the alert popup: every message is
@@ -861,9 +949,7 @@ function alertBackupResult(msg, allowExitWithoutBackup = false){
     return;
   }
 
-  showBackupAlert(msg, allowExitWithoutBackup ? function(){
-    ipcRenderer.send('exit-app-confirmed');
-  } : null);
+  showBackupAlert(msg, allowExitWithoutBackup ? confirmExit : null);
 }
 
 function addImportedChapter(chapDelta, title){
@@ -901,31 +987,6 @@ function editorHasFocus(){
 function editorIsVisible(){
   return document.getElementById('writing-field').classList.contains('visible');
 }
-
-//Wires up every keyboard shortcut that is not a menu item - see keybindings.js for the dispatch
-//itself. context.project is a getter, not the object directly, because createNewProject() below
-//replaces it with a brand new one; capturing it here would leave every shortcut acting on the
-//project this app started with rather than whatever project is actually open.
-var unregisterKeybindings = registerKeybindings({
-  getProject: function(){ return project; },
-  userSettings: userSettings,
-  editorQuill: editorQuill,
-  notesQuill: notesQuill,
-  actions: {
-    moveChapUp: moveChapUp,
-    moveChapDown: moveChapDown,
-    changeChapterTitle: changeChapterTitle,
-    displayPreviousChapter: displayPreviousChapter,
-    displayNextChapter: displayNextChapter,
-    togglePanelDisplay: togglePanelDisplay,
-    toggleChapterNotes: toggleChapterNotes,
-    updatePanelDisplays: updatePanelDisplays,
-    increaseFontSizeSetting: increaseFontSizeSetting,
-    decreaseFontSizeSetting: decreaseFontSizeSetting,
-    increaseEditorWidthSetting: increaseEditorWidthSetting,
-    descreaseEditorWidthSetting: descreaseEditorWidthSetting
-  }
-});
 
 //Both channels below show the same "you have unsaved changes - save first?" prompt before doing
 //something that would otherwise discard them; only exit-app-clicked refreshes the sidebar's
@@ -1118,38 +1179,3 @@ ipcRenderer.on('file-opened-from-outside-warewoolf', function(event, fPath){
   }
 
 });
-
-//Every handler above is registered by the time this runs, so it is safe for index.js's close guard
-//to hand a window close over to this renderer and wait. Anything at this file's top level throwing
-//before here - a damaged project file used to - means the guard never gets this and lets closes
-//through itself instead, rather than holding a dead window open.
-ipcRenderer.send('renderer-ready');
-
-//Exposed for testing only - nothing in the app itself reads this module's exports, since it's
-//loaded as a plain <script> tag rather than required. Limited to the chapter/reference/trash
-//list engine, the most bug-prone and highest-value part of this file to unit test directly.
-module.exports = {
-  project,
-  userSettings,
-  editorQuill,
-  notesQuill,
-  moveChapUp,
-  moveChapDown,
-  moveToTrash,
-  deleteChapter,
-  verifyToDelete,
-  restoreFromTrash,
-  updateFileList,
-  displayChapterByIndex,
-  addNewChapter,
-  addImportedChapter,
-  changeChapterTitle,
-  splitChapter,
-  editorHasFocus,
-  editorIsVisible,
-  //Tears down the keyboard listeners this module attaches on load. Nothing in the app itself calls
-  //this - there is exactly one of these for the app's whole lifetime - but a test harness that
-  //re-requires render.js per test needs it to undo the previous require's listeners, or they pile
-  //up on the shared `document` across every test in the file.
-  _unregisterKeybindings: unregisterKeybindings
-};

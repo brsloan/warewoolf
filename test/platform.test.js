@@ -240,6 +240,69 @@ test('createPlatform refuses to wrap nothing', function(){
 });
 
 // ---------------------------------------------------------------------------------------------
+// Group A - environment and shell
+// ---------------------------------------------------------------------------------------------
+// The node backing's implementation of this group is exercised only here - the shipped app uses
+// platform-ipc.js for it instead (see that file's own header comment for why), so this is the one
+// place these five deps (appPaths via `paths`, fileRequestedOnOpen, and the four action hooks) are
+// under test at all.
+
+test('getAppPaths returns exactly the six documented fields, field by field', async function(){
+  const platform = createPlatform(createNodeBacking({
+    paths: { userData: '/u', home: '/h', temp: '/t', docs: '/d', app: '/a', downloads: '/dl',
+      somethingElseEntirely: 'should not leak' }
+  }));
+
+  const paths = await platform.getAppPaths();
+
+  assert.deepStrictEqual(paths, {
+    userData: '/u', home: '/h', temp: '/t', docs: '/d', app: '/a', downloads: '/dl'
+  });
+});
+
+test('getPlatform reports this process\'s own platform and arch', async function(){
+  const platform = createPlatform(createNodeBacking({}));
+
+  assert.deepStrictEqual(await platform.getPlatform(), { platform: process.platform, arch: process.arch });
+});
+
+test('getFileRequestedOnOpen returns whatever the backing was constructed with, or null', async function(){
+  const withOne = createPlatform(createNodeBacking({ fileRequestedOnOpen: '/opened/via/argv.woolf' }));
+  const withNone = createPlatform(createNodeBacking({}));
+
+  assert.strictEqual(await withOne.getFileRequestedOnOpen(), '/opened/via/argv.woolf');
+  assert.strictEqual(await withNone.getFileRequestedOnOpen(), null);
+});
+
+//setTheme/showAppMenu/confirmExit/notifyRendererReady have no return value - what a backing does
+//with them is entirely the injected hook's business, which is exactly what these assert.
+test('setTheme, showAppMenu, confirmExit, and notifyRendererReady call their injected hooks', async function(){
+  const seen = { mode: undefined, menu: 0, exit: 0, ready: 0 };
+  const platform = createPlatform(createNodeBacking({
+    onSetTheme: function(mode){ seen.mode = mode; },
+    onShowAppMenu: function(){ seen.menu++; },
+    onConfirmExit: function(){ seen.exit++; },
+    onNotifyRendererReady: function(){ seen.ready++; }
+  }));
+
+  await platform.setTheme({ mode: 'dark' });
+  await platform.showAppMenu({});
+  await platform.confirmExit({});
+  await platform.notifyRendererReady({});
+
+  assert.deepStrictEqual(seen, { mode: 'dark', menu: 1, exit: 1, ready: 1 });
+});
+
+test('setTheme, showAppMenu, confirmExit, and notifyRendererReady are no-ops without injected hooks', async function(){
+  const platform = createPlatform(createNodeBacking({}));
+
+  await assert.doesNotReject(platform.setTheme({ mode: 'light' }));
+  await assert.doesNotReject(platform.showAppMenu({}));
+  await assert.doesNotReject(platform.confirmExit({}));
+  await assert.doesNotReject(platform.notifyRendererReady({}));
+});
+
+// ---------------------------------------------------------------------------------------------
 // saveChapterAtomic - the transactional command the contract is shaped around
 // ---------------------------------------------------------------------------------------------
 
