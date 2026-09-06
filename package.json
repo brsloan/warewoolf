@@ -5,10 +5,11 @@
   "description": "A simple novel writing system designed to be usable without a mouse.",
   "main": "src/index.js",
   "scripts": {
-    "build:renderer": "esbuild src/render.js --bundle --platform=node --external:electron --outfile=src/render.bundle.js",
+    "build:renderer": "esbuild src/render.js --bundle --platform=node --external:electron --sourcemap --outfile=src/render.bundle.js",
     "prestart": "npm run build:renderer",
     "prepackage": "npm run build:renderer",
     "premake": "npm run build:renderer",
+    "pretest": "npm run build:renderer",
     "start": "electron-forge start",
     "package": "electron-forge package",
     "make": "electron-forge make",

@@ -40,6 +40,32 @@ step in each platform job instead. Verified: 824 tests green, and a packaged
 Windows build (`electron-forge package`) launches and renders the Frankenstein
 example correctly from the bundle.
 
+**The suite does not test the bundle by default, so it is made to.** Every other
+test here exercises the source tree; the app loads only the bundle. Deleting
+`src/render.bundle.js` outright left all 824 tests green — a build regression,
+an esbuild resolution failure, or simply never running the build would all ship
+an app that cannot start behind a clean suite. `test/render-bundle.test.js`
+closes that: it loads the built bundle through the same jsdom harness
+`render.test.js` uses and asserts it runs its startup path, mounts both Quill
+editors, still exports the API the menu drives it through, and — the actual
+Phase 0 property — contains **no relative `require()` calls**, with only Node
+builtins and `electron` left external. A `pretest` hook builds the bundle so it
+is always present and current. Verified non-vacuous by mutation: rebuilding with
+one module deliberately left external fails two of the six.
+
+`--sourcemap` is on, so renderer devtools show real source rather than 2.8mb of
+bundled output — worth having before Part 2 starts moving 47 commands through
+this code. The 4.9mb `.map` ships inside the package (it is not in
+`packagerConfig.ignore`), which is deliberate: ~1.5% of the installed size, in
+exchange for readable stack traces out of a user's real install.
+
+**At Phase 9 this build changes.** `--platform=node` is right while
+`nodeIntegration` is on — Node builtins resolve as externals through it. Once
+`contextIsolation` is on they are simply unavailable, so the flag becomes
+`--platform=browser` and every surviving builtin import fails at build time.
+That is the desired behavior (it is how the flip proves nothing was missed), but
+it should be expected rather than discovered.
+
 `npm test` is bare `node --test`, which recursively discovers test files from
 cwd (excluding only `node_modules`). Run it after any `electron-forge
 package`/`make`, and it also picks up the stale copy of `test/` that forge
