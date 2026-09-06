@@ -68,6 +68,7 @@ jobs:
           node-version: 20
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fakeroot dpkg
       - run: npm ci
+      - run: npm run build:renderer
       - run: npx electron-forge make --platform=linux --arch=${{ matrix.arch }} --targets=@electron-forge/maker-deb
       # electron-installer-debian only passes dpkg-deb a -Z flag when `compression` is set in the
       # maker options; with none set it inherits dpkg-deb's own default, and Ubuntu patches that
@@ -112,6 +113,7 @@ jobs:
         with:
           node-version: 20
       - run: npm ci
+      - run: npm run build:renderer
       - run: npx electron-forge package --platform=darwin --arch=${{ matrix.arch }}
       - name: Build dmg with hdiutil
         shell: bash
@@ -149,6 +151,7 @@ jobs:
         with:
           node-version: 20
       - run: npm ci
+      - run: npm run build:renderer
       - run: npx electron-forge make --platform=win32 --arch=x64 --targets=@electron-forge/maker-zip
       - shell: bash
         run: |

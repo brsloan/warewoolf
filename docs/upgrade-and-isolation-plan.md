@@ -26,6 +26,20 @@ Matchbox, Help doc opens and behaves correctly (which also confirms
 
 **Part 1 is complete.** Suite is at 824. Part 2 is clear to start.
 
+**Part 2, Phase 0 is complete.** `esbuild` bundles `src/render.js` (CommonJS
+as-is, `platform: node`, `--external:electron`) into `src/render.bundle.js`,
+and `src/index.html` loads that instead of the raw `render.js`. Node builtins
+resolve as externals automatically under `platform: node` and still go through
+Node integration, unchanged. The bundle is generated, not committed
+(`.gitignore`'d); `npm run build:renderer` produces it, and `prestart`/
+`prepackage`/`premake` npm hooks run it ahead of `electron-forge
+start`/`package`/`make` for local use. CI calls `npx electron-forge`
+directly rather than through `npm run`, so those hooks don't fire there —
+`.github/workflows/release.yml` gets its own explicit `npm run build:renderer`
+step in each platform job instead. Verified: 824 tests green, and a packaged
+Windows build (`electron-forge package`) launches and renders the Frankenstein
+example correctly from the bundle.
+
 `npm test` is bare `node --test`, which recursively discovers test files from
 cwd (excluding only `node_modules`). Run it after any `electron-forge
 package`/`make`, and it also picks up the stale copy of `test/` that forge

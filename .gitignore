@@ -1,5 +1,6 @@
 node_modules/
 out/
+src/render.bundle.js
 user-settings.json
 dist/
 error_log.txt
