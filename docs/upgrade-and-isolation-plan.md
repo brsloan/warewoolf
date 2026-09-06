@@ -494,11 +494,11 @@ so these fail at **runtime** instead:
   battery display is enabled on a Pi. That is the worse failure of the two,
   because it survives a smoke pass that does not happen to open Settings.
 
-Worth sweeping as its own small commit rather than waiting: `getPlatform`
-already exists in both backings, so it is roughly four lines of call-site
-change, and the module-scope one in `corkboard_display.js` needs the same
-treatment `getAppPaths` got. Doing it late means doing it during Phase 9, which
-is meant to be an audit, not a conversion.
+**Assigned to Phase 3.** `getPlatform` already exists in both backings, so it
+is roughly four lines of call-site change, plus the module-scope one in
+`corkboard_display.js`, which needs the same treatment `getAppPaths` got.
+Folded in there rather than left to Phase 9, which is meant to be an audit, not
+a conversion.
 
 Worth a grep in the Phase 9 audit regardless: `process.`, `__dirname` and
 `process.cwd()` across renderer code, since none of them are import-shaped and
@@ -512,9 +512,24 @@ explain why `require()` cannot do that waiting itself. Two new test files,
 `test/platform-ipc.test.js` (6 tests) and five tests added to
 `test/platform.test.js`, cover the new backing directly. Suite is now **874**.
 
-**Phase 3 — `logError`.** Widest call graph, least logic. Treat it as a
-calibration exercise for how invasive the async conversion really is before
-committing to the core.
+**Phase 3 — `logError`, plus the Group A sweep.** Widest call graph, least
+logic. Treat it as a calibration exercise for how invasive the async conversion
+really is before committing to the core.
+
+`logError` stays **fire-and-forget**. All 98 of its call sites sit in `catch`
+blocks whose return value nobody uses, so the facade returns a promise the call
+sites do not await. Awaiting it instead would cascade async through the whole
+codebase and turn this phase into Phases 4-8 at once. Two consequences: the
+unawaited promise must never surface as an unhandled rejection (a failed log
+write cannot crash the app), and `setLogDirectory` leaves the renderer
+entirely, since the native side already knows userData. Ten test files call it
+today and switch to configuring the node backing instead.
+
+Also carries the three unowned `getPlatform` call sites recorded under Phase 2
+— `corkboard_display.js:3`, `settings_display.js:186,203`, `render.js:206`.
+Folded in here rather than left standing: they are about four lines, the
+command already exists in both backings, and Phase 9's build-time check does
+not catch them.
 
 **Phase 4 — Groups B and C (projects, chapters).** The core, and the best-tested.
 `saveChapterAtomic` (`chapter.js:134-165`) needs its transactional semantics
