@@ -2,7 +2,7 @@ const { closePopups, createButton, removeElementsByClass, convertFilepath, gener
 const { showBattery, removeBattery } = require('./battery_display');
 const showFileDialog = require('./file-dialog_display');
 
-function showSettings(userSettings, autosaver, sysDirectories, saveProject, callback){
+function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, callback){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup");
@@ -212,7 +212,7 @@ function showSettings(userSettings, autosaver, sysDirectories, saveProject, call
     }
 
     userSettings.save();
-    autosaver.updateAutosave(userSettings.autosaveIntMinutes, saveProject);
+    autosaver.updateAutosave(userSettings.autosaveIntMinutes, autosaveProject);
     callback();
     closePopups();
   }

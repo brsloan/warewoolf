@@ -121,7 +121,7 @@ function applyUserSettings(){
     enableTypewriterMode(editorQuill)
   updateEditorWidth();
   updatePanelDisplays();
-  autosaver.initiateAutosave(userSettings.autosaveIntMinutes, saveProject);
+  autosaver.initiateAutosave(userSettings.autosaveIntMinutes, autosaveProject);
   setDarkMode();
   if(userSettings.showBattery && process.platform == 'linux')
     showBattery();
@@ -281,7 +281,10 @@ function displayChapterByIndex(ind){
 }
 
 function updateTitleBar(){
-  document.title = "Warewoolf - " + (project.filename != "" ? project.filename : "unsaved project");
+  //Says so for a read-only project, so it isn't a surprise that Ctrl+S opens Save As rather than
+  //saving in place.
+  document.title = "Warewoolf - " + (project.filename != "" ? project.filename : "unsaved project")
+    + (project.isReadOnly ? " (read-only)" : "");
 }
 
 function refreshNotesDisplay(){
@@ -469,8 +472,22 @@ function addNewChapter(){
   changeChapterTitle(thisIndex);
 }
 
+//Autosave must not do what an explicit save does on a read-only project: routing it to Save As
+//would pop a file dialog over the reader every autosave interval while the Help doc is open.
+//Nothing is lost by skipping - saveFile() would refuse the write anyway.
+function autosaveProject(){
+  if(project.isReadOnly)
+    return;
+  saveProject();
+}
+
 function saveProject(onComplete){
-  if(project.filename != ""){
+  //A read-only project (the bundled Help doc) has nowhere of its own to be written back to, so an
+  //explicit save becomes Save As - the reader's annotated copy gets a home they chose, and
+  //saveAs() clears the flag once it lands there.
+  if(project.isReadOnly)
+    saveProjectAs(onComplete);
+  else if(project.filename != ""){
     clearCurrentChapterIfUnchanged();
     if(project.saveFile()){
       project.hasUnsavedChanges = false;
@@ -803,18 +820,19 @@ function scrollChapterListToActiveChapter(){
     activeChapter.offsetTop - (document.getElementById('chapters-header').offsetHeight * 3);
 }
 
+//The Help doc is reference material, not the reader's own work: it has to describe the version
+//actually installed. Copying it to userData on first open (as the Frankenstein example does, since
+//that one is a starter project meant to be edited) meant the copy was made once and reused
+//forever, so a release that updated the Help doc would never be seen by anyone who had already
+//launched the app. Open the bundled copy in place instead, and mark the project read-only so the
+//save paths know it cannot be written to. Anyone who wants to annotate it gets a Save As.
 function openHelpDoc(){
-  const bundledHelpDocDir = sysDirectories.app + "/examples/HelpDoc";
-  const writableHelpDocDir = sysDirectories.userData + "/Projects/HelpDoc";
-  const writableHelpDoc = writableHelpDocDir + "/HelpDoc.woolf";
+  const bundledHelpDoc = sysDirectories.app + "/examples/HelpDoc/HelpDoc.woolf";
 
-  const helpDocPath = fs.existsSync(writableHelpDoc) ?
-    writableHelpDoc :
-    copyExampleToUserData(bundledHelpDocDir, writableHelpDocDir, writableHelpDoc);
-
-  project.loadFile(helpDocPath);
-  if(projectFailedToLoad(helpDocPath))
+  project.loadFile(bundledHelpDoc);
+  if(projectFailedToLoad(bundledHelpDoc))
     return;
+  project.isReadOnly = true;
   displayProject();
 }
 
@@ -1049,7 +1067,7 @@ const menuCommands = {
   } },
   'settings-clicked': { run: function(){
     const showSettings = require('./components/views/settings_display');
-    showSettings(userSettings, autosaver, sysDirectories, saveProject, function(){
+    showSettings(userSettings, autosaver, sysDirectories, autosaveProject, function(){
       setDarkMode();
     });
   } },

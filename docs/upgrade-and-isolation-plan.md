@@ -3,8 +3,15 @@
 Companion to [`native-command-inventory.md`](./native-command-inventory.md), which
 holds the command-by-command detail for Part 2.
 
-Baseline at time of writing (`fc501a3`): Electron 18.3.15, Quill 1.3.7, 813 tests
-passing in ~22s, zero native modules, `src/index.js` untested.
+Baseline (`fc501a3`): Electron 18.3.15, Quill 1.3.7, 824 tests passing in ~22s,
+zero native modules, `src/index.js` untested.
+
+**Status as of `0aa3e3a`.** Part 1 steps 1–3 are done: baseline tagged
+(`pre-electron-upgrade-baseline`), electron-forge unified to 7.11.2 (`834a772`),
+test script scoped and `test/` excluded from packages (`fffcbd6`), and Electron
+jumped 18.3.15 → **44.2.0** (`9a4bdbf`). Steps 4–7 remain, and the smoke pass is
+in progress. Two EACCES bugs it has already surfaced are fixed in `a0a199c` and
+`0aa3e3a` — see "Smoke-pass findings" below. Test count is unchanged at 813.
 
 `npm test` is bare `node --test`, which recursively discovers test files from
 cwd (excluding only `node_modules`). Run it after any `electron-forge
@@ -89,14 +96,14 @@ newer Chromium leans harder on GPU compositing, so watch for a regression. On
 2GB Pi 4 units, measure memory rather than assuming the per-chapter lazy loading
 absorbs it.
 
-**Verification is manual.** `src/index.js` has no tests, and the 813 existing
+**Verification is manual.** `src/index.js` has no tests, and the 824 existing
 tests run under plain Node — they will pass regardless of the Electron version
 and prove nothing about the upgrade. The real oracle is a smoke pass on each
 target.
 
 ## Steps
 
-**1. Record the baseline.** `npm test` (expect 813 pass), then build on each
+**1. Record the baseline.** `npm test` (expect 824 pass), then build on each
 target you ship. Tag the commit so there is a known-good point to diff against.
 
 **2. Unify electron-forge first, as its own commit.** The config is currently
@@ -146,6 +153,77 @@ can break:
 survived contact with real use. If modern Chromium meaningfully improves Pi
 performance, that also updates the Tauri calculation.
 
+## Smoke-pass findings
+
+**Read-only install directory (fixed, `a0a199c` + `0aa3e3a`).** The bundled
+Frankenstein example and the Help doc were opened in place from inside the
+install directory, which normal users cannot write to — every autosave and manual
+save failed with EACCES, silently, with no UI feedback. Both now copy to userData
+on first open via `copyExampleToUserData()` (`render.js:91-104`).
+
+Two things follow from this that outlive the fix:
+
+- It is the first bug the upgrade smoke pass caught, and it is a *packaging*
+  bug, not an Electron-version bug — it would have been present at 18.3.15 in any
+  packaged install.
+- The fix added a new renderer→OS operation, tracked as
+  `materializeBundledProject` in the inventory. It is currently **untested** —
+  `copyExampleToUserData` has no coverage in `test/`, and the failure mode it
+  handles (a read-only install dir) is exactly the one a dev machine never
+  reproduces. Worth a test before Part 2 starts converting this code.
+
+**`sysDirectories.app` sweep: clean.** All four consumers checked; nothing else
+writes into the install directory, and no renderer code uses `__dirname` or
+`process.cwd()` at all. Every remaining write target derives from `userData`,
+`docs`, `temp`, a project directory, or a user-chosen path.
+
+| Consumer | Access |
+|---|---|
+| `spellcheck.js:17-20` — reads `en_US-large.aff` / `.dic` | read-only (personal dict writes go to `userData`) |
+| `about_display.js:96` — reads `licenses.txt` | read-only |
+| `render.js:62` — Frankenstein example | fixed in `a0a199c` |
+| `render.js:807` — Help doc | fixed in `0aa3e3a` |
+
+**Resolved: the copy is never refreshed.** Fixed by making the Help doc a
+read-only reference project (option 2 of the three below). It now opens in place
+from the install directory, so it always describes the installed version, and
+`project.isReadOnly` keeps anything from trying to write there: `saveFile()`
+refuses while it is set, an explicit save routes to Save As so an annotated copy
+gets a home the reader chose, autosave skips, and the title bar says
+`(read-only)`. The Frankenstein example still copies to userData — it is a
+starter project meant to be edited, where a stale copy costs nothing.
+
+Covered by 11 new tests (7 in `project.test.js`, 4 in `render.test.js`), which
+also close the untested-`copyExampleToUserData` gap noted above. Suite is now
+**824**. The original problem is recorded below as it stood.
+
+*The problem, as it stood.* Both call sites were guarded by
+`fs.existsSync(writablePath)`, so the userData copy was made once and reused
+forever. A release that updated the Help doc — as `a82aae2` did — would never be
+seen by anyone who had already launched the app. It was introduced by the EACCES
+fix rather than pre-existing, and it landed right before a release whose Help doc
+had changed.
+
+Simply re-copying when the bundled version is newer would have been worse, not
+better: `fs.cpSync` defaults to `force: true`, so it silently overwrites — verified
+against a file containing "USER NOTES", which the copy destroyed outright. That
+is what ruled out a timestamp check and made this a design decision rather than a
+one-line patch.
+
+**Open: the example's copy fallback silently restores the original bug.** If
+`cpSync` throws, `copyExampleToUserData` returns the read-only bundled path
+(`render.js:99-102`), so saves against the Frankenstein example fail with EACCES
+exactly as before, with no user feedback. The comment documents this as
+deliberate — better than opening nothing — but the silence is the part worth
+revisiting, since a save that appears to work and does not is the failure mode
+that lost data in the first place.
+
+Now that `isReadOnly` exists, the fix is small: set it on the project when that
+fallback path is taken, and the example behaves like the Help doc — Ctrl+S offers
+Save As instead of failing into the log. Left undone because it needs the flag to
+be set from `loadInitialProject()` rather than inside the copy helper, and the
+smoke pass is mid-flight.
+
 ---
 
 # Part 2 — Context isolation
@@ -167,7 +245,7 @@ builtins external for now; they still resolve through Node integration, which is
 still on.
 
 This phase changes no behavior. It ships on its own, and it is verified by the
-app running normally with 813 tests still green.
+app running normally with 824 tests still green.
 
 ## Phase 1 — Design the injectable platform facade
 
@@ -176,7 +254,7 @@ app running normally with 813 tests still green.
 The existing tests do not mock the filesystem. They create real temp directories
 and assert against real files (`chapter.test.js`, `render.test.js`, and others
 use `fs.mkdtempSync`). If modules simply start calling `window.warewoolf.*`, that
-entire suite dies — and losing 813 tests at the start of a 46-command refactor
+entire suite dies — and losing 824 tests at the start of a 47-command refactor
 is how this project fails.
 
 So the facade must be **injected, not global**. One module — `platform.js` —
@@ -184,7 +262,7 @@ exports the command surface from the inventory. It has multiple backings:
 
 | Backing | Used by | Notes |
 |---|---|---|
-| Direct `fs`/Node | the test suite | Keeps all 813 tests running against real files, unchanged in spirit |
+| Direct `fs`/Node | the test suite | Keeps all 824 tests running against real files, unchanged in spirit |
 | `ipcRenderer.invoke` | the shipped Electron app | The preload bridge |
 | Tauri `invoke` | a future Tauri build | One-file swap |
 
@@ -240,15 +318,15 @@ Full cross-platform smoke pass again, including the Pi.
 # Part 3 — Which model for which phase
 
 The useful heuristic given this repo: **Opus where the tests cannot tell you that
-you are wrong; Sonnet where they can.** With 813 fast, real-filesystem tests, that
+you are wrong; Sonnet where they can.** With 824 fast, real-filesystem tests, that
 line is unusually clear here.
 
 | Work | Model | Reasoning |
 |---|---|---|
 | Part 1, all steps | **Sonnet** | Empirical loop: bump, run, read the error, fix. The judgment is in reading release notes against a known API list. Escalate only if a failure is genuinely confusing. |
 | Support-matrix call (drop Buster? Win7?) | **You** | A product decision about your users, not a technical one. |
-| Phase 0 (bundler) | **Sonnet** | Well-trodden, and verified by "app runs, 813 tests pass". |
-| Phase 1 (facade design) | **Opus** | The contract for all 46 commands. A wrong shape is expensive and invisible to tests — exactly the failure mode Sonnet is worst at catching. |
+| Phase 0 (bundler) | **Sonnet** | Well-trodden, and verified by "app runs, 824 tests pass". |
+| Phase 1 (facade design) | **Opus** | The contract for all 47 commands. A wrong shape is expensive and invisible to tests — exactly the failure mode Sonnet is worst at catching. |
 | Phases 2, 3, 5, 6, 8 | **Sonnet** | High-volume, repetitive sync→async conversion with a strong test oracle. This is the bulk of the hours and the best Sonnet fit in the project. |
 | Phase 4 — `saveChapterAtomic` | **Opus** | Hand-rolled rollback with ordering constraints. Failures are silent and corrupt manuscripts. |
 | Phase 7 — credentials | **Opus** | Crypto, key handling, and a legacy-format fallback whose breakage looks like nothing until a user's stored password stops decrypting. |

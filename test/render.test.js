@@ -34,6 +34,12 @@ const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'warewoolf-render-test
 //never read from disk.
 const docsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'warewoolf-render-test-docs-'));
 
+//Stands in for the installed app directory. Nonexistent by default, which is what keeps
+//loadInitialProject() falling through to createNewProject() for every test that doesn't care -
+//see freshRender()'s comment. The Help doc tests point it at a real temp directory holding a
+//bundled project, then put it back.
+var appDir = '/no-such-app-dir';
+
 //render.js is loaded via a plain <script> tag in the real app (not required as a CommonJS module),
 //so it reads `ipcRenderer` off a bare `require('electron')` at the top of the file. Outside Electron
 //that resolves to a path string, so it must be faked in require.cache before every (re-)require -
@@ -46,7 +52,7 @@ function makeIpcRenderer(){
     sent: sent,
     sendSync: function(channel){
       if(channel === 'get-directories')
-        return { app: '/no-such-app-dir', userData: userDataDir, docs: docsDir, home: '/no-such-home-dir' };
+        return { app: appDir, userData: userDataDir, docs: docsDir, home: '/no-such-home-dir' };
       if(channel === 'get-file-requested-on-open')
         return null;
       if(channel === 'secure-storage-available')
@@ -1329,4 +1335,93 @@ test('a damaged lastProject leaves an empty but working project rather than a ha
   Array.from(document.querySelectorAll('.popup')).forEach(function(p){ p.remove(); });
   r.addNewChapter();
   assert.strictEqual(r.editorQuill.isEnabled(), true);
+});
+
+//---------------------------------------------------------------------------
+// Help doc (read-only)
+//---------------------------------------------------------------------------
+
+//Writes a bundled Help doc into a stand-in install directory and points appDir at it for the
+//duration of the test, exactly as a packaged build would lay it out.
+function withBundledHelpDoc(t, contents){
+  const installDir = fs.mkdtempSync(path.join(os.tmpdir(), 'warewoolf-install-'));
+  const helpDir = path.join(installDir, 'examples', 'HelpDoc');
+  fs.mkdirSync(helpDir, { recursive: true });
+  const helpDocPath = path.join(helpDir, 'HelpDoc.woolf');
+  fs.writeFileSync(helpDocPath, JSON.stringify(contents || {
+    title: 'WareWoolf Help', author: '', chapsDirectory: '',
+    chapters: [], reference: [], trash: []
+  }), 'utf8');
+
+  const previousAppDir = appDir;
+  //index.js hands the renderer forward-slash paths on every platform, so match that here.
+  appDir = installDir.split(path.sep).join('/');
+  t.after(function(){
+    appDir = previousAppDir;
+    fs.rmSync(installDir, { recursive: true, force: true });
+  });
+
+  return { installDir: installDir, helpDocPath: helpDocPath };
+}
+
+//The whole point of opening it in place: a copy taken once and reused forever would go stale the
+//first time a release updated the Help doc, and nobody who had already launched the app would ever
+//see the new one.
+test('the Help doc opens from the install directory rather than being copied to userData', function(t){
+  const bundled = withBundledHelpDoc(t);
+  var r = freshRender();
+
+  currentIpc().handlers['help-doc-clicked']();
+
+  assert.strictEqual(r.project.title, 'WareWoolf Help');
+  assert.strictEqual(fs.existsSync(path.join(userDataDir, 'Projects', 'HelpDoc')), false,
+    'no copy of the Help doc should be made under userData');
+});
+
+test('a Help doc opened from the read-only install directory is marked read-only', function(t){
+  withBundledHelpDoc(t);
+  var r = freshRender();
+
+  currentIpc().handlers['help-doc-clicked']();
+
+  assert.strictEqual(r.project.isReadOnly, true);
+  assert.ok(/\(read-only\)/.test(document.title),
+    'the title bar should say so, since Ctrl+S behaves differently: ' + document.title);
+});
+
+//Saving in place would fail with EACCES on a real install and be swallowed, losing whatever the
+//reader typed. Save As gives their annotated copy a home they picked instead.
+test('saving an open Help doc offers Save As instead of writing to the install directory', function(t){
+  const bundled = withBundledHelpDoc(t);
+  const before = fs.readFileSync(bundled.helpDocPath, 'utf8');
+  var r = freshRender();
+  currentIpc().handlers['help-doc-clicked']();
+  Array.from(document.querySelectorAll('.popup, .popup-dialog')).forEach(function(p){ p.remove(); });
+
+  currentIpc().handlers['save-clicked']();
+
+  assert.ok(document.querySelector('.popup-dialog'),
+    'a Save As dialog should have opened');
+  assert.strictEqual(fs.readFileSync(bundled.helpDocPath, 'utf8'), before,
+    'the bundled Help doc must be left untouched');
+});
+
+//Opening anything else afterwards has to come back writable, or every later save would silently
+//do nothing.
+test('opening an ordinary project after the Help doc clears the read-only flag', function(t){
+  withBundledHelpDoc(t);
+  var r = freshRender();
+  currentIpc().handlers['help-doc-clicked']();
+  assert.strictEqual(r.project.isReadOnly, true);
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warewoolf-ordinary-')) + path.sep;
+  t.after(function(){ fs.rmSync(dir, { recursive: true, force: true }); });
+  fs.writeFileSync(dir + 'p.woolf', JSON.stringify({
+    title: 'Ordinary', author: '', chapsDirectory: '', chapters: [], reference: [], trash: []
+  }), 'utf8');
+
+  r.project.loadFile(dir + 'p.woolf');
+
+  assert.strictEqual(r.project.isReadOnly, false);
+  assert.strictEqual(r.project.saveFile(), true);
 });

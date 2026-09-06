@@ -19,6 +19,11 @@ function newProject(){
         activeChapterIndex: 0,
         wordGoal: 0,
         hasUnsavedChanges: false,
+        //Set for a project opened out of the read-only install directory (the bundled Help doc).
+        //saveFile() refuses to write while it is set, so nothing can silently fail with EACCES
+        //against a file the user cannot write; render.js routes an explicit save to Save As
+        //instead, which clears it by way of saveAs().
+        isReadOnly: false,
         textCursorPosition: 0,
         corkboardColumns: 4,
         getActiveChapter: getActiveChapter,
@@ -73,6 +78,10 @@ function newProject(){
         this.initNotesChap();
 
         this.hasUnsavedChanges = false;
+        //After the Object.assign above, so a .woolf file that carries the key (hand-edited - it is
+        //never written by stringifyProject) cannot mark a writable project read-only. Callers that
+        //want it set, like openHelpDoc(), set it after the load returns.
+        this.isReadOnly = false;
         return this.testChapsDirectory();
       }
       catch(err){
@@ -98,6 +107,12 @@ function newProject(){
     function saveFile(){
       try{
         var proj = this;
+        //Guarded here rather than at each call site: chapter deletion, legacy conversion and the
+        //autosave/Ctrl+S path all reach saveFile(), and every one of them already treats a false
+        //return as "not saved". Writing anyway would fail with EACCES and be swallowed by the
+        //catch below, which is the silent data loss this flag exists to prevent.
+        if(proj.isReadOnly)
+          return false;
         if(proj.filename != "" && proj.directory != ""){
 
           proj.chapters.forEach(function(chap){
@@ -146,6 +161,8 @@ function newProject(){
         //Records why the last load failed, for the caller that has to report it - never part of
         //the saved project.
         else if (k == "loadError") return undefined;
+        //Describes where this copy was opened from, not the project itself - never saved.
+        else if (k == "isReadOnly") return undefined;
         else return v;
       }, '\t');
     }
@@ -239,6 +256,11 @@ function newProject(){
           proj.directory = oldDir;
           proj.chapsDirectory = oldChapsDir;
         }
+        else
+          //The project now lives where the user chose, which is writable - so it is no longer the
+          //read-only bundled copy. Not cleared for Save a Copy, which leaves the open project
+          //pointing back at the original.
+          proj.isReadOnly = false;
 
         return proj.directory + proj.filename;
       }

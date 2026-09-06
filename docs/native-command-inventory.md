@@ -1,6 +1,6 @@
 # Native Command Inventory
 
-Derived from every Node/Electron call site in the renderer as of `fc501a3`.
+Derived from every Node/Electron call site in the renderer as of `0aa3e3a`.
 
 This is the API surface that must exist between the UI and the OS. It serves two
 purposes at once:
@@ -26,7 +26,7 @@ The only views that reach the OS directly are `about_display.js` and
 `missing-pups_display.js`; both should route through commands below and join the
 node-free set.
 
-- 104 synchronous `fs.*Sync` calls across 18 renderer files.
+- 106 synchronous `fs.*Sync` calls across 18 renderer files.
 - 9 `ipcMain` handlers exist today; 5 of the renderer's IPC calls are `sendSync`.
 - Renderer-side Node dependencies: `fs`, `path`, `os`, `crypto`, `https`,
   `child_process`, `archiver`, `unzipper`, `nodemailer`.
@@ -44,10 +44,10 @@ Mostly already IPC. Small, and the first group to move.
 | `getFileRequestedOnOpen()` | `get-file-requested-on-open` (`index.js:501`) | Also `sendSync`, `render.js:20`. |
 | `setTheme(mode)` | `set-dark-mode` (`index.js:505`) | Tauri: window theme API. |
 | `showAppMenu()` | `show-menu` (`index.js:563`) | `keybindings.js:87`. |
-| `confirmExit()` | `exit-app-confirmed` (`index.js:480`) | `render.js:796,799,815`. |
-| `notifyRendererReady()` | `renderer-ready` (`index.js:486`) | `render.js:1076`. Fire-and-forget startup signal; the only command here with no return value. |
+| `confirmExit()` | `exit-app-confirmed` (`index.js:480`) | `render.js:846,849,865`. |
+| `notifyRendererReady()` | `renderer-ready` (`index.js:486`) | `render.js:1126`. Fire-and-forget startup signal; the only command here with no return value. |
 
-Event (main → renderer): `onFileOpenedFromOutside` (`render.js:1052`).
+Event (main → renderer): `onFileOpenedFromOutside` (`render.js:1102`).
 
 ---
 
@@ -61,9 +61,27 @@ Event (main → renderer): `onFileOpenedFromOutside` (`render.js:1052`).
 | `saveProject(project)` | `writeFileSync` (`project.js:121`, `:234`) |
 | `saveProjectAs(project, newDir, newFilename)` | the `mkdirSync`/`copyFileSync` sequence (`project.js:166-178`) |
 | `verifyProjectFiles(project)` → missing chapter filenames | `existsSync` loop (`project.js:268`); also `missing-pups_display.js:189,222,289,322` |
+| `materializeBundledProject(bundledDir, writableDir)` → path to open | `copyExampleToUserData()` (`render.js:91-103`), called for the Frankenstein example only (`render.js:78`) |
 
 `saveProjectAs` is six filesystem operations that must succeed or fail together.
 It is one command, not six bridge calls.
+
+`materializeBundledProject` exists because the Frankenstein example lives inside
+the read-only install directory, so editing it in place fails with EACCES. It
+copies to userData on first open and returns the writable path, falling back to
+the read-only original if even that copy fails.
+
+The Help doc deliberately does **not** use it: it is reference material that has
+to describe the installed version, so it is opened in place and the project is
+marked `isReadOnly` (`render.js:806-819`). That flag is renderer-side policy, not
+a native command — `saveFile()` refuses to write while it is set
+(`project.js:99-105`), an explicit save routes to Save As, and autosave skips.
+Nothing new crosses the boundary for it.
+
+Under Tauri the bundled originals become resource-directory reads, which is a
+different API from ordinary file access — worth noting now so it is not
+discovered late. The read-only case matters there too: a Tauri resource path is
+not writable at all, so the same distinction has to survive the port.
 
 ---
 
@@ -113,7 +131,7 @@ domain-level rule above.
 | Command | Replaces |
 |---|---|
 | `listDirectory(path)` → `{name, isDirectory}[]` | `readdirSync` (`file-manager.js:140`, `backup-project.js:130`, `missing-pups_display.js:322`) |
-| `pathExists(path)` | `file-manager.js:150`, and the boot checks at `render.js:64,68,70` |
+| `pathExists(path)` | `file-manager.js:150`, and the boot checks at `render.js:67,71,73,77` |
 | `statEntry(path)` | `file-manager.js:30` |
 | `createDirectory(parent, name)` | `file-manager.js:106-107` |
 | `moveEntry(source, dest)` | `file-manager.js:61`, `:96` — must keep the refuse-on-existing-destination guard at `:54-56` |
@@ -222,7 +240,7 @@ hand over content and never learn a temp path.
 
 ## Summary
 
-**~46 commands.** By disposition:
+**~47 commands.** By disposition:
 
 - **Stays JS in the webview, no command needed** — `markdownFic`, `mdfc-to-html`,
   `mdfc-to-md`, `quill-utils`, `wordcount`, `renumber-chapters`, `findreplace`,

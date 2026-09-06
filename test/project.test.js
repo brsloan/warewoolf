@@ -408,3 +408,114 @@ test('testChapsDirectory ignores a chapter that has no filename', function(t){
 
   assert.deepStrictEqual(proj.testChapsDirectory(), []);
 });
+
+//---------------------------------------------------------------------------
+// isReadOnly
+//---------------------------------------------------------------------------
+
+//The bundled Help doc is opened straight out of the install directory, which a normal user account
+//can't write to. saveFile() refusing up front is what keeps a save from failing with EACCES inside
+//its own catch, where the error is logged and the caller is told nothing.
+test('saveFile refuses to write a read-only project and reports failure', function(t){
+  const dir = tempDir(t);
+  const proj = newProject();
+  proj.initNotesChap();
+  proj.directory = dir;
+  proj.filename = 'help.woolf';
+  proj.isReadOnly = true;
+
+  assert.strictEqual(proj.saveFile(), false);
+  assert.strictEqual(fs.existsSync(dir + 'help.woolf'), false,
+    'nothing should have been written for a read-only project');
+});
+
+test('saveFile writes normally once the read-only flag is cleared', function(t){
+  const dir = tempDir(t);
+  const proj = newProject();
+  proj.initNotesChap();
+  proj.directory = dir;
+  proj.filename = 'help.woolf';
+  proj.isReadOnly = true;
+  proj.saveFile();
+
+  proj.isReadOnly = false;
+
+  assert.strictEqual(proj.saveFile(), true);
+  assert.strictEqual(fs.existsSync(dir + 'help.woolf'), true);
+});
+
+//Whether a copy was opened read-only depends on where it was opened from, not on anything in the
+//file, so it must never be written into one.
+test('saveFile does not write isReadOnly into the project file', function(t){
+  const dir = tempDir(t);
+  const proj = newProject();
+  proj.initNotesChap();
+  proj.directory = dir;
+  proj.filename = 'p.woolf';
+
+  proj.saveFile();
+
+  const saved = JSON.parse(fs.readFileSync(dir + 'p.woolf', 'utf8'));
+  assert.strictEqual('isReadOnly' in saved, false);
+});
+
+test('loadFile leaves a project opened from an ordinary file writable', function(t){
+  const dir = tempDir(t);
+  fs.writeFileSync(dir + 'p.woolf', JSON.stringify({
+    title: 'P', author: 'A', chapsDirectory: '', chapters: [], reference: [], trash: []
+  }), 'utf8');
+  const proj = newProject();
+  proj.isReadOnly = true;
+
+  proj.loadFile(dir + 'p.woolf');
+
+  assert.strictEqual(proj.isReadOnly, false,
+    'a fresh load must not inherit the previous project\'s read-only state');
+});
+
+//loadFile Object.assigns the parsed file onto the project, so a .woolf carrying the key - only
+//possible by hand, since it is never written - would otherwise mark a writable project read-only
+//and make every save silently do nothing.
+test('loadFile ignores isReadOnly set inside the project file', function(t){
+  const dir = tempDir(t);
+  fs.writeFileSync(dir + 'p.woolf', JSON.stringify({
+    title: 'P', author: 'A', chapsDirectory: '', chapters: [], reference: [], trash: [],
+    isReadOnly: true
+  }), 'utf8');
+  const proj = newProject();
+
+  proj.loadFile(dir + 'p.woolf');
+
+  assert.strictEqual(proj.isReadOnly, false);
+  assert.strictEqual(proj.saveFile(), true, 'the project should still be saveable');
+});
+
+//Save As is how a reader gets their own copy of the Help doc: the project now points at a location
+//they chose, so it is theirs to write to.
+test('saveAs clears the read-only flag, so the new copy can be saved in place', function(t){
+  const dir = tempDir(t);
+  const proj = newProject();
+  proj.initNotesChap();
+  proj.isReadOnly = true;
+
+  proj.saveAs(dir + 'MyCopy.woolf');
+
+  assert.strictEqual(proj.isReadOnly, false);
+  assert.strictEqual(proj.saveFile(), true);
+});
+
+//Save a Copy deliberately leaves the open project pointing back at the original, so if that
+//original was read-only it still is.
+test('saveAs as a copy leaves the open read-only project read-only', function(t){
+  const dir = tempDir(t);
+  const proj = newProject();
+  proj.initNotesChap();
+  proj.directory = dir;
+  proj.filename = 'help.woolf';
+  proj.isReadOnly = true;
+
+  proj.saveAs(dir + 'MyCopy.woolf', true);
+
+  assert.strictEqual(proj.isReadOnly, true);
+  assert.strictEqual(proj.saveFile(), false);
+});
