@@ -8,6 +8,7 @@ const { convertMdfcToMd } = require('./mdfc-to-md');
 const { htmlChaptersToEpub } = require('./epub');
 const { getCorkboardForExport } = require('./corkboard');
 const { convertToPlainText } = require('./quill-utils');
+const { getTotalWordCount } = require('./wordcount');
 const notesNamePrepend = '-notes_';
 
 //Unlike compile.js (which merges everything into a single output file), export.js is meant to
@@ -19,7 +20,10 @@ const notesNamePrepend = '-notes_';
 //it's safe to report the export as done) has to wait for every outstanding async write too.
 //pendingTasks/loopDone track that: taskStarted/taskDone bracket each async write, and cback only
 //fires once the loop has finished queuing work AND every task it queued has completed.
-function exportProject(project, userSettings, options, filepath, cback = function(){}){
+//Async because reading a chapter that is not already in memory now goes through the platform
+//facade. That does not replace the pendingTasks bookkeeping below: .docx and .epub still finish
+//writing on their own callbacks after this function returns, so callers still wait on cback.
+async function exportProject(project, userSettings, options, filepath, cback = function(){}){
   var errorCount = 0;
   var pendingTasks = 0;
   var loopDone = false;
@@ -43,13 +47,19 @@ function exportProject(project, userSettings, options, filepath, cback = functio
     if(!fs.existsSync(dir))
         fs.mkdirSync(dir);
 
+    //Counted once for the whole run, not once per chapter. The manuscript title page carries a
+    //project-wide word count, which delta-to-docx no longer works out for itself - and it was being
+    //recomputed inside every single chapter's conversion, re-reading the entire project each time.
+    var totalWordCount = options.type == '.docx' && options.generateTitlePage
+      ? await getTotalWordCount(project) : 0;
+
     var chapsToExport = options.what == 'project' ? project.chapters.concat(project.reference) : [ project.getActiveChapter() ];
     for(let i=0;i<chapsToExport.length;i++){
       //Each chapter is exported independently of the others, so one bad chapter (corrupt file,
       //parse failure) shouldn't stop the rest of the batch from being written.
       try{
         var chap = chapsToExport[i];
-        var chapFile = chap.getContentsOrFile();
+        var chapFile = await chap.getContentsOrFile();
         var chapNumber = i < project.chapters.length ? i : i - project.chapters.length;
         var outName = generateChapterFilename(chapNumber, chap.title, options.what);
 
@@ -58,12 +68,12 @@ function exportProject(project, userSettings, options, filepath, cback = functio
         else if(i > project.chapters.length - 1)
           outName = '-ref_' + outName;
 
-        exportChapter(project, chap.title, project.author, chapFile, dir + outName, userSettings, options, taskStarted, taskDone);
+        exportChapter(project, chap.title, project.author, chapFile, dir + outName, userSettings, options, taskStarted, taskDone, totalWordCount);
 
-        var chapNotesDelta = chap.getNotesContentOrFile();
+        var chapNotesDelta = await chap.getNotesContentOrFile();
 
         if(chapNotesDelta)
-          exportChapter(project, chap.title + ' Notes', project.author, chapNotesDelta, dir + notesNamePrepend + outName, userSettings, options, taskStarted, taskDone);
+          exportChapter(project, chap.title + ' Notes', project.author, chapNotesDelta, dir + notesNamePrepend + outName, userSettings, options, taskStarted, taskDone, totalWordCount);
       }
       catch(err){
         errorCount++;
@@ -73,9 +83,9 @@ function exportProject(project, userSettings, options, filepath, cback = functio
 
     if(options.what == 'project'){
       try{
-        var projectNotesDelta = project.notesChap.getNotesContentOrFile();
+        var projectNotesDelta = await project.notesChap.getNotesContentOrFile();
         if(projectNotesDelta)
-          exportChapter(project, 'Project Notes', project.author, projectNotesDelta, dir + notesNamePrepend + 'project_', userSettings, options, taskStarted, taskDone);
+          exportChapter(project, 'Project Notes', project.author, projectNotesDelta, dir + notesNamePrepend + 'project_', userSettings, options, taskStarted, taskDone, totalWordCount);
       }
       catch(err){
         errorCount++;
@@ -87,7 +97,7 @@ function exportProject(project, userSettings, options, filepath, cback = functio
         if(corkboardMd){
           //Override heading styles for just this document since it is not a chapter
           options.styleHeadingAsChapter = false;
-          exportChapter(project, 'Project Corkboard', project.author, parseMDF(corkboardMd), dir + notesNamePrepend + 'corkboard', userSettings, options, taskStarted, taskDone);
+          exportChapter(project, 'Project Corkboard', project.author, parseMDF(corkboardMd), dir + notesNamePrepend + 'corkboard', userSettings, options, taskStarted, taskDone, totalWordCount);
         }
       }
       catch(err){
@@ -107,13 +117,13 @@ function exportProject(project, userSettings, options, filepath, cback = functio
     cback(errorCount);
 }
 
-function exportChapter(project, chapterTitle, author, chapDelta, filepathNameNoExt, userSettings, options, taskStarted, taskDone){
+function exportChapter(project, chapterTitle, author, chapDelta, filepathNameNoExt, userSettings, options, taskStarted, taskDone, totalWordCount){
   switch(options.type){
         case ".txt":
             exportChapAsText(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.generateTitlePage);
             break;
         case ".docx":
-            exportChapAsDocx(project, userSettings.addressInfo, chapDelta, filepathNameNoExt, options, taskStarted, taskDone);
+            exportChapAsDocx(project, userSettings.addressInfo, chapDelta, filepathNameNoExt, options, taskStarted, taskDone, totalWordCount);
             break;
         case ".mdfc":
             exportChapAsMdf(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.generateTitlePage);
@@ -136,8 +146,8 @@ function exportChapAsText(projectTitle, chapTitle, author, chapDelta, filepathNa
   fs.writeFileSync(filepathNameNoExt + ".txt", convertToPlainText(chapDelta));
 }
 
-function exportChapAsDocx(project, addressInfo, chapDelta, filepathNameNoExt, options, taskStarted, taskDone){
-  var doc = convertDeltaToDocx(chapDelta, options, project, addressInfo);
+function exportChapAsDocx(project, addressInfo, chapDelta, filepathNameNoExt, options, taskStarted, taskDone, totalWordCount){
+  var doc = convertDeltaToDocx(chapDelta, options, project, addressInfo, totalWordCount);
   taskStarted();
   //taskStarted() has already been counted as pending, so a synchronous throw here (as opposed to
   //an async rejection, which saveDocx already reports through its own callback) must still reach

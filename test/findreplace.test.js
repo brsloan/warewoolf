@@ -55,7 +55,7 @@ test('whole word search treats regex metacharacters as literal text', function()
 });
 
 //Regression: an unescaped term containing an opening bracket threw out of the Find button handler.
-test('whole word search does not throw on unbalanced regex syntax', function(){
+test('whole word search does not throw on unbalanced regex syntax', async function(){
   assert.doesNotThrow(function(){ getNextIndex('(hi', 'a (hi b', 0, true); });
   assert.doesNotThrow(function(){ getNextIndex('a[b', 'x a[b y', 0, true); });
   assert.doesNotThrow(function(){ getNextIndex('*', 'x * y', 0, true); });
@@ -114,25 +114,25 @@ test('replaceAllInDelta guards against an empty search term instead of looping f
   assert.strictEqual(result.delta, delt);
 });
 
-test('replaceAllInAllChapters only marks chapters that actually changed', function(){
+test('replaceAllInAllChapters only marks chapters that actually changed', async function(){
   var hasMatch = makeChapter(textDelta('the cat sat'));
   var noMatch = makeChapter(textDelta('the dog sat'));
 
   var project = makeProject([hasMatch, noMatch]);
 
-  replaceAllInAllChapters(project, 'cat', 'dog', true);
+  await replaceAllInAllChapters(project, 'cat', 'dog', true);
 
   assert.strictEqual(hasMatch.hasUnsavedChanges, true);
   assert.notStrictEqual(noMatch.hasUnsavedChanges, true);
 });
 
-test('replaceAllInAllChapters also searches reference chapters', function(){
+test('replaceAllInAllChapters also searches reference chapters', async function(){
   var chap = makeChapter(textDelta('no match here'));
   var refChap = makeChapter(textDelta('the cat sat'));
 
   var project = makeProject([chap], [refChap]);
 
-  var numReplaced = replaceAllInAllChapters(project, 'cat', 'dog', true);
+  var numReplaced = await replaceAllInAllChapters(project, 'cat', 'dog', true);
 
   assert.strictEqual(numReplaced, 1);
   assert.strictEqual(refChap.hasUnsavedChanges, true);
@@ -140,18 +140,18 @@ test('replaceAllInAllChapters also searches reference chapters', function(){
 
 //Regression: replaceAllInAllChapters marked individual chapters dirty but never told the project,
 //so Replace All never tripped the exit/open-project unsaved-changes confirmation.
-test('replaceAllInAllChapters sets project.hasUnsavedChanges when a chapter changes', function(){
+test('replaceAllInAllChapters sets project.hasUnsavedChanges when a chapter changes', async function(){
   var project = makeProject([makeChapter(textDelta('the cat sat'))]);
 
-  replaceAllInAllChapters(project, 'cat', 'dog', true);
+  await replaceAllInAllChapters(project, 'cat', 'dog', true);
 
   assert.strictEqual(project.hasUnsavedChanges, true);
 });
 
-test('replaceAllInAllChapters leaves project.hasUnsavedChanges alone when nothing changes', function(){
+test('replaceAllInAllChapters leaves project.hasUnsavedChanges alone when nothing changes', async function(){
   var project = makeProject([makeChapter(textDelta('the dog sat'))]);
 
-  replaceAllInAllChapters(project, 'cat', 'dog', true);
+  await replaceAllInAllChapters(project, 'cat', 'dog', true);
 
   assert.notStrictEqual(project.hasUnsavedChanges, true);
 });

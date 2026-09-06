@@ -518,6 +518,311 @@ test('Save Copy allocates a fresh name and leaves the original alone', async fun
 });
 
 // ---------------------------------------------------------------------------------------------
+// The rest of group C - chapter reads, notes, deletion
+// ---------------------------------------------------------------------------------------------
+
+//loadChapter hands back text, not a parsed chapter: which format that text is in is decided from
+//the filename by the caller, because parsing either format is pure string work with no OS in it.
+test('loadChapter returns the file\'s text verbatim, whatever format it is in', async function(t){
+  const built = platformIn(t);
+  fs.writeFileSync(built.dir + 'legacy.pup', '{"ops":[{"insert":"json chapter"}]}', 'utf8');
+  fs.writeFileSync(built.dir + 'modern.txt', 'markdownfic chapter', 'utf8');
+
+  assert.strictEqual(await built.platform.loadChapter({ projectDir: built.dir, chapsDir: '', filename: 'modern.txt' }),
+    'markdownfic chapter');
+  assert.strictEqual(await built.platform.loadChapter({ projectDir: built.dir, chapsDir: '', filename: 'legacy.pup' }),
+    '{"ops":[{"insert":"json chapter"}]}');
+});
+
+test('loadChapter rejects NOT_FOUND for a chapter file that is not there', async function(t){
+  const built = platformIn(t);
+
+  const err = await rejection(built.platform.loadChapter({
+    projectDir: built.dir, chapsDir: '', filename: 'gone.txt'
+  }));
+
+  assert.strictEqual(err.code, CODES.NOT_FOUND);
+});
+
+//A chapter and its notes are one document to the reader, so an orphaned notes file left behind by
+//a deletion is not a state anything in the UI can show or clean up.
+test('deleteChapterFiles takes the notes file with the chapter', async function(t){
+  const built = platformIn(t);
+  fs.writeFileSync(built.dir + 'chap.txt', 'body', 'utf8');
+  fs.writeFileSync(built.dir + NOTES_PREPEND + 'chap.txt', 'notes', 'utf8');
+
+  await built.platform.deleteChapterFiles({ projectDir: built.dir, chapsDir: '', filename: 'chap.txt' });
+
+  assert.ok(!fs.existsSync(built.dir + 'chap.txt'));
+  assert.ok(!fs.existsSync(built.dir + NOTES_PREPEND + 'chap.txt'));
+});
+
+test('deleteChapterFiles is content with a chapter that has no notes, or no file at all', async function(t){
+  const built = platformIn(t);
+  fs.writeFileSync(built.dir + 'chap.txt', 'body', 'utf8');
+
+  await built.platform.deleteChapterFiles({ projectDir: built.dir, chapsDir: '', filename: 'chap.txt' });
+  await built.platform.deleteChapterFiles({ projectDir: built.dir, chapsDir: '', filename: 'never-existed.txt' });
+
+  assert.ok(!fs.existsSync(built.dir + 'chap.txt'));
+});
+
+//Most chapters have no notes, which is an ordinary state and not a failure - so it is null rather
+//than a NOT_FOUND the caller would have to catch on the common path.
+test('loadChapterNotes returns null for a chapter that has none', async function(t){
+  const built = platformIn(t);
+  fs.writeFileSync(built.dir + 'chap.txt', 'body', 'utf8');
+
+  assert.strictEqual(await built.platform.loadChapterNotes({
+    projectDir: built.dir, chapsDir: '', filename: 'chap.txt'
+  }), null);
+});
+
+test('saveChapterNotes and loadChapterNotes round-trip under the derived notes filename', async function(t){
+  const built = platformIn(t);
+
+  await built.platform.saveChapterNotes({
+    projectDir: built.dir, chapsDir: '', filename: 'chap.txt', mdfc: 'some notes'
+  });
+
+  assert.ok(fs.existsSync(built.dir + NOTES_PREPEND + 'chap.txt'),
+    'the notes filename is derived natively, so the renderer never composes it');
+  assert.strictEqual(await built.platform.loadChapterNotes({
+    projectDir: built.dir, chapsDir: '', filename: 'chap.txt'
+  }), 'some notes');
+});
+
+// ---------------------------------------------------------------------------------------------
+// Group B - project lifecycle
+// ---------------------------------------------------------------------------------------------
+
+//The renderer stops splitting paths: openProject hands back the pieces already separated, which is
+//what closes project.js's own backslash-normalize + split('/') dance.
+test('openProject parses the file and hands back the path already split', async function(t){
+  const built = platformIn(t);
+  fs.writeFileSync(built.dir + 'book.woolf', JSON.stringify({ title: 'A Book', chapters: [] }), 'utf8');
+
+  const opened = await built.platform.openProject({ path: built.dir + 'book.woolf' });
+
+  assert.strictEqual(opened.project.title, 'A Book');
+  assert.strictEqual(opened.filename, 'book.woolf');
+  assert.strictEqual(opened.directory, built.dir.replaceAll('\\', '/'));
+});
+
+test('openProject normalizes a windows path so what comes back can be concatenated safely', async function(t){
+  const built = platformIn(t);
+  fs.writeFileSync(built.dir + 'book.woolf', '{"title":"A Book"}', 'utf8');
+
+  const opened = await built.platform.openProject({
+    path: (built.dir + 'book.woolf').replaceAll('/', '\\')
+  });
+
+  assert.ok(!opened.directory.includes('\\'));
+  assert.strictEqual(opened.filename, 'book.woolf');
+});
+
+//A .woolf truncated by a power loss mid-save is the case this has to survive - loudly, with
+//something the caller can put in front of the reader.
+test('openProject rejects a damaged project file rather than returning half of one', async function(t){
+  const built = platformIn(t);
+  fs.writeFileSync(built.dir + 'damaged.woolf', '{"title": "Half a proj', 'utf8');
+
+  const err = await rejection(built.platform.openProject({ path: built.dir + 'damaged.woolf' }));
+
+  assert.ok(err.isPlatformError);
+  assert.ok(err.message.length > 0);
+});
+
+test('openProject rejects NOT_FOUND for a file that is not there', async function(t){
+  const built = platformIn(t);
+
+  assert.strictEqual((await rejection(built.platform.openProject({
+    path: built.dir + 'nothing.woolf'
+  }))).code, CODES.NOT_FOUND);
+});
+
+test('saveProject writes the project file where it is told', async function(t){
+  const built = platformIn(t);
+
+  await built.platform.saveProject({ directory: built.dir, filename: 'p.woolf', contents: '{"title":"P"}' });
+
+  assert.strictEqual(fs.readFileSync(built.dir + 'p.woolf', 'utf8'), '{"title":"P"}');
+});
+
+test('saveProjectAs makes both directories and copies every chapter across', async function(t){
+  const built = platformIn(t);
+  const target = tempDir(t).replaceAll('\\', '/');
+  fs.writeFileSync(built.dir + 'one.txt', 'chapter one', 'utf8');
+  fs.writeFileSync(built.dir + 'two.txt', 'chapter two', 'utf8');
+
+  const saved = await built.platform.saveProjectAs({
+    fromDirectory: built.dir, fromChapsDir: '',
+    targetPath: target + 'MyBook.woolf',
+    chapterFilenames: ['one.txt', 'two.txt']
+  });
+
+  assert.strictEqual(saved.filename, 'MyBook.woolf');
+  assert.strictEqual(saved.chapsDirectory, 'MyBook_chapters/');
+  assert.deepStrictEqual(saved.chapterFilenames, ['one.txt', 'two.txt']);
+  assert.deepStrictEqual(saved.failed, []);
+  assert.strictEqual(fs.readFileSync(target + 'MyBook_chapters/two.txt', 'utf8'), 'chapter two');
+});
+
+//The extension is forced on after the subdirectory has already been named, so a target the reader
+//typed without one still gets a matching pair.
+test('saveProjectAs adds the .woolf extension without it reaching the chapters directory name', async function(t){
+  const built = platformIn(t);
+  const target = tempDir(t).replaceAll('\\', '/');
+
+  const saved = await built.platform.saveProjectAs({
+    fromDirectory: built.dir, fromChapsDir: '', targetPath: target + 'MyBook', chapterFilenames: []
+  });
+
+  assert.strictEqual(saved.filename, 'MyBook.woolf');
+  assert.strictEqual(saved.chapsDirectory, 'MyBook_chapters/');
+  assert.ok(fs.existsSync(target + 'MyBook_chapters/'));
+});
+
+//The subdirectory is named by the target's *last* dot, not its first: a project title containing a
+//period used to lose everything after the first one.
+test('saveProjectAs keeps a title containing a period whole in the chapters directory', async function(t){
+  const built = platformIn(t);
+  const target = tempDir(t).replaceAll('\\', '/');
+
+  const saved = await built.platform.saveProjectAs({
+    fromDirectory: built.dir, fromChapsDir: '', targetPath: target + 'My.Book.woolf', chapterFilenames: []
+  });
+
+  assert.strictEqual(saved.chapsDirectory, 'My.Book_chapters/');
+  assert.ok(fs.existsSync(target + 'My.Book_chapters/'));
+  assert.ok(!fs.existsSync(target + 'My_chapters/'));
+});
+
+//`failed` is the whole reason this returns a report rather than throwing on the first bad copy: one
+//chapter whose file has gone missing must not cost the reader the other forty.
+test('saveProjectAs reports a chapter it could not copy and carries on with the rest', async function(t){
+  const built = platformIn(t);
+  const target = tempDir(t).replaceAll('\\', '/');
+  fs.writeFileSync(built.dir + 'good.txt', 'good contents', 'utf8');
+
+  const saved = await built.platform.saveProjectAs({
+    fromDirectory: built.dir, fromChapsDir: '',
+    targetPath: target + 'p.woolf',
+    chapterFilenames: ['missing.txt', 'good.txt']
+  });
+
+  assert.deepStrictEqual(saved.chapterFilenames, [null, 'good.txt'],
+    'the null holds the slot so the caller can line results up against the chapters it sent');
+  assert.strictEqual(saved.failed.length, 1);
+  assert.strictEqual(saved.failed[0].filename, 'missing.txt');
+  assert.strictEqual(saved.failed[0].code, CODES.NOT_FOUND);
+  assert.ok(fs.existsSync(target + 'p_chapters/good.txt'));
+});
+
+//A chapter added but never saved has no file to copy, and nothing went wrong - so it takes a slot
+//but does not appear in `failed`.
+test('saveProjectAs passes over a chapter that has no file yet without calling it a failure', async function(t){
+  const built = platformIn(t);
+  const target = tempDir(t).replaceAll('\\', '/');
+
+  const saved = await built.platform.saveProjectAs({
+    fromDirectory: built.dir, fromChapsDir: '', targetPath: target + 'p.woolf',
+    chapterFilenames: [null]
+  });
+
+  assert.deepStrictEqual(saved.chapterFilenames, [null]);
+  assert.deepStrictEqual(saved.failed, []);
+});
+
+test('saveProjectAs flattens a chapter filename that carries a path segment', async function(t){
+  const built = platformIn(t);
+  const target = tempDir(t).replaceAll('\\', '/');
+  fs.mkdirSync(built.dir + 'nested');
+  fs.writeFileSync(built.dir + 'nested/deep.txt', 'deep', 'utf8');
+
+  const saved = await built.platform.saveProjectAs({
+    fromDirectory: built.dir, fromChapsDir: '', targetPath: target + 'p.woolf',
+    chapterFilenames: ['nested/deep.txt']
+  });
+
+  assert.deepStrictEqual(saved.chapterFilenames, ['deep.txt']);
+  assert.ok(fs.existsSync(target + 'p_chapters/deep.txt'));
+});
+
+test('verifyProjectFiles names only the chapter files that are not on disk', async function(t){
+  const built = platformIn(t);
+  fs.writeFileSync(built.dir + 'here.txt', 'x', 'utf8');
+
+  assert.deepStrictEqual(await built.platform.verifyProjectFiles({
+    directory: built.dir, chapsDirectory: '',
+    chapterFilenames: ['here.txt', 'gone.txt', null]
+  }), ['gone.txt']);
+});
+
+//The same file can legitimately be named by more than one list - a reference document pointing at
+//a chapter's file - and the caller matches its own chapters against this as a set.
+test('verifyProjectFiles reports a filename named twice only once', async function(t){
+  const built = platformIn(t);
+
+  assert.deepStrictEqual(await built.platform.verifyProjectFiles({
+    directory: built.dir, chapsDirectory: '',
+    chapterFilenames: ['gone.txt', 'gone.txt']
+  }), ['gone.txt']);
+});
+
+test('materializeBundledProject copies the bundled project out and reports it writable', async function(t){
+  const built = platformIn(t);
+  const bundled = tempDir(t).replaceAll('\\', '/') + 'Frankenstein';
+  fs.mkdirSync(bundled);
+  fs.writeFileSync(bundled + '/Frankenstein.woolf', '{"title":"Frankenstein"}', 'utf8');
+  const writable = built.dir.replaceAll('\\', '/') + 'Projects/Frankenstein';
+
+  const result = await built.platform.materializeBundledProject({
+    bundledDir: bundled, writableDir: writable, filename: 'Frankenstein.woolf'
+  });
+
+  assert.strictEqual(result.writable, true);
+  assert.strictEqual(result.error, null);
+  assert.strictEqual(result.path, writable + '/Frankenstein.woolf');
+  assert.ok(fs.existsSync(result.path));
+});
+
+//The open finding this closes: when the copy fails, the caller used to get a read-only path it
+//could not tell apart from a writable one, and every later save died with EACCES in silence.
+test('materializeBundledProject falls back to the bundled original, flagged and with a reason', async function(t){
+  const built = platformIn(t);
+  const bundled = tempDir(t).replaceAll('\\', '/') + 'Frankenstein';
+  fs.mkdirSync(bundled);
+  fs.writeFileSync(bundled + '/Frankenstein.woolf', '{"title":"Frankenstein"}', 'utf8');
+  patch(t, fs, 'cpSync', function(){
+    const err = new Error('permission denied');
+    err.code = 'EACCES';
+    throw err;
+  });
+
+  const result = await built.platform.materializeBundledProject({
+    bundledDir: bundled, writableDir: built.dir + 'Projects', filename: 'Frankenstein.woolf'
+  });
+
+  assert.strictEqual(result.writable, false, 'the caller must be able to tell this copy apart from a writable one');
+  assert.strictEqual(result.path, bundled + '/Frankenstein.woolf');
+  assert.strictEqual(result.error.code, CODES.PERMISSION_DENIED);
+  assert.match(result.error.message, /permission denied/);
+});
+
+test('the project commands refuse arguments they cannot act on', async function(t){
+  const built = platformIn(t);
+
+  assert.strictEqual((await rejection(built.platform.openProject({}))).code, CODES.INVALID_ARGUMENT);
+  assert.strictEqual((await rejection(built.platform.saveProject({ directory: built.dir, filename: 'p.woolf' }))).code,
+    CODES.INVALID_ARGUMENT);
+  assert.strictEqual((await rejection(built.platform.saveProjectAs({ chapterFilenames: [] }))).code,
+    CODES.INVALID_ARGUMENT);
+  assert.strictEqual((await rejection(built.platform.materializeBundledProject({ bundledDir: '/a' }))).code,
+    CODES.INVALID_ARGUMENT);
+});
+
+// ---------------------------------------------------------------------------------------------
 // Credentials - the group the contract is shaped around at the other end
 // ---------------------------------------------------------------------------------------------
 
@@ -664,3 +969,36 @@ function encryptTheOldWay(text){
 
   return { iv: iv.toString('hex'), content: encrypted.toString('hex') };
 }
+
+// ---------------------------------------------------------------------------------------------
+// What groups B and C give up
+// ---------------------------------------------------------------------------------------------
+
+//The point of converting these two, beyond the Tauri port: the models stop being able to reach the
+//filesystem at all. Anything they need has to be a declared command, which is what makes "the
+//renderer cannot write an arbitrary path" checkable rather than a convention. Phase 9 turns this
+//from a property into a build error; until then, this is what holds it.
+test('the project and chapter models no longer require anything native', function(){
+  ['models/project.js', 'models/chapter.js'].forEach(function(relative){
+    const source = fs.readFileSync(
+      path.join(__dirname, '..', 'src', 'components', relative.split('/')[0], relative.split('/')[1]), 'utf8');
+
+    ['fs', 'path', 'os', 'crypto', 'child_process', 'electron'].forEach(function(builtin){
+      assert.strictEqual(source.indexOf("require('" + builtin + "')"), -1,
+        relative + ' still requires ' + builtin);
+    });
+  });
+});
+
+//The layout of a chapter on disk - the extension, the notes prefix, the stash name used during a
+//save - belongs to the native side now. A renderer that still spelled any of it out would be
+//deciding filenames the command is supposed to hand back.
+test('the chapter model no longer spells out how a chapter is laid out on disk', function(){
+  const source = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'components', 'models', 'chapter.js'), 'utf8');
+
+  [NOTES_PREPEND, OLD_VERSION_FLAG, "'.txt'"].forEach(function(literal){
+    assert.strictEqual(source.indexOf(literal), -1,
+      'chapter.js still knows about ' + literal);
+  });
+});

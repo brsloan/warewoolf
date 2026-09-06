@@ -108,12 +108,13 @@ function showProperties(project, userSettings){
     var pupDirSubmit = createButton("Save Changes To Chaps Directory");
     var pupDirConfirm = document.createElement('p');
     pupDirConfirm.classList.add('popup-text-small');
-    pupDirSubmit.onclick = function(){
+    pupDirSubmit.onclick = async function(){
       if(pupDirInput.value.length > 0 && !pupDirInput.value.endsWith('/')){
         pupDirInput.value += "/";
       }
       project.chapsDirectory = pupDirInput.value;
-      project.saveFile();
+      //Awaited so "Saved." only appears once the project file has actually been written.
+      await project.saveFile();
       pupDirConfirm.innerText = "Saved.";
     };
     advancedArea.appendChild(pupDirSubmit);

@@ -29,31 +29,31 @@ test('convertMarkedTabs does not match a differently-cased marker', function(){
   assert.strictEqual(result.delta.ops[0].insert, 'tab indented text\n');
 });
 
-test('convertMarkedTabsForAllChapters only marks chapters that actually changed', function(){
+test('convertMarkedTabsForAllChapters only marks chapters that actually changed', async function(){
   var hasMarker = makeChapter(markedDelta('>>indented text'));
   var noMarker = makeChapter(markedDelta('no marker here'));
 
   var project = makeProject([hasMarker, noMarker]);
 
-  convertMarkedTabsForAllChapters(project, '>>');
+  await convertMarkedTabsForAllChapters(project, '>>');
 
   assert.strictEqual(hasMarker.hasUnsavedChanges, true);
   assert.notStrictEqual(noMarker.hasUnsavedChanges, true);
 });
 
 //Regression: same missing project-level flag as the other "for all chapters" converters.
-test('convertMarkedTabsForAllChapters sets project.hasUnsavedChanges when a chapter changes', function(){
+test('convertMarkedTabsForAllChapters sets project.hasUnsavedChanges when a chapter changes', async function(){
   var project = makeProject([makeChapter(markedDelta('>>indented text'))]);
 
-  convertMarkedTabsForAllChapters(project, '>>');
+  await convertMarkedTabsForAllChapters(project, '>>');
 
   assert.strictEqual(project.hasUnsavedChanges, true);
 });
 
-test('convertMarkedTabsForAllChapters leaves project.hasUnsavedChanges alone when nothing changes', function(){
+test('convertMarkedTabsForAllChapters leaves project.hasUnsavedChanges alone when nothing changes', async function(){
   var project = makeProject([makeChapter(markedDelta('no marker here'))]);
 
-  convertMarkedTabsForAllChapters(project, '>>');
+  await convertMarkedTabsForAllChapters(project, '>>');
 
   assert.notStrictEqual(project.hasUnsavedChanges, true);
 });

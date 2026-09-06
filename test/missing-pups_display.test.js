@@ -81,7 +81,7 @@ test.afterEach(function(){
   delete global.document;
 });
 
-test('renders the project directory, prefills the expected subdirectory, and lists missing chapters', function(t){
+test('renders the project directory, prefills the expected subdirectory, and lists missing chapters', async function(t){
   t.mock.method(fs, 'existsSync', function(){ return true; });
   t.mock.method(fs, 'readdirSync', function(){ return []; });
   var chap = makeChap('Chapter One', 'ch1.txt');
@@ -93,7 +93,7 @@ test('renders the project directory, prefills the expected subdirectory, and lis
   });
   var promptForMissingPups = freshMissingPupsDisplay({});
 
-  promptForMissingPups(project, function(){});
+  await promptForMissingPups(project, function(){});
 
   assert.strictEqual(document.querySelector('p.popup-text-small').innerText, '/proj/');
   assert.strictEqual(document.querySelector('input[type="text"]').value, 'chapters/');
@@ -103,21 +103,21 @@ test('renders the project directory, prefills the expected subdirectory, and lis
   assert.ok(chapLabels.includes('Chapter One: '));
 });
 
-test('Close removes the popup and calls back with "cancel"', function(t){
+test('Close removes the popup and calls back with "cancel"', async function(t){
   t.mock.method(fs, 'existsSync', function(){ return true; });
   t.mock.method(fs, 'readdirSync', function(){ return []; });
   var callbackCalls = [];
   var project = makeProject();
   var promptForMissingPups = freshMissingPupsDisplay({});
 
-  promptForMissingPups(project, function(resp){ callbackCalls.push(resp); });
+  await promptForMissingPups(project, function(resp){ callbackCalls.push(resp); });
   findButton('Close').onclick();
 
   assert.strictEqual(document.getElementsByClassName('popup').length, 0);
   assert.deepStrictEqual(callbackCalls, ['cancel']);
 });
 
-test('Save & Reload saves the project, removes the popup, and calls back with "save"', function(t){
+test('Save & Reload saves the project, removes the popup, and calls back with "save"', async function(t){
   t.mock.method(fs, 'existsSync', function(){ return true; });
   t.mock.method(fs, 'readdirSync', function(){ return []; });
   var saveFileCalls = 0;
@@ -125,15 +125,17 @@ test('Save & Reload saves the project, removes the popup, and calls back with "s
   var project = makeProject({ saveFile: function(){ saveFileCalls++; } });
   var promptForMissingPups = freshMissingPupsDisplay({});
 
-  promptForMissingPups(project, function(resp){ callbackCalls.push(resp); });
-  findButton('Save & Reload').onclick();
+  await promptForMissingPups(project, function(resp){ callbackCalls.push(resp); });
+  //Awaited: the handler saves the project before it closes the popup and calls back, and saving is
+  //asynchronous now.
+  await findButton('Save & Reload').onclick();
 
   assert.strictEqual(saveFileCalls, 1);
   assert.strictEqual(document.getElementsByClassName('popup').length, 0);
   assert.deepStrictEqual(callbackCalls, ['save']);
 });
 
-test('Delete requires a confirming second click before removing the chapter', function(t){
+test('Delete requires a confirming second click before removing the chapter', async function(t){
   t.mock.method(fs, 'existsSync', function(){ return false; });
   t.mock.method(fs, 'readdirSync', function(){ return []; });
   var chap = makeChap('Chapter One', 'ch1.txt');
@@ -143,7 +145,7 @@ test('Delete requires a confirming second click before removing the chapter', fu
   });
   var promptForMissingPups = freshMissingPupsDisplay({});
 
-  promptForMissingPups(project, function(){});
+  await promptForMissingPups(project, function(){});
   var deleteBtn = findButton('Delete');
   //jsdom's innerText doesn't derive from rendered content set via innerHTML (as createButton()
   //does) - it only tracks values assigned through innerText itself. A real browser's innerText
@@ -159,14 +161,14 @@ test('Delete requires a confirming second click before removing the chapter', fu
   assert.deepStrictEqual(project.chapters, [], 'a second click should remove the chapter');
 });
 
-test('editing a missing chapter\'s filename updates the chapter object and re-checks it against disk', function(t){
+test('editing a missing chapter\'s filename updates the chapter object and re-checks it against disk', async function(t){
   t.mock.method(fs, 'existsSync', function(p){ return p === '/proj/chapters/found.txt'; });
   t.mock.method(fs, 'readdirSync', function(){ return []; });
   var chap = makeChap('Chapter One', 'missing.txt');
   var project = makeProject({ chapters: [chap], testChapsDirectory: function(){ return [chap]; } });
   var promptForMissingPups = freshMissingPupsDisplay({});
 
-  promptForMissingPups(project, function(){});
+  await promptForMissingPups(project, function(){});
   var filenameInput = document.querySelectorAll('input[type="text"]')[1];
   assert.strictEqual(filenameInput.value, 'missing.txt');
 
@@ -180,13 +182,13 @@ test('editing a missing chapter\'s filename updates the chapter object and re-ch
 //Regression: the Expected Subdirectory field used to force a trailing '/' onto its own value on
 //every keyup. Since setting .value moves the caret to the end, each keystroke landed after that
 //forced slash, so typing "NewChapters" produced "N/e/w/C/h/a/p/t/e/r/s/" instead of "NewChapters".
-test('typing a multi-character subdirectory name is not fragmented by a forced slash on every keystroke', function(t){
+test('typing a multi-character subdirectory name is not fragmented by a forced slash on every keystroke', async function(t){
   t.mock.method(fs, 'existsSync', function(){ return false; });
   t.mock.method(fs, 'readdirSync', function(){ return []; });
   var project = makeProject({ chapsDirectory: '' });
   var promptForMissingPups = freshMissingPupsDisplay({});
 
-  promptForMissingPups(project, function(){});
+  await promptForMissingPups(project, function(){});
   var chapsDirIn = document.querySelector('input[type="text"]');
 
   typeInto(chapsDirIn, 'NewChapters');
@@ -198,13 +200,13 @@ test('typing a multi-character subdirectory name is not fragmented by a forced s
 //Regression: because the old handler unconditionally re-appended '/' whenever the value didn't
 //already end in one, backspacing over the trailing slash was immediately undone, making it
 //impossible to edit down from the end of the field.
-test('removing the trailing slash from the subdirectory field is not immediately re-added', function(t){
+test('removing the trailing slash from the subdirectory field is not immediately re-added', async function(t){
   t.mock.method(fs, 'existsSync', function(){ return false; });
   t.mock.method(fs, 'readdirSync', function(){ return []; });
   var project = makeProject({ chapsDirectory: 'chapters/' });
   var promptForMissingPups = freshMissingPupsDisplay({});
 
-  promptForMissingPups(project, function(){});
+  await promptForMissingPups(project, function(){});
   var chapsDirIn = document.querySelector('input[type="text"]');
   assert.strictEqual(chapsDirIn.value, 'chapters/');
 
@@ -215,7 +217,7 @@ test('removing the trailing slash from the subdirectory field is not immediately
   assert.strictEqual(project.chapsDirectory, 'chapters/', 'the model value is still normalized for disk checks');
 });
 
-test('the file list looks up files using a normalized trailing slash even if the field lacks one', function(t){
+test('the file list looks up files using a normalized trailing slash even if the field lacks one', async function(t){
   t.mock.method(fs, 'existsSync', function(){ return true; });
   t.mock.method(fs, 'readdirSync', function(){ return []; });
   var getFileListCalls = [];
@@ -224,7 +226,7 @@ test('the file list looks up files using a normalized trailing slash even if the
     getFileList: function(dirPath){ getFileListCalls.push(dirPath); return []; }
   });
 
-  promptForMissingPups(project, function(){});
+  await promptForMissingPups(project, function(){});
   var chapsDirIn = document.querySelector('input[type="text"]');
   chapsDirIn.value = 'newdir';
   keyup(chapsDirIn, 'r');
@@ -236,7 +238,7 @@ test('the file list looks up files using a normalized trailing slash even if the
 //Files In Subdirectory list which correctly checks chapters *and* reference docs. Retyping a
 //missing chapter's filename to match a reference doc's filename used to show a reassuring
 //"Exists" instead of flagging the collision.
-test('a missing chapter\'s filename is flagged as already used when it collides with a reference document', function(t){
+test('a missing chapter\'s filename is flagged as already used when it collides with a reference document', async function(t){
   t.mock.method(fs, 'existsSync', function(p){ return p === '/proj/chapters/shared.txt'; });
   t.mock.method(fs, 'readdirSync', function(){ return []; });
   var chap = makeChap('Chapter One', 'missing.txt');
@@ -247,7 +249,7 @@ test('a missing chapter\'s filename is flagged as already used when it collides 
   });
   var promptForMissingPups = freshMissingPupsDisplay({});
 
-  promptForMissingPups(project, function(){});
+  await promptForMissingPups(project, function(){});
   var filenameInput = document.querySelectorAll('input[type="text"]')[1];
   filenameInput.value = 'shared.txt';
   keyup(filenameInput, 't');
@@ -263,7 +265,7 @@ test('a missing chapter\'s filename is flagged as already used when it collides 
 //Deleting used to splice project.chapters at project.chapters.indexOf(chap), which is -1 for a
 //reference or trashed document - and splice(-1, 1) removes the last element, so confirming Delete
 //on a missing reference document quietly threw away the project's last real chapter instead.
-test('Delete removes a missing reference document without touching the chapters list', function(t){
+test('Delete removes a missing reference document without touching the chapters list', async function(t){
   t.mock.method(fs, 'existsSync', function(){ return false; });
   t.mock.method(fs, 'readdirSync', function(){ return []; });
   var keeper = makeChap('Chapter One', 'ch1.txt');
@@ -277,7 +279,7 @@ test('Delete removes a missing reference document without touching the chapters 
   });
   var promptForMissingPups = freshMissingPupsDisplay({});
 
-  promptForMissingPups(project, function(){});
+  await promptForMissingPups(project, function(){});
   var deleteBtn = findButton('Delete');
   deleteBtn.innerText = 'Delete';
   deleteBtn.onclick();
@@ -288,7 +290,7 @@ test('Delete removes a missing reference document without touching the chapters 
     'no chapter should have been removed');
 });
 
-test('Delete removes a missing trashed chapter from the trash', function(t){
+test('Delete removes a missing trashed chapter from the trash', async function(t){
   t.mock.method(fs, 'existsSync', function(){ return false; });
   t.mock.method(fs, 'readdirSync', function(){ return []; });
   var keeper = makeChap('Chapter One', 'ch1.txt');
@@ -301,7 +303,7 @@ test('Delete removes a missing trashed chapter from the trash', function(t){
   });
   var promptForMissingPups = freshMissingPupsDisplay({});
 
-  promptForMissingPups(project, function(){});
+  await promptForMissingPups(project, function(){});
   var deleteBtn = findButton('Delete');
   deleteBtn.innerText = 'Delete';
   deleteBtn.onclick();
@@ -311,7 +313,7 @@ test('Delete removes a missing trashed chapter from the trash', function(t){
   assert.deepStrictEqual(project.chapters, [keeper]);
 });
 
-test('a filename collision with a trashed chapter is flagged like any other', function(t){
+test('a filename collision with a trashed chapter is flagged like any other', async function(t){
   t.mock.method(fs, 'existsSync', function(){ return true; });
   t.mock.method(fs, 'readdirSync', function(){ return []; });
   var missing = makeChap('Chapter One', 'ch1.txt');
@@ -323,7 +325,7 @@ test('a filename collision with a trashed chapter is flagged like any other', fu
   });
   var promptForMissingPups = freshMissingPupsDisplay({});
 
-  promptForMissingPups(project, function(){});
+  await promptForMissingPups(project, function(){});
 
   var filenameInput = Array.from(document.querySelectorAll('input')).find(function(i){
     return i.value === 'ch1.txt';
@@ -332,7 +334,7 @@ test('a filename collision with a trashed chapter is flagged like any other', fu
     ' !! File Already Used By Another Chapter');
 });
 
-test('a trashed chapter\'s file is not listed as an unexpected file in the subdirectory', function(t){
+test('a trashed chapter\'s file is not listed as an unexpected file in the subdirectory', async function(t){
   t.mock.method(fs, 'existsSync', function(){ return true; });
   //fillSubdirsList() reads the project directory through fs directly, unlike the file listing
   //below, which goes through the mocked getFileList.
@@ -352,7 +354,7 @@ test('a trashed chapter\'s file is not listed as an unexpected file in the subdi
     }
   });
 
-  promptForMissingPups(project, function(){});
+  await promptForMissingPups(project, function(){});
 
   var labels = Array.from(document.querySelectorAll('#missing-file-list label'))
     .map(function(l){ return l.innerText; });
@@ -381,7 +383,7 @@ function fileEntry(name){
 //Every document's notes are saved beside it as '-notes_<filename>', and the project-wide notes as
 //'-notes_project_.txt' - none of which the listing knew about, so correcting the chapters
 //subdirectory left the reader looking at their own notes files flagged as unexpected strays.
-test('notes files and the corkboard are recognised as the project\'s own files', function(t){
+test('notes files and the corkboard are recognised as the project\'s own files', async function(t){
   t.mock.method(fs, 'existsSync', function(){ return true; });
   t.mock.method(fs, 'readdirSync', function(){ return []; });
   var project = makeProject({
@@ -403,7 +405,7 @@ test('notes files and the corkboard are recognised as the project\'s own files',
     }
   });
 
-  promptForMissingPups(project, function(){});
+  await promptForMissingPups(project, function(){});
 
   var listed = listedFiles();
   Object.keys(listed).forEach(function(name){
@@ -411,7 +413,7 @@ test('notes files and the corkboard are recognised as the project\'s own files',
   });
 });
 
-test('a file that is not part of the project is still flagged as unexpected', function(t){
+test('a file that is not part of the project is still flagged as unexpected', async function(t){
   t.mock.method(fs, 'existsSync', function(){ return true; });
   t.mock.method(fs, 'readdirSync', function(){ return []; });
   var project = makeProject({
@@ -427,14 +429,14 @@ test('a file that is not part of the project is still flagged as unexpected', fu
     }
   });
 
-  promptForMissingPups(project, function(){});
+  await promptForMissingPups(project, function(){});
 
   var listed = listedFiles();
   assert.strictEqual(listed['ch1.txt'], ' ✔');
   assert.strictEqual(listed['holiday-photo.jpg'], ' ??? Unexpected File');
 });
 
-test('the file listing copes with a project whose notes chapter is not set up yet', function(t){
+test('the file listing copes with a project whose notes chapter is not set up yet', async function(t){
   t.mock.method(fs, 'existsSync', function(){ return true; });
   t.mock.method(fs, 'readdirSync', function(){ return []; });
   var project = makeProject({
@@ -448,6 +450,6 @@ test('the file listing copes with a project whose notes chapter is not set up ye
     getFileList: function(){ return [fileEntry('ch1.txt')]; }
   });
 
-  assert.doesNotThrow(function(){ promptForMissingPups(project, function(){}); });
+  await assert.doesNotReject(function(){ return promptForMissingPups(project, function(){}); });
   assert.strictEqual(listedFiles()['ch1.txt'], ' ✔');
 });

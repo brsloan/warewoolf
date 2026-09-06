@@ -70,6 +70,29 @@ module.exports.ready = loadPlatformState().catch(function(err){
   throw err;
 });
 
+//A good many functions in this file became async in Phase 4, and several of them are called by
+//things that drop the return value on the floor: a menu channel, a keybinding, a file dialog's
+//callback, an autosave timer. A rejection out of one of those has nowhere to go and would be an
+//unhandled rejection with nothing on screen and nothing in the log - which is the silence
+//platform.js's rule 5 exists to prevent.
+//
+//Only the rejection is caught. A synchronous throw is left to propagate exactly as it did before
+//any of this was async, so nothing that used to fail loudly starts failing quietly instead.
+function detached(fn){
+  return function(){
+    var result = fn.apply(this, arguments);
+
+    if(result && typeof result.then === 'function')
+      result.catch(reportDetachedFailure);
+
+    return result;
+  };
+}
+
+function reportDetachedFailure(err){
+  require('./components/controllers/error-log').logError(err);
+}
+
 //Kept out of loadPlatformState()'s own try/catch reasoning: this must not itself be able to throw
 //past the handler above, so it swallows a failure to report rather than replacing one unhandled
 //rejection with another.
@@ -98,6 +121,10 @@ async function loadPlatformState(){
   //Phase 9, alongside C and J, once nodeIntegration goes away and fs stops being reachable at all.
   nodePlatform = createPlatform(createNodeBacking({ paths: sysDirectories }));
   require('./components/controllers/error-log').setPlatform(nodePlatform);
+  //Groups B and C (projects and chapters) are plain fs too, so they take the same node-backed
+  //instance and get swapped for the ipc backing alongside D at Phase 9.
+  newProject.setPlatform(nodePlatform);
+  newChapter.setPlatform(nodePlatform);
   fileRequestedOnOpen = await platform.getFileRequestedOnOpen();
   platformInfo = await platform.getPlatform();
 
@@ -107,7 +134,7 @@ async function loadPlatformState(){
   //key that shipped in the source, and re-seal it with whatever this machine can actually offer.
   credentialStore.migrateLegacyPassword(userSettings);
 
-  initialize();
+  await initialize();
 
   //Wires up every keyboard shortcut that is not a menu item - see keybindings.js for the dispatch
   //itself. context.project is a getter, not the object directly, because createNewProject() below
@@ -121,14 +148,17 @@ async function loadPlatformState(){
     userSettings: userSettings,
     editorQuill: editorQuill,
     notesQuill: notesQuill,
+    //Wrapped rather than passed straight through: keybindings.js calls these from a keydown
+    //listener and never looks at what they return, and three of them (both chapter-navigation
+    //shortcuts and the notes toggle) are async now. See detached() above.
     actions: {
       moveChapUp: moveChapUp,
       moveChapDown: moveChapDown,
       changeChapterTitle: changeChapterTitle,
-      displayPreviousChapter: displayPreviousChapter,
-      displayNextChapter: displayNextChapter,
+      displayPreviousChapter: detached(displayPreviousChapter),
+      displayNextChapter: detached(displayNextChapter),
       togglePanelDisplay: togglePanelDisplay,
-      toggleChapterNotes: toggleChapterNotes,
+      toggleChapterNotes: detached(toggleChapterNotes),
       updatePanelDisplays: updatePanelDisplays,
       increaseFontSizeSetting: increaseFontSizeSetting,
       decreaseFontSizeSetting: decreaseFontSizeSetting,
@@ -167,54 +197,60 @@ async function loadPlatformState(){
   });
 }
 
-function initialize(){
+async function initialize(){
   setUpQuills();
   applyUserSettings();
-  loadInitialProject();
+  await loadInitialProject();
 }
 
-function loadInitialProject(){
+async function loadInitialProject(){
   //Load requested project, last project opened, or if none logged, load example project, and if example gone, create new project
+  const exampleFilename = "Frankenstein.woolf";
   const bundledExampleDir = sysDirectories.app + "/examples/Frankenstein";
-  const bundledExample = bundledExampleDir + "/Frankenstein.woolf";
+  const bundledExample = bundledExampleDir + "/" + exampleFilename;
   const writableExampleDir = sysDirectories.userData + "/Projects/Frankenstein";
-  const writableExample = writableExampleDir + "/Frankenstein.woolf";
+  const writableExample = writableExampleDir + "/" + exampleFilename;
 
   if(fileRequestedOnOpen != null && fs.existsSync(fileRequestedOnOpen)){
-    setProject(fileRequestedOnOpen);
+    await setProject(fileRequestedOnOpen);
     userSettings.lastProject = fileRequestedOnOpen;
   }
   else if(userSettings.lastProject != null && fs.existsSync(userSettings.lastProject))
-    setProject(userSettings.lastProject);
+    await setProject(userSettings.lastProject);
   else if(fs.existsSync(writableExample)){
-    setProject(writableExample);
+    await setProject(writableExample);
     userSettings.lastProject = writableExample;
   }
   else if(fs.existsSync(bundledExample)){
-    setProject(copyExampleToUserData(bundledExampleDir, writableExampleDir, writableExample));
+    //The bundled copy lives inside the installed app directory (e.g. /usr/lib/... on a Linux
+    //package install), which a normal user account can't write back to - editing it and letting
+    //autosave or a manual save run against it in place always fails with EACCES. Copy it out to
+    //userData once on first launch and open that copy instead, so the example is actually editable.
+    var materialized = await nodePlatform.materializeBundledProject({
+      bundledDir: bundledExampleDir,
+      writableDir: writableExampleDir,
+      filename: exampleFilename
+    });
+
+    //Closes the open finding recorded in upgrade-and-isolation-plan.md. When the copy fails, the
+    //example is opened from the install directory instead - which is exactly the read-only case the
+    //copy exists to avoid, and it used to be indistinguishable from a writable one, so every later
+    //save died with EACCES in silence. Flagged instead, so Ctrl+S offers Save As the way it does for
+    //the Help doc. Handed to setProject() rather than set afterwards - see its own comment for why
+    //that ordering is load-bearing.
+    if(materialized.error)
+      require('./components/controllers/error-log').logError(
+        new Error('Could not copy the bundled example project into userData ('
+          + materialized.error.code + '): ' + materialized.error.message
+          + ' - opening it read-only instead.'));
+
+    await setProject(materialized.path, !materialized.writable);
+
     userSettings.lastProject = project.directory + project.filename;
   }
   else {
     //Start new project
     createNewProject();
-  }
-}
-
-//The bundled copy lives inside the installed app directory (e.g. /usr/lib/... on a Linux
-//package install), which a normal user account can't write back to - editing it and letting
-//autosave or a manual save run against it in place always fails with EACCES. Copy it out to
-//userData once on first launch and open that copy instead, so the example is actually editable.
-function copyExampleToUserData(bundledDir, writableDir, writablePath){
-  try{
-    fs.cpSync(bundledDir, writableDir, { recursive: true });
-    return writablePath;
-  }
-  catch(err){
-    const { logError } = require('./components/controllers/error-log');
-    logError(err);
-    //Couldn't copy (e.g. userData itself is somehow unwritable) - fall back to the bundled,
-    //read-only copy rather than failing to open anything.
-    return bundledDir + "/" + writablePath.split("/").pop();
   }
 }
 
@@ -237,7 +273,9 @@ function applyUserSettings(){
     enableTypewriterMode(editorQuill)
   updateEditorWidth();
   updatePanelDisplays();
-  autosaver.initiateAutosave(userSettings.autosaveIntMinutes, autosaveProject);
+  //Wrapped: the autosave timer never looks at what its callback returns, and saving is asynchronous
+  //now - see detached().
+  autosaver.initiateAutosave(userSettings.autosaveIntMinutes, detached(autosaveProject));
   setDarkMode();
   if(userSettings.showBattery && platformInfo.platform == 'linux')
     showBattery();
@@ -262,24 +300,32 @@ function setDarkMode(){
   });
 }
 
-function setProject(filepath){
+//`readOnly` has to be an argument rather than something the caller sets afterward, and that is not
+//a convenience. loadFile() clears the flag on every load, and convertLegacyProject() below ends in
+//an unconditional project.saveFile() - so a caller that opened a read-only copy and set the flag on
+//the way back would already have written to it. That is how the bundled example, opened from the
+//install directory because its copy out to userData failed, was saved over before anything knew it
+//was read-only.
+async function setProject(filepath, readOnly){
   if(filepath && filepath != null){
-    var missingChaps = project.loadFile(filepath);
-    if(projectFailedToLoad(filepath))
+    var missingChaps = await project.loadFile(filepath);
+    if(await projectFailedToLoad(filepath))
       return;
+    //Set before anything downstream can write. Nothing else in this function may run first.
+    project.isReadOnly = readOnly === true;
     if(missingChaps.length > 0){
       console.log('could not find all chapters.');
       const promptForMissingPups = require('./components/views/missing-pups_display');
-      promptForMissingPups(project, function(resp){
+      await promptForMissingPups(project, function(resp){
         if(resp == 'save')
-          setProject(filepath);
+          setProject(filepath, readOnly).catch(reportDetachedFailure);
         else
           createNewProject();
       });
     }
     else{
-      convertLegacyProject();
-      displayProject();
+      await convertLegacyProject();
+      await displayProject();
     }
   }
 }
@@ -288,7 +334,7 @@ function setProject(filepath){
 //could not be read at all - truncated by a power loss mid-save, or simply not a .woolf - in which
 //case the failure has already been dealt with here and the caller should stop rather than go on to
 //display a project that is not there.
-function projectFailedToLoad(filepath){
+async function projectFailedToLoad(filepath){
   if(!project.loadError)
     return false;
 
@@ -299,46 +345,59 @@ function projectFailedToLoad(filepath){
   //it. Start from a clean project rather than trying to display a half-loaded one.
   project = newProject();
   project.initNotesChap();
-  displayProject();
+  await displayProject();
 
   const reportProjectLoadFailure = require('./components/views/project-load-error_display');
   reportProjectLoadFailure(filepath, loadError);
   return true;
 }
 
-function convertLegacyProject(){
+//Runs on every setProject(), and ends in an unconditional save - so opening any project writes its
+//.woolf back out, whether or not there was anything legacy to convert. That is longstanding
+//behaviour, left as it is; what changes here is that the write is now awaited, so the project is on
+//disk before the UI is drawn from it. A read-only project (the Help doc, or a Frankenstein example
+//whose copy out to userData failed) is refused by saveFile()'s own guard and simply returns false.
+async function convertLegacyProject(){
+  //Nothing here can be done to a project that cannot be written to, and the two conversions below
+  //write through chapter.js rather than project.saveFile() - so the read-only guard in
+  //project.saveFile() does not cover them. Without this, opening the bundled example out of the
+  //install directory (the fallback taken when its copy to userData fails) would attempt a chapter
+  //write per legacy chapter, each one an EACCES swallowed into the log.
+  if(project.isReadOnly)
+    return;
 
   //Convert legacy notes from v2.1 and before
   if(project.notes){
     project.notesChap.notes = project.notes;
-    project.notesChap.saveNotesFile();
+    await project.notesChap.saveNotesFile();
   }
 
   //Convert legacy chapters from v1.1 and before
-  project.chapters.forEach(function(chap, i){
+  for(let i = 0; i < project.chapters.length; i++){
+    let chap = project.chapters[i];
     if(chap.filename.includes('.pup')){
-      chap.contents = chap.getFile();
-      chap.saveFile();
+      chap.contents = await chap.getFile();
+      await chap.saveFile();
       chap.contents = null;
     }
-  });
-  project.saveFile();
+  }
+  await project.saveFile();
 }
 
-function displayProject(){
+async function displayProject(){
   updateFileList();
   updateTitleBar();
-  refreshNotesDisplay();
-  displayInitialChapter();
-  setWordCountOnLoad();
+  await refreshNotesDisplay();
+  await displayInitialChapter();
+  await setWordCountOnLoad();
   editorQuill.focus();
   editorQuill.setSelection(project.textCursorPosition);
   scrollChapterListToActiveChapter();
 }
 
-function setWordCountOnLoad(){
+async function setWordCountOnLoad(){
   const { getTotalWordCount } = require('./components/controllers/wordcount');
-  project.wordCountOnLoad = getTotalWordCount(project);
+  project.wordCountOnLoad = await getTotalWordCount(project);
 }
 
 function updateFileList(){
@@ -348,7 +407,7 @@ function updateFileList(){
   });
 }
 
-function displayChapterByIndex(ind){
+async function displayChapterByIndex(ind){
   clearCurrentChapterIfUnchanged();
   ind = parseInt(ind);
 
@@ -380,7 +439,7 @@ function displayChapterByIndex(ind){
     contents = chap.contents;
   }
   else{
-     contents = chap.getFile();
+     contents = await chap.getFile();
   }
 
   var correctNotesChap = userSettings.displayChapNotes ? chap : project.notesChap;
@@ -389,7 +448,7 @@ function displayChapterByIndex(ind){
     notes = correctNotesChap.notes;
   }
   else {
-    let savedNotes = correctNotesChap.getNotesFile();
+    let savedNotes = await correctNotesChap.getNotesFile();
     notes = savedNotes ? savedNotes : getEmptyDelta();
   }
 
@@ -405,19 +464,19 @@ function updateTitleBar(){
     + (project.isReadOnly ? " (read-only)" : "");
 }
 
-function refreshNotesDisplay(){
+async function refreshNotesDisplay(){
   var notesHeader = document.getElementById('notes-header');
 
   if(userSettings.displayChapNotes){
     var activeChapter = project.getActiveChapter();
-    let savedNotes = activeChapter ? activeChapter.getNotesContentOrFile() : null;
+    let savedNotes = activeChapter ? await activeChapter.getNotesContentOrFile() : null;
     let currentNotes = savedNotes ? savedNotes : getEmptyDelta();
     notesQuill.setContents(currentNotes, 'api');
 
     notesHeader.innerText = 'Chapter Notes';
   }
   else{
-    let savedNotes = project.notesChap.getNotesContentOrFile();
+    let savedNotes = await project.notesChap.getNotesContentOrFile();
     let currentNotes = savedNotes ? savedNotes : getEmptyDelta();
     notesQuill.setContents(currentNotes, 'api');
 
@@ -429,8 +488,8 @@ function getEmptyDelta(){
   return {"ops":[{"insert":"\n"}]};
 }
 
-function displayInitialChapter(){
-  displayChapterByIndex(project.activeChapterIndex);
+async function displayInitialChapter(){
+  await displayChapterByIndex(project.activeChapterIndex);
 }
 
 function togglePanelDisplay(p){
@@ -508,17 +567,17 @@ function removeSpecialDisplayClasses(el){
 
 //User Actions
 
-function displayPreviousChapter(){
+async function displayPreviousChapter(){
   if(project.activeChapterIndex > 0){
-    displayChapterByIndex(project.activeChapterIndex - 1);
+    await displayChapterByIndex(project.activeChapterIndex - 1);
     editorQuill.setSelection(0);
     project.textCursorPosition = 0;
   }
 }
 
-function displayNextChapter(){
+async function displayNextChapter(){
   if(!chapterList.isLastOfAll(project, chapterList.activeLocator(project))){
-    displayChapterByIndex(project.activeChapterIndex + 1);
+    await displayChapterByIndex(project.activeChapterIndex + 1);
     editorQuill.setSelection(0);
     project.textCursorPosition = 0;
   }
@@ -552,19 +611,19 @@ function moveChapDown(chapInd){
 
 function createNewProject(){
   const requestProjectTitle = require('./components/views/new-project_display');
-  requestProjectTitle(function(title){
+  requestProjectTitle(detached(async function(title){
     if(title && title != ""){
       project = newProject();
       project.title = title;
       project.author = userSettings.defaultAuthor;
       project.initNotesChap();
-      addNewChapter();
-      displayProject();
+      await addNewChapter();
+      await displayProject();
     }
-  });
+  }));
 }
 
-function addNewChapter(){
+async function addNewChapter(){
   var currentLoc = chapterList.activeLocator(project);
   var newChap = newChapter(project);
   newChap.hasUnsavedChanges = true;
@@ -585,7 +644,7 @@ function addNewChapter(){
   //displayChapterByIndex() below renders the sidebar itself as its last step, so this used to
   //render it a second time for nothing.
   var thisIndex = chapterList.toCombinedIndex(project, landed);
-  displayChapterByIndex(thisIndex);
+  await displayChapterByIndex(thisIndex);
   editorQuill.enable();
   changeChapterTitle(thisIndex);
 }
@@ -593,13 +652,13 @@ function addNewChapter(){
 //Autosave must not do what an explicit save does on a read-only project: routing it to Save As
 //would pop a file dialog over the reader every autosave interval while the Help doc is open.
 //Nothing is lost by skipping - saveFile() would refuse the write anyway.
-function autosaveProject(){
+async function autosaveProject(){
   if(project.isReadOnly)
     return;
-  saveProject();
+  await saveProject();
 }
 
-function saveProject(onComplete){
+async function saveProject(onComplete){
   //A read-only project (the bundled Help doc) has nowhere of its own to be written back to, so an
   //explicit save becomes Save As - the reader's annotated copy gets a home they chose, and
   //saveAs() clears the flag once it lands there.
@@ -607,7 +666,7 @@ function saveProject(onComplete){
     saveProjectAs(onComplete);
   else if(project.filename != ""){
     clearCurrentChapterIfUnchanged();
-    if(project.saveFile()){
+    if(await project.saveFile()){
       project.hasUnsavedChanges = false;
       updateFileList();
       if(onComplete)
@@ -620,6 +679,7 @@ function saveProject(onComplete){
     saveProjectAs(onComplete);
 }
 
+//Not async: the dialog is what takes time, and it reports through onComplete, exactly as before.
 function saveProjectAs(onComplete) {
   const options = {
     title: 'Save project as...',
@@ -633,9 +693,9 @@ function saveProjectAs(onComplete) {
   };
 
   const showFileDialog = require('./components/views/file-dialog_display');
-  showFileDialog(options, function(filepath){
+  showFileDialog(options, detached(async function(filepath){
     if (filepath){
-      var savedPath = project.saveAs(filepath);
+      var savedPath = await project.saveAs(filepath);
       if(savedPath){
         userSettings.lastProject = savedPath;
         userSettings.save();
@@ -649,7 +709,7 @@ function saveProjectAs(onComplete) {
     }
     if(onComplete)
       onComplete(false);
-  });
+  }));
 }
 
 function saveProjectCopy() {
@@ -665,14 +725,14 @@ function saveProjectCopy() {
   };
 
   const showFileDialog = require('./components/views/file-dialog_display');
-  showFileDialog(options, function(filepath){
+  showFileDialog(options, detached(async function(filepath){
     if (filepath){
-      project.saveAs(filepath, true);
+      await project.saveAs(filepath, true);
     }
 
     updateFileList();
     updateTitleBar();
-  })
+  }))
 }
 
 function openAProject() {
@@ -688,24 +748,24 @@ function openAProject() {
   };
 
   const showFileDialog = require('./components/views/file-dialog_display');
-  showFileDialog(options, function(filepath){
+  showFileDialog(options, detached(async function(filepath){
     if (filepath) {
-      var missingChaps = project.loadFile(filepath[0]);
-      if(projectFailedToLoad(filepath[0]))
+      var missingChaps = await project.loadFile(filepath[0]);
+      if(await projectFailedToLoad(filepath[0]))
         return;
       if(missingChaps.length > 0){
         const promptForMissingPups = require('./components/views/missing-pups_display');
-        promptForMissingPups(project, function(resp){
-          displayProject();
+        await promptForMissingPups(project, function(resp){
+          displayProject().catch(reportDetachedFailure);
         });
       }
       else{
-        displayProject();
+        await displayProject();
       }
       userSettings.lastProject = filepath[0];
       userSettings.save();
     }
-  });
+  }));
 }
 
 
@@ -757,7 +817,7 @@ notesQuill.on('text-change', function(delta, oldDelta, source){
   }
 });
 
-function moveToTrash(ind){
+async function moveToTrash(ind){
   var loc = chapterList.toLocator(project, ind);
 
   //Nothing at that index to trash - on an empty project this used to splice an empty list and
@@ -784,20 +844,20 @@ function moveToTrash(ind){
     //Select whatever slid into the trashed chapter's place, falling back down the lists as they
     //empty out.
     var next = chapterList.selectionAfterRemoval(project, loc);
-    displayChapterByIndex(next ? chapterList.toCombinedIndex(project, next) : 0);
+    await displayChapterByIndex(next ? chapterList.toCombinedIndex(project, next) : 0);
   }
   else
     updateFileList();
 }
 
-function deleteChapter(ind){
+async function deleteChapter(ind){
   var loc = chapterList.toLocator(project, ind);
   var deletedChap = chapterList.remove(project, loc);
 
   //Always save project file after deleting a chapter
   //so if user closes without saving it won't expect
   //the deleted chapter at next load...
-  deletedChap.deleteFile();
+  await deletedChap.deleteFile();
 
   if(ind == project.activeChapterIndex){
     //Same "stay on whatever slid into the gap, else fall back" rule moveToTrash() uses - this
@@ -805,7 +865,7 @@ function deleteChapter(ind){
     //blanked the editor even when the project still had reference chapters to show.
     var next = chapterList.selectionAfterRemoval(project, loc);
     if(next)
-      displayChapterByIndex(chapterList.toCombinedIndex(project, next));
+      await displayChapterByIndex(chapterList.toCombinedIndex(project, next));
     else{
       editorQuill.disable();
       editorQuill.setText("");
@@ -816,7 +876,7 @@ function deleteChapter(ind){
   //in case it is the last chapter that was deleted.
   //And only if it is not a new project that has not yet been saved.
   if(project.directory != '')
-    project.saveFile();
+    await project.saveFile();
   updateFileList();
   console.log("deleted " + ind);
 }
@@ -825,14 +885,14 @@ function verifyToDelete(ind){
   var loc = chapterList.toLocator(project, ind);
   if(loc && loc.list == 'trash'){
     const displayDeleteConfirmation = require('./components/views/delete-confirmation_display');
-    displayDeleteConfirmation(function(){
-      deleteChapter(ind);
+    displayDeleteConfirmation(detached(async function(){
+      await deleteChapter(ind);
       editorQuill.focus();
-    });
+    }));
   }
 }
 
-function restoreFromTrash(ind){
+async function restoreFromTrash(ind){
   var loc = chapterList.toLocator(project, ind);
 
   if(!loc || loc.list != 'trash')
@@ -858,7 +918,7 @@ function restoreFromTrash(ind){
     //Follow the restored chapter to its new place. Leaving activeChapterIndex where it was left
     //the editor still showing this chapter while the index named whatever slid into its old slot -
     //so the next keystroke was written into that other chapter, and saved over its file.
-    displayChapterByIndex(chapterList.toCombinedIndex(project, landed));
+    await displayChapterByIndex(chapterList.toCombinedIndex(project, landed));
   }
   else{
     if(activeLoc)
@@ -890,13 +950,13 @@ function changeChapterTitle(ind){
   });
 }
 
-function splitChapter(){
+async function splitChapter(){
   var selection = editorQuill.getSelection(true);
   if(selection){
       var newChap = editorQuill.getContents(selection.index);
       console.log("deleting " + selection.index + " to " + editorQuill.getLength());
       editorQuill.deleteText(selection.index, editorQuill.getLength(), 'user');
-      addImportedChapter(newChap, "untitled");
+      await addImportedChapter(newChap, "untitled");
       changeChapterTitle(project.activeChapterIndex);
   }
 }
@@ -944,14 +1004,18 @@ function scrollChapterListToActiveChapter(){
 //forever, so a release that updated the Help doc would never be seen by anyone who had already
 //launched the app. Open the bundled copy in place instead, and mark the project read-only so the
 //save paths know it cannot be written to. Anyone who wants to annotate it gets a Save As.
-function openHelpDoc(){
+//Deliberately not setProject(path, true), even though that now takes the flag. setProject() runs
+//convertLegacyProject() and the missing-chapters repair screen, and neither belongs to a document
+//the reader cannot edit: repairing it would mean rewriting a file in the install directory, and
+//there is nothing to repair anyway, since the Help doc ships complete.
+async function openHelpDoc(){
   const bundledHelpDoc = sysDirectories.app + "/examples/HelpDoc/HelpDoc.woolf";
 
-  project.loadFile(bundledHelpDoc);
-  if(projectFailedToLoad(bundledHelpDoc))
+  await project.loadFile(bundledHelpDoc);
+  if(await projectFailedToLoad(bundledHelpDoc))
     return;
   project.isReadOnly = true;
-  displayProject();
+  await displayProject();
 }
 
 function exitApp(){
@@ -988,7 +1052,7 @@ function alertBackupResult(msg, allowExitWithoutBackup = false){
   showBackupAlert(msg, allowExitWithoutBackup ? confirmExit : null);
 }
 
-function addImportedChapter(chapDelta, title){
+async function addImportedChapter(chapDelta, title){
   var newChap = newChapter(project);
   newChap.hasUnsavedChanges = true;
   newChap.contents = chapDelta;
@@ -1006,13 +1070,13 @@ function addImportedChapter(chapDelta, title){
 
   //displayChapterByIndex() below renders the sidebar itself as its last step, so this used to
   //render it a second time for nothing.
-  displayChapterByIndex(chapterList.toCombinedIndex(project, landed));
+  await displayChapterByIndex(chapterList.toCombinedIndex(project, landed));
 }
 
-function toggleChapterNotes(){
+async function toggleChapterNotes(){
   userSettings.displayChapNotes = !userSettings.displayChapNotes;
   userSettings.save();
-  refreshNotesDisplay();
+  await refreshNotesDisplay();
 }
 
 
@@ -1034,7 +1098,7 @@ function proceedOrConfirmSave(continueFunc, refreshFileListFirst){
     const displayExitConfirmation = require('./components/views/exit-confirmation_display');
     if(refreshFileListFirst)
       updateFileList();
-    displayExitConfirmation(saveProject, continueFunc);
+    displayExitConfirmation(detached(saveProject), continueFunc);
   }
   else
     continueFunc();
@@ -1055,17 +1119,17 @@ function proceedOrConfirmSave(continueFunc, refreshFileListFirst){
 //that one pattern, but file-opened-from-outside-warewoolf takes its own argument (the opened
 //path) and has a distinct multi-branch shape, so it is registered separately below the table.
 const menuCommands = {
-  'save-clicked': { run: function(){ saveProject(); } },
+  'save-clicked': { run: function(){ return saveProject(); } },
   'save-as-clicked': { run: function(){ saveProjectAs(); } },
   'open-clicked': { run: function(){ proceedOrConfirmSave(openAProject); } },
   'new-project-clicked': { run: function(){ createNewProject(); } },
   'import-clicked': { run: function(){
     const showImportOptions = require('./components/views/import_display');
-    showImportOptions(sysDirectories, addImportedChapter, function(){
-      displayChapterByIndex(project.activeChapterIndex);
+    showImportOptions(sysDirectories, detached(addImportedChapter), detached(async function(){
+      await displayChapterByIndex(project.activeChapterIndex);
       if(project.chapters.length > 0)
         editorQuill.enable();
-    });
+    }));
   } },
   'export-clicked': { run: function(){
     const showExportOptions = require('./components/views/export_display');
@@ -1081,52 +1145,52 @@ const menuCommands = {
   } },
   'word-count-clicked': { run: function(){
     const showWordCount = require('./components/views/wordcount_display');
-    showWordCount(project, editorQuill);
+    return showWordCount(project, editorQuill);
   } },
   'find-replace-clicked': { requiresFocus: true, run: function(){
     const showFindReplace = require('./components/views/findreplace_display');
-    showFindReplace(project, editorQuill, displayChapterByIndex);
+    showFindReplace(project, editorQuill, detached(displayChapterByIndex));
   } },
   'spellcheck-clicked': { requiresFocus: true, run: function(){
     const showSpellcheck = require('./components/views/spellcheck_display');
     const { getBeginningOfCurrentWord } = require('./components/controllers/spellcheck');
     var currentIndex = editorQuill.getSelection(true).index;
     var beginningOfWord = getBeginningOfCurrentWord(editorQuill.getText(), currentIndex);
-    showSpellcheck(editorQuill, project, sysDirectories, displayChapterByIndex, beginningOfWord);
+    showSpellcheck(editorQuill, project, sysDirectories, detached(displayChapterByIndex), beginningOfWord);
   } },
   'convert-first-lines-clicked': { requiresFocus: true, run: function(){
     const showConvertFirstLines = require('./components/views/convert-first-lines_display');
-    showConvertFirstLines(project, function(){
-      displayChapterByIndex(project.activeChapterIndex);
-    });
+    showConvertFirstLines(project, detached(function(){
+      return displayChapterByIndex(project.activeChapterIndex);
+    }));
   } },
   'headings-to-chaps-clicked': { requiresFocus: true, run: function(){
     const showBreakHeadingsOptions = require('./components/views/headings-to-chapters_display');
-    showBreakHeadingsOptions(editorQuill, addImportedChapter);
+    showBreakHeadingsOptions(editorQuill, detached(addImportedChapter));
   } },
   'convert-italics-clicked': { requiresFocus: true, run: function(){
     const showItalicsOptions = require('./components/views/convert-italics_display');
-    showItalicsOptions(project, function(){
-      displayChapterByIndex(project.activeChapterIndex);
-    });
+    showItalicsOptions(project, detached(function(){
+      return displayChapterByIndex(project.activeChapterIndex);
+    }));
   } },
-  'split-chapter-clicked': { requiresFocus: true, run: function(){ splitChapter(); } },
-  'add-chapter-clicked': { requiresFocus: true, run: function(){ addNewChapter(); } },
-  'delete-chapter-clicked': { requiresFocus: true, run: function(){ moveToTrash(project.activeChapterIndex); } },
-  'restore-chapter-clicked': { requiresFocus: true, run: function(){ restoreFromTrash(project.activeChapterIndex); } },
+  'split-chapter-clicked': { requiresFocus: true, run: function(){ return splitChapter(); } },
+  'add-chapter-clicked': { requiresFocus: true, run: function(){ return addNewChapter(); } },
+  'delete-chapter-clicked': { requiresFocus: true, run: function(){ return moveToTrash(project.activeChapterIndex); } },
+  'restore-chapter-clicked': { requiresFocus: true, run: function(){ return restoreFromTrash(project.activeChapterIndex); } },
   'shortcuts-clicked': { run: function(isMac){
     const showShortcutsHelp = require('./components/views/shortcuts-help_display');
     showShortcutsHelp(isMac);
   } },
   'outliner-clicked': { run: function(){
     const showOutliner = require('./components/views/outliner_display');
-    showOutliner(project);
+    return showOutliner(project);
   } },
   'convert-tabs-clicked': { run: function(){
     const showTabOptions = require('./components/views/convert-tabs-display');
-    showTabOptions(project, function(){
-      displayChapterByIndex(project.activeChapterIndex);
-    });
+    showTabOptions(project, detached(function(){
+      return displayChapterByIndex(project.activeChapterIndex);
+    }));
   } },
   'about-clicked': { run: function(appVersion){
     const showAbout = require('./components/views/about_display');
@@ -1134,13 +1198,13 @@ const menuCommands = {
   } },
   'exit-app-clicked': { run: function(){ proceedOrConfirmSave(exitApp, true); } },
   'save-copy-clicked': { run: function(){ saveProjectCopy(); } },
-  'help-doc-clicked': { run: function(){ openHelpDoc(); } },
+  'help-doc-clicked': { run: function(){ return openHelpDoc(); } },
   'renumber-chapters-clicked': { run: function(){
     const showRenumberChapters = require('./components/views/renumber-chapters_display');
-    showRenumberChapters(project, function(){
+    showRenumberChapters(project, detached(function(){
       updateFileList();
-      displayChapterByIndex(project.activeChapterIndex);
-    });
+      return displayChapterByIndex(project.activeChapterIndex);
+    }));
   } },
   'send-via-email-clicked': { run: function(){
     const showEmailOptions = require('./components/views/email-doc_display');
@@ -1164,7 +1228,7 @@ const menuCommands = {
   } },
   'settings-clicked': { run: function(){
     const showSettings = require('./components/views/settings_display');
-    showSettings(userSettings, autosaver, sysDirectories, autosaveProject, function(){
+    showSettings(userSettings, autosaver, sysDirectories, detached(autosaveProject), function(){
       setDarkMode();
     }, platformInfo);
   } },
@@ -1172,15 +1236,15 @@ const menuCommands = {
     const showCorkboard = require('./components/views/corkboard_display');
     showCorkboard(project, platformInfo);
   } },
-  'indent-all-clicked': { run: function(){
+  'indent-all-clicked': { run: async function(){
     const { indentAllParasInAllChaps } = require('./components/controllers/indent-all');
-    indentAllParasInAllChaps(project);
-    displayChapterByIndex(project.activeChapterIndex);
+    await indentAllParasInAllChaps(project);
+    await displayChapterByIndex(project.activeChapterIndex);
   } },
-  'center-all-heads-clicked': { run: function(){
+  'center-all-heads-clicked': { run: async function(){
     const { centerAllHeadingsInAllChaps } = require('./components/controllers/center-all-heads');
-    centerAllHeadingsInAllChaps(project);
-    displayChapterByIndex(project.activeChapterIndex);
+    await centerAllHeadingsInAllChaps(project);
+    await displayChapterByIndex(project.activeChapterIndex);
   } }
 };
 
@@ -1189,29 +1253,32 @@ Object.keys(menuCommands).forEach(function(channel){
   ipcRenderer.on(channel, function(e){
     if(command.requiresFocus && !editorHasFocus())
       return;
-    command.run.apply(null, Array.prototype.slice.call(arguments, 1));
+    //Wrapped because several of these are async now and nothing reads what a menu channel returns
+    //- see detached(). The promise is handed back anyway: ipcRenderer ignores it, but a test can
+    //await the handler instead of guessing how many ticks the command needs.
+    return detached(command.run)(...Array.prototype.slice.call(arguments, 1));
   });
 });
 
 //Takes its own argument (the opened file's path) and has a distinct multi-branch shape - handling
 //a chapter missing from disk mirrors openAProject()'s own file-dialog callback - so it is kept as
 //an ordinary handler rather than forced into the single-argument shape above.
-ipcRenderer.on('file-opened-from-outside-warewoolf', function(event, fPath){
+ipcRenderer.on('file-opened-from-outside-warewoolf', detached(async function(event, fPath){
   if (fPath) {
-    var missingChaps = project.loadFile(fPath);
-    if(projectFailedToLoad(fPath))
+    var missingChaps = await project.loadFile(fPath);
+    if(await projectFailedToLoad(fPath))
       return;
     if(missingChaps.length > 0){
       const promptForMissingPups = require('./components/views/missing-pups_display');
-      promptForMissingPups(project, function(resp){
-        displayProject();
+      await promptForMissingPups(project, function(resp){
+        displayProject().catch(reportDetachedFailure);
       });
     }
     else{
-      displayProject();
+      await displayProject();
     }
     userSettings.lastProject = fPath;
     userSettings.save();
   }
 
-});
+}));

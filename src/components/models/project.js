@@ -1,8 +1,17 @@
-const fs = require('fs');
 const newChapter = require('./chapter');
 const chapterList = require('../controllers/chapter-list');
 const { logError } = require('../controllers/error-log');
 const defaultProjectNotesName = 'project_.txt'; //Will have default notes prepend ('-notes_') as well (added by Chapter object's save function)
+
+//Group B of the platform contract (see platform.js). Like chapter.js, this module no longer knows
+//how a project is laid out on disk: openProject hands back the path already split, saveProjectAs
+//names the chapters subdirectory and returns the filenames the chapter files landed under, and
+//nothing here composes a path or decides an extension any more.
+let platform = null;
+
+function setPlatform(p){
+  platform = p;
+}
 
 function newProject(){
     return {
@@ -19,7 +28,8 @@ function newProject(){
         activeChapterIndex: 0,
         wordGoal: 0,
         hasUnsavedChanges: false,
-        //Set for a project opened out of the read-only install directory (the bundled Help doc).
+        //Set for a project opened out of the read-only install directory (the bundled Help doc, and
+        //the Frankenstein example when its copy out to userData fails).
         //saveFile() refuses to write while it is set, so nothing can silently fail with EACCES
         //against a file the user cannot write; render.js routes an explicit save to Save As
         //instead, which clears it by way of saveAs().
@@ -38,21 +48,22 @@ function newProject(){
       return chapterList.chapterAt(this, this.activeChapterIndex);
     }
 
-    function loadFile(projPath){
+    async function loadFile(projPath){
       //Cleared up front so it always describes this load, not an earlier one.
       this.loadError = null;
 
       try{
-        //Convert Windows filepaths to maintain linux/windows compatibility
-        projPath = projPath.replaceAll('\\', '/');
+        requirePlatform();
 
-        var projectFile = JSON.parse(fs.readFileSync(projPath, "utf8"));
+        //openProject reads and parses the file and splits the path (normalizing Windows separators
+        //to maintain linux/windows compatibility), so all three used to happen here and no longer
+        //do.
+        var opened = await platform.openProject({ path: projPath });
 
-        Object.assign(this, projectFile);
-        var projPathParts = projPath.split('/');
+        Object.assign(this, opened.project);
 
-        this.filename = projPathParts.pop();
-        this.directory = projPathParts.join('/').concat("/");
+        this.filename = opened.filename;
+        this.directory = opened.directory;
 
         //Named rather than reached for as `this`, which inside these callbacks is not the project.
         var proj = this;
@@ -82,7 +93,7 @@ function newProject(){
         //never written by stringifyProject) cannot mark a writable project read-only. Callers that
         //want it set, like openHelpDoc(), set it after the load returns.
         this.isReadOnly = false;
-        return this.testChapsDirectory();
+        return await this.testChapsDirectory();
       }
       catch(err){
         logError(err);
@@ -104,36 +115,33 @@ function newProject(){
       return this.notesChap;
     }
 
-    function saveFile(){
+    async function saveFile(){
       try{
+        requirePlatform();
+
         var proj = this;
         //Guarded here rather than at each call site: chapter deletion, legacy conversion and the
         //autosave/Ctrl+S path all reach saveFile(), and every one of them already treats a false
         //return as "not saved". Writing anyway would fail with EACCES and be swallowed by the
         //catch below, which is the silent data loss this flag exists to prevent.
+        //
+        //Deliberately still here rather than pushed into the platform: isReadOnly describes where
+        //this copy was *opened from*, which is renderer-side policy the native side cannot know and
+        //which is never written into the .woolf. It also has to sit above the chapter saves below,
+        //not just above the project-file write - a read-only project's chapter files are equally
+        //unwritable. PERMISSION_DENIED coming back from a command is the backstop for when this
+        //flag is wrong, not a replacement for it. See platform.js's CODES.PERMISSION_DENIED.
         if(proj.isReadOnly)
           return false;
         if(proj.filename != "" && proj.directory != ""){
 
-          proj.chapters.forEach(function(chap){
-            if(chap.hasUnsavedChanges)
-              chap.saveFile();
-          });
-          proj.reference.forEach(function(rf){
-            if(rf.hasUnsavedChanges)
-              rf.saveFile();
-          });
-          proj.trash.forEach(function(tr){
-            if(tr.hasUnsavedChanges)
-              tr.saveFile();
-          });
+          await saveDirtyChapters(proj);
 
-          if(proj.notesChap.hasUnsavedChanges)
-            proj.notesChap.saveNotesFile();
-
-          var fileString = stringifyProject(proj);
-
-          fs.writeFileSync(proj.directory + proj.filename, fileString, 'utf8');
+          await platform.saveProject({
+            directory: proj.directory,
+            filename: proj.filename,
+            contents: stringifyProject(proj)
+          });
 
           return true;
         }
@@ -144,6 +152,22 @@ function newProject(){
         logError(err);
         return false;
       }
+    }
+
+    //Sequential rather than concurrent on purpose. Two chapters with the same title race for the
+    //same allocated filename if their saves overlap, and saveChapterAtomic can only close that race
+    //within one call - it stashes, allocates and writes as a unit, but two of those interleaved
+    //would both see the name free.
+    async function saveDirtyChapters(proj){
+      var everyChapter = proj.chapters.concat(proj.reference, proj.trash);
+
+      for(let i = 0; i < everyChapter.length; i++){
+        if(everyChapter[i].hasUnsavedChanges)
+          await everyChapter[i].saveFile();
+      }
+
+      if(proj.notesChap.hasUnsavedChanges)
+        await proj.notesChap.saveNotesFile();
     }
 
     function stringifyProject(proj){
@@ -167,88 +191,80 @@ function newProject(){
       }, '\t');
     }
 
-    function saveAs(filepath, useSaveCopy = false){
+    //Save As, and (with useSaveCopy) Save a Copy.
+    //
+    //Three steps in this order, and the order is forced rather than chosen:
+    //
+    //  1. saveProjectAs - parse the target path, make the project and chapters directories, copy
+    //     every chapter file that already exists across. Six filesystem operations that succeed or
+    //     fail together, which is why they are one command.
+    //  2. Save any chapter with unsaved changes, into the new location. This cannot be folded into
+    //     step 1: saveChapterAtomic/saveChapter *allocate* the filename, so the names the .woolf
+    //     has to list are not known until these have run - and they cannot run before step 1,
+    //     because the directory they write into does not exist yet.
+    //  3. saveProject - write the .woolf, now that every filename in it is final. See the note on
+    //     saveProject in platform.js for why this is a separate command rather than part of step 1.
+    async function saveAs(filepath, useSaveCopy = false){
       try{
-        //Convert Windows filepaths to maintain linux/windows compatibility
-        filepath = filepath.replaceAll('\\', '/');
+        requirePlatform();
 
         var proj = this;
-        var filepathParts = filepath.split('/');
-        var newFilename = filepathParts.pop();
-        var newDirectory = filepathParts.join('/').concat("/");
-        var extIndex = newFilename.lastIndexOf(".");
-        var newSubDir = (extIndex > -1 ? newFilename.substring(0, extIndex) : newFilename).concat("_chapters/");
+        //One flat list in a fixed order, so what saveProjectAs reports back can be lined up against
+        //the chapters it was asked about. A chapter that has never been saved has a null filename
+        //and takes a slot without being a failure.
+        var everyChapter = proj.chapters.concat(proj.reference, proj.trash);
 
-        //Create new directories
-        if(!fs.existsSync(newDirectory))
-          fs.mkdirSync(newDirectory);
-        if(!fs.existsSync(newDirectory + newSubDir))
-          fs.mkdirSync(newDirectory + newSubDir);
+        var moved = await platform.saveProjectAs({
+          fromDirectory: proj.directory,
+          fromChapsDir: proj.chapsDirectory,
+          targetPath: filepath,
+          chapterFilenames: everyChapter.map(function(chap){ return chap.filename; })
+        });
 
-        //Copy any existing chapters over to new location and change name accordingly.
         //A chapter whose file is missing from disk (flagged by testChapsDirectory) shouldn't
         //abort the whole Save As - log it and move on to the rest.
-        function copyChapterToNewLocation(chap){
-          if(chap.filename != null){
-            var newChapFilename = chap.filename.split("/").pop();
-            try{
-              fs.copyFileSync(proj.directory + proj.chapsDirectory + chap.filename,
-                newDirectory + newSubDir + newChapFilename);
-              if(useSaveCopy == false)
-                chap.filename = newChapFilename;
-            }
-            catch(copyErr){
-              logError(copyErr);
-            }
-          }
-        }
-        proj.chapters.forEach(copyChapterToNewLocation);
-        proj.reference.forEach(copyChapterToNewLocation);
-        proj.trash.forEach(copyChapterToNewLocation);
+        moved.failed.forEach(function(failure){
+          logError(new Error('Could not copy chapter file "' + failure.filename
+            + '" into the new project location (' + failure.code + '): ' + failure.message));
+        });
 
         //Save old values for re-assignment with SaveCopy
         var oldFn = proj.filename;
         var oldDir = proj.directory;
         var oldChapsDir = proj.chapsDirectory;
 
-        //Update project info for new locations
-        proj.filename = newFilename;
-        if(proj.filename.substr(proj.filename.length - 6, 6) != ".woolf")
-          proj.filename += ".woolf";
-        proj.directory = newDirectory;
-        proj.chapsDirectory = newSubDir;
+        //Update project info for new locations. Has to happen before the chapter saves below, which
+        //resolve their directory through the project on each use - that is what carries them to the
+        //new location rather than writing back into the old one.
+        proj.filename = moved.filename;
+        proj.directory = moved.directory;
+        proj.chapsDirectory = moved.chapsDirectory;
 
-        //Save any new or altered chapters
-        proj.chapters.forEach(function(chap){
-          if(chap.hasUnsavedChanges){
-            if(useSaveCopy)
-              chap.saveCopy();
-            else
-              chap.saveFile();
-          }
-        });
-        proj.reference.forEach(function(rf){
-          if(rf.hasUnsavedChanges){
-            if(useSaveCopy)
-              rf.saveCopy();
-            else
-              rf.saveFile();
-          }
-        });
-        proj.trash.forEach(function(tr){
-          if(tr.hasUnsavedChanges){
-            if(useSaveCopy)
-              tr.saveCopy();
-            else
-              tr.saveFile();
-          }
-        });
+        //Save a Copy leaves the open project pointing at its original files, so only a real Save As
+        //repoints them. A chapter that failed to copy comes back as null and is not repointed at a
+        //file that was never created.
+        if(useSaveCopy == false)
+          everyChapter.forEach(function(chap, i){
+            if(moved.chapterFilenames[i] != null)
+              chap.filename = moved.chapterFilenames[i];
+          });
 
+        //Sequential for the same reason saveDirtyChapters is - see its comment.
+        for(let i = 0; i < everyChapter.length; i++){
+          if(everyChapter[i].hasUnsavedChanges){
+            if(useSaveCopy)
+              await everyChapter[i].saveCopy();
+            else
+              await everyChapter[i].saveFile();
+          }
+        }
 
         //Save new project file
-        var fileString = stringifyProject(proj);
-
-        fs.writeFileSync(proj.directory + proj.filename, fileString, 'utf8');
+        await platform.saveProject({
+          directory: proj.directory,
+          filename: proj.filename,
+          contents: stringifyProject(proj)
+        });
 
         //reset porject details if using saveCopy
         if(useSaveCopy){
@@ -276,9 +292,12 @@ function newProject(){
     //out on navigating onto it, by way of a blank editor and an ENOENT in the error log. The usual
     //cause (a renamed or mistyped chapters subdirectory) breaks all three at once, and that is
     //exactly what the repair screen fixes, so it needs the whole set to work from.
-    function testChapsDirectory(){
+    //
+    //verifyProjectFiles answers in filenames, so the chapters are matched back against them by
+    //name rather than by position: the same file can legitimately be named by more than one list.
+    async function testChapsDirectory(){
       var proj = this;
-      var missingChaps = [];
+      var candidates = [];
 
       chapterList.LIST_ORDER.forEach(function(listName){
         chapterList.listOf(proj, listName).forEach(function(chap){
@@ -287,13 +306,41 @@ function newProject(){
           if(chap.filename == null)
             return;
 
-          if(!fs.existsSync(proj.directory + proj.chapsDirectory + chap.filename))
-            missingChaps.push(chap);
+          candidates.push(chap);
         });
       });
 
-      return missingChaps;
+      try{
+        requirePlatform();
+
+        var missing = await platform.verifyProjectFiles({
+          directory: proj.directory,
+          chapsDirectory: proj.chapsDirectory,
+          chapterFilenames: candidates.map(function(chap){ return chap.filename; })
+        });
+
+        return candidates.filter(function(chap){
+          return missing.indexOf(chap.filename) > -1;
+        });
+      }
+      catch(err){
+        //Callers treat the return value as "which chapters need repairing", and every one of them
+        //does .length on it - so a check that could not run reports nothing missing rather than
+        //throwing out of a load or an unawaited view callback. Logged, because a repair screen that
+        //silently never opens is the failure mode this whole function exists to end.
+        logError(err);
+        return [];
+      }
     }
 }
 
+//Louder than a silent no-op, which for a save would be data loss behind a clean-looking return.
+function requirePlatform(){
+  if(platform == null)
+    throw new Error('This project cannot reach the filesystem: no platform has been configured. Call setPlatform() first.');
+}
+
 module.exports = newProject;
+//Hung off the factory rather than exported alongside it, so every existing
+//`require('./project')` call site keeps working unchanged.
+module.exports.setPlatform = setPlatform;

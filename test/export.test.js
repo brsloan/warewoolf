@@ -71,21 +71,21 @@ function makeTestProject(chapters, reference){
   return project;
 }
 
-test('exportProject writes one sequentially numbered file per chapter when exporting the whole project', function(t){
+test('exportProject writes one sequentially numbered file per chapter when exporting the whole project', async function(t){
   var chap1 = makeChapter(textDelta('First chapter text.'));
   var chap2 = makeChapter(textDelta('Second chapter text.'));
   var project = makeTestProject([chap1, chap2]);
   var dir = tempDir(t);
   var options = { type: '.txt', what: 'project', styleHeadingAsChapter: true, generateTitlePage: false };
 
-  exportProject(project, {}, options, dir);
+  await exportProject(project, {}, options, dir);
 
   var outDir = path.join(dir, 'Test Project');
   assert.match(fs.readFileSync(path.join(outDir, '0001_Chapter 1.txt'), 'utf8'), /First chapter text\./);
   assert.match(fs.readFileSync(path.join(outDir, '0002_Chapter 2.txt'), 'utf8'), /Second chapter text\./);
 });
 
-test('exportProject prefixes reference-chapter filenames with "-ref_"', function(t){
+test('exportProject prefixes reference-chapter filenames with "-ref_"', async function(t){
   var chap = makeChapter(textDelta('Body.'));
   var ref = makeChapter(textDelta('Reference body.'));
   ref.title = 'Appendix';
@@ -93,21 +93,21 @@ test('exportProject prefixes reference-chapter filenames with "-ref_"', function
   var dir = tempDir(t);
   var options = { type: '.txt', what: 'project', styleHeadingAsChapter: true, generateTitlePage: false };
 
-  exportProject(project, {}, options, dir);
+  await exportProject(project, {}, options, dir);
 
   var outDir = path.join(dir, 'Test Project');
   assert.ok(fs.existsSync(path.join(outDir, '0001_Chapter 1.txt')), 'expected the regular chapter file');
   assert.match(fs.readFileSync(path.join(outDir, '-ref_0001_Appendix.txt'), 'utf8'), /Reference body\./);
 });
 
-test('exportProject writes a chapter\'s notes alongside it with the "-notes_" prefix', function(t){
+test('exportProject writes a chapter\'s notes alongside it with the "-notes_" prefix', async function(t){
   var chap = makeChapter(textDelta('Body.'));
   chap.notes = textDelta('Some chapter notes.');
   var project = makeTestProject([chap]);
   var dir = tempDir(t);
   var options = { type: '.txt', what: 'project', styleHeadingAsChapter: true, generateTitlePage: false };
 
-  exportProject(project, {}, options, dir);
+  await exportProject(project, {}, options, dir);
 
   var outDir = path.join(dir, 'Test Project');
   assert.match(fs.readFileSync(path.join(outDir, '-notes_0001_Chapter 1.txt'), 'utf8'), /Some chapter notes\./);
@@ -116,33 +116,33 @@ test('exportProject writes a chapter\'s notes alongside it with the "-notes_" pr
 //Regression: exportChapter read options.compileGenTitlePage, a field export_display.js never
 //sets (it sets options.generateTitlePage), so the title page was silently never inserted into
 //.html/.epub exports regardless of what the caller asked for.
-test('exportProject inserts a title page into .html output when generateTitlePage is true', function(t){
+test('exportProject inserts a title page into .html output when generateTitlePage is true', async function(t){
   var chap = makeChapter(textDelta('Body text.'));
   chap.title = 'Chapter One';
   var project = makeTestProject([chap]);
   var dir = tempDir(t);
   var options = { type: '.html', what: 'project', styleHeadingAsChapter: true, generateTitlePage: true };
 
-  exportProject(project, {}, options, dir);
+  await exportProject(project, {}, options, dir);
 
   var html = fs.readFileSync(path.join(dir, 'Test Project', '0001_Chapter One.html'), 'utf8');
   assert.match(html, /<h1 class="center">/, 'expected a title-page heading to be inserted');
 });
 
-test('exportProject omits the title page from .html output when generateTitlePage is false', function(t){
+test('exportProject omits the title page from .html output when generateTitlePage is false', async function(t){
   var chap = makeChapter(textDelta('Body text.'));
   chap.title = 'Chapter One';
   var project = makeTestProject([chap]);
   var dir = tempDir(t);
   var options = { type: '.html', what: 'project', styleHeadingAsChapter: true, generateTitlePage: false };
 
-  exportProject(project, {}, options, dir);
+  await exportProject(project, {}, options, dir);
 
   var html = fs.readFileSync(path.join(dir, 'Test Project', '0001_Chapter One.html'), 'utf8');
   assert.doesNotMatch(html, /<h1 class="center">/);
 });
 
-test('exportProject prefixes a trashed chapter export with "-trash_"', function(t){
+test('exportProject prefixes a trashed chapter export with "-trash_"', async function(t){
   var trashedChap = makeChapter(textDelta('Deleted content.'));
   trashedChap.title = 'Deleted Chapter';
   var project = makeTestProject([]);
@@ -151,7 +151,7 @@ test('exportProject prefixes a trashed chapter export with "-trash_"', function(
   var dir = tempDir(t);
   var options = { type: '.txt', what: 'chapter', styleHeadingAsChapter: true, generateTitlePage: false };
 
-  exportProject(project, {}, options, dir);
+  await exportProject(project, {}, options, dir);
 
   var outDir = path.join(dir, 'Test Project');
   assert.match(fs.readFileSync(path.join(outDir, '-trash_Deleted Chapter.txt'), 'utf8'), /Deleted content\./);
@@ -160,7 +160,7 @@ test('exportProject prefixes a trashed chapter export with "-trash_"', function(
 //Regression: the whole chapter loop used to share one try/catch, so a single bad chapter (a
 //corrupt file, a parse failure) aborted every chapter after it instead of just being logged and
 //skipped.
-test('exportProject keeps exporting later chapters after an earlier one throws', function(t){
+test('exportProject keeps exporting later chapters after an earlier one throws', async function(t){
   var logErrorMock = t.mock.method(errorLog, 'logError', function(){});
   var freshExportProject = freshExport().exportProject;
 
@@ -171,8 +171,8 @@ test('exportProject keeps exporting later chapters after an earlier one throws',
   var dir = tempDir(t);
   var options = { type: '.txt', what: 'project', styleHeadingAsChapter: true, generateTitlePage: false };
 
-  assert.doesNotThrow(function(){
-    freshExportProject(project, {}, options, dir);
+  await assert.doesNotReject(function(){
+    return freshExportProject(project, {}, options, dir);
   });
 
   var outDir = path.join(dir, 'Test Project');
@@ -186,31 +186,31 @@ test('exportProject keeps exporting later chapters after an earlier one throws',
 //for .docx (docx.Packer's promise) and .epub (an archive stream), both of which finish writing
 //asynchronously. It now takes a completion callback that only fires once every write, sync or
 //async, has actually finished, and reports how many failed.
-test('exportProject invokes its callback with an error count of 0 once a synchronous export has fully written', function(t){
+test('exportProject invokes its callback with an error count of 0 once a synchronous export has fully written', async function(t){
   var chap = makeChapter(textDelta('Body text.'));
   var project = makeTestProject([chap]);
   var dir = tempDir(t);
   var options = { type: '.txt', what: 'project', styleHeadingAsChapter: true, generateTitlePage: false };
 
   var cbackCalls = [];
-  exportProject(project, {}, options, dir, function(errorCount){ cbackCalls.push(errorCount); });
+  await exportProject(project, {}, options, dir, function(errorCount){ cbackCalls.push(errorCount); });
 
   assert.deepStrictEqual(cbackCalls, [0]);
   assert.ok(fs.existsSync(path.join(dir, 'Test Project', '0001_Chapter 1.txt')));
 });
 
-test('exportProject does not throw when called without a completion callback (legacy call shape)', function(t){
+test('exportProject does not throw when called without a completion callback (legacy call shape)', async function(t){
   var chap = makeChapter(textDelta('Body text.'));
   var project = makeTestProject([chap]);
   var dir = tempDir(t);
   var options = { type: '.txt', what: 'project', styleHeadingAsChapter: true, generateTitlePage: false };
 
-  assert.doesNotThrow(function(){
-    exportProject(project, {}, options, dir);
+  await assert.doesNotReject(function(){
+    return exportProject(project, {}, options, dir);
   });
 });
 
-test('exportProject reports a nonzero error count when an earlier chapter throws', function(t){
+test('exportProject reports a nonzero error count when an earlier chapter throws', async function(t){
   t.mock.method(errorLog, 'logError', function(){});
   var freshExportProject = freshExport().exportProject;
 
@@ -222,7 +222,7 @@ test('exportProject reports a nonzero error count when an earlier chapter throws
   var options = { type: '.txt', what: 'project', styleHeadingAsChapter: true, generateTitlePage: false };
 
   var cbackCalls = [];
-  freshExportProject(project, {}, options, dir, function(errorCount){ cbackCalls.push(errorCount); });
+  await freshExportProject(project, {}, options, dir, function(errorCount){ cbackCalls.push(errorCount); });
 
   assert.deepStrictEqual(cbackCalls, [1]);
 });
@@ -234,7 +234,7 @@ test('exportProject\'s callback only fires once an async .docx write has actuall
   var options = { type: '.docx', what: 'project', styleHeadingAsChapter: true, generateTitlePage: false };
 
   var callbackFired = false;
-  exportProject(project, { addressInfo: null }, options, dir, function(){ callbackFired = true; });
+  await exportProject(project, { addressInfo: null }, options, dir, function(){ callbackFired = true; });
 
   assert.strictEqual(callbackFired, false, '.docx callback should not fire synchronously');
 
@@ -257,7 +257,7 @@ test('exportProject\'s callback only fires once an async .epub write has actuall
   var options = { type: '.epub', what: 'project', styleHeadingAsChapter: true, generateTitlePage: false };
 
   var callbackFired = false;
-  exportProject(project, {}, options, dir, function(){ callbackFired = true; });
+  await exportProject(project, {}, options, dir, function(){ callbackFired = true; });
 
   assert.strictEqual(callbackFired, false, '.epub callback should not fire synchronously');
 

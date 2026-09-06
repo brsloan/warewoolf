@@ -1,7 +1,10 @@
 const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
 const { countWords, convertToPlainText } = require('../controllers/wordcount');
 
-function showOutliner(project){
+//Async because each chapter's word count needs its text, which for a chapter not already in memory
+//is now an asynchronous read through the platform facade. The popup is still built and appended in
+//one pass - the rows are assembled first, so the reader never sees a half-drawn table.
+async function showOutliner(project){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup", "popup-outliner");
@@ -22,7 +25,8 @@ function showOutliner(project){
 
   var outlineIndex = 1;
 
-  project.chapters.forEach(function(chap){
+  for(let chapIndex = 0; chapIndex < project.chapters.length; chapIndex++){
+    let chap = project.chapters[chapIndex];
     var row = document.createElement('tr');
 
     var indexCell = document.createElement('td');
@@ -36,7 +40,7 @@ function showOutliner(project){
     row.appendChild(titleCell);
 
     var wordCountCell = document.createElement('td');
-    var text = convertToPlainText(chap.getContentsOrFile());
+    var text = convertToPlainText(await chap.getContentsOrFile());
     wordCountCell.innerText = countWords(text);
     wordCountCell.classList.add('outliner-word-count');
     row.appendChild(wordCountCell);
@@ -55,7 +59,7 @@ function showOutliner(project){
 
     chapTable.appendChild(row);
 
-  });
+  }
 
   popup.appendChild(chapTable);
 

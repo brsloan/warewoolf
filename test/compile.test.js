@@ -75,8 +75,8 @@ test('compileProject writes a .docx file instead of throwing when project/userSe
   var options = { type: '.docx', insertStrng: '***', insertHead: false, generateTitlePage: false, styleHeadingAsChapter: true };
   var filepath = tempFilePath(t, '.docx');
 
-  assert.doesNotThrow(function(){
-    compileProject(project, userSettings, options, filepath);
+  await assert.doesNotReject(function(){
+    return compileProject(project, userSettings, options, filepath);
   });
 
   await waitForFile(filepath, 2000);
@@ -110,7 +110,7 @@ test('compileProject callback for .epub only fires once the archive has actually
   var filepath = tempFilePath(t, '.epub');
 
   var callbackFired = false;
-  compileProject(project, {}, options, filepath, function(){
+  await compileProject(project, {}, options, filepath, function(){
     callbackFired = true;
   });
 
@@ -120,34 +120,34 @@ test('compileProject callback for .epub only fires once the archive has actually
   assert.strictEqual(callbackFired, true, 'epub callback should have fired by the time the archive is readable');
 });
 
-test('compileProject does not throw when called without a callback (legacy call shape)', function(t){
+test('compileProject does not throw when called without a callback (legacy call shape)', async function(t){
   var chap = makeChapter(textDelta('Some text.'));
   var project = makeTestProject([chap]);
   var options = { type: '.mdfc', insertStrng: '***', insertHead: false };
   var filepath = tempFilePath(t, '.mdfc');
 
-  assert.doesNotThrow(function(){
-    compileProject(project, {}, options, filepath);
+  await assert.doesNotReject(function(){
+    return compileProject(project, {}, options, filepath);
   });
 });
 
-test('compileChapterDeltas does not leak an implicit global "i"', function(){
+test('compileChapterDeltas does not leak an implicit global "i"', async function(){
   delete global.i;
 
   var chapters = [makeChapter(textDelta('One')), makeChapter(textDelta('Two')), makeChapter(textDelta('Three'))];
   var project = makeTestProject(chapters);
 
-  compileChapterDeltas(project, { insertStrng: '***', insertHead: false });
+  await compileChapterDeltas(project, { insertStrng: '***', insertHead: false });
 
   assert.strictEqual(typeof global.i, 'undefined', 'compileChapterDeltas leaked "i" as an implicit global');
 });
 
-test('compileChapterDeltas inserts the divider between chapters and a header per chapter when requested', function(){
+test('compileChapterDeltas inserts the divider between chapters and a header per chapter when requested', async function(){
   var chap1 = makeChapter(textDelta('First chapter text.'));
   var chap2 = makeChapter(textDelta('Second chapter text.'));
   var project = makeTestProject([chap1, chap2]);
 
-  var compiled = compileChapterDeltas(project, { insertStrng: '***', insertHead: true });
+  var compiled = await compileChapterDeltas(project, { insertStrng: '***', insertHead: true });
 
   //Adjacent plain-text inserts get merged by Delta.concat, so assert on the full joined text and op
   //order rather than looking for each title as its own op.
@@ -159,11 +159,11 @@ test('compileChapterDeltas inserts the divider between chapters and a header per
   assert.strictEqual(headerOps.length, 2, 'expected one heading op per chapter');
 });
 
-test('compileChapterDeltas omits headers when insertHead is false', function(){
+test('compileChapterDeltas omits headers when insertHead is false', async function(){
   var chap1 = makeChapter(textDelta('First chapter text.'));
   var project = makeTestProject([chap1]);
 
-  var compiled = compileChapterDeltas(project, { insertStrng: '***', insertHead: false });
+  var compiled = await compileChapterDeltas(project, { insertStrng: '***', insertHead: false });
   var headerOps = compiled.ops.filter(op => op.attributes && op.attributes.header === 1);
 
   assert.strictEqual(headerOps.length, 0);
@@ -180,7 +180,7 @@ test('compileProject inserts a heading into each epub chapter when insertHead is
   var options = { type: '.epub', insertStrng: '***', insertHead: true, generateTitlePage: false };
   var filepath = tempFilePath(t, '.epub');
 
-  compileProject(project, userSettings, options, filepath);
+  await compileProject(project, userSettings, options, filepath);
 
   var dir = await waitForEpub(filepath, 2000);
   var chapterEntry = dir.files.find(f => f.path === 'OEBPS/chapter_1.xhtml');
@@ -199,7 +199,7 @@ test('compileProject leaves epub chapter body without a heading when insertHead 
   var options = { type: '.epub', insertStrng: '***', insertHead: false, generateTitlePage: false };
   var filepath = tempFilePath(t, '.epub');
 
-  compileProject(project, userSettings, options, filepath);
+  await compileProject(project, userSettings, options, filepath);
 
   var dir = await waitForEpub(filepath, 2000);
   var chapterEntry = dir.files.find(f => f.path === 'OEBPS/chapter_1.xhtml');
@@ -211,7 +211,7 @@ test('compileProject leaves epub chapter body without a heading when insertHead 
 
 //Regression: compileProject unconditionally console.log'd the raw options object and filepath on
 //every call, left over from debugging.
-test('compileProject does not dump options/filepath to the console', function(t){
+test('compileProject does not dump options/filepath to the console', async function(t){
   var chap = makeChapter(textDelta('Text.'));
   var project = makeTestProject([chap]);
   var options = { type: '.mdfc', insertStrng: '***', insertHead: false };
@@ -222,7 +222,7 @@ test('compileProject does not dump options/filepath to the console', function(t)
   console.log = function(){ loggedArgs.push(Array.from(arguments)); };
   t.after(function(){ console.log = originalLog; });
 
-  compileProject(project, {}, options, filepath);
+  await compileProject(project, {}, options, filepath);
 
   console.log = originalLog;
 

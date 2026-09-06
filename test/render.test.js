@@ -280,7 +280,7 @@ test('moveToTrash on a live chapter moves it to trash and keeps the display on t
   r.project.chapters = [c0, c1];
   r.project.activeChapterIndex = 0;
 
-  r.moveToTrash(0);
+  await r.moveToTrash(0);
 
   assert.deepStrictEqual(r.project.chapters, [c1]);
   assert.deepStrictEqual(r.project.trash, [c0]);
@@ -294,7 +294,7 @@ test('moveToTrash on an already-trashed chapter asks for confirmation instead of
   var t0 = makeChap('t0');
   r.project.trash = [t0];
 
-  r.moveToTrash(0);
+  await r.moveToTrash(0);
 
   assert.deepStrictEqual(r.project.trash, [t0], 'nothing should be deleted before Yes is clicked');
   assert.ok(document.querySelector('.delete-confirm-popup'), 'a confirmation popup should appear');
@@ -306,7 +306,7 @@ test('moveToTrash on a project with nothing in any list does not push an empty s
   r.project.reference = [];
   r.project.trash = [];
 
-  r.moveToTrash(0);
+  await r.moveToTrash(0);
 
   assert.deepStrictEqual(r.project.trash, []);
 });
@@ -325,7 +325,7 @@ test('restoreFromTrash moves the chapter back and marks the project as having un
   r.project.trash = [t0];
   r.project.hasUnsavedChanges = false;
 
-  r.restoreFromTrash(1); //t0's combined index: chapters.length(1) + reference.length(0)
+  await r.restoreFromTrash(1); //t0's combined index: chapters.length(1) + reference.length(0)
 
   assert.deepStrictEqual(r.project.chapters, [c0, t0]);
   assert.deepStrictEqual(r.project.trash, []);
@@ -344,8 +344,8 @@ test('confirming delete twice in a row does not stack a second confirmation popu
   var r = await freshRender();
   r.project.trash = [makeChap('t0')];
 
-  r.moveToTrash(0);
-  r.moveToTrash(0);
+  await r.moveToTrash(0);
+  await r.moveToTrash(0);
 
   assert.strictEqual(document.querySelectorAll('.delete-confirm-popup').length, 1);
 });
@@ -362,8 +362,10 @@ test('deleting a trashed chapter removes that exact chapter, not a neighboring o
   r.project.trash = [t0, t1];
   r.project.activeChapterIndex = 2; //t0's combined index: chapters.length(1) + reference.length(1) + 0
 
-  r.moveToTrash(2);
-  findButton('Yes').onclick();
+  await r.moveToTrash(2);
+  //Awaited: the confirmation's handler deletes the chapter's files and saves the project, both of
+  //which go through the platform facade now.
+  await findButton('Yes').onclick();
 
   assert.deepStrictEqual(deletedFiles, ['t0']);
   assert.strictEqual(r.project.trash.length, 1);
@@ -385,9 +387,11 @@ test('deleting the last trashed chapter does not crash when the project has mult
   //t0's combined index: chapters.length(1) + reference.length(2) + 0 = 3
   r.project.activeChapterIndex = 3;
 
-  assert.doesNotThrow(function(){
-    r.moveToTrash(3);
-    findButton('Yes').onclick();
+  await assert.doesNotReject(async function(){
+    await r.moveToTrash(3);
+    //Awaited: the confirmation's handler deletes the chapter's files and saves the project, both of
+    //which go through the platform facade now.
+    await findButton('Yes').onclick();
   });
 
   assert.deepStrictEqual(deletedFiles, ['t0']);
@@ -402,7 +406,7 @@ test('clicking No on the delete confirmation leaves the trashed chapter untouche
   var t0 = makeChap('t0');
   r.project.trash = [t0];
 
-  r.moveToTrash(0);
+  await r.moveToTrash(0);
   findButton('No').onclick();
 
   assert.deepStrictEqual(r.project.trash, [t0]);
@@ -460,7 +464,7 @@ test('displayChapterByIndex clamps an out-of-range index to the last chapter', a
   var r = await freshRender();
   r.project.chapters = [makeChap('c0'), makeChap('c1')];
 
-  r.displayChapterByIndex(99);
+  await r.displayChapterByIndex(99);
 
   assert.strictEqual(r.project.activeChapterIndex, 1);
   assert.strictEqual(r.editorQuill.getText().trim(), 'c1');
@@ -473,16 +477,16 @@ test('editing a chapter, viewing another, then returning shows the edit rather t
   var r = await freshRender();
   var c0 = makeChap('c0'), c1 = makeChap('c1');
   r.project.chapters = [c0, c1];
-  r.displayChapterByIndex(0);
+  await r.displayChapterByIndex(0);
 
   r.editorQuill.setText('edited content\n', 'user');
   assert.deepStrictEqual(c0.contents, r.editorQuill.getContents(), 'the edit should be stored on the chapter as it happens, not just left in the editor');
   assert.strictEqual(c0.hasUnsavedChanges, true);
 
-  r.displayChapterByIndex(1);
+  await r.displayChapterByIndex(1);
   assert.strictEqual(r.editorQuill.getText().trim(), 'c1');
 
-  r.displayChapterByIndex(0);
+  await r.displayChapterByIndex(0);
   assert.strictEqual(r.editorQuill.getText().trim(), 'edited content');
 });
 
@@ -490,7 +494,7 @@ test('editing a chapter marks both the chapter and the project as having unsaved
   var r = await freshRender();
   var c0 = makeChap('c0');
   r.project.chapters = [c0];
-  r.displayChapterByIndex(0);
+  await r.displayChapterByIndex(0);
 
   r.editorQuill.insertText(0, 'x', 'user');
 
@@ -503,7 +507,7 @@ test('a programmatic content change (loading a chapter) does not mark it as havi
   var c0 = makeChap('c0');
   r.project.chapters = [c0];
 
-  r.displayChapterByIndex(0);
+  await r.displayChapterByIndex(0);
 
   assert.strictEqual(c0.hasUnsavedChanges, false);
 });
@@ -513,7 +517,7 @@ test('typing in the notes pane updates the active chapter\'s own notes while per
   var c0 = makeChap('c0');
   r.project.chapters = [c0];
   r.userSettings.displayChapNotes = true;
-  r.displayChapterByIndex(0);
+  await r.displayChapterByIndex(0);
 
   r.notesQuill.setText('a note\n', 'user');
 
@@ -538,7 +542,7 @@ test('displayChapterByIndex clears and disables the editor instead of throwing w
   r.project.reference = [];
   r.project.trash = [];
 
-  assert.doesNotThrow(function(){ r.displayChapterByIndex(0); });
+  await assert.doesNotReject(function(){ return r.displayChapterByIndex(0); });
 
   assert.strictEqual(r.project.activeChapterIndex, 0);
   assert.strictEqual(r.editorQuill.getText(), '\n');
@@ -554,7 +558,7 @@ test('addNewChapter inserts a blank chapter right after the active one and selec
   r.project.chapters = [makeChap('c0')];
   r.project.activeChapterIndex = 0;
 
-  r.addNewChapter();
+  await r.addNewChapter();
 
   assert.strictEqual(r.project.chapters.length, 2);
   assert.strictEqual(r.project.activeChapterIndex, 1);
@@ -568,7 +572,7 @@ test('addNewChapter with a Reference document active inserts into Reference and 
   r.project.reference = [makeChap('r0'), makeChap('r1')];
   r.project.activeChapterIndex = 3; //r1, the last reference item
 
-  r.addNewChapter();
+  await r.addNewChapter();
 
   assert.strictEqual(r.project.reference.length, 3);
   assert.strictEqual(r.project.reference[2].title, 'new');
@@ -583,7 +587,7 @@ test('addNewChapter with only a trashed chapter active appends the new chapter o
   r.project.trash = [makeChap('t0')];
   r.project.activeChapterIndex = 0; //t0, the only thing in any list
 
-  r.addNewChapter();
+  await r.addNewChapter();
 
   assert.strictEqual(r.project.chapters.length, 1);
   assert.strictEqual(r.project.chapters[0].title, 'new');
@@ -597,7 +601,7 @@ test('addImportedChapter inserts the given delta right after the active chapter 
   r.project.chapters = [c0];
   r.project.activeChapterIndex = 0;
 
-  r.addImportedChapter({ ops: [{ insert: 'Imported\n' }] }, 'Imported Title');
+  await r.addImportedChapter({ ops: [{ insert: 'Imported\n' }] }, 'Imported Title');
 
   assert.strictEqual(r.project.chapters.length, 2);
   assert.strictEqual(r.project.chapters[1].title, 'Imported Title');
@@ -611,7 +615,7 @@ test('addImportedChapter with a trashed chapter active appends onto Chapters and
   r.project.trash = [makeChap('t0')];
   r.project.activeChapterIndex = 1; //t0's combined index: chapters.length(1) + 0
 
-  r.addImportedChapter({ ops: [{ insert: 'Imported\n' }] }, 'Imported Title');
+  await r.addImportedChapter({ ops: [{ insert: 'Imported\n' }] }, 'Imported Title');
 
   assert.strictEqual(r.project.chapters.length, 2);
   assert.strictEqual(r.project.chapters[1].title, 'Imported Title');
@@ -1034,6 +1038,9 @@ test('Ctrl/Cmd+F3 toggles whether notes are per-chapter or project-wide; bare F3
   assert.strictEqual(r.userSettings.displayNotes, true);
 
   var err1 = dispatchAndCaptureJsdomErrors(document, ctrlKeydown('F3'));
+  //The notes redraw reads a chapter's notes off disk through the platform facade now, so the header
+  //only changes a tick after the keydown a listener's return value is thrown away.
+  await flushMicrotasks();
   assert.strictEqual(err1, null, err1 && err1.message);
   assert.strictEqual(r.userSettings.displayChapNotes, false);
   assert.strictEqual(document.getElementById('notes-header').innerText, 'Project Notes');
@@ -1054,7 +1061,9 @@ test('toggling back to per-chapter notes loads the active chapter\'s own notes, 
   //One toggle away, then back - lands on the branch of refreshNotesDisplay() that had no
   //coverage at all before this test (only the project-wide 'else' branch did).
   dispatchAndCaptureJsdomErrors(document, ctrlKeydown('F3'));
+  await flushMicrotasks();
   var err = dispatchAndCaptureJsdomErrors(document, ctrlKeydown('F3'));
+  await flushMicrotasks();
 
   assert.strictEqual(err, null, err && err.message);
   assert.strictEqual(r.userSettings.displayChapNotes, true);
@@ -1161,9 +1170,9 @@ test('restoreFromTrash follows the restored chapter to its new place in the list
   r.project.chapters = [A, B];
   r.project.reference = [R];
   r.project.trash = [T1, T2];
-  r.displayChapterByIndex(4); //T2
+  await r.displayChapterByIndex(4); //T2
 
-  r.restoreFromTrash(4);
+  await r.restoreFromTrash(4);
 
   //T2 is now the last chapter, so its combined index is 2 - not the 4 it was restored from, which
   //by then names T1 (chapters A,B,T2 | reference R | trash T1).
@@ -1182,9 +1191,9 @@ test('typing after a restore edits the restored chapter, not the one that took i
   r.project.chapters = [A];
   r.project.reference = [makeChap('R')];
   r.project.trash = [T1, T2];
-  r.displayChapterByIndex(3); //T2
+  await r.displayChapterByIndex(3); //T2
 
-  r.restoreFromTrash(3);
+  await r.restoreFromTrash(3);
   r.editorQuill.insertText(0, 'X', 'user');
 
   assert.strictEqual(T1.hasUnsavedChanges, false, 'T1 was never opened and must stay untouched');
@@ -1200,9 +1209,9 @@ test('restoreFromTrash keeps a different active chapter pointing at the same doc
   r.project.chapters = [A];
   r.project.reference = [R];
   r.project.trash = [T1];
-  r.displayChapterByIndex(1); //R, the reference doc
+  await r.displayChapterByIndex(1); //R, the reference doc
 
-  r.restoreFromTrash(2); //restore T1 while R is the active document
+  await r.restoreFromTrash(2); //restore T1 while R is the active document
 
   //T1 joins the chapters list ahead of R, pushing R's combined index from 1 to 2.
   assert.strictEqual(r.project.activeChapterIndex, 2);
@@ -1216,7 +1225,7 @@ test('restoreFromTrash ignores an index that is not in the trash', async functio
   r.project.trash = [];
   r.project.activeChapterIndex = 0;
 
-  r.restoreFromTrash(0);
+  await r.restoreFromTrash(0);
 
   assert.deepStrictEqual(r.project.chapters.map(function(c){ return c.title; }), ['A']);
   assert.strictEqual(r.project.activeChapterIndex, 0);
@@ -1234,14 +1243,14 @@ test('displaying a chapter re-enables an editor that an emptied project disabled
   r.project.activeChapterIndex = 0;
   r.updateFileList();
 
-  r.moveToTrash(0);
-  r.deleteChapter(0);
+  await r.moveToTrash(0);
+  await r.deleteChapter(0);
   assert.strictEqual(r.editorQuill.isEnabled(), false, 'nothing left to edit');
 
   //As displayProject() would after opening another project.
   r.project.chapters = [makeChap('fresh')];
   r.project.activeChapterIndex = 0;
-  r.displayChapterByIndex(0);
+  await r.displayChapterByIndex(0);
 
   assert.strictEqual(r.editorQuill.isEnabled(), true);
 });
@@ -1252,7 +1261,7 @@ test('the editor stays disabled while the project has nothing in any list', asyn
   r.project.reference = [];
   r.project.trash = [];
 
-  r.displayChapterByIndex(0);
+  await r.displayChapterByIndex(0);
 
   assert.strictEqual(r.editorQuill.isEnabled(), false);
 });
@@ -1375,7 +1384,7 @@ test('a damaged lastProject leaves an empty but working project rather than a ha
 
   //And the app is usable from there: adding a chapter works and turns the editor back on.
   Array.from(document.querySelectorAll('.popup')).forEach(function(p){ p.remove(); });
-  r.addNewChapter();
+  await r.addNewChapter();
   assert.strictEqual(r.editorQuill.isEnabled(), true);
 });
 
@@ -1413,7 +1422,9 @@ test('the Help doc opens from the install directory rather than being copied to 
   const bundled = withBundledHelpDoc(t);
   var r = await freshRender();
 
-  currentIpc().handlers['help-doc-clicked']();
+  //Awaited: opening a project reads it through the platform facade now, so the menu handler returns
+  //before the project is loaded.
+  await currentIpc().handlers['help-doc-clicked']();
 
   assert.strictEqual(r.project.title, 'WareWoolf Help');
   assert.strictEqual(fs.existsSync(path.join(userDataDir, 'Projects', 'HelpDoc')), false,
@@ -1424,7 +1435,9 @@ test('a Help doc opened from the read-only install directory is marked read-only
   withBundledHelpDoc(t);
   var r = await freshRender();
 
-  currentIpc().handlers['help-doc-clicked']();
+  //Awaited: opening a project reads it through the platform facade now, so the menu handler returns
+  //before the project is loaded.
+  await currentIpc().handlers['help-doc-clicked']();
 
   assert.strictEqual(r.project.isReadOnly, true);
   assert.ok(/\(read-only\)/.test(document.title),
@@ -1437,10 +1450,12 @@ test('saving an open Help doc offers Save As instead of writing to the install d
   const bundled = withBundledHelpDoc(t);
   const before = fs.readFileSync(bundled.helpDocPath, 'utf8');
   var r = await freshRender();
-  currentIpc().handlers['help-doc-clicked']();
+  //Awaited: opening a project reads it through the platform facade now, so the menu handler returns
+  //before the project is loaded.
+  await currentIpc().handlers['help-doc-clicked']();
   Array.from(document.querySelectorAll('.popup, .popup-dialog')).forEach(function(p){ p.remove(); });
 
-  currentIpc().handlers['save-clicked']();
+  await currentIpc().handlers['save-clicked']();
 
   assert.ok(document.querySelector('.popup-dialog'),
     'a Save As dialog should have opened');
@@ -1453,7 +1468,9 @@ test('saving an open Help doc offers Save As instead of writing to the install d
 test('opening an ordinary project after the Help doc clears the read-only flag', async function(t){
   withBundledHelpDoc(t);
   var r = await freshRender();
-  currentIpc().handlers['help-doc-clicked']();
+  //Awaited: opening a project reads it through the platform facade now, so the menu handler returns
+  //before the project is loaded.
+  await currentIpc().handlers['help-doc-clicked']();
   assert.strictEqual(r.project.isReadOnly, true);
 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warewoolf-ordinary-')) + path.sep;
@@ -1462,10 +1479,10 @@ test('opening an ordinary project after the Help doc clears the read-only flag',
     title: 'Ordinary', author: '', chapsDirectory: '', chapters: [], reference: [], trash: []
   }), 'utf8');
 
-  r.project.loadFile(dir + 'p.woolf');
+  await r.project.loadFile(dir + 'p.woolf');
 
   assert.strictEqual(r.project.isReadOnly, false);
-  assert.strictEqual(r.project.saveFile(), true);
+  assert.strictEqual(await r.project.saveFile(), true);
 });
 
 //---------------------------------------------------------------------------
@@ -1558,4 +1575,110 @@ test('a rejected platform command shows its code alongside the message', async f
   await assert.rejects(function(){ return mod.ready; });
 
   assert.match(popupText(), /UNAVAILABLE: main process said no/);
+});
+
+//---------------------------------------------------------------------------
+// The bundled Frankenstein example
+//---------------------------------------------------------------------------
+
+//Lays out a bundled example inside a stand-in install directory, exactly as a packaged build would.
+function withBundledExample(t){
+  const installDir = fs.mkdtempSync(path.join(os.tmpdir(), 'warewoolf-install-example-'));
+  const exampleDir = path.join(installDir, 'examples', 'Frankenstein');
+  fs.mkdirSync(path.join(exampleDir, 'Frankenstein_chapters'), { recursive: true });
+  fs.writeFileSync(path.join(exampleDir, 'Frankenstein.woolf'), JSON.stringify({
+    title: 'Frankenstein', author: 'Mary Shelley', chapsDirectory: 'Frankenstein_chapters/',
+    chapters: [], reference: [], trash: []
+  }), 'utf8');
+
+  const previousAppDir = appDir;
+  //index.js hands the renderer forward-slash paths on every platform, so match that here.
+  appDir = installDir.split(path.sep).join('/');
+  t.after(function(){
+    appDir = previousAppDir;
+    fs.rmSync(installDir, { recursive: true, force: true });
+    fs.rmSync(path.join(userDataDir, 'Projects'), { recursive: true, force: true });
+  });
+
+  return { installDir: installDir, exampleDir: exampleDir };
+}
+
+test('the bundled example is copied out to userData on first launch and opened from there', async function(t){
+  withBundledExample(t);
+
+  var r = await freshRender();
+
+  assert.strictEqual(r.project.title, 'Frankenstein');
+  assert.ok(fs.existsSync(path.join(userDataDir, 'Projects', 'Frankenstein', 'Frankenstein.woolf')),
+    'the example should have been copied somewhere the reader can actually write to');
+  assert.strictEqual(r.project.isReadOnly, false);
+});
+
+//The open finding this closes. The copy out of the install directory can fail - userData itself
+//unwritable, a full disk - and the fallback opens the bundled original instead, which is read-only.
+//That used to be indistinguishable from a writable copy, so every later save died with EACCES in
+//silence: exactly the failure that started this whole exercise.
+test('an example that could not be copied out is opened read-only rather than silently unsaveable', async function(t){
+  withBundledExample(t);
+  const realCpSync = fs.cpSync;
+  fs.cpSync = function(){
+    const err = new Error('permission denied');
+    err.code = 'EACCES';
+    throw err;
+  };
+  t.after(function(){ fs.cpSync = realCpSync; });
+
+  var r = await freshRender();
+
+  assert.strictEqual(r.project.title, 'Frankenstein', 'something is still opened rather than nothing');
+  assert.strictEqual(r.project.isReadOnly, true,
+    'the caller has to be able to tell this copy apart from a writable one');
+  assert.ok(/\(read-only\)/.test(document.title),
+    'the title bar should say so, since Ctrl+S behaves differently: ' + document.title);
+  assert.strictEqual(await r.project.saveFile(), false);
+});
+
+//Ctrl+S on the read-only fallback has to reach the same Save As the Help doc gets, rather than
+//failing into the log.
+test('saving the read-only example fallback offers Save As instead of writing to the install directory', async function(t){
+  const bundled = withBundledExample(t);
+  const before = fs.readFileSync(path.join(bundled.exampleDir, 'Frankenstein.woolf'), 'utf8');
+  const realCpSync = fs.cpSync;
+  fs.cpSync = function(){ throw new Error('nope'); };
+  t.after(function(){ fs.cpSync = realCpSync; });
+
+  await freshRender();
+  Array.from(document.querySelectorAll('.popup, .popup-dialog')).forEach(function(p){ p.remove(); });
+
+  await currentIpc().handlers['save-clicked']();
+
+  assert.ok(document.querySelector('.popup-dialog'), 'a Save As dialog should have opened');
+  assert.strictEqual(fs.readFileSync(path.join(bundled.exampleDir, 'Frankenstein.woolf'), 'utf8'), before,
+    'the bundled example must be left untouched');
+});
+
+//The read-only guard in project.saveFile() does not cover convertLegacyProject(): its two
+//conversions write through chapter.js, not through the project. Without its own guard, opening a
+//legacy project out of the install directory attempts a write per legacy item, each one an EACCES
+//swallowed into the log - and, worse, each one a write attempted against the installed app.
+test('a read-only legacy project is not converted, so nothing is written into the install directory', async function(t){
+  const bundled = withBundledExample(t);
+  //v2.1 and earlier kept project notes on the project itself; convertLegacyProject() moves them
+  //onto the notes chapter and saves that chapter's file.
+  fs.writeFileSync(path.join(bundled.exampleDir, 'Frankenstein.woolf'), JSON.stringify({
+    title: 'Frankenstein', author: 'Mary Shelley', chapsDirectory: 'Frankenstein_chapters/',
+    chapters: [], reference: [], trash: [],
+    notes: { ops: [{ insert: 'legacy project notes\n' }] }
+  }), 'utf8');
+
+  const realCpSync = fs.cpSync;
+  fs.cpSync = function(){ throw new Error('nope'); };
+  t.after(function(){ fs.cpSync = realCpSync; });
+
+  var r = await freshRender();
+
+  assert.strictEqual(r.project.isReadOnly, true);
+  assert.deepStrictEqual(
+    fs.readdirSync(path.join(bundled.exampleDir, 'Frankenstein_chapters')), [],
+    'no chapter or notes file should have been written into the install directory');
 });

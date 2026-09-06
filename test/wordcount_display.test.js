@@ -45,12 +45,12 @@ test.afterEach(function(){
   delete global.document;
 });
 
-test('renders chapter, project, and session totals from the editor and project chapters', function(){
+test('renders chapter, project, and session totals from the editor and project chapters', async function(){
   var showWordCount = require(wordcountDisplayPath);
   var project = makeProject({ wordCountOnLoad: 3, chapters: [makeChapter('one two three four')] });
   var editorQuill = makeEditorQuill('one two');
 
-  showWordCount(project, editorQuill);
+  await showWordCount(project, editorQuill);
 
   assert.strictEqual(document.getElementById('word-goal-input').value, '0');
   var paragraphs = document.querySelectorAll('table p');
@@ -63,12 +63,12 @@ test('renders chapter, project, and session totals from the editor and project c
 //Number, even though the project model initializes wordGoal as a Number (project.js). This let a
 //string value get persisted to the .woolf file on save (already visible as "wordGoal": "0" in
 //src/examples/HelpDoc/HelpDoc.woolf).
-test('editing the goal field coerces project.wordGoal to a Number', function(){
+test('editing the goal field coerces project.wordGoal to a Number', async function(){
   var showWordCount = require(wordcountDisplayPath);
   var project = makeProject();
   var editorQuill = makeEditorQuill('');
 
-  showWordCount(project, editorQuill);
+  await showWordCount(project, editorQuill);
 
   var goalInput = document.getElementById('word-goal-input');
   goalInput.value = '500';
@@ -81,12 +81,12 @@ test('editing the goal field coerces project.wordGoal to a Number', function(){
 //Regression: clearing the goal field used to set project.wordGoal to the empty string; guard against
 //a NaN/empty result ever being written back (NaN serializes as null via JSON.stringify, silently
 //corrupting the saved project file).
-test('clearing the goal field falls back to a Number 0 instead of NaN', function(){
+test('clearing the goal field falls back to a Number 0 instead of NaN', async function(){
   var showWordCount = require(wordcountDisplayPath);
   var project = makeProject({ wordGoal: 500 });
   var editorQuill = makeEditorQuill('');
 
-  showWordCount(project, editorQuill);
+  await showWordCount(project, editorQuill);
 
   var goalInput = document.getElementById('word-goal-input');
   goalInput.value = '';
@@ -98,27 +98,27 @@ test('clearing the goal field falls back to a Number 0 instead of NaN', function
 
 //Regression: the handler was wired to onkeyup, which never fires for the number input's spinner
 //arrows or a context-menu paste - only oninput covers every way the value can change.
-test('the goal field is wired to oninput rather than onkeyup', function(){
+test('the goal field is wired to oninput rather than onkeyup', async function(){
   var showWordCount = require(wordcountDisplayPath);
   var project = makeProject();
-  showWordCount(project, makeEditorQuill(''));
+  await showWordCount(project, makeEditorQuill(''));
 
   var goalInput = document.getElementById('word-goal-input');
   assert.strictEqual(typeof goalInput.oninput, 'function');
   assert.strictEqual(goalInput.onkeyup, null);
 });
 
-test('the goal field rejects negative values via the min attribute', function(){
+test('the goal field rejects negative values via the min attribute', async function(){
   var showWordCount = require(wordcountDisplayPath);
-  showWordCount(makeProject(), makeEditorQuill(''));
+  await showWordCount(makeProject(), makeEditorQuill(''));
 
   assert.strictEqual(document.getElementById('word-goal-input').min, '0');
 });
 
-test('updating the goal recalculates the progress bar width and color', function(){
+test('updating the goal recalculates the progress bar width and color', async function(){
   var showWordCount = require(wordcountDisplayPath);
   var project = makeProject({ chapters: [makeChapter('one two three four five')] }); //total = 5
-  showWordCount(project, makeEditorQuill(''));
+  await showWordCount(project, makeEditorQuill(''));
 
   var goalInput = document.getElementById('word-goal-input');
   var progressBarFill = document.getElementById('prog-bar-fill');
@@ -132,9 +132,9 @@ test('updating the goal recalculates the progress bar width and color', function
   assert.strictEqual(progressBarFill.style.width, '100%'); //capped even though 5/2 > 100%
 });
 
-test('Close removes the popup', function(){
+test('Close removes the popup', async function(){
   var showWordCount = require(wordcountDisplayPath);
-  showWordCount(makeProject(), makeEditorQuill(''));
+  await showWordCount(makeProject(), makeEditorQuill(''));
 
   assert.strictEqual(document.getElementsByClassName('popup').length, 1);
   findButton('Close').onclick();

@@ -4,6 +4,7 @@ const path = require('path');
 const nodemailer = require('nodemailer');
 const { archiveProject } = require('./backup-project');
 const { compileChapterDeltas } = require('./compile');
+const { getTotalWordCount } = require('./wordcount');
 const { convertDeltaToDocx, packageDocxBase64 } = require('./delta-to-docx');
 const { convertDeltaToMDF } = require('./markdownFic');
 const { logError } = require('./error-log');
@@ -12,12 +13,15 @@ const { convertMdfcToHtmlPage, convertMdfcToHtml } = require('./mdfc-to-html');
 const { htmlChaptersToEpub } = require('./epub');
 const { convertToPlainText } = require('./quill-utils');
 
-function prepareAndEmail(project, userSettings, editorQuill, sender, pass, receiver, filetype, compileOptions, callback){
+//Async because compiling the project, and building an .epub from it, read any chapter that is not
+//already in memory off disk - which now goes through the platform facade. Every caller already
+//waits on `callback` rather than on this returning, so nothing about the reporting changes.
+async function prepareAndEmail(project, userSettings, editorQuill, sender, pass, receiver, filetype, compileOptions, callback){
   var delt;
   var filename;
 
   if(compileOptions.compile){
-    delt = compileChapterDeltas(project, compileOptions);
+    delt = await compileChapterDeltas(project, compileOptions);
     let projectTitle = project.filename == "" ? "untitled" : project.filename.split('.')[0];
     if(projectTitle == "untitled" && project.title != "")
       projectTitle = project.title;
@@ -30,7 +34,7 @@ function prepareAndEmail(project, userSettings, editorQuill, sender, pass, recei
   }
 
   if(filetype == ".docx"){
-    emailDeltaAsDocx(project, userSettings, filename, delt, compileOptions, sender, pass, receiver, callback);
+    await emailDeltaAsDocx(project, userSettings, filename, delt, compileOptions, sender, pass, receiver, callback);
   }
   else if(filetype == ".mdfc"){
     emailDeltaAsMdfc(filename, delt, sender, pass, receiver, callback);
@@ -45,7 +49,7 @@ function prepareAndEmail(project, userSettings, editorQuill, sender, pass, recei
     emailDeltaAsHtml(filename, project, compileOptions, delt, sender, pass, receiver, callback);
   }
   else if(filetype == '.epub'){
-    emailAsEpub(filename, project, compileOptions, delt, sender, pass, receiver, callback);
+    await emailAsEpub(filename, project, compileOptions, delt, sender, pass, receiver, callback);
   }
   else {
     //default to txt
@@ -54,8 +58,11 @@ function prepareAndEmail(project, userSettings, editorQuill, sender, pass, recei
 
 }
 
-function emailDeltaAsDocx(project, userSettings, filename, delt, options, sender, pass, receiver, callback){
-  var doc = convertDeltaToDocx(delt, options, project, userSettings.addressInfo);
+//The manuscript title page's project-wide word count is counted here now rather than inside
+//delta-to-docx - see the note on convertDeltaToDocx for why.
+async function emailDeltaAsDocx(project, userSettings, filename, delt, options, sender, pass, receiver, callback){
+  var totalWordCount = options && options.generateTitlePage ? await getTotalWordCount(project) : 0;
+  var doc = convertDeltaToDocx(delt, options, project, userSettings.addressInfo, totalWordCount);
   packageDocxBase64(doc, (docString) => {
     var attachments = [
       {
@@ -141,19 +148,19 @@ function emailAsZip(project, sender, pass, receiver, callback){
   });
 }
 
-function emailAsEpub(filename, project, compileOptions, delt, sender, pass, receiver, callback){
+async function emailAsEpub(filename, project, compileOptions, delt, sender, pass, receiver, callback){
   var generateTitle = compileOptions ? compileOptions.generateTitlePage : false;
   var title = compileOptions.compile ? project.title : project.getActiveChapter().title;
   var filePath = os.tmpdir() + '/' + filename + '.epub';
   var htmlChapters = [];
 
   if(compileOptions.compile){
-    project.chapters.forEach(function(chap){
+    for(let i = 0; i < project.chapters.length; i++){
       htmlChapters.push({
-        title: chap.title,
-        html: convertMdfcToHtml(convertDeltaToMDF(chap.getContentsOrFile()))
+        title: project.chapters[i].title,
+        html: convertMdfcToHtml(convertDeltaToMDF(await project.chapters[i].getContentsOrFile()))
       })
-    });
+    }
   }
   else{
     htmlChapters.push({

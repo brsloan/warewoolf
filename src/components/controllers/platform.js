@@ -157,17 +157,34 @@ var COMMANDS = {
   openProject: { group: 'B', params: ['path'],
     returns: '{ project, directory, filename }',
     note: 'Splits the path natively so the renderer stops doing it (project.js:52-54).' },
+  //Writes the .woolf, both for an ordinary save (project.js:136) and as the last step of Save As
+  //(project.js:251).
+  //
+  //Phase 4 correction: saveProjectAs used to declare `contents` too, so that it wrote the .woolf
+  //itself. It cannot, and the reason is an ordering constraint rather than a preference. Save As
+  //has to write out any chapter with unsaved changes, and those writes go through group C's
+  //saveChapterAtomic/saveChapter, which *allocate* the filename - so the chapter filenames the
+  //.woolf must list are not known until after those writes, and those writes cannot happen until
+  //the new chapters directory exists. The order is therefore: make the directories and copy
+  //(saveProjectAs) -> save the dirty chapters (group C) -> write the .woolf (saveProject). Passing
+  //`contents` into saveProjectAs would mean writing a .woolf that names the *pre-save* filenames
+  //and then rewriting it, and if the rewrite failed the file left on disk would point at chapter
+  //files whose names had since changed. That is worse than no file at all.
+  //
+  //Nothing about the transaction is lost: the operations that must succeed or fail together are
+  //still the two mkdirs and the copy loop, still in one command, exactly as they are today.
+  //`copyOnly` went the same way and for a simpler reason - Save a Copy does identical work on
+  //disk, and differs only in whether the *renderer* repoints its own chapters afterward.
   saveProject: { group: 'B', params: ['directory', 'filename', 'contents'], returns: 'void' },
   saveProjectAs: { group: 'B',
-    params: ['fromDirectory', 'fromChapsDir', 'targetPath', 'chapterFilenames', 'contents'],
-    optional: ['copyOnly'],
+    params: ['fromDirectory', 'fromChapsDir', 'targetPath', 'chapterFilenames'],
     returns: '{ directory, filename, chapsDirectory, chapterFilenames, failed }',
-    note: 'Six filesystem operations that succeed or fail together (project.js:183-195). Returns the renamed chapter filenames because the renderer cannot know them, and `failed` because a chapter missing from disk must not abort the rest.' },
+    note: 'Six filesystem operations that succeed or fail together (project.js:183-195): parse the target path, make the two directories, copy every chapter file across. Returns the new chapter filenames because the renderer cannot know them, and `failed` because a chapter missing from disk must not abort the rest. Does NOT write the .woolf - see below for why that is saveProject and not this.' },
   verifyProjectFiles: { group: 'B', params: ['directory', 'chapsDirectory', 'chapterFilenames'],
     returns: 'string[] of filenames not on disk' },
   materializeBundledProject: { group: 'B', params: ['bundledDir', 'writableDir', 'filename'],
-    returns: '{ path, writable }',
-    note: 'Returns `writable` rather than a bare path. When the copy out of the read-only install directory fails, render.js:99-102 currently falls back to the bundled original and every later save dies with EACCES in silence - the open finding in upgrade-and-isolation-plan.md. With the flag the caller sets project.isReadOnly, and the example behaves like the Help doc.' },
+    returns: '{ path, writable, error }',
+    note: 'Returns `writable` rather than a bare path. When the copy out of the read-only install directory fails, render.js falls back to the bundled original and every later save dies with EACCES in silence - the open finding in upgrade-and-isolation-plan.md. With the flag the caller sets project.isReadOnly, and the example behaves like the Help doc. `error` is the fallback\'s reason (null when the copy worked), because a fallback nobody can see is the silence rule 5 exists to stop; this command resolves rather than rejecting since falling back is a success, just a diminished one.' },
 
   // --- C. Chapter I/O -----------------------------------------------------------------------
   loadChapter: { group: 'C', params: ['projectDir', 'chapsDir', 'filename'], returns: 'mdfc text' },

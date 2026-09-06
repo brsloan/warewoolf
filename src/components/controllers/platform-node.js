@@ -8,10 +8,9 @@
 //Phase 9 it survives the switch to `--platform=browser` untouched, and this file is the one that
 //has to be gone. If the contract file ever grows a `require('fs')`, that property is lost.
 //
-//Only the two commands that constrain the contract's shape are implemented here: saveChapterAtomic
-//(group C) and the credential group (J). Everything else in COMMANDS is deliberately absent and
-//rejects with NOT_IMPLEMENTED, so Phases 2-8 fill the table in one group at a time and the suite
-//says what is still outstanding.
+//Groups A, B, C, D's error-log slice and J are implemented. Everything else in COMMANDS is
+//deliberately absent and rejects with NOT_IMPLEMENTED, so the remaining phases fill the table in
+//one group at a time and the suite says what is still outstanding.
 
 const fs = require('fs');
 const path = require('path');
@@ -29,6 +28,10 @@ const getCredentialStore = require('../models/credential-store');
 const CHAPTER_EXT = '.txt';
 const NOTES_PREPEND = '-notes_';
 const OLD_VERSION_FLAG = 'old_v_temp';
+const PROJECT_EXT = '.woolf';
+//Save As derives the chapters subdirectory from the project's own name. The renderer used to build
+//this string itself (project.js:180); it is layout, so it belongs on this side with the rest.
+const CHAPS_DIR_SUFFIX = '_chapters/';
 
 //Group D's error log slice. Timestamping and describing whatever was thrown are pure JS with no
 //OS dependency, so that stays in error-log.js - this is only the part that used to be
@@ -78,9 +81,20 @@ function createNodeBacking(deps){
     confirmExit: confirmExit,
     notifyRendererReady: notifyRendererReady,
 
+    // --- B. Project lifecycle ---------------------------------------------------------------
+    openProject: openProject,
+    saveProject: saveProject,
+    saveProjectAs: saveProjectAs,
+    verifyProjectFiles: verifyProjectFiles,
+    materializeBundledProject: materializeBundledProject,
+
     // --- C. Chapter I/O ---------------------------------------------------------------------
+    loadChapter: loadChapter,
     saveChapter: saveChapter,
     saveChapterAtomic: saveChapterAtomic,
+    deleteChapterFiles: deleteChapterFiles,
+    loadChapterNotes: loadChapterNotes,
+    saveChapterNotes: saveChapterNotes,
 
     // --- D. Error log (the rest of group D is still NOT_IMPLEMENTED) ------------------------
     logError: logError,
@@ -150,8 +164,209 @@ function createNodeBacking(deps){
   }
 
   // ------------------------------------------------------------------------------------------
+  // Group B
+  // ------------------------------------------------------------------------------------------
+
+  //Every path this backing is handed is normalized to forward slashes, which is what project.js
+  //did at the top of loadFile() and saveAs() for linux/windows compatibility. Node accepts either
+  //separator on Windows, so this is not about reaching the file - it is about the directory and
+  //filename handed *back*, which the renderer concatenates with chapter filenames all over the
+  //place and compares against paths from other sources.
+  function normalizePath(value, name){
+    requireText(value, name);
+    return value.replaceAll('\\', '/');
+  }
+
+  //project.js:52-55, moved. The renderer stops splitting paths at all: openProject and
+  //saveProjectAs both hand back the pieces already separated.
+  function splitPath(fullPath){
+    var parts = fullPath.split('/');
+    var filename = parts.pop();
+
+    return { directory: parts.join('/').concat('/'), filename: filename };
+  }
+
+  function openProject(args){
+    var projPath = normalizePath(args == null ? undefined : args.path, 'path');
+    var split = splitPath(projPath);
+
+    return {
+      project: JSON.parse(fs.readFileSync(projPath, 'utf8')),
+      directory: split.directory,
+      filename: split.filename
+    };
+  }
+
+  function saveProject(args){
+    requireText(args.directory, 'directory');
+    requireText(args.filename, 'filename');
+    requireText(args.contents, 'contents');
+
+    fs.writeFileSync(args.directory + args.filename, args.contents, 'utf8');
+  }
+
+  //Save As, up to but not including the .woolf write - see the note on saveProject in platform.js
+  //for why that last step cannot live in here.
+  //
+  //Two orderings in the original are preserved deliberately:
+  //
+  //  - The chapters subdirectory is named from the target filename *before* the .woolf extension
+  //    is forced onto it, and by its last dot rather than its first. "My.Book.woolf" therefore
+  //    yields "My.Book_chapters/", not "My_chapters/" - a project title containing a period used
+  //    to lose everything after the first one.
+  //  - mkdir is not recursive. A target whose parent directory does not exist fails here rather
+  //    than quietly building a tree the reader never asked for.
+  //
+  //A chapter whose file has gone missing from the old location must not abort the rest of the
+  //save (project.js:200-202), so each copy is caught individually: the ones that worked come back
+  //in `chapterFilenames` and the ones that did not come back in `failed`, with a null holding the
+  //slot so the caller can line the result up against the chapters it sent.
+  function saveProjectAs(args){
+    var target = normalizePath(args == null ? undefined : args.targetPath, 'targetPath');
+    var split = splitPath(target);
+
+    var extIndex = split.filename.lastIndexOf('.');
+    var chapsDirectory = (extIndex > -1 ? split.filename.substring(0, extIndex) : split.filename)
+      .concat(CHAPS_DIR_SUFFIX);
+    var filename = split.filename.endsWith(PROJECT_EXT) ? split.filename : split.filename + PROJECT_EXT;
+
+    if(!fs.existsSync(split.directory))
+      fs.mkdirSync(split.directory);
+    if(!fs.existsSync(split.directory + chapsDirectory))
+      fs.mkdirSync(split.directory + chapsDirectory);
+
+    var fromDir = (args.fromDirectory == null ? '' : args.fromDirectory)
+      + (args.fromChapsDir == null ? '' : args.fromChapsDir);
+
+    var copied = [];
+    var failed = [];
+
+    (args.chapterFilenames == null ? [] : args.chapterFilenames).forEach(function(name){
+      //A chapter that has never been saved has no file to copy, and no place in `failed` either -
+      //nothing went wrong.
+      if(name == null){
+        copied.push(null);
+        return;
+      }
+
+      //Historic project files can carry a path segment in a chapter's filename; the new location
+      //is flat, so only the basename survives the move.
+      var basename = String(name).split('/').pop();
+
+      try{
+        fs.copyFileSync(fromDir + name, split.directory + chapsDirectory + basename);
+        copied.push(basename);
+      }
+      catch(copyErr){
+        var wrapped = fromNodeError(copyErr, { command: 'saveProjectAs' });
+        copied.push(null);
+        failed.push({ filename: name, code: wrapped.code, message: wrapped.message });
+      }
+    });
+
+    return {
+      directory: split.directory,
+      filename: filename,
+      chapsDirectory: chapsDirectory,
+      chapterFilenames: copied,
+      failed: failed
+    };
+  }
+
+  //Returns the filenames that are not on disk, deduplicated - the same file can legitimately be
+  //named by more than one list (a reference document pointing at a chapter's file), and the caller
+  //matches its own chapters against this as a set rather than positionally.
+  function verifyProjectFiles(args){
+    var chaptersDir = (args.directory == null ? '' : args.directory)
+      + (args.chapsDirectory == null ? '' : args.chapsDirectory);
+    var missing = [];
+
+    (args.chapterFilenames == null ? [] : args.chapterFilenames).forEach(function(name){
+      //A chapter that has never been saved has no file yet, so there is no missing one to report.
+      if(name == null || missing.indexOf(name) > -1)
+        return;
+
+      if(!fs.existsSync(chaptersDir + name))
+        missing.push(name);
+    });
+
+    return missing;
+  }
+
+  //The bundled Frankenstein example lives inside the installed app directory, which a normal user
+  //account cannot write to, so it is copied out to userData once and that copy is opened instead.
+  //
+  //The fallback is the interesting part. If the copy fails there is still something worth opening
+  //- the bundled original - so this resolves rather than rejecting. But it comes back flagged: the
+  //caller sets project.isReadOnly from `writable`, which routes Ctrl+S to Save As instead of
+  //letting every later save die with EACCES in silence, and `error` says why so the failure
+  //reaches the log rather than disappearing into a successful-looking return.
+  function materializeBundledProject(args){
+    var bundledDir = normalizePath(args == null ? undefined : args.bundledDir, 'bundledDir');
+    var writableDir = normalizePath(args.writableDir, 'writableDir');
+    requireText(args.filename, 'filename');
+
+    try{
+      fs.cpSync(bundledDir, writableDir, { recursive: true });
+      return { path: writableDir + '/' + args.filename, writable: true, error: null };
+    }
+    catch(copyErr){
+      var wrapped = fromNodeError(copyErr, { command: 'materializeBundledProject' });
+
+      return {
+        path: bundledDir + '/' + args.filename,
+        writable: false,
+        error: { code: wrapped.code, message: wrapped.message }
+      };
+    }
+  }
+
+  // ------------------------------------------------------------------------------------------
   // Group C
   // ------------------------------------------------------------------------------------------
+
+  //Returns the file's text, not a parsed chapter. Which format that text is in - MarkdownFic, or
+  //the JSON of a pre-1.1 `.pup` - is decided from the filename by the caller, because parsing
+  //either one is pure string work with no OS in it and belongs in the webview.
+  function loadChapter(args){
+    var chaptersDir = chaptersDirOf(args);
+    requireText(args.filename, 'filename');
+
+    return fs.readFileSync(chaptersDir + args.filename, 'utf8');
+  }
+
+  //A chapter and its notes are one document to the reader, so they go together - deleting the
+  //chapter and leaving an orphaned notes file behind is not a state the reader can see or clean up.
+  function deleteChapterFiles(args){
+    var chaptersDir = chaptersDirOf(args);
+    requireText(args.filename, 'filename');
+
+    if(fs.existsSync(chaptersDir + args.filename))
+      fs.unlinkSync(chaptersDir + args.filename);
+    if(fs.existsSync(chaptersDir + NOTES_PREPEND + args.filename))
+      fs.unlinkSync(chaptersDir + NOTES_PREPEND + args.filename);
+  }
+
+  //null rather than a rejection for a chapter that simply has no notes yet, which is the ordinary
+  //case for most chapters and not a failure of any kind.
+  function loadChapterNotes(args){
+    var chaptersDir = chaptersDirOf(args);
+    requireText(args.filename, 'filename');
+
+    var notesPath = chaptersDir + NOTES_PREPEND + args.filename;
+
+    return fs.existsSync(notesPath) ? fs.readFileSync(notesPath, 'utf8') : null;
+  }
+
+  //Notes for a chapter whose filename is not changing. When it *is* changing they go through
+  //saveChapterAtomic instead, which owns the rename - see the note there.
+  function saveChapterNotes(args){
+    var chaptersDir = chaptersDirOf(args);
+    requireText(args.filename, 'filename');
+    requireText(args.mdfc, 'mdfc');
+
+    fs.writeFileSync(chaptersDir + NOTES_PREPEND + args.filename, args.mdfc, 'utf8');
+  }
 
   //Filename allocation lives here, and only here. It is the reason saveChapterAtomic takes a title
   //rather than a filename: picking a free name means reading the directory, and any gap between
@@ -457,5 +672,7 @@ module.exports = {
   createNodeBacking: createNodeBacking,
   CHAPTER_EXT: CHAPTER_EXT,
   NOTES_PREPEND: NOTES_PREPEND,
-  OLD_VERSION_FLAG: OLD_VERSION_FLAG
+  OLD_VERSION_FLAG: OLD_VERSION_FLAG,
+  PROJECT_EXT: PROJECT_EXT,
+  CHAPS_DIR_SUFFIX: CHAPS_DIR_SUFFIX
 };

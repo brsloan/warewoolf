@@ -49,8 +49,8 @@ function showTabOptions(project, onFinish){
       closePopups();
       //Converting can be slow on projects with many/large chapters, so show a working
       //indicator (deferred via showWorkingAndThen) instead of blocking with no feedback.
-      showWorkingAndThen('Converting marked tabs...', function(){
-        convertMarkedTabsForAllChapters(project, marker);
+      showWorkingAndThen('Converting marked tabs...', async function(){
+        await convertMarkedTabsForAllChapters(project, marker);
         hideWorking();
         onFinish();
       });

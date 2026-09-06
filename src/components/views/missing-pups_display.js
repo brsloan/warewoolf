@@ -7,7 +7,9 @@ const { getFileList } = require('../controllers/file-manager');
 const notesNamePrepend = '-notes_';
 const corkboardFilename = 'project_corkboard.txt';
 
-function promptForMissingPups(project, callback){
+//Async because working out which chapter files are actually missing now goes through the platform
+//facade. The popup is still appended in one pass at the end, so the reader never sees it half-drawn.
+async function promptForMissingPups(project, callback){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup");
@@ -64,8 +66,9 @@ function promptForMissingPups(project, callback){
   popup.appendChild(fileList);
 
   var saveChangesBtn = createButton('Save & Reload');
-  saveChangesBtn.onclick = function(){
-    project.saveFile();
+  //Awaited so the reload the callback triggers reads a project file that has actually been written.
+  saveChangesBtn.onclick = async function(){
+    await project.saveFile();
     closePopups();
     callback('save');
   }
@@ -79,23 +82,25 @@ function promptForMissingPups(project, callback){
   popup.appendChild(cancel);
 
 
-  fillMissingChapsList(project, missingChapsList, fileList, chapsDirIn);
+  await fillMissingChapsList(project, missingChapsList, fileList, chapsDirIn);
 
-  chapsDirIn.onkeyup = function(ev){
+  chapsDirIn.onkeyup = async function(ev){
     project.chapsDirectory = normalizeTrailingSlash(chapsDirIn.value);
     updateDirExists(project, dirExistsCheck);
     fillSubdirsList(project, subdirsList);
     fillFileList(project, fileList, chapsDirIn);
-    fillMissingChapsList(project, missingChapsList, fileList, chapsDirIn);
+    await fillMissingChapsList(project, missingChapsList, fileList, chapsDirIn);
   };
 
   document.body.appendChild(popup);
   chapsDirIn.focus();
 }
 
-function fillMissingChapsList(project, missingChapsList, fileList, chapsDirIn){
+async function fillMissingChapsList(project, missingChapsList, fileList, chapsDirIn){
+  var missingChaps = await project.testChapsDirectory();
+  //Cleared only once the answer is in hand, so a redraw that is still waiting on the check does not
+  //leave the reader looking at an empty list.
   missingChapsList.innerHTML = '';
-  var missingChaps = project.testChapsDirectory();
   var missingChapsLabel = document.createElement('h2');
   missingChapsLabel.innerText = "Missing Chapter Files: ";
   missingChapsList.appendChild(missingChapsLabel);
@@ -124,13 +129,13 @@ function fillMissingChapsList(project, missingChapsList, fileList, chapsDirIn){
       fillFileList(project, fileList, chapsDirIn);
     };
 
-    deleteBtn.onclick = function(){
+    deleteBtn.onclick = async function(){
       if(deleteBtn.innerText == 'Delete'){
         deleteBtn.innerText = 'Click Again To DELETE';
       }
       else{
         removeChapterFromProject(project, chap);
-        fillMissingChapsList(project, missingChapsList, fileList, chapsDirIn);
+        await fillMissingChapsList(project, missingChapsList, fileList, chapsDirIn);
         fillFileList(project, fileList, chapsDirIn);
       }
     }

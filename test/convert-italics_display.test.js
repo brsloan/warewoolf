@@ -45,7 +45,7 @@ test.afterEach(function(){
 //project with many/large chapters would freeze the UI with the popup stuck on screen and no
 //feedback. The working indicator must show before the conversion runs, and must not be hidden
 //(nor onFinish called) until the conversion actually completes.
-test('submitting the form shows a working indicator and only converts/finishes once it resolves', function(t){
+test('submitting the form shows a working indicator and only converts/finishes once it resolves', async function(t){
   var project = { title: 'My Novel', chapters: [] };
 
   var convertCalls = [];
@@ -79,7 +79,9 @@ test('submitting the form shows a working indicator and only converts/finishes o
   assert.strictEqual(convertCalls.length, 0, 'conversion must not run until the working indicator has had a chance to paint');
   assert.strictEqual(document.querySelector('.popup'), null, 'the options popup should close immediately on submit');
 
-  capturedWorkingCallback();
+  //Awaited: converting reads chapters through the platform facade now, so the deferred callback is
+  //async and hideWorking/onFinish run after it settles.
+  await capturedWorkingCallback();
 
   assert.strictEqual(convertCalls.length, 1);
   assert.strictEqual(convertCalls[0].project, project);

@@ -2,6 +2,7 @@ const { closePopups, createButton, removeElementsByClass, generateRow } = requir
 const showFileDialog = require('./file-dialog_display');
 const { showWorking, hideWorking } = require('./working_display');
 const { compileProject } = require('../controllers/compile');
+const { logError } = require('../controllers/error-log');
 
 function showCompileOptions(project, sysDirectories, userSettings){
     removeElementsByClass('popup');
@@ -131,7 +132,16 @@ function showCompileOptions(project, sysDirectories, userSettings){
     showFileDialog(dialogOptions, function(filepath){
       if(filepath){
         showWorking();
-        compileProject(project, userSettings, options, filepath, function(){
+        //compileProject is async now (it reads chapters through the platform facade), so a failure
+        //inside it arrives as a rejection rather than a throw. Caught here so the "Working..."
+        //popup always comes back down - unhandled, it would sit over the reader forever.
+        //Promise.resolve so a backing that hands back nothing at all is as safe as one that returns a
+        //promise.
+        Promise.resolve(compileProject(project, userSettings, options, filepath, function(){
+          hideWorking();
+          cback();
+        })).catch(function(err){
+          logError(err);
           hideWorking();
           cback();
         });

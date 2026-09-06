@@ -100,18 +100,16 @@ function replace(editorQuill, newStr){
     }
 }
 
-function replaceAllInAllChapters(project, oldStr, newStr, caseSensitive, wholeWordOnly = false){
+//Async because a chapter that is not already in memory has to be read off disk, which now goes
+//through the platform facade. replaceAllInDelta below stays pure and synchronous - it is the part
+//convert-tabs.js and the tests reuse.
+async function replaceAllInAllChapters(project, oldStr, newStr, caseSensitive, wholeWordOnly = false){
   var numReplaced = 0;
+  var everyChapter = project.chapters.concat(project.reference);
 
-  project.chapters.forEach(function(chap){
-    var changed = replaceAllInChapter(oldStr, newStr, caseSensitive, chap, wholeWordOnly);
-    numReplaced += changed;
-  });
-
-  project.reference.forEach(function(chap){
-    var changed = replaceAllInChapter(oldStr, newStr, caseSensitive, chap, wholeWordOnly);
-    numReplaced += changed;
-  });
+  for(let i = 0; i < everyChapter.length; i++){
+    numReplaced += await replaceAllInChapter(oldStr, newStr, caseSensitive, everyChapter[i], wholeWordOnly);
+  }
 
   if(numReplaced > 0)
     project.hasUnsavedChanges = true;
@@ -119,8 +117,8 @@ function replaceAllInAllChapters(project, oldStr, newStr, caseSensitive, wholeWo
   return numReplaced;
 }
 
-function replaceAllInChapter(oldStr, newStr, caseSensitive, chap, wholeWordOnly = false){
-  var result = replaceAllInDelta(oldStr, newStr, caseSensitive, chap.contents ? chap.contents : chap.getFile(), wholeWordOnly);
+async function replaceAllInChapter(oldStr, newStr, caseSensitive, chap, wholeWordOnly = false){
+  var result = replaceAllInDelta(oldStr, newStr, caseSensitive, chap.contents ? chap.contents : await chap.getFile(), wholeWordOnly);
   if(result.changed > 0){
     chap.contents = result.delta;
     chap.hasUnsavedChanges = true;

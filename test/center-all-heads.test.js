@@ -53,14 +53,14 @@ test('centerHeads counts every off-center header in a multi-header document', fu
   assert.strictEqual(result.changed, 2);
 });
 
-test('centerAllHeadingsInAllChaps only marks chapters that actually changed', function(){
+test('centerAllHeadingsInAllChaps only marks chapters that actually changed', async function(){
   var needsCentering = makeChapter(headingDelta('Chapter One'));
   var alreadyCentered = makeChapter(headingDelta('Chapter Two', { centered: true }));
   var noHeaders = makeChapter({ ops: [{ insert: 'Just prose.\n' }] });
 
   var project = makeProject([needsCentering, alreadyCentered, noHeaders]);
 
-  centerAllHeadingsInAllChaps(project);
+  await centerAllHeadingsInAllChaps(project);
 
   assert.strictEqual(needsCentering.hasUnsavedChanges, true);
   assert.notStrictEqual(alreadyCentered.hasUnsavedChanges, true);
@@ -69,18 +69,18 @@ test('centerAllHeadingsInAllChaps only marks chapters that actually changed', fu
 
 //Regression: centerAllHeadingsInAllChaps used to mark chapters dirty without ever telling the
 //project itself it had unsaved changes, so the exit/open-project confirmation never fired.
-test('centerAllHeadingsInAllChaps sets project.hasUnsavedChanges when a chapter changes', function(){
+test('centerAllHeadingsInAllChaps sets project.hasUnsavedChanges when a chapter changes', async function(){
   var project = makeProject([makeChapter(headingDelta('Chapter One'))]);
 
-  centerAllHeadingsInAllChaps(project);
+  await centerAllHeadingsInAllChaps(project);
 
   assert.strictEqual(project.hasUnsavedChanges, true);
 });
 
-test('centerAllHeadingsInAllChaps leaves project.hasUnsavedChanges alone when nothing changes', function(){
+test('centerAllHeadingsInAllChaps leaves project.hasUnsavedChanges alone when nothing changes', async function(){
   var project = makeProject([makeChapter(headingDelta('Chapter One', { centered: true }))]);
 
-  centerAllHeadingsInAllChaps(project);
+  await centerAllHeadingsInAllChaps(project);
 
   assert.notStrictEqual(project.hasUnsavedChanges, true);
 });

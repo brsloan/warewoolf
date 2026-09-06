@@ -16,8 +16,10 @@ function showConvertFirstLines(project, cback){
   popup.appendChild(undoWarning);
 
   var convertBtn = createButton('Convert');
-  convertBtn.onclick = function(){
-    convertFirstLinesToTitles(project);
+  //Awaited so the caller's cback - which redraws the chapter it converted - only runs once every
+  //chapter has actually been converted, rather than partway through.
+  convertBtn.onclick = async function(){
+    await convertFirstLinesToTitles(project);
     closePopups();
     cback();
   };

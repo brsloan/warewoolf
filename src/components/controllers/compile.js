@@ -7,9 +7,14 @@ const { convertMdfcToHtmlPage, convertMdfcToHtml } = require('./mdfc-to-html');
 const { convertMdfcToMd } = require('./mdfc-to-md');
 const { htmlChaptersToEpub } = require('./epub');
 const { convertToPlainText } = require('./quill-utils');
+const { getTotalWordCount } = require('./wordcount');
 
-function compileProject(project, userSettings, options, filepath, cback = function(){}){
-    var allChaps = compileChapterDeltas(project, options);
+//Async because assembling the chapters reads any that are not already in memory off disk, which now
+//goes through the platform facade. The callback is left exactly as it was: .epub finishes writing
+//asynchronously through archiver and always did, so callers already wait on cback rather than on
+//this function returning.
+async function compileProject(project, userSettings, options, filepath, cback = function(){}){
+    var allChaps = await compileChapterDeltas(project, options);
 
     switch(options.type){
         case ".txt":
@@ -17,7 +22,7 @@ function compileProject(project, userSettings, options, filepath, cback = functi
             cback();
             break;
         case ".docx":
-            compileDocx(filepath, allChaps, options, project, userSettings);
+            await compileDocx(filepath, allChaps, options, project, userSettings);
             cback();
             break;
         case ".mdfc":
@@ -33,7 +38,7 @@ function compileProject(project, userSettings, options, filepath, cback = functi
             cback();
             break;
           case ".epub":
-            compileEpub(filepath, project.chapters, project.title, project.author, options.generateTitlePage, options.insertHead, cback);
+            await compileEpub(filepath, project.chapters, project.title, project.author, options.generateTitlePage, options.insertHead, cback);
             break;
         default:
             console.log("No valid filetype selected for compile.");
@@ -41,16 +46,16 @@ function compileProject(project, userSettings, options, filepath, cback = functi
     }
 }
 
-function compileEpub(dir, chapters, title, author, insertTitle, insertHead, cback = function(){}){
+async function compileEpub(dir, chapters, title, author, insertTitle, insertHead, cback = function(){}){
   try {
     var htmlChaps = [];
 
-    chapters.forEach(function(chap){
+    for(let i = 0; i < chapters.length; i++){
       htmlChaps.push({
-        title: chap.title,
-        html: convertMdfcToHtml(convertDeltaToMDF(chapterDeltaWithHeader(chap, insertHead)))
+        title: chapters[i].title,
+        html: convertMdfcToHtml(convertDeltaToMDF(await chapterDeltaWithHeader(chapters[i], insertHead)))
       })
-    })
+    }
 
     htmlChaptersToEpub(title, author, htmlChaps, dir, insertTitle, function(resp){
       console.log('Conversion done: ' + resp);
@@ -104,33 +109,37 @@ function compilePlainText(dir, allChaps){
   }
 }
 
-function chapterDeltaWithHeader(chapter, insertHead){
+async function chapterDeltaWithHeader(chapter, insertHead){
   var Delta = Quill.import('delta');
   var compiled = new Delta();
   if(insertHead){
     compiled.insert(chapter.title);
     compiled.insert('\n', { header: 1 } );
   }
-  return compiled.concat(new Delta(chapter.getContentsOrFile()));
+  return compiled.concat(new Delta(await chapter.getContentsOrFile()));
 }
 
-function compileChapterDeltas(project, options){
+async function compileChapterDeltas(project, options){
     var divider = options.insertStrng;
     var Delta = Quill.import('delta');
-    var compiled = new Delta().concat(chapterDeltaWithHeader(project.chapters[0], options.insertHead));
+    var compiled = new Delta().concat(await chapterDeltaWithHeader(project.chapters[0], options.insertHead));
 
     for(let i=1; i<project.chapters.length; i++){
         compiled.insert(divider + '\n');
-        compiled = compiled.concat(chapterDeltaWithHeader(project.chapters[i], options.insertHead));
+        compiled = compiled.concat(await chapterDeltaWithHeader(project.chapters[i], options.insertHead));
     }
 
     return compiled;
 }
 
 
-function compileDocx(filepath, delt, options, project, userSettings) {
+//The manuscript title page carries a project-wide word count, which delta-to-docx no longer works
+//out for itself - reading the chapters it needs is asynchronous now, and it is a document generator
+//with no other I/O in it. Counted here, and only when a title page is actually being generated.
+async function compileDocx(filepath, delt, options, project, userSettings) {
   try{
-    var doc = convertDeltaToDocx(delt, options, project, userSettings.addressInfo);
+    var totalWordCount = options && options.generateTitlePage ? await getTotalWordCount(project) : 0;
+    var doc = convertDeltaToDocx(delt, options, project, userSettings.addressInfo, totalWordCount);
     saveDocx(filepath, doc);
   }
   catch(err){

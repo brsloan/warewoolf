@@ -105,7 +105,9 @@ function showSpellcheck(editorQuill, project, sysDirectories, displayChapterByIn
     popup.appendChild(changeBtn);
 
     var changeAllBtn = createButton("C<span class='access-key'>h</span>ange All");
-    changeAllBtn.onclick = function(){
+    //Awaited so the redraw below shows a finished pass rather than one still reading chapters off
+    //disk.
+    changeAllBtn.onclick = async function(){
       var selectedReplacement = document.querySelector('input[name="suggestions"]:checked');
       if(customInput.value != "")
         selectedReplacement = customInput;
@@ -113,7 +115,7 @@ function showSpellcheck(editorQuill, project, sysDirectories, displayChapterByIn
       if(invalidWord && selectedReplacement != null){
         const caseSensitive = true;
         const wholeWordOnly = true;
-        replaceAllInAllChapters(project, invalidWord.word, selectedReplacement.value, caseSensitive, wholeWordOnly);
+        await replaceAllInAllChapters(project, invalidWord.word, selectedReplacement.value, caseSensitive, wholeWordOnly);
         displayChapterByIndex(project.activeChapterIndex);
         ignoreBtn.click();
       }

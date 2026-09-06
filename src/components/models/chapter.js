@@ -1,8 +1,32 @@
-const fs = require('fs');
 const { logError } = require('../controllers/error-log');
 const { parseMDF, convertDeltaToMDF } = require('../controllers/markdownFic');
-const { sanitizeFilename } = require('../controllers/utils');
-const notesNamePrepend = '-notes_';
+
+//Group C of the platform contract (see platform.js). This module used to be the largest single
+//user of `fs` in the renderer; it now knows nothing about where a chapter lives on disk beyond the
+//project directory it was built with and the filename it was handed back.
+//
+//Three things left with the filesystem, and their absence is the point of the exercise:
+//
+//  - The chapter-file extension and the notes-file prefix. A notes file's name is derived from its
+//    chapter's, and deriving it here meant the renderer had to know that layout in three separate
+//    places and keep them in step. A test asserts neither literal appears in this file any more.
+//  - The find-a-free-filename loop. It is now inside saveChapterAtomic, because reading the
+//    directory to pick a free name and then writing under it is a race whoever owns both halves
+//    has to close - and that is the native side, not this one. saveFile() therefore hands over the
+//    chapter's *title* and is told which filename it got.
+//  - The rename/write/restore-on-failure rollback saveFile() used to run by hand. Same command,
+//    same reason: the ordering is load-bearing, and it is no longer this file's to get wrong.
+//
+//Injected, not global, exactly as platform.js requires - a test hands this module a node-backed
+//platform pointed at a temp directory, which is how the suite goes on asserting against real files.
+let platform = null;
+
+//Called once at renderer startup with the node-backed platform instance (render.js's
+//loadPlatformState), and by each test's setup with one of its own. Group C is plain fs, so it does
+//not cross IPC yet; that instance is what has to be swapped at Phase 9.
+function setPlatform(p){
+  platform = p;
+}
 
 //A chapter's files live in its project's chapters directory, so every file operation below needs
 //the project that owns it. It arrives here as an argument rather than being read off a bare
@@ -33,21 +57,35 @@ function newChapter(parentProject){
 
     //Resolved on each use rather than captured once, because Save As moves a project (and every
     //chapter in it) to a new directory in place.
-    function chaptersDirectory(chap){
+    function chapterLocation(chap){
       if(!chap.parentProject)
         throw new Error('Chapter "' + chap.title + '" has no parent project, so its file path cannot be resolved.');
+      //Louder than a silent no-op, which for a save would be data loss with a clean-looking return.
+      if(platform == null)
+        throw new Error('Chapter "' + chap.title + '" cannot reach the filesystem: no platform has been configured. Call setPlatform() first.');
 
-      return chap.parentProject.directory + chap.parentProject.chapsDirectory;
+      return {
+        projectDir: chap.parentProject.directory,
+        chapsDir: chap.parentProject.chapsDirectory
+      };
     }
 
-    function deleteChapterFile(){
+    async function deleteChapterFile(){
       var chap = this;
       try{
-        const filepathRoot = chaptersDirectory(chap);
-        if(fs.existsSync(filepathRoot + chap.filename))
-          fs.unlinkSync(filepathRoot + chap.filename);
-        if(fs.existsSync(filepathRoot + notesNamePrepend + chap.filename))
-          fs.unlinkSync(filepathRoot + notesNamePrepend + chap.filename);
+        //A chapter added but never saved has no file to delete, and asking for one by a null name
+        //is not a failure worth logging.
+        if(chap.filename == null)
+          return;
+
+        var where = chapterLocation(chap);
+        //The chapter's notes go with it - one command, so the renderer cannot delete one and leave
+        //the other stranded under a name nothing in the UI can reach.
+        await platform.deleteChapterFiles({
+          projectDir: where.projectDir,
+          chapsDir: where.chapsDir,
+          filename: chap.filename
+        });
       }
       catch(err){
         logError(err);
@@ -64,145 +102,118 @@ function newChapter(parentProject){
       return this;
     }
 
-    function getFile(){
+    async function getFile(){
       try{
         var chap = this;
-        
-        //Temporarily support both old chapter JSON files (.pup) and new markdown (.txt)
-        var chapterObj;
-        var fileText = fs.readFileSync(chaptersDirectory(chap) + chap.filename, "utf8");
-        if(chap.filename.includes('.pup'))
-          chapterObj = JSON.parse(fileText);
-        else
-          chapterObj = parseMDF(fileText);
+        var where = chapterLocation(chap);
 
-        return chapterObj;
+        //loadChapter returns the file's text, not a parsed chapter: deciding which of the two
+        //formats it is in, and parsing it, is pure string work with no OS in it, so it stays here.
+        //Temporarily support both old chapter JSON files (.pup) and new markdown (.txt)
+        var fileText = await platform.loadChapter({
+          projectDir: where.projectDir,
+          chapsDir: where.chapsDir,
+          filename: chap.filename
+        });
+
+        if(chap.filename.includes('.pup'))
+          return JSON.parse(fileText);
+
+        return parseMDF(fileText);
       }
       catch(err){
         logError(err);
       }
     }
 
-    function getContentsOrFile(){
+    async function getContentsOrFile(){
       var chap = this;
 
       var cont = chap.contents ? chap.contents : null;
       if(cont == null && chap.filename != null)
-        cont = chap.getFile();
+        cont = await chap.getFile();
 
       return cont;
     }
 
-    function getNotesContentOrFile(){
+    async function getNotesContentOrFile(){
       var chap = this;
 
       var notes = chap.notes ? chap.notes : null;
       if(notes == null && chap.filename != null)
-        notes = chap.getNotesFile();
+        notes = await chap.getNotesFile();
 
       return notes;
     }
 
 
-    function saveCopy(){
+    //Save a Copy. There is no old file to displace, so there is no transaction: the command
+    //allocates a fresh name and writes under it.
+    async function saveCopy(){
       try{
         var chap = this;
-        var newFilename = getNewFilename(chaptersDirectory(chap), chap.title);
+        var where = chapterLocation(chap);
 
-        fs.writeFileSync(chaptersDirectory(chap) + newFilename, convertDeltaToMDF(chap.contents), "utf8")
+        var saved = await platform.saveChapter({
+          projectDir: where.projectDir,
+          chapsDir: where.chapsDir,
+          title: chap.title,
+          mdfc: convertDeltaToMDF(chap.contents)
+        });
 
         //Only point the chapter at the new file once the write has actually succeeded
-        chap.filename = newFilename;
+        chap.filename = saved.filename;
       }
       catch(err){
         logError(err);
       }
     }
 
-    function saveFile(){
+    //The chapter save. What used to be five ordered fs calls here - stash the old file under a
+    //flagged name, allocate a new one, write, restore the stash if the write failed, drop the stash
+    //once everything else has succeeded - is one command whose ordering the renderer cannot get
+    //wrong. See saveChapterAtomic in platform-node.js for which parts of that ordering are
+    //load-bearing and why.
+    //
+    //hasUnsavedChanges is cleared only on the way out, never before the command returns, which is
+    //what makes a failed save (and, worse, a failed *rollback*, where the chapter has no file on
+    //disk at all) leave the chapter dirty rather than looking saved.
+    async function saveFile(){
       try{
-        const oldVersionFlag = 'old_v_temp';
         var chap = this;
-        const filepathRoot = chaptersDirectory(chap);
+        var where = chapterLocation(chap);
 
+        //A title change with no edit to the text: there is nothing in memory to write, so the file
+        //is read back and rewritten under the new name. Round-tripped through the parser rather
+        //than copied as text, because a .pup chapter is JSON and comes out as MarkdownFic.
         if(chap.contents == null && chap.filename != null)
-          chap.contents = chap.getFile();
+          chap.contents = await chap.getFile();
 
-        //Because I'm paranoid about the tiny possibility of something going wrong between deleting old verison of file and creating new,
-        //we rename the old version with the oldVersionFlag, create new version, verify success, THEN delete old version
-        var oldFilename = chap.filename;
-        if(oldFilename != undefined && oldFilename != null && fs.existsSync(filepathRoot + oldFilename))
-          fs.renameSync(filepathRoot + oldFilename, filepathRoot + oldVersionFlag + oldFilename);
-
-        var newFilename = getNewFilename(filepathRoot, chap.title);
-
-        try{
-          fs.writeFileSync(filepathRoot + newFilename, convertDeltaToMDF(chap.contents), "utf8")
-        }
-        catch(writeErr){
-          //Write failed - put the old version back so the chapter isn't left without a file on disk
-          if(oldFilename != undefined && oldFilename != null && fs.existsSync(filepathRoot + oldVersionFlag + oldFilename))
-            fs.renameSync(filepathRoot + oldVersionFlag + oldFilename, filepathRoot + oldFilename);
-          throw writeErr;
-        }
+        var saved = await platform.saveChapterAtomic({
+          projectDir: where.projectDir,
+          chapsDir: where.chapsDir,
+          oldFilename: chap.filename,
+          title: chap.title,
+          mdfc: convertDeltaToMDF(chap.contents),
+          //Notes ride along in the same call because their filename is derived from the chapter's:
+          //saving them separately would leave a window where they sat under the old name.
+          notesMdfc: chap.notes != null ? convertDeltaToMDF(chap.notes) : null
+        });
 
         //Only point the chapter at the new file once the write has actually succeeded
-        chap.filename = newFilename;
-
-        //If filename has changed and new file successfully created, delete old file
-        if(oldFilename != undefined && oldFilename != null && fs.existsSync(filepathRoot + oldVersionFlag + oldFilename)){
-          try{
-            fs.unlinkSync(filepathRoot + oldVersionFlag + oldFilename);
-          }
-          catch(unlinkErr){
-            logError(unlinkErr);
-          }
-        }
-
-        //If filename has changed and notes exist, rename notes to match
-        if(oldFilename != undefined && oldFilename != null && oldFilename != chap.filename){
-          if(fs.existsSync(filepathRoot + notesNamePrepend + oldFilename)){
-            fs.renameSync(filepathRoot + notesNamePrepend + oldFilename, filepathRoot + notesNamePrepend + chap.filename);
-          }
-        }
-        
+        chap.filename = saved.filename;
         chap.contents = null;
-      
-        chap.hasUnsavedChanges = false;
-        if(chap.notes != null){
-          chap.saveNotesFile();
+
+        //A notes failure never fails a chapter that was written - but it is not nothing either.
+        //The old code cleared hasUnsavedChanges before saveNotesFile() ran, so notes that never
+        //reached disk left the chapter looking saved and were dropped without a prompt on exit.
+        //Left dirty instead, with the notes still in memory, so the reader is asked about them and
+        //the next save retries.
+        if(saved.notesError){
+          logError(new Error('Chapter "' + chap.title + '" was saved, but its notes were not ('
+            + saved.notesError.code + '): ' + saved.notesError.message));
+          return;
         }
-      }
-      catch(err){
-        logError(err);
-      }
-    }
-
-    function getNotesFile(){
-      try{
-        var chap = this;
-        var fullNotesPath = chaptersDirectory(chap) + notesNamePrepend + chap.filename;
-
-        var fileText = null;
-        if(fs.existsSync(fullNotesPath)){
-          fileText = fs.readFileSync(fullNotesPath, "utf8");
-        }
-        
-
-        return fileText ? parseMDF(fileText) : null;
-      }
-      catch(err){
-        logError(err);
-      }
-    }
-
-    function saveNotesFile(){
-      try{
-        var chap = this;
-        const filepathRoot = chaptersDirectory(chap);
-
-        if(chap.notes != null)
-          fs.writeFileSync(filepathRoot + notesNamePrepend + chap.filename, convertDeltaToMDF(chap.notes), "utf8")
 
         chap.notes = null;
         chap.hasUnsavedChanges = false;
@@ -211,23 +222,53 @@ function newChapter(parentProject){
         logError(err);
       }
     }
-    
 
-  function getNewFilename(chaptersDir, title){
-    
-    const fileExt = '.txt';    
-    var copyNum = 1;
-    var filenameRoot = sanitizeFilename(title && title != '' ? title : 'untitled');
-    var filename = filenameRoot + fileExt;
+    async function getNotesFile(){
+      try{
+        var chap = this;
+        var where = chapterLocation(chap);
 
-    while(fs.existsSync(chaptersDir + filename)){
-      copyNum++;
-      filename = filenameRoot + '_' + copyNum + fileExt;
+        //null for a chapter that simply has no notes yet, which is the ordinary case and not a
+        //failure - the command distinguishes the two so this does not have to.
+        var fileText = await platform.loadChapterNotes({
+          projectDir: where.projectDir,
+          chapsDir: where.chapsDir,
+          filename: chap.filename
+        });
+
+        return fileText ? parseMDF(fileText) : null;
+      }
+      catch(err){
+        logError(err);
+      }
     }
-    
-    return filename;
-  }
 
+    //Notes for a chapter whose filename is not changing - the project notes chapter, and the notes
+    //panel saving on its own. When the filename *is* changing they go through saveFile() above
+    //instead, which owns the rename.
+    async function saveNotesFile(){
+      try{
+        var chap = this;
+        var where = chapterLocation(chap);
+
+        if(chap.notes != null)
+          await platform.saveChapterNotes({
+            projectDir: where.projectDir,
+            chapsDir: where.chapsDir,
+            filename: chap.filename,
+            mdfc: convertDeltaToMDF(chap.notes)
+          });
+
+        chap.notes = null;
+        chap.hasUnsavedChanges = false;
+      }
+      catch(err){
+        logError(err);
+      }
+    }
 }
 
 module.exports = newChapter;
+//Hung off the factory rather than exported alongside it, so every existing
+//`require('./chapter')` call site keeps working unchanged.
+module.exports.setPlatform = setPlatform;

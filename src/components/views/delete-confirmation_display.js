@@ -23,9 +23,12 @@ function displayDeleteConfirmation(onConfirm){
   popup.appendChild(message);
 
   var yesButton = createButton("Yes");
+  //The popup comes down first and stays down: confirming is what the reader answered, and deleting
+  //the files is asynchronous now, so waiting on it would leave the dialog sitting there. onConfirm's
+  //own promise is handed back - a click ignores it, but a test can await the deletion.
   yesButton.onclick = function(){
     popup.remove();
-    onConfirm();
+    return onConfirm();
   }
   var noButton = createButton("No");
   noButton.onclick = function(){

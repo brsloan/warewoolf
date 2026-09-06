@@ -43,6 +43,10 @@ function platformInfo(overrides){
   return Object.assign({ platform: 'linux', arch: 'x64' }, overrides);
 }
 
+function flushMicrotasks(){
+  return new Promise(function(resolve){ setImmediate(resolve); });
+}
+
 function keydown(target, key, modifiers){
   target.dispatchEvent(new window.KeyboardEvent('keydown', Object.assign({
     key: key,
@@ -160,7 +164,7 @@ test('Escape with no unsaved changes closes the corkboard immediately, without p
   assert.strictEqual(document.querySelector('.popup-corkboard'), null);
 });
 
-test('Ctrl+S saves the cards and the project, then clears the unsaved-changes flag', function(t){
+test('Ctrl+S saves the cards and the project, then clears the unsaved-changes flag', async function(t){
   var cards = [{ label: 'A', descr: 'a', color: 0, checked: false }];
   var saveCardsCalls = [];
   var saveFileCalls = 0;
@@ -177,6 +181,9 @@ test('Ctrl+S saves the cards and the project, then clears the unsaved-changes fl
 
   var popup = document.querySelector('.popup-corkboard');
   keydown(popup, 's', { ctrlKey: true });
+  //A keydown listener's return value is dropped by dispatchEvent, and the handler is async now
+  //(saving the project goes through the platform facade), so the flag is only cleared a tick later.
+  await flushMicrotasks();
 
   assert.strictEqual(saveCardsCalls.length, 1);
   assert.strictEqual(saveCardsCalls[0].path, '/proj/chaps/');

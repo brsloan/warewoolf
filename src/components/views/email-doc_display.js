@@ -1,6 +1,7 @@
 const { closePopups, createButton, removeElementsByClass, generateRow } = require('../controllers/utils');
 const { describeCredentialBackend, APP_PASSWORD_HINT } = require('../controllers/credential-help');
 const { prepareAndEmail } = require('../controllers/email-doc');
+const { logError } = require('../controllers/error-log');
 const { showWorkingAndThen, hideWorking } = require('./working_display');
 
 function showEmailOptions(project, userSettings, credentialStore, editorQuill){
@@ -350,11 +351,13 @@ function showEmailOptions(project, userSettings, credentialStore, editorQuill){
           compile: compiledRadio.checked
         }
 
-      //Building the attachment (compiling chapters, generating a docx/epub) runs synchronously
-      //and can be slow on a large project. Deferring it behind showWorkingAndThen gives
-      //"Sending..." a chance to paint first instead of freezing with no feedback.
+      //Building the attachment (compiling chapters, generating a docx/epub) can be slow on a large
+      //project. Deferring it behind showWorkingAndThen gives "Sending..." a chance to paint first
+      //instead of freezing with no feedback.
       showWorkingAndThen('Sending...', function(){
-        prepareAndEmail(project, userSettings, editorQuill, senderEmailInput.value,
+        //Promise.resolve so a backing that hands back nothing at all is as safe as one that returns a
+        //promise.
+        Promise.resolve(prepareAndEmail(project, userSettings, editorQuill, senderEmailInput.value,
           senderPassInput.value,
           receiverEmailInput.value,
           projectRadio.checked ? '.zip' : typeSelect.value,
@@ -362,6 +365,15 @@ function showEmailOptions(project, userSettings, credentialStore, editorQuill){
           function(resp){
             hideWorking();
             responseText.innerText = resp;
+            sendButton.disabled = false;
+          })).catch(function(err){
+            //prepareAndEmail is async now (compiling reads chapters through the platform facade),
+            //so a failure while building the attachment arrives as a rejection rather than a
+            //throw. Caught here so "Sending..." always comes down and the button comes back -
+            //unhandled, the dialog would be stuck with nothing to say.
+            logError(err);
+            hideWorking();
+            responseText.innerText = 'Error preparing the document to send.';
             sendButton.disabled = false;
           });
       });

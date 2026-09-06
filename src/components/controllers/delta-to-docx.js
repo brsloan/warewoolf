@@ -2,7 +2,6 @@ const fs = require('fs');
 const docx = require('docx');
 const { logError } = require('./error-log');
 const { parseDelta, getOrderedListNumbers, getListLevel, getListMarker } = require('./quill-utils');
-const { getTotalWordCount } = require('./wordcount');
 
 function saveDocx(filepath, doc, cback = function(){}){
   docx.Packer.toBuffer(doc).then((buffer) => {
@@ -27,7 +26,13 @@ function packageDocxBase64(doc, callback){
   }).catch(logError);
 }
 
-function convertDeltaToDocx(delt, options, project, addressInfo){
+//`totalWordCount` is handed in rather than computed here. It used to come from getTotalWordCount(),
+//which reads every chapter that is not already in memory - now an asynchronous read through the
+//platform facade. Making this whole module async for one line of a title page would be the wrong
+//trade: it generates a document from a delta and touches no I/O otherwise. Lifting the number out
+//to the caller also ends a quadratic re-read, since export.js calls this once per chapter and each
+//call used to re-count the entire project.
+function convertDeltaToDocx(delt, options, project, addressInfo, totalWordCount){
   if(options == null){
     options = {
       styleHeadingAsChapter: false
@@ -172,7 +177,7 @@ function convertDeltaToDocx(delt, options, project, addressInfo){
 
   var sections = [];
   if(options && options.generateTitlePage == true)
-    sections.push(getTitlePage(project, addressInfo));
+    sections.push(getTitlePage(project, addressInfo, totalWordCount));
 
   sections.push(getDocBody(xParagraphs, project));
 
@@ -362,10 +367,10 @@ function getDocBody(xParagraphs, project){
   }
 }
 
-function getTitlePage(project, addressInfo){
+function getTitlePage(project, addressInfo, totalWordCount){
   var titleParas = [];
   titleParas.push(new docx.Paragraph({
-    text: getTitlePageFirstLine(project),
+    text: getTitlePageFirstLine(project, totalWordCount),
     style: 'address'
   }));
 
@@ -423,8 +428,8 @@ function getTitlePage(project, addressInfo){
 
 }
 
-function getTitlePageFirstLine(project){
-  var wordCount = (Math.round(getTotalWordCount(project)/100)*100).toString();
+function getTitlePageFirstLine(project, totalWordCount){
+  var wordCount = (Math.round((totalWordCount || 0)/100)*100).toString();
   if(wordCount.length > 3){
     wordCount = wordCount.slice(0,-3) + ',' + wordCount.slice(-3);
   }

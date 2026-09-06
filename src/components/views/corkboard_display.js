@@ -290,11 +290,15 @@ function getElementWidthWithMargin(element) {
   return width + marginLeft + marginRight;
 }
 
-function boardCntrlEvents(e){
+//Async because saving the project it belongs to now goes through the platform facade. A keydown
+//listener's return value is never read, so the promise this returns goes nowhere - which is fine
+//here: saveFile() reports its own failures to the error log and returns false rather than throwing.
+async function boardCntrlEvents(e){
   if((e.ctrlKey || e.metaKey) && (e.key === "s")){
     stopDefaultPropagation(e);
     saveCards(loadedCards, openProject.directory + openProject.chapsDirectory);
-    openProject.saveFile();
+    //Awaited so the board is only marked clean once the project file has actually been written.
+    await openProject.saveFile();
     unmarkUnsavedChanges();
   }
   else if(e.key === "Escape"){
@@ -439,9 +443,9 @@ function promptToSave(){
   popup.appendChild(subWarning);
 
   var save = createButton("Save");
-  save.onclick = function(){
+  save.onclick = async function(){
     saveCards(loadedCards, openProject.directory + openProject.chapsDirectory);
-    openProject.saveFile();
+    await openProject.saveFile();
     unsavedChanges = false;
     closePopups();
   };

@@ -1,7 +1,9 @@
 const { closePopups, createButton, removeElementsByClass, generateRow } = require('../controllers/utils');
 const { countWords, getTotalWordCount } = require('../controllers/wordcount');
 
-function showWordCount(project, editorQuill){
+//Async because the project-wide total needs every chapter's text, which for a chapter not already
+//in memory is now an asynchronous read through the platform facade.
+async function showWordCount(project, editorQuill){
     removeElementsByClass('popup');
     var popup = document.createElement("div");
     popup.classList.add("popup");
@@ -70,7 +72,7 @@ function showWordCount(project, editorQuill){
     document.body.appendChild(popup);
 
     var activeTotal = countWords(editorQuill.getText());
-    var total = getTotalWordCount(project);
+    var total = await getTotalWordCount(project);
     updateProgressBar();
 
     goalInput.oninput = function(){

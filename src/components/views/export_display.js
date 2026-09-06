@@ -1,6 +1,7 @@
 const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
 const showFileDialog = require('./file-dialog_display');
 const { exportProject } = require('../controllers/export');
+const { logError } = require('../controllers/error-log');
 const { showWorkingAndThen, showWorking, hideWorking } = require('./working_display');
 
 function showExportOptions(project, userSettings, sysDirectories){
@@ -119,7 +120,9 @@ function showExportOptions(project, userSettings, sysDirectories){
         //showWorkingAndThen so it has a chance to paint first) instead of freezing with no
         //feedback, and wait for exportProject's completion callback before closing anything.
         showWorkingAndThen('Exporting...', function(){
-          exportProject(project, userSettings, options, dirpath, function(errorCount){
+          //Promise.resolve so a backing that hands back nothing at all is as safe as one that returns
+          //a promise.
+          Promise.resolve(exportProject(project, userSettings, options, dirpath, function(errorCount){
             if(errorCount > 0){
               //Give the user a moment to see that something went wrong instead of the popup
               //just vanishing as if the export fully succeeded.
@@ -133,6 +136,14 @@ function showExportOptions(project, userSettings, sysDirectories){
               hideWorking();
               cback();
             }
+          })).catch(function(err){
+            //exportProject is async now (it reads chapters through the platform facade), so a
+            //failure inside it arrives as a rejection rather than a throw. Caught here so the
+            //"Exporting..." popup always comes back down - unhandled, it would sit over the reader
+            //forever.
+            logError(err);
+            hideWorking();
+            cback();
           });
         });
       }
