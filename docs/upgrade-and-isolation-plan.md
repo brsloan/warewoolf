@@ -9,9 +9,17 @@ zero native modules, `src/index.js` untested.
 **Status as of `0aa3e3a`.** Part 1 steps 1–3 are done: baseline tagged
 (`pre-electron-upgrade-baseline`), electron-forge unified to 7.11.2 (`834a772`),
 test script scoped and `test/` excluded from packages (`fffcbd6`), and Electron
-jumped 18.3.15 → **44.2.0** (`9a4bdbf`). Steps 4–7 remain, and the smoke pass is
-in progress. Two EACCES bugs it has already surfaced are fixed in `a0a199c` and
-`0aa3e3a` — see "Smoke-pass findings" below. Test count is unchanged at 813.
+jumped 18.3.15 → **44.2.0** (`9a4bdbf`).
+
+Steps 4 and 5 are done: all 26 majors' breaking changes read against the actual
+API surface, with nothing requiring a code change — `sandbox` stays false because
+`nodeIntegration: true` disables it (verified from the live docs, not assumed),
+`new-window` and the `crashed` events were already on their replacements, and
+`getSelectedStorageBackend`'s `basic_text`/`unknown` sentinels are unchanged.
+Step 6 is done, including a real writerDeck on Pi OS Lite + Xorg + Matchbox; the
+three bugs it surfaced are fixed in `a0a199c`, `0aa3e3a` and `bd615c7`.
+
+**Only step 7 remains.** Suite is at 824.
 
 `npm test` is bare `node --test`, which recursively discovers test files from
 cwd (excluding only `node_modules`). Run it after any `electron-forge
@@ -43,7 +51,11 @@ of one.
   distinct Electron calls: `app.getPath/quit/on/isPackaged/name/getVersion/
   applicationMenu`, `BrowserWindow`, `Menu.buildFromTemplate/setApplicationMenu`,
   `nativeTheme.themeSource`, `safeStorage.*`, `webContents.send/on/openDevTools/
-  setWindowOpenHandler`, and `ipcMain.on`. All still exist and are stable.
+  setWindowOpenHandler`, and `ipcMain.on`. All still exist and are stable. The
+  `webContents.on` handlers are `will-navigate` and `render-process-gone` — the
+  latter already the modern replacement for the `crashed` events removed in 29.
+  Check against the file, not this list: it was written from a grep and missed
+  `render-process-gone` on the first pass.
 - **The renderer is already hardened.** `setWindowOpenHandler` deny,
   `will-navigate` deny, gated devTools, and the close guard are already in place
   (`index.js:108-118`), so the upgrade does not have to introduce them.
