@@ -1,6 +1,8 @@
 const { getTempQuill } = require('./quill-utils');
 
-function renumberChaps(project, startIndex, endIndex, withinChaps, useNumerals, template){
+//Async because insertChapTitle below has to read a chapter that is not already in memory, which now
+//goes through the platform facade.
+async function renumberChaps(project, startIndex, endIndex, withinChaps, useNumerals, template){
   //template should have [num] where number should go
   var newNum = 1;
   var firstIndex = Math.max(0, startIndex);
@@ -14,7 +16,7 @@ function renumberChaps(project, startIndex, endIndex, withinChaps, useNumerals, 
     newNum++;
 
     if(withinChaps)
-      insertChapTitle(chap);
+      await insertChapTitle(chap);
 
     chap.hasUnsavedChanges = true;
     anyChanged = true;
@@ -24,8 +26,8 @@ function renumberChaps(project, startIndex, endIndex, withinChaps, useNumerals, 
     project.hasUnsavedChanges = true;
 }
 
-function insertChapTitle(chap){
-  var delt = chap.getContentsOrFile();
+async function insertChapTitle(chap){
+  var delt = await chap.getContentsOrFile();
   //A chapter whose file failed to load reads back as null/undefined. Unlike the other converters,
   //this function has no "anything to change?" check - it unconditionally writes back whatever it
   //builds, so without this guard a failed load would silently replace the chapter's real content

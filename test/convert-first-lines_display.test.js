@@ -61,7 +61,7 @@ test('renders a warning and focuses the Convert button', function(t){
   assert.strictEqual(document.activeElement, getConvertBtn());
 });
 
-test('clicking Convert converts the project, closes the popup, and calls the callback', function(t){
+test('clicking Convert converts the project, closes the popup, and calls the callback', async function(t){
   var convertCalls = [];
   var project = { chapters: [] };
   var showConvertFirstLines = freshConvertFirstLinesDisplay({
@@ -71,7 +71,9 @@ test('clicking Convert converts the project, closes the popup, and calls the cal
   var cbackCalls = 0;
   showConvertFirstLines(project, function(){ cbackCalls++; });
 
-  getConvertBtn().onclick();
+  //Awaited: the handler converts the project before closing and calling back, and conversion reads
+  //chapters through the platform facade now.
+  await getConvertBtn().onclick();
 
   assert.strictEqual(convertCalls.length, 1);
   assert.strictEqual(convertCalls[0], project);

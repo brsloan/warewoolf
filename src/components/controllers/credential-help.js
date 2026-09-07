@@ -5,7 +5,7 @@
 const BACKEND_NOTES = {
   safeStorage: "Saved password is protected by this computer's system keystore, tied to your login.",
   passphrase: "Saved password is protected by your passphrase. WareWoolf asks for it once per session, and cannot recover it if you forget it.",
-  keyfile: "No system keystore here, so the saved password is protected by a key file in WareWoolf's settings folder. That keeps a copied settings file or backup useless, but not anyone who can already read your files on this computer — tick the passphrase box for that."
+  keyfile: "Adding a passphrase would make your password more secure. See help file."
 };
 
 //Whatever protects a saved password, an app password limits what a leaked one is worth: most

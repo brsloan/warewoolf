@@ -7,7 +7,9 @@ const corkboardControllerPath = require.resolve('../src/components/controllers/c
 
 //corkboard_display.js destructures getCardsFromFile/saveCards from the corkboard controller at
 //require-time, so mocking them only takes effect if the cache is primed before corkboard_display.js
-//is (re-)required - same pattern as compile_display.test.js's freshCompileDisplay().
+//is (re-)required - same pattern as compile_display.test.js's freshCompileDisplay(). showCorkboard()
+//is async now (loading the cards goes through the platform facade), so every test below awaits it
+//before asserting on the rendered board.
 function freshCorkboardDisplay(mocks){
   delete require.cache[corkboardDisplayPath];
   require.cache[corkboardControllerPath] = {
@@ -39,12 +41,27 @@ function makeProject(overrides){
   }, overrides);
 }
 
+function platformInfo(overrides){
+  return Object.assign({ platform: 'linux', arch: 'x64' }, overrides);
+}
+
+function flushMicrotasks(){
+  return new Promise(function(resolve){ setImmediate(resolve); });
+}
+
 function keydown(target, key, modifiers){
   target.dispatchEvent(new window.KeyboardEvent('keydown', Object.assign({
     key: key,
     bubbles: true,
     cancelable: true
   }, modifiers)));
+}
+
+//A keydown listener's return value is dropped by dispatchEvent, and boardCntrlEvents is async
+//(saving now goes through the platform facade) - flush a microtask so awaited work has landed.
+async function keydownAndFlush(target, key, modifiers){
+  keydown(target, key, modifiers);
+  await flushMicrotasks();
 }
 
 test.beforeEach(function(){
@@ -60,7 +77,7 @@ test.afterEach(function(){
   delete global.document;
 });
 
-test('renders loaded cards into the requested number of columns with their label/description/color/checkmark', function(t){
+test('renders loaded cards into the requested number of columns with their label/description/color/checkmark', async function(t){
   var cards = [
     { label: 'One', descr: 'First', color: 0, checked: false },
     { label: 'Two', descr: 'Second', color: '2', checked: true },
@@ -73,7 +90,7 @@ test('renders loaded cards into the requested number of columns with their label
   });
   var project = makeProject({ corkboardColumns: 2 });
 
-  showCorkboard(project);
+  await showCorkboard(project, platformInfo());
 
   assert.strictEqual(getCardsFromFileCalls[0], '/proj/chaps/');
   assert.strictEqual(document.getElementsByClassName('corkboard-column').length, 2);
@@ -84,21 +101,21 @@ test('renders loaded cards into the requested number of columns with their label
   assert.ok(document.getElementById('card-checkmark2').classList.contains('card-checkmark-checked'));
 });
 
-test('shows a single blank starter card when no cards exist yet', function(t){
+test('shows a single blank starter card when no cards exist yet', async function(t){
   var showCorkboard = freshCorkboardDisplay({
     getCardsFromFile: function(){ return undefined; },
     saveCards: function(){}
   });
   var project = makeProject({ corkboardColumns: 1 });
 
-  showCorkboard(project);
+  await showCorkboard(project, platformInfo());
 
   assert.strictEqual(document.getElementById('card-label1').value, '');
   assert.strictEqual(document.getElementById('card-label1').disabled, false);
   assert.strictEqual(document.getElementById('card2'), null, 'a single starter card should only need one slot');
 });
 
-test('focuses the last checked card on open, when it is not the final card', function(t){
+test('focuses the last checked card on open, when it is not the final card', async function(t){
   var cards = [
     { label: 'A', descr: '', checked: false },
     { label: 'B', descr: '', checked: true },
@@ -107,12 +124,12 @@ test('focuses the last checked card on open, when it is not the final card', fun
   var showCorkboard = freshCorkboardDisplay({ getCardsFromFile: function(){ return cards; }, saveCards: function(){} });
   var project = makeProject({ corkboardColumns: 1 });
 
-  showCorkboard(project);
+  await showCorkboard(project, platformInfo());
 
   assert.strictEqual(document.activeElement.id, 'card-label2');
 });
 
-test('focuses the first card when the last card is the last one checked', function(t){
+test('focuses the first card when the last card is the last one checked', async function(t){
   var cards = [
     { label: 'A', descr: '', checked: false },
     { label: 'B', descr: '', checked: true }
@@ -120,7 +137,7 @@ test('focuses the first card when the last card is the last one checked', functi
   var showCorkboard = freshCorkboardDisplay({ getCardsFromFile: function(){ return cards; }, saveCards: function(){} });
   var project = makeProject({ corkboardColumns: 1 });
 
-  showCorkboard(project);
+  await showCorkboard(project, platformInfo());
 
   assert.strictEqual(document.activeElement.id, 'card-label1');
 });
@@ -128,11 +145,11 @@ test('focuses the first card when the last card is the last one checked', functi
 //Regression: markUnsavedChanges was only wired to the label/description fields' `change` event,
 //which fires on blur. Typing then pressing Escape before ever blurring left unsavedChanges false,
 //so the corkboard closed immediately and silently discarded the edit instead of prompting to save.
-test('typing in a card marks unsaved changes immediately, so Escape prompts to save without needing to blur first', function(t){
+test('typing in a card marks unsaved changes immediately, so Escape prompts to save without needing to blur first', async function(t){
   var cards = [{ label: 'A', descr: 'a', color: 0, checked: false }];
   var showCorkboard = freshCorkboardDisplay({ getCardsFromFile: function(){ return cards; }, saveCards: function(){} });
   var project = makeProject({ corkboardColumns: 1 });
-  showCorkboard(project);
+  await showCorkboard(project, platformInfo());
 
   var label = document.getElementById('card-label1');
   label.value = 'Changed';
@@ -144,11 +161,11 @@ test('typing in a card marks unsaved changes immediately, so Escape prompts to s
   assert.ok(document.querySelector('.popup-corkboard'), 'the corkboard itself should stay open behind the prompt');
 });
 
-test('Escape with no unsaved changes closes the corkboard immediately, without prompting', function(t){
+test('Escape with no unsaved changes closes the corkboard immediately, without prompting', async function(t){
   var cards = [{ label: 'A', descr: 'a', color: 0, checked: false }];
   var showCorkboard = freshCorkboardDisplay({ getCardsFromFile: function(){ return cards; }, saveCards: function(){} });
   var project = makeProject({ corkboardColumns: 1 });
-  showCorkboard(project);
+  await showCorkboard(project, platformInfo());
 
   keydown(document.querySelector('.popup-corkboard'), 'Escape', {});
 
@@ -156,7 +173,7 @@ test('Escape with no unsaved changes closes the corkboard immediately, without p
   assert.strictEqual(document.querySelector('.popup-corkboard'), null);
 });
 
-test('Ctrl+S saves the cards and the project, then clears the unsaved-changes flag', function(t){
+test('Ctrl+S saves the cards and the project, then clears the unsaved-changes flag', async function(t){
   var cards = [{ label: 'A', descr: 'a', color: 0, checked: false }];
   var saveCardsCalls = [];
   var saveFileCalls = 0;
@@ -165,14 +182,16 @@ test('Ctrl+S saves the cards and the project, then clears the unsaved-changes fl
     saveCards: function(cardsArg, path){ saveCardsCalls.push({ cardsArg: cardsArg, path: path }); }
   });
   var project = makeProject({ corkboardColumns: 1, saveFile: function(){ saveFileCalls++; } });
-  showCorkboard(project);
+  await showCorkboard(project, platformInfo());
 
   var label = document.getElementById('card-label1');
   label.value = 'Changed';
   label.dispatchEvent(new window.Event('keyup', { bubbles: true }));
 
   var popup = document.querySelector('.popup-corkboard');
-  keydown(popup, 's', { ctrlKey: true });
+  //A keydown listener's return value is dropped by dispatchEvent, and the handler is async now
+  //(saving the project goes through the platform facade), so the flag is only cleared a tick later.
+  await keydownAndFlush(popup, 's', { ctrlKey: true });
 
   assert.strictEqual(saveCardsCalls.length, 1);
   assert.strictEqual(saveCardsCalls[0].path, '/proj/chaps/');
@@ -187,11 +206,11 @@ test('Ctrl+S saves the cards and the project, then clears the unsaved-changes fl
 //Regression: "Continue Without Saving" never reset unsavedChanges, so it stayed true forever - the
 //very next time the corkboard was opened (with no new edits at all), Escape would still show a
 //stale "you have unsaved changes" prompt.
-test('Continue Without Saving clears the unsaved flag instead of leaving it stuck for next time', function(t){
+test('Continue Without Saving clears the unsaved flag instead of leaving it stuck for next time', async function(t){
   var cards = [{ label: 'A', descr: 'a', color: 0, checked: false }];
   var showCorkboard = freshCorkboardDisplay({ getCardsFromFile: function(){ return cards; }, saveCards: function(){} });
   var project = makeProject({ corkboardColumns: 1 });
-  showCorkboard(project);
+  await showCorkboard(project, platformInfo());
 
   var label = document.getElementById('card-label1');
   label.value = 'Changed';
@@ -207,14 +226,14 @@ test('Continue Without Saving clears the unsaved flag instead of leaving it stuc
   assert.strictEqual(document.querySelector('.popup-corkboard'), null, 'corkboard should be closed');
 
   //Reopen fresh with no new edits and press Escape right away - it must not show a stale prompt.
-  showCorkboard(project);
+  await showCorkboard(project, platformInfo());
   keydown(document.querySelector('.popup-corkboard'), 'Escape', {});
 
   assert.strictEqual(document.querySelector('.popup-dialog'), null, 'should not show a stale unsaved-changes prompt');
   assert.strictEqual(document.querySelector('.popup-corkboard'), null);
 });
 
-test('Ctrl+I inserts a full-schema blank card after the current one and focuses it', function(t){
+test('Ctrl+I inserts a full-schema blank card after the current one and focuses it', async function(t){
   var cards = [{ label: 'A', descr: 'a', color: 0, checked: false }];
   var savedCardsArg = null;
   var showCorkboard = freshCorkboardDisplay({
@@ -222,7 +241,7 @@ test('Ctrl+I inserts a full-schema blank card after the current one and focuses 
     saveCards: function(cardsArg){ savedCardsArg = cardsArg; }
   });
   var project = makeProject({ corkboardColumns: 1 });
-  showCorkboard(project);
+  await showCorkboard(project, platformInfo());
 
   keydown(document.getElementById('card1'), 'i', { ctrlKey: true });
 
@@ -231,20 +250,20 @@ test('Ctrl+I inserts a full-schema blank card after the current one and focuses 
 
   //Regression: insertBlankCard used to omit color/checked, unlike every other card's schema.
   var popup = document.querySelector('.popup-corkboard');
-  keydown(popup, 's', { ctrlKey: true });
+  await keydownAndFlush(popup, 's', { ctrlKey: true });
   assert.strictEqual(savedCardsArg.length, 2);
   assert.strictEqual(savedCardsArg[1].color, 0);
   assert.strictEqual(savedCardsArg[1].checked, false);
 });
 
-test('Ctrl+Backspace deletes a card but refuses to delete the last remaining one', function(t){
+test('Ctrl+Backspace deletes a card but refuses to delete the last remaining one', async function(t){
   var cards = [
     { label: 'A', descr: '', color: 0, checked: false },
     { label: 'B', descr: '', color: 0, checked: false }
   ];
   var showCorkboard = freshCorkboardDisplay({ getCardsFromFile: function(){ return cards; }, saveCards: function(){} });
   var project = makeProject({ corkboardColumns: 1 });
-  showCorkboard(project);
+  await showCorkboard(project, platformInfo());
 
   keydown(document.getElementById('card1'), 'Backspace', { ctrlKey: true });
 
@@ -256,11 +275,11 @@ test('Ctrl+Backspace deletes a card but refuses to delete the last remaining one
   assert.strictEqual(document.getElementById('card-label1').value, 'B', 'the last remaining card must not be deletable');
 });
 
-test('Ctrl+Enter toggles a card checked/unchecked', function(t){
+test('Ctrl+Enter toggles a card checked/unchecked', async function(t){
   var cards = [{ label: 'A', descr: '', color: 0, checked: false }];
   var showCorkboard = freshCorkboardDisplay({ getCardsFromFile: function(){ return cards; }, saveCards: function(){} });
   var project = makeProject({ corkboardColumns: 1 });
-  showCorkboard(project);
+  await showCorkboard(project, platformInfo());
 
   keydown(document.getElementById('card1'), 'Enter', { ctrlKey: true });
   assert.ok(document.getElementById('card-checkmark1').classList.contains('card-checkmark-checked'));
@@ -269,11 +288,11 @@ test('Ctrl+Enter toggles a card checked/unchecked', function(t){
   assert.strictEqual(document.getElementById('card-checkmark1').classList.contains('card-checkmark-checked'), false);
 });
 
-test('Ctrl+<digit> sets the card color class and Ctrl+0 clears it', function(t){
+test('Ctrl+<digit> sets the card color class and Ctrl+0 clears it', async function(t){
   var cards = [{ label: 'A', descr: '', color: 0, checked: false }];
   var showCorkboard = freshCorkboardDisplay({ getCardsFromFile: function(){ return cards; }, saveCards: function(){} });
   var project = makeProject({ corkboardColumns: 1 });
-  showCorkboard(project);
+  await showCorkboard(project, platformInfo());
 
   var card1 = document.getElementById('card1');
   keydown(card1, '3', { ctrlKey: true });
@@ -285,11 +304,11 @@ test('Ctrl+<digit> sets the card color class and Ctrl+0 clears it', function(t){
   }
 });
 
-test('Ctrl+, and Ctrl+. adjust the number of board columns, never going below 1', function(t){
+test('Ctrl+, and Ctrl+. adjust the number of board columns, never going below 1', async function(t){
   var cards = [{ label: 'A', descr: '' }, { label: 'B', descr: '' }];
   var showCorkboard = freshCorkboardDisplay({ getCardsFromFile: function(){ return cards; }, saveCards: function(){} });
   var project = makeProject({ corkboardColumns: 1 });
-  showCorkboard(project);
+  await showCorkboard(project, platformInfo());
 
   assert.strictEqual(document.getElementsByClassName('corkboard-column').length, 1);
 
@@ -302,14 +321,14 @@ test('Ctrl+, and Ctrl+. adjust the number of board columns, never going below 1'
   assert.strictEqual(project.corkboardColumns, 1, 'column count should not go below 1');
 });
 
-test('Ctrl+Shift+ArrowRight reorders cards, and moving the last card right inserts a blank card instead', function(t){
+test('Ctrl+Shift+ArrowRight reorders cards, and moving the last card right inserts a blank card instead', async function(t){
   var cards = [
     { label: 'A', descr: '', color: 0, checked: false },
     { label: 'B', descr: '', color: 0, checked: false }
   ];
   var showCorkboard = freshCorkboardDisplay({ getCardsFromFile: function(){ return cards; }, saveCards: function(){} });
   var project = makeProject({ corkboardColumns: 1 });
-  showCorkboard(project);
+  await showCorkboard(project, platformInfo());
 
   keydown(document.getElementById('card1'), 'ArrowRight', { ctrlKey: true, shiftKey: true });
 
@@ -324,11 +343,11 @@ test('Ctrl+Shift+ArrowRight reorders cards, and moving the last card right inser
   assert.strictEqual(document.getElementById('card-label3').value, 'A');
 });
 
-test('Ctrl+ArrowRight/ArrowLeft move focus between cards without reordering them', function(t){
+test('Ctrl+ArrowRight/ArrowLeft move focus between cards without reordering them', async function(t){
   var cards = [{ label: 'A', descr: '' }, { label: 'B', descr: '' }];
   var showCorkboard = freshCorkboardDisplay({ getCardsFromFile: function(){ return cards; }, saveCards: function(){} });
   var project = makeProject({ corkboardColumns: 1 });
-  showCorkboard(project);
+  await showCorkboard(project, platformInfo());
 
   keydown(document.getElementById('card1'), 'ArrowRight', { ctrlKey: true });
   assert.strictEqual(document.activeElement.id, 'card-label2');

@@ -1,28 +1,28 @@
 var nspell = require('nspell');
-const fs = require('fs');
-const { convertFilepath } = require('../controllers/utils');
 const { logError } = require('./error-log');
+const { createPlatform } = require('./platform');
+const { createIpcBacking } = require('./platform-ipc');
 
-function runSpellcheck(editorQuill, sysDirectories, startingIndex = 0, wordsToIgnore){
-    var spellchecker = loadDictionaries(sysDirectories);
+//Group I used to need the app/userData paths wired in, so this module took sysDirectories from
+//every caller and built a node backing out of it. Phase 9a moved the backing into the main process,
+//which already knows where the dictionaries live - so the paths stop crossing at all and this
+//becomes a standing instance like every other module's.
+var platform = createPlatform(createIpcBacking());
+
+async function runSpellcheck(editorQuill, startingIndex = 0, wordsToIgnore){
+    var spellchecker = await loadDictionaries();
     if(!spellchecker)
       return null;
     return findInvalidWord(editorQuill, spellchecker, startingIndex, wordsToIgnore)
 }
 
-function loadDictionaries(sysDirectories){
+async function loadDictionaries(){
   try{
-    createPersonalDicIfNeeded(sysDirectories);
+    var dict = await platform.loadDictionary();
+    var personal = await platform.loadPersonalDictionary();
 
-    var baseFilepath = sysDirectories.app;
-    console.log('dictionary base filepath: ' + sysDirectories.app);
-    var aff = fs.readFileSync(baseFilepath + '/dictionaries/en_US-large.aff', 'utf8');
-    var dic = fs.readFileSync(baseFilepath + '/dictionaries/en_US-large.dic', 'utf8');
-
-    var personal = fs.readFileSync(convertFilepath(sysDirectories.userData) + '/dictionaries/personal.dic', 'utf8');
-
-    var spellchecker = nspell({ aff: aff, dic: dic });
-    spellchecker.personal(personal);
+    var spellchecker = nspell({ aff: dict.aff, dic: dict.dic });
+    spellchecker.personal(personal.join('\n'));
     return spellchecker;
   }
   catch(err){
@@ -30,24 +30,6 @@ function loadDictionaries(sysDirectories){
     return null;
   }
 
-}
-
-function createPersonalDicIfNeeded(sysDirectories){
-  try{
-    let personalDicDir = convertFilepath(sysDirectories.userData) + '/dictionaries';
-    if(!fs.existsSync(personalDicDir)){
-      fs.mkdirSync(personalDicDir);
-    }
-
-    let personalPath = convertFilepath(sysDirectories.userData) + '/dictionaries/personal.dic';
-    if(!fs.existsSync(personalPath)){
-      fs.writeFileSync(personalPath, "WareWoolf\n", 'utf8');
-    }
-
-  }
-  catch(err){
-    logError(err);
-  }
 }
 
 function findInvalidWord(editorQuill, spellchecker, startingIndex = 0, wordsToIgnore = []) {
@@ -88,21 +70,12 @@ function findInvalidWord(editorQuill, spellchecker, startingIndex = 0, wordsToIg
     return invalidWord;
 }
 
-function getPersonalDict(sysDirectories){
+async function addWordToPersonalDictFile(word){
   try{
-    return fs.readFileSync(convertFilepath(sysDirectories.userData) + '/dictionaries/personal.dic', 'utf8').split("\n").filter(word => word.trim() !== "");
-  }
-  catch(err){
-    logError(err);
-  }
-}
-
-function addWordToPersonalDictFile(word, sysDirectories){
-  try{
-    var personal = getPersonalDict(sysDirectories);
+    var personal = await platform.loadPersonalDictionary();
     if(personal.indexOf(word) == -1){
         personal.push(word);
-        fs.writeFileSync(convertFilepath(sysDirectories.userData) + '/dictionaries/personal.dic', personal.join("\n"), 'utf8');
+        await platform.savePersonalDictionary({ words: personal });
     }
   }
   catch(err){

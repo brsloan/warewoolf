@@ -47,7 +47,7 @@ test.afterEach(function(){
   delete global.document;
 });
 
-test('renders the current title, author, filename, directory, and chaps directory', function(t){
+test('renders the current title, author, filename, directory, and chaps directory', async function(t){
   var showProperties = require(propertiesDisplayPath);
   var project = makeProject();
 
@@ -58,7 +58,7 @@ test('renders the current title, author, filename, directory, and chaps director
   assert.strictEqual(document.querySelector('.popup-text-small').innerText, 'book.woolf');
 });
 
-test('focuses the title field on open', function(t){
+test('focuses the title field on open', async function(t){
   var showProperties = require(propertiesDisplayPath);
   var project = makeProject();
 
@@ -70,7 +70,7 @@ test('focuses the title field on open', function(t){
 //Regression: Apply used to update project.title/author without setting hasUnsavedChanges, so the
 //app's "save before exit"/"save before opening another project" prompts (render.js, gated on
 //project.hasUnsavedChanges) would silently skip, losing the edit.
-test('Apply updates title/author, marks the project as having unsaved changes, and closes the popup', function(t){
+test('Apply updates title/author, marks the project as having unsaved changes, and closes the popup', async function(t){
   var showProperties = require(propertiesDisplayPath);
   var project = makeProject();
 
@@ -85,7 +85,7 @@ test('Apply updates title/author, marks the project as having unsaved changes, a
   assert.strictEqual(document.getElementsByClassName('popup').length, 0);
 });
 
-test('Cancel closes the popup without changing the project', function(t){
+test('Cancel closes the popup without changing the project', async function(t){
   var showProperties = require(propertiesDisplayPath);
   var project = makeProject();
 
@@ -98,7 +98,7 @@ test('Cancel closes the popup without changing the project', function(t){
   assert.strictEqual(document.getElementsByClassName('popup').length, 0);
 });
 
-test('Reveal Advanced shows the advanced area', function(t){
+test('Reveal Advanced shows the advanced area', async function(t){
   var showProperties = require(propertiesDisplayPath);
   var project = makeProject();
 
@@ -110,7 +110,7 @@ test('Reveal Advanced shows the advanced area', function(t){
   assert.strictEqual(advancedArea.style.display, 'block');
 });
 
-test('saving the chaps directory appends a trailing slash, persists it, and shows a confirmation', function(t){
+test('saving the chaps directory appends a trailing slash, persists it, and shows a confirmation', async function(t){
   var showProperties = require(propertiesDisplayPath);
   var project = makeProject({ chapsDirectory: 'chapters/' });
   var saveFileCalls = 0;
@@ -119,7 +119,8 @@ test('saving the chaps directory appends a trailing slash, persists it, and show
   showProperties(project, makeUserSettings());
   var pupDirInput = document.querySelectorAll('input[type="text"]')[2];
   pupDirInput.value = 'new-chapters';
-  findButton('Save Changes To Chaps Directory').onclick();
+  //Awaited: saving the project is asynchronous now, and the confirmation only appears afterwards.
+  await findButton('Save Changes To Chaps Directory').onclick();
 
   assert.strictEqual(project.chapsDirectory, 'new-chapters/');
   assert.strictEqual(pupDirInput.value, 'new-chapters/');
@@ -130,31 +131,33 @@ test('saving the chaps directory appends a trailing slash, persists it, and show
 //Regression: clearing the field to "" used to still hit the "add trailing slash if missing" branch,
 //turning an intentionally-empty chapsDirectory into "/" - a bogus path once concatenated with
 //project.directory elsewhere (chapter.js, project.js).
-test('clearing the chaps directory field saves an empty string instead of "/"', function(t){
+test('clearing the chaps directory field saves an empty string instead of "/"', async function(t){
   var showProperties = require(propertiesDisplayPath);
   var project = makeProject({ chapsDirectory: 'chapters/' });
 
   showProperties(project, makeUserSettings());
   var pupDirInput = document.querySelectorAll('input[type="text"]')[2];
   pupDirInput.value = '';
-  findButton('Save Changes To Chaps Directory').onclick();
+  //Awaited: saving the project is asynchronous now, and the confirmation only appears afterwards.
+  await findButton('Save Changes To Chaps Directory').onclick();
 
   assert.strictEqual(project.chapsDirectory, '');
 });
 
-test('does not append a second trailing slash when one is already present', function(t){
+test('does not append a second trailing slash when one is already present', async function(t){
   var showProperties = require(propertiesDisplayPath);
   var project = makeProject({ chapsDirectory: 'chapters/' });
 
   showProperties(project, makeUserSettings());
   var pupDirInput = document.querySelectorAll('input[type="text"]')[2];
   pupDirInput.value = 'already-slashed/';
-  findButton('Save Changes To Chaps Directory').onclick();
+  //Awaited: saving the project is asynchronous now, and the confirmation only appears afterwards.
+  await findButton('Save Changes To Chaps Directory').onclick();
 
   assert.strictEqual(project.chapsDirectory, 'already-slashed/');
 });
 
-test('shows the user settings filepath', function(t){
+test('shows the user settings filepath', async function(t){
   var showProperties = require(propertiesDisplayPath);
   var project = makeProject();
 
@@ -164,7 +167,7 @@ test('shows the user settings filepath', function(t){
   assert.ok(texts.includes('/custom/settings.json'));
 });
 
-test('opening the popup twice removes the first one instead of stacking popups', function(t){
+test('opening the popup twice removes the first one instead of stacking popups', async function(t){
   var showProperties = require(propertiesDisplayPath);
 
   showProperties(makeProject(), makeUserSettings());

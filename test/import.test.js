@@ -8,6 +8,8 @@ const path = require('path');
 const archiver = require('archiver');
 
 const errorLog = require('../src/components/controllers/error-log');
+const { createPlatform } = require('../src/components/controllers/platform');
+const { createNodeBacking } = require('../src/components/controllers/platform-node');
 const importCtrlPath = require.resolve('../src/components/controllers/import');
 const importCtrl = require(importCtrlPath);
 
@@ -26,8 +28,17 @@ function tempDir(){
 //Keep any incidental real logError call out of the repo's cwd instead of the default bare
 //"error_log.txt".
 test.before(function(){
-  errorLog.setLogDirectory(tempDir());
+  errorLog.setPlatform(createPlatform(createNodeBacking({ paths: { userData: tempDir() } })));
 });
+
+//The module under test holds its own createPlatform(createIpcBacking()) instance and reaches the
+//machine through window.warewoolf, exactly as it does in the app. A real node backing sits behind
+//the bridge, so these tests still assert against real files in real temp directories - across a
+//real structured-clone boundary now.
+const { installBridge, uninstallBridge } = require('./fake-bridge');
+
+test.before(function(){ installBridge(); });
+test.after(uninstallBridge);
 
 function plainTextOptions(overrides){
   return Object.assign({

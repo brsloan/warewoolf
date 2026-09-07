@@ -44,20 +44,20 @@ test('countWords treats a single hyphen as part of a word', function(){
 // getTotalWordCount
 //---------------------------------------------------------------------------
 
-test('getTotalWordCount sums word counts across every chapter', function(){
+test('getTotalWordCount sums word counts across every chapter', async function(){
   const project = { chapters: [
     chapterWithContents(delta(['one two ', 'three'])),
     chapterWithContents(delta(['four five six']))
   ] };
 
-  assert.strictEqual(getTotalWordCount(project), 6);
+  assert.strictEqual(await getTotalWordCount(project), 6);
 });
 
-test('getTotalWordCount returns 0 for a project with no chapters', function(){
-  assert.strictEqual(getTotalWordCount({ chapters: [] }), 0);
+test('getTotalWordCount returns 0 for a project with no chapters', async function(){
+  assert.strictEqual(await getTotalWordCount({ chapters: [] }), 0);
 });
 
-test('getTotalWordCount regression: does not throw when a chapter has no readable contents', function(){
+test('getTotalWordCount regression: does not throw when a chapter has no readable contents', async function(){
   //getContentsOrFile()/getFile() return undefined when a chapter's file is missing or fails to
   //parse; convertToPlainText used to assume it always got back a Delta and crashed on `.ops`.
   const project = { chapters: [
@@ -65,23 +65,23 @@ test('getTotalWordCount regression: does not throw when a chapter has no readabl
     chapterWithContents(delta(['two words']))
   ] };
 
-  assert.doesNotThrow(function(){ getTotalWordCount(project); });
-  assert.strictEqual(getTotalWordCount(project), 2);
+  await assert.doesNotReject(function(){ return getTotalWordCount(project); });
+  assert.strictEqual(await getTotalWordCount(project), 2);
 });
 
-test('getTotalWordCount regression: does not throw when a chapter delta has no ops', function(){
+test('getTotalWordCount regression: does not throw when a chapter delta has no ops', async function(){
   const project = { chapters: [ chapterWithContents({}) ] };
 
-  assert.doesNotThrow(function(){ getTotalWordCount(project); });
-  assert.strictEqual(getTotalWordCount(project), 0);
+  await assert.doesNotReject(function(){ return getTotalWordCount(project); });
+  assert.strictEqual(await getTotalWordCount(project), 0);
 });
 
-test('getTotalWordCount regression: ignores non-string insert values instead of stringifying them', function(){
+test('getTotalWordCount regression: ignores non-string insert values instead of stringifying them', async function(){
   //Embeds (e.g. images) store a non-string `insert`; it must not turn into text like
   //"[object Object]" and inflate the count.
   const project = { chapters: [
     chapterWithContents(delta(['one ', { image: 'data:...' }, ' two']))
   ] };
 
-  assert.strictEqual(getTotalWordCount(project), 2);
+  assert.strictEqual(await getTotalWordCount(project), 2);
 });

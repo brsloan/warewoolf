@@ -48,31 +48,31 @@ test('indentAllParas leaves a blank line alone', function(){
   assert.strictEqual(result.changed, 1);
 });
 
-test('indentAllParasInAllChaps only marks chapters that actually changed', function(){
+test('indentAllParasInAllChaps only marks chapters that actually changed', async function(){
   var needsIndent = makeChapter(bodyDelta('Plain paragraph.'));
   var alreadyIndented = makeChapter(bodyDelta('\tAlready tabbed.'));
 
   var project = makeProject([needsIndent, alreadyIndented]);
 
-  indentAllParasInAllChaps(project);
+  await indentAllParasInAllChaps(project);
 
   assert.strictEqual(needsIndent.hasUnsavedChanges, true);
   assert.notStrictEqual(alreadyIndented.hasUnsavedChanges, true);
 });
 
 //Regression: same missing project-level flag as centerAllHeadingsInAllChaps.
-test('indentAllParasInAllChaps sets project.hasUnsavedChanges when a chapter changes', function(){
+test('indentAllParasInAllChaps sets project.hasUnsavedChanges when a chapter changes', async function(){
   var project = makeProject([makeChapter(bodyDelta('Plain paragraph.'))]);
 
-  indentAllParasInAllChaps(project);
+  await indentAllParasInAllChaps(project);
 
   assert.strictEqual(project.hasUnsavedChanges, true);
 });
 
-test('indentAllParasInAllChaps leaves project.hasUnsavedChanges alone when nothing changes', function(){
+test('indentAllParasInAllChaps leaves project.hasUnsavedChanges alone when nothing changes', async function(){
   var project = makeProject([makeChapter(bodyDelta('\tAlready tabbed.'))]);
 
-  indentAllParasInAllChaps(project);
+  await indentAllParasInAllChaps(project);
 
   assert.notStrictEqual(project.hasUnsavedChanges, true);
 });

@@ -53,31 +53,31 @@ test('convertFirstLineToTitle formats the first line, not the second, when the f
   assert.strictEqual(secondLineOp.attributes, undefined);
 });
 
-test('convertFirstLinesToTitles only marks chapters that actually changed', function(){
+test('convertFirstLinesToTitles only marks chapters that actually changed', async function(){
   var plain = makeChapter(plainFirstLine());
   var alreadyTitled = makeChapter(titledFirstLine());
 
   var project = makeProject([plain, alreadyTitled]);
 
-  convertFirstLinesToTitles(project);
+  await convertFirstLinesToTitles(project);
 
   assert.strictEqual(plain.hasUnsavedChanges, true);
   assert.notStrictEqual(alreadyTitled.hasUnsavedChanges, true);
 });
 
 //Regression: same missing project-level flag as the other "for all chapters" converters.
-test('convertFirstLinesToTitles sets project.hasUnsavedChanges when a chapter changes', function(){
+test('convertFirstLinesToTitles sets project.hasUnsavedChanges when a chapter changes', async function(){
   var project = makeProject([makeChapter(plainFirstLine())]);
 
-  convertFirstLinesToTitles(project);
+  await convertFirstLinesToTitles(project);
 
   assert.strictEqual(project.hasUnsavedChanges, true);
 });
 
-test('convertFirstLinesToTitles leaves project.hasUnsavedChanges alone when nothing changes', function(){
+test('convertFirstLinesToTitles leaves project.hasUnsavedChanges alone when nothing changes', async function(){
   var project = makeProject([makeChapter(titledFirstLine())]);
 
-  convertFirstLinesToTitles(project);
+  await convertFirstLinesToTitles(project);
 
   assert.notStrictEqual(project.hasUnsavedChanges, true);
 });
@@ -86,23 +86,23 @@ test('convertFirstLinesToTitles leaves project.hasUnsavedChanges alone when noth
 //passed straight through. Quill reads that as an empty document, which has no header/align at
 //index 0, so convertFirstLineToTitle reported it as "changed" and the chapter's real content
 //(still intact on disk) was overwritten with a lone blank titled line.
-test('convertFirstLinesToTitles leaves an unloadable chapter untouched', function(){
+test('convertFirstLinesToTitles leaves an unloadable chapter untouched', async function(){
   var unloadable = makeUnloadableChapter();
   var project = makeProject([unloadable]);
 
-  convertFirstLinesToTitles(project);
+  await convertFirstLinesToTitles(project);
 
   assert.strictEqual(unloadable.contents, null);
   assert.notStrictEqual(unloadable.hasUnsavedChanges, true);
   assert.notStrictEqual(project.hasUnsavedChanges, true);
 });
 
-test('convertFirstLinesToTitles still converts other chapters when one chapter is unloadable', function(){
+test('convertFirstLinesToTitles still converts other chapters when one chapter is unloadable', async function(){
   var unloadable = makeUnloadableChapter();
   var plain = makeChapter(plainFirstLine());
   var project = makeProject([unloadable, plain]);
 
-  convertFirstLinesToTitles(project);
+  await convertFirstLinesToTitles(project);
 
   assert.strictEqual(unloadable.contents, null);
   assert.strictEqual(plain.hasUnsavedChanges, true);

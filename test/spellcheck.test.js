@@ -4,8 +4,11 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { setLogDirectory } = require('../src/components/controllers/error-log');
+const { setPlatform } = require('../src/components/controllers/error-log');
+const { createPlatform } = require('../src/components/controllers/platform');
+const { createNodeBacking } = require('../src/components/controllers/platform-node');
 const { runSpellcheck, addWordToPersonalDictFile, getBeginningOfCurrentWord } = require('../src/components/controllers/spellcheck');
+const { installBridge, uninstallBridge } = require('./fake-bridge');
 
 function tempDir(prefix){
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -23,11 +26,20 @@ function writeFixtureDictionary(appDir){
   fs.writeFileSync(path.join(dictDir, 'en_US-large.dic'), DICT_WORDS.length + '\n' + DICT_WORDS.join('\n') + '\n', 'utf8');
 }
 
+//spellcheck.js no longer takes sysDirectories: the dictionaries live under paths.app/userData,
+//which the main process owns now, so the paths go to the backing behind the bridge instead of
+//through the module's own arguments. Each test still gets its own pair of real temp directories -
+//they just arrive from the other side of the boundary.
+function useSysDirectories(dirs){
+  installBridge({ paths: dirs });
+  return dirs;
+}
+
 function makeSysDirectories(){
   var appDir = tempDir('warewoolf-spellcheck-app-');
   var userDataDir = tempDir('warewoolf-spellcheck-userdata-');
   writeFixtureDictionary(appDir);
-  return { app: appDir, userData: userDataDir };
+  return useSysDirectories({ app: appDir, userData: userDataDir });
 }
 
 //spellcheck.js only ever calls getText() on the editor it's given, so a bare object stands in
@@ -37,83 +49,85 @@ function makeEditorQuill(text){
 }
 
 test.beforeEach(function(){
-  setLogDirectory(tempDir('warewoolf-spellcheck-log-'));
+  setPlatform(createPlatform(createNodeBacking({ paths: { userData: tempDir('warewoolf-spellcheck-log-') } })));
 });
 
-test('runSpellcheck finds the first misspelled word and its position', function(){
+test.after(uninstallBridge);
+
+test('runSpellcheck finds the first misspelled word and its position', async function(){
   var sysDirectories = makeSysDirectories();
   var editorQuill = makeEditorQuill('the cat sat on the zxqzxq mat\n');
 
-  var result = runSpellcheck(editorQuill, sysDirectories);
+  var result = await runSpellcheck(editorQuill);
 
   assert.strictEqual(result.word, 'zxqzxq');
   assert.strictEqual(editorQuill.getText().slice(result.index, result.index + result.word.length), 'zxqzxq');
 });
 
-test('runSpellcheck returns null when every word is valid', function(){
+test('runSpellcheck returns null when every word is valid', async function(){
   var sysDirectories = makeSysDirectories();
   var editorQuill = makeEditorQuill('the cat sat on the mat\n');
 
-  assert.strictEqual(runSpellcheck(editorQuill, sysDirectories), null);
+  assert.strictEqual(await runSpellcheck(editorQuill), null);
 });
 
-test('runSpellcheck starts searching from startingIndex', function(){
+test('runSpellcheck starts searching from startingIndex', async function(){
   var sysDirectories = makeSysDirectories();
   var editorQuill = makeEditorQuill('zxqzxq the cat sat\n');
 
   //Skip past the leading misspelling entirely.
-  var result = runSpellcheck(editorQuill, sysDirectories, 7);
+  var result = await runSpellcheck(editorQuill, 7);
 
   assert.strictEqual(result, null);
 });
 
-test('runSpellcheck skips words on the ignore list', function(){
+test('runSpellcheck skips words on the ignore list', async function(){
   var sysDirectories = makeSysDirectories();
   var editorQuill = makeEditorQuill('the zxqzxq cat sat\n');
 
-  var result = runSpellcheck(editorQuill, sysDirectories, 0, ['zxqzxq']);
+  var result = await runSpellcheck(editorQuill, 0, ['zxqzxq']);
 
   assert.strictEqual(result, null);
 });
 
-test('runSpellcheck treats a digit sequence as a number, not a misspelling', function(){
+test('runSpellcheck treats a digit sequence as a number, not a misspelling', async function(){
   var sysDirectories = makeSysDirectories();
   var editorQuill = makeEditorQuill("the cat sat on the 1990s\n");
 
-  assert.strictEqual(runSpellcheck(editorQuill, sysDirectories), null);
+  assert.strictEqual(await runSpellcheck(editorQuill), null);
 });
 
 //Regression: wordRegx used to be /(\w'*)+/, which swallows any apostrophe immediately following a
 //word - not just apostrophes internal to it. That flagged ordinary plural possessives like
 //"boys'" as misspelled, since "boys'" (with the trailing apostrophe) isn't a dictionary word.
-test('runSpellcheck does not flag a trailing possessive apostrophe as part of the word', function(){
+test('runSpellcheck does not flag a trailing possessive apostrophe as part of the word', async function(){
   var sysDirectories = makeSysDirectories();
   var editorQuill = makeEditorQuill("the boys' shoes are here\n");
 
-  assert.strictEqual(runSpellcheck(editorQuill, sysDirectories), null);
+  assert.strictEqual(await runSpellcheck(editorQuill), null);
 });
 
-test('runSpellcheck still keeps an internal apostrophe as part of the word', function(){
+test('runSpellcheck still keeps an internal apostrophe as part of the word', async function(){
   var sysDirectories = makeSysDirectories();
   var editorQuillValid = makeEditorQuill("she said don't stop\n");
-  assert.strictEqual(runSpellcheck(editorQuillValid, sysDirectories), null);
+  assert.strictEqual(await runSpellcheck(editorQuillValid), null);
 
   //Same contraction missing its apostrophe is a different, genuinely misspelled token.
   var editorQuillInvalid = makeEditorQuill("she said dont stop\n");
-  var result = runSpellcheck(editorQuillInvalid, sysDirectories);
+  var result = await runSpellcheck(editorQuillInvalid);
   assert.strictEqual(result.word, 'dont');
 });
 
 //Regression: a failure inside loadDictionaries (missing/unreadable dictionary files) was logged
 //but the function fell through and returned undefined. runSpellcheck passed that straight into
 //findInvalidWord, which called .correct() on undefined and crashed instead of failing gracefully.
-test('runSpellcheck does not throw when the dictionary files are missing', function(){
-  var sysDirectories = { app: tempDir('warewoolf-spellcheck-missing-'), userData: tempDir('warewoolf-spellcheck-userdata-') };
+test('runSpellcheck does not throw when the dictionary files are missing', async function(){
+  var sysDirectories = useSysDirectories({ app: tempDir('warewoolf-spellcheck-missing-'), userData: tempDir('warewoolf-spellcheck-userdata-') });
   var editorQuill = makeEditorQuill('the cat sat\n');
 
   var result;
-  assert.doesNotThrow(function(){
-    result = runSpellcheck(editorQuill, sysDirectories);
+  await assert.doesNotReject(async function(){
+    result = await runSpellcheck(editorQuill);
   });
   assert.strictEqual(result, null);
 });
@@ -121,46 +135,47 @@ test('runSpellcheck does not throw when the dictionary files are missing', funct
 //Regression: personal.dic is seeded as "WareWoolf\n". Splitting that on "\n" leaves a trailing
 //empty entry, and appending a new word re-joined that empty entry back into the middle of the
 //file instead of dropping it, leaving a stray blank line.
-test('addWordToPersonalDictFile does not leave a blank line in personal.dic', function(){
+test('addWordToPersonalDictFile does not leave a blank line in personal.dic', async function(){
   var userDataDir = tempDir('warewoolf-spellcheck-userdata-');
   var dictDir = path.join(userDataDir, 'dictionaries');
   fs.mkdirSync(dictDir, { recursive: true });
   var personalPath = path.join(dictDir, 'personal.dic');
   fs.writeFileSync(personalPath, 'WareWoolf\n', 'utf8');
 
-  addWordToPersonalDictFile('Nebula', { userData: userDataDir });
+  useSysDirectories({ userData: userDataDir });
+  await addWordToPersonalDictFile('Nebula');
 
   var contents = fs.readFileSync(personalPath, 'utf8');
   assert.ok(!contents.includes('\n\n'), 'expected no blank line in: ' + JSON.stringify(contents));
   assert.deepStrictEqual(contents.split('\n').filter(function(w){ return w.trim() !== ''; }), ['WareWoolf', 'Nebula']);
 });
 
-test('addWordToPersonalDictFile does not add the same word twice', function(){
+test('addWordToPersonalDictFile does not add the same word twice', async function(){
   var userDataDir = tempDir('warewoolf-spellcheck-userdata-');
   var dictDir = path.join(userDataDir, 'dictionaries');
   fs.mkdirSync(dictDir, { recursive: true });
   var personalPath = path.join(dictDir, 'personal.dic');
   fs.writeFileSync(personalPath, 'WareWoolf\n', 'utf8');
 
-  addWordToPersonalDictFile('Nebula', { userData: userDataDir });
+  await addWordToPersonalDictFile('Nebula');
   var afterFirstAdd = fs.readFileSync(personalPath, 'utf8');
 
-  addWordToPersonalDictFile('Nebula', { userData: userDataDir });
+  await addWordToPersonalDictFile('Nebula');
   var afterSecondAdd = fs.readFileSync(personalPath, 'utf8');
 
   assert.strictEqual(afterSecondAdd, afterFirstAdd);
 });
 
-test('a word added to the personal dictionary is accepted on the next spellcheck', function(){
+test('a word added to the personal dictionary is accepted on the next spellcheck', async function(){
   var sysDirectories = makeSysDirectories();
   var editorQuill = makeEditorQuill('the cat sat on the nebulon mat\n');
 
-  var before = runSpellcheck(editorQuill, sysDirectories);
+  var before = await runSpellcheck(editorQuill);
   assert.strictEqual(before.word, 'nebulon');
 
-  addWordToPersonalDictFile('nebulon', sysDirectories);
+  await addWordToPersonalDictFile('nebulon');
 
-  assert.strictEqual(runSpellcheck(editorQuill, sysDirectories), null);
+  assert.strictEqual(await runSpellcheck(editorQuill), null);
 });
 
 test('getBeginningOfCurrentWord finds the start of the word at the cursor', function(){

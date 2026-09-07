@@ -21,9 +21,11 @@ function makeProject(chapters){
   return { chapters: chapters, hasUnsavedChanges: false };
 }
 
+//Returns the handler's promise: renumbering reads chapters through the platform facade now, so the
+//popup only closes and onFinish only runs once it settles.
 function clickSubmit(){
   var submitBtn = Array.from(document.querySelectorAll('button')).find(function(b){ return b.textContent === 'Submit'; });
-  submitBtn.onclick();
+  return submitBtn.onclick();
 }
 
 function clickClose(){
@@ -74,7 +76,7 @@ test('the form has no stray direct children besides the table, error text, and b
   assert.ok(document.getElementById('end-chap-select').closest('table'), 'end-chap-select should live inside the table');
 });
 
-test('Submit renumbers the selected range, closes the popup, and calls onFinish', function(t){
+test('Submit renumbers the selected range, closes the popup, and calls onFinish', async function(t){
   var showRenumberChapters = require(renumberDisplayPath);
   var chapA = makeChap('Old A');
   var chapB = makeChap('Old B');
@@ -85,7 +87,7 @@ test('Submit renumbers the selected range, closes the popup, and calls onFinish'
   document.getElementById('renumber-format-input').value = 'Ch. [num]';
   document.getElementById('use-numerals-check').checked = true;
 
-  clickSubmit();
+  await clickSubmit();
 
   assert.strictEqual(chapA.title, 'Ch. 1');
   assert.strictEqual(chapB.title, 'Ch. 2');
@@ -110,20 +112,20 @@ test('Close does not renumber and just closes the popup', function(t){
 //Regression: with zero chapters, submit used to silently no-op (the renumber loop's start/end
 //index came from an empty <select>'s value, i.e. NaN, so the loop condition was never true) with
 //no feedback that nothing happened, even though the popup still warned the action is irreversible.
-test('Submit shows an error and does not close the popup when there are no chapters', function(t){
+test('Submit shows an error and does not close the popup when there are no chapters', async function(t){
   var showRenumberChapters = require(renumberDisplayPath);
   var project = makeProject([]);
   var finished = false;
 
   showRenumberChapters(project, function(){ finished = true; });
-  clickSubmit();
+  await clickSubmit();
 
   assert.match(document.querySelector('form p').innerText, /no chapters/i);
   assert.strictEqual(document.getElementsByClassName('popup').length, 1);
   assert.strictEqual(finished, false);
 });
 
-test('Submit shows an error and does not renumber when the start chapter is after the end chapter', function(t){
+test('Submit shows an error and does not renumber when the start chapter is after the end chapter', async function(t){
   var showRenumberChapters = require(renumberDisplayPath);
   var chapA = makeChap('Old A');
   var chapB = makeChap('Old B');
@@ -134,7 +136,7 @@ test('Submit shows an error and does not renumber when the start chapter is afte
   document.getElementById('start-chap-select').value = '1';
   document.getElementById('end-chap-select').value = '0';
 
-  clickSubmit();
+  await clickSubmit();
 
   assert.match(document.querySelector('form p').innerText, /start chapter must come before/i);
   assert.strictEqual(chapA.title, 'Old A');

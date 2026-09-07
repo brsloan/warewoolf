@@ -2,29 +2,39 @@ const { JSDOM } = require('jsdom');
 const test = require('node:test');
 const assert = require('node:assert');
 
-const electronPath = require.resolve('electron');
 const keybindingsPath = require.resolve('../src/components/controllers/keybindings');
 
-//keybindings.js destructures `ipcRenderer` from 'electron' at require-time, same pattern (and same
-//reason) as render.js itself - faked in require.cache before every (re-)require.
-function fakeIpcRenderer(){
-  var sent = [];
-  return { sent: sent, send: function(channel){ sent.push(channel); } };
+//keybindings.js creates its own platform instance (createPlatform(createIpcBacking())) at
+//require-time, same pattern (and same reason) as render.js itself. As of Phase 9a that backing
+//talks to window.warewoolf - the object preload.js publishes - rather than to ipcRenderer, so what
+//this file installs is a bridge on the global instead of a fake 'electron' in require.cache.
+//keybindings.js reaches for exactly one command (showAppMenu), which is why this can stay a
+//recording stub rather than a node-backed one.
+function fakeBridge(){
+  var invoked = [];
+  return {
+    invoked: invoked,
+    invoke: function(name, args){ invoked.push(name); return Promise.resolve(undefined); },
+    on: function(){},
+    off: function(){}
+  };
 }
 
 function freshKeybindings(){
   delete require.cache[keybindingsPath];
-  require.cache[electronPath] = {
-    id: electronPath,
-    filename: electronPath,
-    loaded: true,
-    exports: { ipcRenderer: fakeIpcRenderer() }
-  };
+  globalThis.warewoolf = fakeBridge();
   return require(keybindingsPath);
 }
 
-function currentIpc(){
-  return require('electron').ipcRenderer;
+function currentBridge(){
+  return globalThis.warewoolf;
+}
+
+//Resolving a promise still takes at least one microtask tick - platform.js's own wrapper adds a
+//second, and platform-ipc.js's .then() a third - so anything triggered by a keydown needs this
+//before checking what it invoked.
+function flushMicrotasks(){
+  return new Promise(function(resolve){ setImmediate(resolve); });
 }
 
 //The five elements every shortcut below reaches for by id - the same shell render.js's own HTML
@@ -109,7 +119,7 @@ function teardown(env){
   delete global.window;
   delete global.document;
   delete require.cache[keybindingsPath];
-  delete require.cache[electronPath];
+  delete globalThis.warewoolf;
 }
 
 function keydown(target, key, extra){
@@ -210,12 +220,13 @@ test('Ctrl/Cmd+Alt+T toggles typewriter mode and persists the setting', function
   teardown(env);
 });
 
-test('Ctrl/Cmd+M asks the main process to show the menu', function(){
+test('Ctrl/Cmd+M asks the main process to show the menu', async function(){
   var env = setup();
 
   keydown(document, 'm', ctrl());
+  await flushMicrotasks();
 
-  assert.ok(currentIpc().sent.includes('show-menu'));
+  assert.ok(currentBridge().invoked.includes('showAppMenu'));
 
   teardown(env);
 });
@@ -328,7 +339,7 @@ test('unregister() removes all four listeners, so a later keydown does nothing',
   delete global.window;
   delete global.document;
   delete require.cache[keybindingsPath];
-  delete require.cache[electronPath];
+  delete globalThis.warewoolf;
 });
 
 //---------------------------------------------------------------------------

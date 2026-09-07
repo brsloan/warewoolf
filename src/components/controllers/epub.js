@@ -1,9 +1,22 @@
-const fs = require('fs');
-const crypto = require('crypto');
-const archiver = require('archiver');
 const { logError } = require('./error-log');
+const { createPlatform } = require('./platform');
+const { createIpcBacking } = require('./platform-ipc');
 
-function htmlChaptersToEpub(title, author, htmlChapters, filepath, insertTitlePage, callback){
+//buildEpub takes no injected config - filepath is a full path and entries are pre-assembled text -
+//so this holds its own standing instance rather than needing setPlatform() wiring, the same reason
+//file-manager.js/corkboard.js do.
+var platform = createPlatform(createIpcBacking());
+
+//Every entry is already-generated text: mimetype, container.xml, content.opf, toc.ncx, toc.xhtml,
+//one chapter_N.xhtml per chapter, and the stylesheet. Only the zipping (archiver has no browser
+//build) and the actual disk write cross to platform.buildEpub now - every bit of XML/XHTML
+//generation and escaping below stays exactly where it was.
+//
+//Split out from htmlChaptersToEpub in Phase 8 so email-doc.js's sendEmail path can build the same
+//entries and hand them to platform.sendEmail directly, without ever writing an epub to a path the
+//renderer would have to learn and clean up - the same "assembled content crosses, not a path"
+//shape buildEpub itself established in Phase 6.
+function assembleEpubEntries(title, author, htmlChapters, insertTitlePage){
     //htmlChapters should be an array of objects with a title property and an html property.
     //Build a new array rather than unshift()-ing in place: callers construct this array fresh
     //today, but mutating an argument the caller still holds a reference to is a footgun waiting
@@ -16,73 +29,34 @@ function htmlChaptersToEpub(title, author, htmlChapters, filepath, insertTitlePa
     }
 
     const uuid = crypto.randomUUID();
-
-    //filepath includes name/extension
-    const output = fs.createWriteStream(filepath);
-    const archive = archiver('zip', {
-        zlib: { level: 9 }
-    });
-
-    //An output-stream failure (e.g. ENOSPC, EACCES, a missing parent directory) and archiver's
-    //own 'error' event can both fire for the same underlying problem, and callers (email-doc.js,
-    //compile.js) aren't written to tolerate the completion callback firing more than once.
-    var finished = false;
-    function finish(result){
-      if(finished) return;
-      finished = true;
-      callback(result);
-    }
-
-     archive.on('warning', function(err) {
-      //Not fatal - archiver already recovered (e.g. a stat failed on an entry). Rethrowing here
-      //would throw from inside an event handler with no surrounding try/catch to catch it,
-      //crashing the process instead of just losing this one warning.
-      logError(err);
-    });
-
-    archive.on('error', function(err) {
-      logError(err);
-      finish('error');
-    });
-
-    //Node throws an uncaught exception on an unhandled 'error' event, so the write stream needs
-    //its own listener - without one, a disk-level failure (full disk, permission denied, missing
-    //parent directory) crashes the process instead of reaching the callback.
-    output.on('error', function(err){
-      logError(err);
-      finish('error');
-    });
-
-    //Listen on the write stream's 'close', not archive's 'finish': 'finish' only means archiver
-    //has pushed the last bytes into the pipe, not that fs has flushed them to disk. Calling back
-    //before that risks handing off a truncated epub (e.g. to the email attachment code).
-    output.on('close', function(){
-      finish(filepath);
-    })
-
-    archive.pipe(output);
-
-    archive.append(getMimetype(), { 
-        name: 'mimetype',
-        store: true 
-    });
-
-    archive.append(getContainerXml(), {name: 'META-INF/container.xml'});
-
     const contentDir = 'OEBPS/';
 
-    archive.append(getContentOpf(title, author, htmlChapters, uuid), {name: contentDir + 'content.opf'});
-    archive.append(getTocNcx(title, htmlChapters, uuid), {name: contentDir + 'toc.ncx'});
-    archive.append(getTocXhtml(htmlChapters), {name: contentDir + 'toc.xhtml'});
+    const entries = [
+        { name: 'mimetype', content: getMimetype() },
+        { name: 'META-INF/container.xml', content: getContainerXml() },
+        { name: contentDir + 'content.opf', content: getContentOpf(title, author, htmlChapters, uuid) },
+        { name: contentDir + 'toc.ncx', content: getTocNcx(title, htmlChapters, uuid) },
+        { name: contentDir + 'toc.xhtml', content: getTocXhtml(htmlChapters) }
+    ];
 
-    var pages = getChapterXhtmlPages(htmlChapters);
-    pages.forEach(function(page, i){
-        archive.append(page, {name: contentDir + 'chapter_' + (i + 1) + '.xhtml'});
+    getChapterXhtmlPages(htmlChapters).forEach(function(page, i){
+        entries.push({ name: contentDir + 'chapter_' + (i + 1) + '.xhtml', content: page });
     });
 
-    archive.append(getCss(), {name: contentDir + 'CSS/template.css'});
+    entries.push({ name: contentDir + 'CSS/template.css', content: getCss() });
 
-    archive.finalize();
+    return entries;
+}
+
+function htmlChaptersToEpub(title, author, htmlChapters, filepath, insertTitlePage, callback){
+    const entries = assembleEpubEntries(title, author, htmlChapters, insertTitlePage);
+
+    platform.buildEpub({ filepath: filepath, entries: entries }).then(function(){
+        callback(filepath);
+    }).catch(function(err){
+        logError(err);
+        callback('error');
+    });
 };
 
 function getMimetype(){
@@ -298,5 +272,6 @@ function getCss(){
 }
 
 module.exports = {
-    htmlChaptersToEpub
+    htmlChaptersToEpub,
+    assembleEpubEntries
 }

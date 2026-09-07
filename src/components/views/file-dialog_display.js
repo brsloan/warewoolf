@@ -6,7 +6,11 @@ function stopDefaultPropagation(keyEvent){
   keyEvent.stopPropagation();
 }
 
-function showFileDialog(options, callback){
+//Async now that listing a directory goes through the platform facade. The popup is only appended
+//to the DOM once the initial listing has landed - render.test.js's docsDir comment documents why
+//that directory has to actually exist: the listing this waits on reads it for real, just a tick
+//later than it used to.
+async function showFileDialog(options, callback){
     var popup = document.createElement("div");
     popup.classList.add("popup-dialog");
 
@@ -26,9 +30,9 @@ function showFileDialog(options, callback){
     dirShortcutSelect.classList.add("file-dir-shortcuts");
     dirShortcutSelect.size = 20;
     selectFieldsContainer.appendChild(dirShortcutSelect);
-    dirShortcutSelect.addEventListener('keydown', function(e){
+    dirShortcutSelect.addEventListener('keydown', async function(e){
         if(e.key === "Enter"){
-            populateFileList(dirShortcutSelect.value, fileListSelect, currentDirDisplay, options.filters[filterSelect.value]);
+            await populateFileList(dirShortcutSelect.value, fileListSelect, currentDirDisplay, options.filters[filterSelect.value]);
         }
         else if(e.key === "ArrowRight"){
             fileListSelect.focus();
@@ -65,8 +69,8 @@ function showFileDialog(options, callback){
     }
 
     var filterSelect = getFilterSelect(options.filters);
-    filterSelect.onchange = function(){
-      populateFileList(currentDirDisplay.innerText, fileListSelect, currentDirDisplay, options.filters[filterSelect.value])
+    filterSelect.onchange = async function(){
+      await populateFileList(currentDirDisplay.innerText, fileListSelect, currentDirDisplay, options.filters[filterSelect.value])
     }
     filterSelect.classList.add('save-input');
     popup.appendChild(filterSelect);
@@ -105,15 +109,15 @@ function showFileDialog(options, callback){
     var filesToBeCut = [];
     var filesToBeCopied = [];
 
-    fileListSelect.addEventListener('keydown', function(e){
+    fileListSelect.addEventListener('keydown', async function(e){
         if(e.key === "Enter"){
           e.preventDefault();
             var selectedFiletype = fileListSelect.options[fileListSelect.selectedIndex].dataset.filetype;
             if (selectedFiletype == "dir"){
-                populateFileList(currentDirDisplay.innerText + "/" + fileListSelect.value, fileListSelect, currentDirDisplay, options.filters[filterSelect.value]);
+                await populateFileList(currentDirDisplay.innerText + "/" + fileListSelect.value, fileListSelect, currentDirDisplay, options.filters[filterSelect.value]);
             }
             else if(fileListSelect.value == "uplevel"){
-                populateFileList(getParentDirectory(currentDirDisplay.innerText), fileListSelect, currentDirDisplay, options.filters[filterSelect.value]);
+                await populateFileList(getParentDirectory(currentDirDisplay.innerText), fileListSelect, currentDirDisplay, options.filters[filterSelect.value]);
             }
             else if(selectedFiletype == 'file'){
               if(options.dialogType == 'open')
@@ -130,7 +134,7 @@ function showFileDialog(options, callback){
     });
 
     populateShortcutsList(options.bookmarkedPaths, options.projectDirectory, dirShortcutSelect);
-    populateFileList(options.defaultPath, fileListSelect, currentDirDisplay, options.filters[filterSelect.value]);
+    await populateFileList(options.defaultPath, fileListSelect, currentDirDisplay, options.filters[filterSelect.value]);
 
     document.body.appendChild(popup);
     if(options.dialogType !== 'save')
@@ -201,20 +205,20 @@ function populateShortcutsList(shortcuts, projectDirectory, listElement){
     }
 }
 
-function populateFileList(directoryPath, listElement, currentDirDisplay, filter = null){
+async function populateFileList(directoryPath, listElement, currentDirDisplay, filter = null){
     currentDirDisplay.innerText = directoryPath;
 
     listElement.innerHTML = "";
 
-    var files = getFileList(directoryPath);
+    var files = await getFileList(directoryPath);
 
     files.sort(function(a,b){
-        return b.isDirectory() - a.isDirectory();
+        return b.isDirectory - a.isDirectory;
     });
 
     if(filter){
       files = files.filter(function(file, index, arr){
-        var match = file.isDirectory();
+        var match = file.isDirectory;
         if(match == false){
           var fileExt = getFileExtension(file.name);
           var counter = 0;
@@ -237,8 +241,8 @@ function populateFileList(directoryPath, listElement, currentDirDisplay, filter 
     for(var i=0;i<files.length;i++){
         var filename = document.createElement("option");
         filename.value = files[i].name;
-        filename.innerText = (files[i].isDirectory() ? "> " : "") + files[i].name;
-        filename.dataset.filetype = files[i].isDirectory() ? "dir" : "file";
+        filename.innerText = (files[i].isDirectory ? "> " : "") + files[i].name;
+        filename.dataset.filetype = files[i].isDirectory ? "dir" : "file";
 
         listElement.appendChild(filename);
     }

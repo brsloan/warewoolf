@@ -1,11 +1,7 @@
-const { ipcRenderer } = require('electron');
-const fs = require('fs');
 const Quill = require('quill');
-const sysDirectories = ipcRenderer.sendSync('get-directories');
-require('./components/controllers/error-log').setLogDirectory(sysDirectories.userData);
+const { createPlatform } = require('./components/controllers/platform');
+const { createIpcBacking } = require('./components/controllers/platform-ipc');
 const getUserSettings = require('./components/models/user-settings');
-const getCredentialStore = require('./components/models/credential-store');
-const getSecureStorage = require('./components/controllers/secure-storage');
 const newChapter = require('./components/models/chapter');
 const newProject = require('./components/models/project');
 const autosaver = require('./components/controllers/autosave');
@@ -17,9 +13,20 @@ const {
   removeElementsByClass,
   disableSearchView
 } = require('./components/controllers/utils');
-const fileRequestedOnOpen = ipcRenderer.sendSync('get-file-requested-on-open');
 const { showBattery } = require('./components/views/battery_display');
 const { renderChapterList, renameChapterInList } = require('./components/views/chapter-list_display');
+
+//The single boundary to the OS and the main process - see platform.js. getAppPaths/
+//getFileRequestedOnOpen used to be sendSync calls made here at module load; both are now regular
+//commands, which means both are promises, which is why loadPlatformState() below exists at all -
+//nothing that depends on sysDirectories or userSettings can run until it resolves.
+//
+//As of Phase 9a this is the *only* platform instance this file has. Through Phase 8 there were two:
+//this one for group A, and a second node-backed one for everything that was plain fs and therefore
+//reachable from the renderer directly. The node backing now runs in the main process, so both
+//halves are this object, and the 36 menu channels come through it as well - render.js no longer
+//requires 'electron' at all.
+var platform = createPlatform(createIpcBacking());
 
 var editorQuill = new Quill('#editor-container', {
   modules: {
@@ -43,62 +50,249 @@ var notesQuill = new Quill('#notes-editor', {
 
 var project = newProject();
 
-var userSettings = getUserSettings(sysDirectories.userData + "/user-settings.json").load();
-var credentialStore = getCredentialStore(sysDirectories.userData, getSecureStorage());
-//Lift any password saved by an older version out of user-settings.json, where it sat under a
-//key that shipped in the source, and re-seal it with whatever this machine can actually offer.
-credentialStore.migrateLegacyPassword(userSettings);
+//Populated by loadPlatformState() below, once getAppPaths()/getFileRequestedOnOpen() resolve.
+//Nothing above this line needs them; everything below runs from inside functions and reads these by
+//closure, not at define-time, so it does not matter that they start out undefined.
+var sysDirectories, fileRequestedOnOpen, userSettings, platformInfo;
 
-initialize();
+//Exposed for testing only - nothing in the app itself reads this module's exports, since it's
+//loaded as a plain <script> tag rather than required. `ready` is how a caller (render.test.js's
+//freshRender()) waits for loadPlatformState() below to populate the rest of this object - project,
+//userSettings, and the handful of chapter/reference/trash functions that are the most bug-prone and
+//highest-value part of this file to unit test directly - since require() itself cannot wait on it.
+//The rejection handler is not optional decoration. Everything below this line runs from inside
+//loadPlatformState(), so a failure anywhere in it - a platform command that rejects, unreadable
+//user settings, a throw out of initialize() - used to surface as an unhandled promise rejection and
+//nothing else: a window with two empty editors, no keybindings, no menu, and no indication that
+//anything had gone wrong. That is the silence platform.js's rule 5 exists to prevent. Reported to
+//the reader instead, and re-thrown so `ready` still rejects for a test that asserts on it.
+module.exports.ready = loadPlatformState().catch(function(err){
+  reportStartupFailure(err);
+  throw err;
+});
 
-function initialize(){
-  setUpQuills();
-  applyUserSettings();
-  loadInitialProject();
+//A good many functions in this file became async in Phase 4, and several of them are called by
+//things that drop the return value on the floor: a menu channel, a keybinding, a file dialog's
+//callback, an autosave timer. A rejection out of one of those has nowhere to go and would be an
+//unhandled rejection with nothing on screen and nothing in the log - which is the silence
+//platform.js's rule 5 exists to prevent.
+//
+//Only the rejection is caught. A synchronous throw is left to propagate exactly as it did before
+//any of this was async, so nothing that used to fail loudly starts failing quietly instead.
+function detached(fn){
+  return function(){
+    var result = fn.apply(this, arguments);
+
+    if(result && typeof result.then === 'function')
+      result.catch(reportDetachedFailure);
+
+    return result;
+  };
 }
 
-function loadInitialProject(){
-  //Load requested project, last project opened, or if none logged, load example project, and if example gone, create new project
-  const bundledExampleDir = sysDirectories.app + "/examples/Frankenstein";
-  const bundledExample = bundledExampleDir + "/Frankenstein.woolf";
-  const writableExampleDir = sysDirectories.userData + "/Projects/Frankenstein";
-  const writableExample = writableExampleDir + "/Frankenstein.woolf";
+function reportDetachedFailure(err){
+  require('./components/controllers/error-log').logError(err);
+}
 
-  if(fileRequestedOnOpen != null && fs.existsSync(fileRequestedOnOpen)){
-    setProject(fileRequestedOnOpen);
+//Kept out of loadPlatformState()'s own try/catch reasoning: this must not itself be able to throw
+//past the handler above, so it swallows a failure to report rather than replacing one unhandled
+//rejection with another.
+function reportStartupFailure(err){
+  //Logged first, since the popup below is the part most likely to fail on a badly broken boot.
+  try{
+    require('./components/controllers/error-log').logError(err);
+  }
+  catch(logErr){
+    console.log(logErr);
+  }
+
+  try{
+    require('./components/views/startup-error_display')(err);
+  }
+  catch(displayErr){
+    console.log(displayErr);
+  }
+}
+
+async function loadPlatformState(){
+  sysDirectories = await platform.getAppPaths();
+  //The four modules that are handed a platform rather than holding one. They used to be handed a
+  //second, node-backed instance built here out of sysDirectories and an OS keystore reached over
+  //three sendSync channels; groups B/C/D were plain fs, so the renderer could just do the work. It
+  //cannot any more, and does not need to: the same commands arrive at the same node backing, one
+  //process over. Nothing in the renderer derives a key, seals a secret, or writes credentials.json,
+  //and now nothing in it opens a file either.
+  require('./components/controllers/error-log').setPlatform(platform);
+  newProject.setPlatform(platform);
+  newChapter.setPlatform(platform);
+  getUserSettings.setPlatform(platform);
+  fileRequestedOnOpen = await platform.getFileRequestedOnOpen();
+  platformInfo = await platform.getPlatform();
+
+  userSettings = await getUserSettings(sysDirectories.userData + "/user-settings.json").load();
+  await migrateLegacyCredential();
+
+  await initialize();
+
+  //Wires up every keyboard shortcut that is not a menu item - see keybindings.js for the dispatch
+  //itself. context.project is a getter, not the object directly, because createNewProject() below
+  //replaces it with a brand new one; capturing it here would leave every shortcut acting on the
+  //project this app started with rather than whatever project is actually open. userSettings is
+  //held directly rather than through a getter - unlike `project` it is never reassigned - which is
+  //exactly why this call has to happen here rather than at this file's true top level: userSettings
+  //does not exist yet until the two lines above it in this function have run.
+  var unregisterKeybindings = registerKeybindings({
+    getProject: function(){ return project; },
+    userSettings: userSettings,
+    editorQuill: editorQuill,
+    notesQuill: notesQuill,
+    //Wrapped rather than passed straight through: keybindings.js calls these from a keydown
+    //listener and never looks at what they return, and three of them (both chapter-navigation
+    //shortcuts and the notes toggle) are async now. See detached() above.
+    actions: {
+      moveChapUp: moveChapUp,
+      moveChapDown: moveChapDown,
+      changeChapterTitle: changeChapterTitle,
+      displayPreviousChapter: detached(displayPreviousChapter),
+      displayNextChapter: detached(displayNextChapter),
+      togglePanelDisplay: togglePanelDisplay,
+      toggleChapterNotes: detached(toggleChapterNotes),
+      updatePanelDisplays: updatePanelDisplays,
+      increaseFontSizeSetting: increaseFontSizeSetting,
+      decreaseFontSizeSetting: decreaseFontSizeSetting,
+      increaseEditorWidthSetting: increaseEditorWidthSetting,
+      descreaseEditorWidthSetting: descreaseEditorWidthSetting
+    }
+  });
+
+  //The keybindings above are now registered, and so is everything else this file subscribes to
+  //through platform.on() (the per-menu-channel listeners and the file-opened-from-outside handler,
+  //both further down this file but run in the first synchronous pass through it - well before this
+  //async function ever got here). index.js's close guard only hands a window close to this renderer
+  //once this fires, so nothing above may still be pending when it does.
+  await platform.notifyRendererReady();
+
+  Object.assign(module.exports, {
+    project,
+    userSettings,
+    editorQuill,
+    notesQuill,
+    moveChapUp,
+    moveChapDown,
+    moveToTrash,
+    deleteChapter,
+    verifyToDelete,
+    restoreFromTrash,
+    updateFileList,
+    displayChapterByIndex,
+    addNewChapter,
+    addImportedChapter,
+    changeChapterTitle,
+    splitChapter,
+    editorHasFocus,
+    editorIsVisible,
+    _unregisterKeybindings: unregisterKeybindings
+  });
+}
+
+//Versions up to 2.2.1 kept the saved email password inside user-settings.json, encrypted with a
+//key that shipped in the packaged source. This runs on every launch, on real machines, and lifts
+//it out: migrateLegacyCredential decrypts it with that old key and re-seals it under whatever this
+//machine can actually offer, entirely natively - the recovered password never crosses back - and
+//clearing the settings field afterward is this file's job, since this file owns the settings.
+//
+//The two flags are not the same question, and treating them as one loses a case:
+//
+//  recognized - the field held a pre-2.2.2 blob. It is dead now either way, so clear it. A blob
+//               that decrypts to nothing (a 2.2.1 writer who ticked "remember" with an empty
+//               password field) is recognized but not migrated, and the code this replaced cleared
+//               the field for them too. Keying the clear off `migrated` instead would leave that
+//               blob sitting there, retried on every launch, forever, saying nothing.
+//  migrated   - a password was actually recovered and re-sealed.
+//
+//Failures are logged and swallowed, exactly as they were when this was a try/catch inside the
+//credential store: a broken keystore must not stop the app from starting. Swallowing also leaves
+//the legacy blob where it is, so the next launch tries again rather than destroying the writer's
+//only copy of the password - which is what the old code did when the re-save failed.
+async function migrateLegacyCredential(){
+  try{
+    var result = await platform.migrateLegacyCredential({
+      service: 'email',
+      legacyBlob: userSettings.senderPass
+    });
+
+    if(!result.recognized)
+      return;
+
+    userSettings.senderPass = null;
+    await userSettings.save();
+  }
+  catch(err){
+    require('./components/controllers/error-log').logError(err);
+  }
+}
+
+async function initialize(){
+  setUpQuills();
+  applyUserSettings();
+  await loadInitialProject();
+}
+
+async function loadInitialProject(){
+  //Load requested project, last project opened, or if none logged, load example project, and if example gone, create new project
+  const exampleFilename = "Frankenstein.woolf";
+  const bundledExampleDir = sysDirectories.app + "/examples/Frankenstein";
+  const bundledExample = bundledExampleDir + "/" + exampleFilename;
+  const writableExampleDir = sysDirectories.userData + "/Projects/Frankenstein";
+  const writableExample = writableExampleDir + "/" + exampleFilename;
+
+  //(Phase 9b) These four were the renderer's last `fs` calls, and the last thing in it that opened
+  //the filesystem at all. pathExists (group E) already existed; awaiting it here is the whole
+  //change. The chain stays an if/else-if - the checks are ordered by preference, not merely
+  //grouped, and each one must not run when an earlier branch already matched: an eager
+  //Promise.all() of all four would stat the example projects on every launch, and worse, would ask
+  //the main process about paths built from a userSettings that a failed earlier branch may have
+  //left stale. Sequential `await` in the conditions preserves exactly the old short-circuit.
+  if(fileRequestedOnOpen != null && await platform.pathExists({ path: fileRequestedOnOpen })){
+    await setProject(fileRequestedOnOpen);
     userSettings.lastProject = fileRequestedOnOpen;
   }
-  else if(userSettings.lastProject != null && fs.existsSync(userSettings.lastProject))
-    setProject(userSettings.lastProject);
-  else if(fs.existsSync(writableExample)){
-    setProject(writableExample);
+  else if(userSettings.lastProject != null && await platform.pathExists({ path: userSettings.lastProject }))
+    await setProject(userSettings.lastProject);
+  else if(await platform.pathExists({ path: writableExample })){
+    await setProject(writableExample);
     userSettings.lastProject = writableExample;
   }
-  else if(fs.existsSync(bundledExample)){
-    setProject(copyExampleToUserData(bundledExampleDir, writableExampleDir, writableExample));
+  else if(await platform.pathExists({ path: bundledExample })){
+    //The bundled copy lives inside the installed app directory (e.g. /usr/lib/... on a Linux
+    //package install), which a normal user account can't write back to - editing it and letting
+    //autosave or a manual save run against it in place always fails with EACCES. Copy it out to
+    //userData once on first launch and open that copy instead, so the example is actually editable.
+    var materialized = await platform.materializeBundledProject({
+      bundledDir: bundledExampleDir,
+      writableDir: writableExampleDir,
+      filename: exampleFilename
+    });
+
+    //Closes the open finding recorded in upgrade-and-isolation-plan.md. When the copy fails, the
+    //example is opened from the install directory instead - which is exactly the read-only case the
+    //copy exists to avoid, and it used to be indistinguishable from a writable one, so every later
+    //save died with EACCES in silence. Flagged instead, so Ctrl+S offers Save As the way it does for
+    //the Help doc. Handed to setProject() rather than set afterwards - see its own comment for why
+    //that ordering is load-bearing.
+    if(materialized.error)
+      require('./components/controllers/error-log').logError(
+        new Error('Could not copy the bundled example project into userData ('
+          + materialized.error.code + '): ' + materialized.error.message
+          + ' - opening it read-only instead.'));
+
+    await setProject(materialized.path, !materialized.writable);
+
     userSettings.lastProject = project.directory + project.filename;
   }
   else {
     //Start new project
     createNewProject();
-  }
-}
-
-//The bundled copy lives inside the installed app directory (e.g. /usr/lib/... on a Linux
-//package install), which a normal user account can't write back to - editing it and letting
-//autosave or a manual save run against it in place always fails with EACCES. Copy it out to
-//userData once on first launch and open that copy instead, so the example is actually editable.
-function copyExampleToUserData(bundledDir, writableDir, writablePath){
-  try{
-    fs.cpSync(bundledDir, writableDir, { recursive: true });
-    return writablePath;
-  }
-  catch(err){
-    const { logError } = require('./components/controllers/error-log');
-    logError(err);
-    //Couldn't copy (e.g. userData itself is somehow unwritable) - fall back to the bundled,
-    //read-only copy rather than failing to open anything.
-    return bundledDir + "/" + writablePath.split("/").pop();
   }
 }
 
@@ -121,9 +315,11 @@ function applyUserSettings(){
     enableTypewriterMode(editorQuill)
   updateEditorWidth();
   updatePanelDisplays();
-  autosaver.initiateAutosave(userSettings.autosaveIntMinutes, autosaveProject);
+  //Wrapped: the autosave timer never looks at what its callback returns, and saving is asynchronous
+  //now - see detached().
+  autosaver.initiateAutosave(userSettings.autosaveIntMinutes, detached(autosaveProject));
   setDarkMode();
-  if(userSettings.showBattery && process.platform == 'linux')
+  if(userSettings.showBattery && platformInfo.platform == 'linux')
     showBattery();
 }
 
@@ -141,27 +337,37 @@ function updateEditorWidth(){
 }
 
 function setDarkMode(){
-  ipcRenderer.send('set-dark-mode', userSettings.darkMode);
+  platform.setTheme({ mode: userSettings.darkMode }).catch(function(err){
+    require('./components/controllers/error-log').logError(err);
+  });
 }
 
-function setProject(filepath){
+//`readOnly` has to be an argument rather than something the caller sets afterward, and that is not
+//a convenience. loadFile() clears the flag on every load, and convertLegacyProject() below ends in
+//an unconditional project.saveFile() - so a caller that opened a read-only copy and set the flag on
+//the way back would already have written to it. That is how the bundled example, opened from the
+//install directory because its copy out to userData failed, was saved over before anything knew it
+//was read-only.
+async function setProject(filepath, readOnly){
   if(filepath && filepath != null){
-    var missingChaps = project.loadFile(filepath);
-    if(projectFailedToLoad(filepath))
+    var missingChaps = await project.loadFile(filepath);
+    if(await projectFailedToLoad(filepath))
       return;
+    //Set before anything downstream can write. Nothing else in this function may run first.
+    project.isReadOnly = readOnly === true;
     if(missingChaps.length > 0){
       console.log('could not find all chapters.');
       const promptForMissingPups = require('./components/views/missing-pups_display');
-      promptForMissingPups(project, function(resp){
+      await promptForMissingPups(project, function(resp){
         if(resp == 'save')
-          setProject(filepath);
+          setProject(filepath, readOnly).catch(reportDetachedFailure);
         else
           createNewProject();
       });
     }
     else{
-      convertLegacyProject();
-      displayProject();
+      await convertLegacyProject();
+      await displayProject();
     }
   }
 }
@@ -170,7 +376,7 @@ function setProject(filepath){
 //could not be read at all - truncated by a power loss mid-save, or simply not a .woolf - in which
 //case the failure has already been dealt with here and the caller should stop rather than go on to
 //display a project that is not there.
-function projectFailedToLoad(filepath){
+async function projectFailedToLoad(filepath){
   if(!project.loadError)
     return false;
 
@@ -181,46 +387,59 @@ function projectFailedToLoad(filepath){
   //it. Start from a clean project rather than trying to display a half-loaded one.
   project = newProject();
   project.initNotesChap();
-  displayProject();
+  await displayProject();
 
   const reportProjectLoadFailure = require('./components/views/project-load-error_display');
   reportProjectLoadFailure(filepath, loadError);
   return true;
 }
 
-function convertLegacyProject(){
+//Runs on every setProject(), and ends in an unconditional save - so opening any project writes its
+//.woolf back out, whether or not there was anything legacy to convert. That is longstanding
+//behaviour, left as it is; what changes here is that the write is now awaited, so the project is on
+//disk before the UI is drawn from it. A read-only project (the Help doc, or a Frankenstein example
+//whose copy out to userData failed) is refused by saveFile()'s own guard and simply returns false.
+async function convertLegacyProject(){
+  //Nothing here can be done to a project that cannot be written to, and the two conversions below
+  //write through chapter.js rather than project.saveFile() - so the read-only guard in
+  //project.saveFile() does not cover them. Without this, opening the bundled example out of the
+  //install directory (the fallback taken when its copy to userData fails) would attempt a chapter
+  //write per legacy chapter, each one an EACCES swallowed into the log.
+  if(project.isReadOnly)
+    return;
 
   //Convert legacy notes from v2.1 and before
   if(project.notes){
     project.notesChap.notes = project.notes;
-    project.notesChap.saveNotesFile();
+    await project.notesChap.saveNotesFile();
   }
 
   //Convert legacy chapters from v1.1 and before
-  project.chapters.forEach(function(chap, i){
+  for(let i = 0; i < project.chapters.length; i++){
+    let chap = project.chapters[i];
     if(chap.filename.includes('.pup')){
-      chap.contents = chap.getFile();
-      chap.saveFile();
+      chap.contents = await chap.getFile();
+      await chap.saveFile();
       chap.contents = null;
     }
-  });
-  project.saveFile();
+  }
+  await project.saveFile();
 }
 
-function displayProject(){
+async function displayProject(){
   updateFileList();
   updateTitleBar();
-  refreshNotesDisplay();
-  displayInitialChapter();
-  setWordCountOnLoad();
+  await refreshNotesDisplay();
+  await displayInitialChapter();
+  await setWordCountOnLoad();
   editorQuill.focus();
   editorQuill.setSelection(project.textCursorPosition);
   scrollChapterListToActiveChapter();
 }
 
-function setWordCountOnLoad(){
+async function setWordCountOnLoad(){
   const { getTotalWordCount } = require('./components/controllers/wordcount');
-  project.wordCountOnLoad = getTotalWordCount(project);
+  project.wordCountOnLoad = await getTotalWordCount(project);
 }
 
 function updateFileList(){
@@ -230,7 +449,7 @@ function updateFileList(){
   });
 }
 
-function displayChapterByIndex(ind){
+async function displayChapterByIndex(ind){
   clearCurrentChapterIfUnchanged();
   ind = parseInt(ind);
 
@@ -262,7 +481,7 @@ function displayChapterByIndex(ind){
     contents = chap.contents;
   }
   else{
-     contents = chap.getFile();
+     contents = await chap.getFile();
   }
 
   var correctNotesChap = userSettings.displayChapNotes ? chap : project.notesChap;
@@ -271,7 +490,7 @@ function displayChapterByIndex(ind){
     notes = correctNotesChap.notes;
   }
   else {
-    let savedNotes = correctNotesChap.getNotesFile();
+    let savedNotes = await correctNotesChap.getNotesFile();
     notes = savedNotes ? savedNotes : getEmptyDelta();
   }
 
@@ -287,19 +506,19 @@ function updateTitleBar(){
     + (project.isReadOnly ? " (read-only)" : "");
 }
 
-function refreshNotesDisplay(){
+async function refreshNotesDisplay(){
   var notesHeader = document.getElementById('notes-header');
 
   if(userSettings.displayChapNotes){
     var activeChapter = project.getActiveChapter();
-    let savedNotes = activeChapter ? activeChapter.getNotesContentOrFile() : null;
+    let savedNotes = activeChapter ? await activeChapter.getNotesContentOrFile() : null;
     let currentNotes = savedNotes ? savedNotes : getEmptyDelta();
     notesQuill.setContents(currentNotes, 'api');
 
     notesHeader.innerText = 'Chapter Notes';
   }
   else{
-    let savedNotes = project.notesChap.getNotesContentOrFile();
+    let savedNotes = await project.notesChap.getNotesContentOrFile();
     let currentNotes = savedNotes ? savedNotes : getEmptyDelta();
     notesQuill.setContents(currentNotes, 'api');
 
@@ -311,8 +530,8 @@ function getEmptyDelta(){
   return {"ops":[{"insert":"\n"}]};
 }
 
-function displayInitialChapter(){
-  displayChapterByIndex(project.activeChapterIndex);
+async function displayInitialChapter(){
+  await displayChapterByIndex(project.activeChapterIndex);
 }
 
 function togglePanelDisplay(p){
@@ -390,17 +609,17 @@ function removeSpecialDisplayClasses(el){
 
 //User Actions
 
-function displayPreviousChapter(){
+async function displayPreviousChapter(){
   if(project.activeChapterIndex > 0){
-    displayChapterByIndex(project.activeChapterIndex - 1);
+    await displayChapterByIndex(project.activeChapterIndex - 1);
     editorQuill.setSelection(0);
     project.textCursorPosition = 0;
   }
 }
 
-function displayNextChapter(){
+async function displayNextChapter(){
   if(!chapterList.isLastOfAll(project, chapterList.activeLocator(project))){
-    displayChapterByIndex(project.activeChapterIndex + 1);
+    await displayChapterByIndex(project.activeChapterIndex + 1);
     editorQuill.setSelection(0);
     project.textCursorPosition = 0;
   }
@@ -434,19 +653,19 @@ function moveChapDown(chapInd){
 
 function createNewProject(){
   const requestProjectTitle = require('./components/views/new-project_display');
-  requestProjectTitle(function(title){
+  requestProjectTitle(detached(async function(title){
     if(title && title != ""){
       project = newProject();
       project.title = title;
       project.author = userSettings.defaultAuthor;
       project.initNotesChap();
-      addNewChapter();
-      displayProject();
+      await addNewChapter();
+      await displayProject();
     }
-  });
+  }));
 }
 
-function addNewChapter(){
+async function addNewChapter(){
   var currentLoc = chapterList.activeLocator(project);
   var newChap = newChapter(project);
   newChap.hasUnsavedChanges = true;
@@ -467,7 +686,7 @@ function addNewChapter(){
   //displayChapterByIndex() below renders the sidebar itself as its last step, so this used to
   //render it a second time for nothing.
   var thisIndex = chapterList.toCombinedIndex(project, landed);
-  displayChapterByIndex(thisIndex);
+  await displayChapterByIndex(thisIndex);
   editorQuill.enable();
   changeChapterTitle(thisIndex);
 }
@@ -475,13 +694,13 @@ function addNewChapter(){
 //Autosave must not do what an explicit save does on a read-only project: routing it to Save As
 //would pop a file dialog over the reader every autosave interval while the Help doc is open.
 //Nothing is lost by skipping - saveFile() would refuse the write anyway.
-function autosaveProject(){
+async function autosaveProject(){
   if(project.isReadOnly)
     return;
-  saveProject();
+  await saveProject();
 }
 
-function saveProject(onComplete){
+async function saveProject(onComplete){
   //A read-only project (the bundled Help doc) has nowhere of its own to be written back to, so an
   //explicit save becomes Save As - the reader's annotated copy gets a home they chose, and
   //saveAs() clears the flag once it lands there.
@@ -489,7 +708,7 @@ function saveProject(onComplete){
     saveProjectAs(onComplete);
   else if(project.filename != ""){
     clearCurrentChapterIfUnchanged();
-    if(project.saveFile()){
+    if(await project.saveFile()){
       project.hasUnsavedChanges = false;
       updateFileList();
       if(onComplete)
@@ -502,6 +721,10 @@ function saveProject(onComplete){
     saveProjectAs(onComplete);
 }
 
+//Not awaited by the caller: the dialog is what takes time, and it reports through onComplete,
+//exactly as before. showFileDialog() itself is async now (listing its initial directory goes
+//through the platform facade), so the call is `.catch()`-ed rather than awaited - see detached()'s
+//own comment for why a dropped rejection here would otherwise vanish silently.
 function saveProjectAs(onComplete) {
   const options = {
     title: 'Save project as...',
@@ -515,9 +738,9 @@ function saveProjectAs(onComplete) {
   };
 
   const showFileDialog = require('./components/views/file-dialog_display');
-  showFileDialog(options, function(filepath){
+  showFileDialog(options, detached(async function(filepath){
     if (filepath){
-      var savedPath = project.saveAs(filepath);
+      var savedPath = await project.saveAs(filepath);
       if(savedPath){
         userSettings.lastProject = savedPath;
         userSettings.save();
@@ -531,7 +754,7 @@ function saveProjectAs(onComplete) {
     }
     if(onComplete)
       onComplete(false);
-  });
+  })).catch(reportDetachedFailure);
 }
 
 function saveProjectCopy() {
@@ -547,14 +770,14 @@ function saveProjectCopy() {
   };
 
   const showFileDialog = require('./components/views/file-dialog_display');
-  showFileDialog(options, function(filepath){
+  showFileDialog(options, detached(async function(filepath){
     if (filepath){
-      project.saveAs(filepath, true);
+      await project.saveAs(filepath, true);
     }
 
     updateFileList();
     updateTitleBar();
-  })
+  })).catch(reportDetachedFailure);
 }
 
 function openAProject() {
@@ -570,24 +793,24 @@ function openAProject() {
   };
 
   const showFileDialog = require('./components/views/file-dialog_display');
-  showFileDialog(options, function(filepath){
+  showFileDialog(options, detached(async function(filepath){
     if (filepath) {
-      var missingChaps = project.loadFile(filepath[0]);
-      if(projectFailedToLoad(filepath[0]))
+      var missingChaps = await project.loadFile(filepath[0]);
+      if(await projectFailedToLoad(filepath[0]))
         return;
       if(missingChaps.length > 0){
         const promptForMissingPups = require('./components/views/missing-pups_display');
-        promptForMissingPups(project, function(resp){
-          displayProject();
+        await promptForMissingPups(project, function(resp){
+          displayProject().catch(reportDetachedFailure);
         });
       }
       else{
-        displayProject();
+        await displayProject();
       }
       userSettings.lastProject = filepath[0];
       userSettings.save();
     }
-  });
+  })).catch(reportDetachedFailure);
 }
 
 
@@ -639,7 +862,7 @@ notesQuill.on('text-change', function(delta, oldDelta, source){
   }
 });
 
-function moveToTrash(ind){
+async function moveToTrash(ind){
   var loc = chapterList.toLocator(project, ind);
 
   //Nothing at that index to trash - on an empty project this used to splice an empty list and
@@ -666,20 +889,20 @@ function moveToTrash(ind){
     //Select whatever slid into the trashed chapter's place, falling back down the lists as they
     //empty out.
     var next = chapterList.selectionAfterRemoval(project, loc);
-    displayChapterByIndex(next ? chapterList.toCombinedIndex(project, next) : 0);
+    await displayChapterByIndex(next ? chapterList.toCombinedIndex(project, next) : 0);
   }
   else
     updateFileList();
 }
 
-function deleteChapter(ind){
+async function deleteChapter(ind){
   var loc = chapterList.toLocator(project, ind);
   var deletedChap = chapterList.remove(project, loc);
 
   //Always save project file after deleting a chapter
   //so if user closes without saving it won't expect
   //the deleted chapter at next load...
-  deletedChap.deleteFile();
+  await deletedChap.deleteFile();
 
   if(ind == project.activeChapterIndex){
     //Same "stay on whatever slid into the gap, else fall back" rule moveToTrash() uses - this
@@ -687,7 +910,7 @@ function deleteChapter(ind){
     //blanked the editor even when the project still had reference chapters to show.
     var next = chapterList.selectionAfterRemoval(project, loc);
     if(next)
-      displayChapterByIndex(chapterList.toCombinedIndex(project, next));
+      await displayChapterByIndex(chapterList.toCombinedIndex(project, next));
     else{
       editorQuill.disable();
       editorQuill.setText("");
@@ -698,7 +921,7 @@ function deleteChapter(ind){
   //in case it is the last chapter that was deleted.
   //And only if it is not a new project that has not yet been saved.
   if(project.directory != '')
-    project.saveFile();
+    await project.saveFile();
   updateFileList();
   console.log("deleted " + ind);
 }
@@ -707,14 +930,14 @@ function verifyToDelete(ind){
   var loc = chapterList.toLocator(project, ind);
   if(loc && loc.list == 'trash'){
     const displayDeleteConfirmation = require('./components/views/delete-confirmation_display');
-    displayDeleteConfirmation(function(){
-      deleteChapter(ind);
+    displayDeleteConfirmation(detached(async function(){
+      await deleteChapter(ind);
       editorQuill.focus();
-    });
+    }));
   }
 }
 
-function restoreFromTrash(ind){
+async function restoreFromTrash(ind){
   var loc = chapterList.toLocator(project, ind);
 
   if(!loc || loc.list != 'trash')
@@ -740,7 +963,7 @@ function restoreFromTrash(ind){
     //Follow the restored chapter to its new place. Leaving activeChapterIndex where it was left
     //the editor still showing this chapter while the index named whatever slid into its old slot -
     //so the next keystroke was written into that other chapter, and saved over its file.
-    displayChapterByIndex(chapterList.toCombinedIndex(project, landed));
+    await displayChapterByIndex(chapterList.toCombinedIndex(project, landed));
   }
   else{
     if(activeLoc)
@@ -772,13 +995,13 @@ function changeChapterTitle(ind){
   });
 }
 
-function splitChapter(){
+async function splitChapter(){
   var selection = editorQuill.getSelection(true);
   if(selection){
       var newChap = editorQuill.getContents(selection.index);
       console.log("deleting " + selection.index + " to " + editorQuill.getLength());
       editorQuill.deleteText(selection.index, editorQuill.getLength(), 'user');
-      addImportedChapter(newChap, "untitled");
+      await addImportedChapter(newChap, "untitled");
       changeChapterTitle(project.activeChapterIndex);
   }
 }
@@ -826,14 +1049,18 @@ function scrollChapterListToActiveChapter(){
 //forever, so a release that updated the Help doc would never be seen by anyone who had already
 //launched the app. Open the bundled copy in place instead, and mark the project read-only so the
 //save paths know it cannot be written to. Anyone who wants to annotate it gets a Save As.
-function openHelpDoc(){
+//Deliberately not setProject(path, true), even though that now takes the flag. setProject() runs
+//convertLegacyProject() and the missing-chapters repair screen, and neither belongs to a document
+//the reader cannot edit: repairing it would mean rewriting a file in the install directory, and
+//there is nothing to repair anyway, since the Help doc ships complete.
+async function openHelpDoc(){
   const bundledHelpDoc = sysDirectories.app + "/examples/HelpDoc/HelpDoc.woolf";
 
-  project.loadFile(bundledHelpDoc);
-  if(projectFailedToLoad(bundledHelpDoc))
+  await project.loadFile(bundledHelpDoc);
+  if(await projectFailedToLoad(bundledHelpDoc))
     return;
   project.isReadOnly = true;
-  displayProject();
+  await displayProject();
 }
 
 function exitApp(){
@@ -843,11 +1070,17 @@ function exitApp(){
     backupProject(project, userSettings, sysDirectories.docs, function(update){
       alertBackupResult(update, true);
       if(update == BACKUP_FINISHED)
-        ipcRenderer.send('exit-app-confirmed');
+        confirmExit();
     });
   } else {
-      ipcRenderer.send('exit-app-confirmed');
+      confirmExit();
   }
+}
+
+function confirmExit(){
+  platform.confirmExit().catch(function(err){
+    require('./components/controllers/error-log').logError(err);
+  });
 }
 
 //Adapts backup-project.js's stream of progress messages onto the alert popup: every message is
@@ -861,12 +1094,10 @@ function alertBackupResult(msg, allowExitWithoutBackup = false){
     return;
   }
 
-  showBackupAlert(msg, allowExitWithoutBackup ? function(){
-    ipcRenderer.send('exit-app-confirmed');
-  } : null);
+  showBackupAlert(msg, allowExitWithoutBackup ? confirmExit : null);
 }
 
-function addImportedChapter(chapDelta, title){
+async function addImportedChapter(chapDelta, title){
   var newChap = newChapter(project);
   newChap.hasUnsavedChanges = true;
   newChap.contents = chapDelta;
@@ -884,13 +1115,13 @@ function addImportedChapter(chapDelta, title){
 
   //displayChapterByIndex() below renders the sidebar itself as its last step, so this used to
   //render it a second time for nothing.
-  displayChapterByIndex(chapterList.toCombinedIndex(project, landed));
+  await displayChapterByIndex(chapterList.toCombinedIndex(project, landed));
 }
 
-function toggleChapterNotes(){
+async function toggleChapterNotes(){
   userSettings.displayChapNotes = !userSettings.displayChapNotes;
   userSettings.save();
-  refreshNotesDisplay();
+  await refreshNotesDisplay();
 }
 
 
@@ -902,31 +1133,6 @@ function editorIsVisible(){
   return document.getElementById('writing-field').classList.contains('visible');
 }
 
-//Wires up every keyboard shortcut that is not a menu item - see keybindings.js for the dispatch
-//itself. context.project is a getter, not the object directly, because createNewProject() below
-//replaces it with a brand new one; capturing it here would leave every shortcut acting on the
-//project this app started with rather than whatever project is actually open.
-var unregisterKeybindings = registerKeybindings({
-  getProject: function(){ return project; },
-  userSettings: userSettings,
-  editorQuill: editorQuill,
-  notesQuill: notesQuill,
-  actions: {
-    moveChapUp: moveChapUp,
-    moveChapDown: moveChapDown,
-    changeChapterTitle: changeChapterTitle,
-    displayPreviousChapter: displayPreviousChapter,
-    displayNextChapter: displayNextChapter,
-    togglePanelDisplay: togglePanelDisplay,
-    toggleChapterNotes: toggleChapterNotes,
-    updatePanelDisplays: updatePanelDisplays,
-    increaseFontSizeSetting: increaseFontSizeSetting,
-    decreaseFontSizeSetting: decreaseFontSizeSetting,
-    increaseEditorWidthSetting: increaseEditorWidthSetting,
-    descreaseEditorWidthSetting: descreaseEditorWidthSetting
-  }
-});
-
 //Both channels below show the same "you have unsaved changes - save first?" prompt before doing
 //something that would otherwise discard them; only exit-app-clicked refreshes the sidebar's
 //unsaved-change markers first (open-clicked never has, though there's no obvious reason it
@@ -937,7 +1143,7 @@ function proceedOrConfirmSave(continueFunc, refreshFileListFirst){
     const displayExitConfirmation = require('./components/views/exit-confirmation_display');
     if(refreshFileListFirst)
       updateFileList();
-    displayExitConfirmation(saveProject, continueFunc);
+    displayExitConfirmation(detached(saveProject), continueFunc);
   }
   else
     continueFunc();
@@ -958,17 +1164,17 @@ function proceedOrConfirmSave(continueFunc, refreshFileListFirst){
 //that one pattern, but file-opened-from-outside-warewoolf takes its own argument (the opened
 //path) and has a distinct multi-branch shape, so it is registered separately below the table.
 const menuCommands = {
-  'save-clicked': { run: function(){ saveProject(); } },
+  'save-clicked': { run: function(){ return saveProject(); } },
   'save-as-clicked': { run: function(){ saveProjectAs(); } },
   'open-clicked': { run: function(){ proceedOrConfirmSave(openAProject); } },
   'new-project-clicked': { run: function(){ createNewProject(); } },
   'import-clicked': { run: function(){
     const showImportOptions = require('./components/views/import_display');
-    showImportOptions(sysDirectories, addImportedChapter, function(){
-      displayChapterByIndex(project.activeChapterIndex);
+    showImportOptions(sysDirectories, detached(addImportedChapter), detached(async function(){
+      await displayChapterByIndex(project.activeChapterIndex);
       if(project.chapters.length > 0)
         editorQuill.enable();
-    });
+    }));
   } },
   'export-clicked': { run: function(){
     const showExportOptions = require('./components/views/export_display');
@@ -984,78 +1190,78 @@ const menuCommands = {
   } },
   'word-count-clicked': { run: function(){
     const showWordCount = require('./components/views/wordcount_display');
-    showWordCount(project, editorQuill);
+    return showWordCount(project, editorQuill);
   } },
   'find-replace-clicked': { requiresFocus: true, run: function(){
     const showFindReplace = require('./components/views/findreplace_display');
-    showFindReplace(project, editorQuill, displayChapterByIndex);
+    showFindReplace(project, editorQuill, detached(displayChapterByIndex));
   } },
   'spellcheck-clicked': { requiresFocus: true, run: function(){
     const showSpellcheck = require('./components/views/spellcheck_display');
     const { getBeginningOfCurrentWord } = require('./components/controllers/spellcheck');
     var currentIndex = editorQuill.getSelection(true).index;
     var beginningOfWord = getBeginningOfCurrentWord(editorQuill.getText(), currentIndex);
-    showSpellcheck(editorQuill, project, sysDirectories, displayChapterByIndex, beginningOfWord);
+    return showSpellcheck(editorQuill, project, detached(displayChapterByIndex), beginningOfWord);
   } },
   'convert-first-lines-clicked': { requiresFocus: true, run: function(){
     const showConvertFirstLines = require('./components/views/convert-first-lines_display');
-    showConvertFirstLines(project, function(){
-      displayChapterByIndex(project.activeChapterIndex);
-    });
+    showConvertFirstLines(project, detached(function(){
+      return displayChapterByIndex(project.activeChapterIndex);
+    }));
   } },
   'headings-to-chaps-clicked': { requiresFocus: true, run: function(){
     const showBreakHeadingsOptions = require('./components/views/headings-to-chapters_display');
-    showBreakHeadingsOptions(editorQuill, addImportedChapter);
+    showBreakHeadingsOptions(editorQuill, detached(addImportedChapter));
   } },
   'convert-italics-clicked': { requiresFocus: true, run: function(){
     const showItalicsOptions = require('./components/views/convert-italics_display');
-    showItalicsOptions(project, function(){
-      displayChapterByIndex(project.activeChapterIndex);
-    });
+    showItalicsOptions(project, detached(function(){
+      return displayChapterByIndex(project.activeChapterIndex);
+    }));
   } },
-  'split-chapter-clicked': { requiresFocus: true, run: function(){ splitChapter(); } },
-  'add-chapter-clicked': { requiresFocus: true, run: function(){ addNewChapter(); } },
-  'delete-chapter-clicked': { requiresFocus: true, run: function(){ moveToTrash(project.activeChapterIndex); } },
-  'restore-chapter-clicked': { requiresFocus: true, run: function(){ restoreFromTrash(project.activeChapterIndex); } },
+  'split-chapter-clicked': { requiresFocus: true, run: function(){ return splitChapter(); } },
+  'add-chapter-clicked': { requiresFocus: true, run: function(){ return addNewChapter(); } },
+  'delete-chapter-clicked': { requiresFocus: true, run: function(){ return moveToTrash(project.activeChapterIndex); } },
+  'restore-chapter-clicked': { requiresFocus: true, run: function(){ return restoreFromTrash(project.activeChapterIndex); } },
   'shortcuts-clicked': { run: function(isMac){
     const showShortcutsHelp = require('./components/views/shortcuts-help_display');
     showShortcutsHelp(isMac);
   } },
   'outliner-clicked': { run: function(){
     const showOutliner = require('./components/views/outliner_display');
-    showOutliner(project);
+    return showOutliner(project);
   } },
   'convert-tabs-clicked': { run: function(){
     const showTabOptions = require('./components/views/convert-tabs-display');
-    showTabOptions(project, function(){
-      displayChapterByIndex(project.activeChapterIndex);
-    });
+    showTabOptions(project, detached(function(){
+      return displayChapterByIndex(project.activeChapterIndex);
+    }));
   } },
   'about-clicked': { run: function(appVersion){
     const showAbout = require('./components/views/about_display');
-    showAbout(sysDirectories, appVersion);
+    return showAbout(appVersion, platformInfo);
   } },
   'exit-app-clicked': { run: function(){ proceedOrConfirmSave(exitApp, true); } },
   'save-copy-clicked': { run: function(){ saveProjectCopy(); } },
-  'help-doc-clicked': { run: function(){ openHelpDoc(); } },
+  'help-doc-clicked': { run: function(){ return openHelpDoc(); } },
   'renumber-chapters-clicked': { run: function(){
     const showRenumberChapters = require('./components/views/renumber-chapters_display');
-    showRenumberChapters(project, function(){
+    showRenumberChapters(project, detached(function(){
       updateFileList();
-      displayChapterByIndex(project.activeChapterIndex);
-    });
+      return displayChapterByIndex(project.activeChapterIndex);
+    }));
   } },
   'send-via-email-clicked': { run: function(){
     const showEmailOptions = require('./components/views/email-doc_display');
-    showEmailOptions(project, userSettings, credentialStore, editorQuill);
+    return showEmailOptions(project, userSettings, platform, editorQuill);
   } },
   'view-error-log-clicked': { run: function(){
     const showErrorLog = require('./components/views/error-log_display');
-    showErrorLog(userSettings, credentialStore);
+    return showErrorLog(userSettings, platform);
   } },
   'file-manager-clicked': { run: function(){
     const showFileManager = require('./components/views/file-manager_display');
-    showFileManager(sysDirectories, project.directory);
+    return showFileManager(sysDirectories, project.directory);
   } },
   'wifi-manager-clicked': { run: function(){
     const showWifiManager = require('./components/views/wifi-manager_display');
@@ -1067,89 +1273,69 @@ const menuCommands = {
   } },
   'settings-clicked': { run: function(){
     const showSettings = require('./components/views/settings_display');
-    showSettings(userSettings, autosaver, sysDirectories, autosaveProject, function(){
+    return showSettings(userSettings, autosaver, sysDirectories, detached(autosaveProject), function(){
       setDarkMode();
-    });
+    }, platformInfo);
   } },
   'corkboard-clicked': { run: function(){
     const showCorkboard = require('./components/views/corkboard_display');
-    showCorkboard(project);
+    return showCorkboard(project, platformInfo);
   } },
-  'indent-all-clicked': { run: function(){
+  'indent-all-clicked': { run: async function(){
     const { indentAllParasInAllChaps } = require('./components/controllers/indent-all');
-    indentAllParasInAllChaps(project);
-    displayChapterByIndex(project.activeChapterIndex);
+    await indentAllParasInAllChaps(project);
+    await displayChapterByIndex(project.activeChapterIndex);
   } },
-  'center-all-heads-clicked': { run: function(){
+  'center-all-heads-clicked': { run: async function(){
     const { centerAllHeadingsInAllChaps } = require('./components/controllers/center-all-heads');
-    centerAllHeadingsInAllChaps(project);
-    displayChapterByIndex(project.activeChapterIndex);
+    await centerAllHeadingsInAllChaps(project);
+    await displayChapterByIndex(project.activeChapterIndex);
   } }
 };
 
+//Phase 9a: these go through platform.on() rather than the raw ipc channel. Two things change with
+//them, both worth knowing before reading the handlers below.
+//
+//A handler is called with the payload arguments only - preload.js drops the event object that used
+//to arrive first, because forwarding it would hand the page `sender` and with it the whole ipc
+//surface the bridge exists to withhold. So `function(e)` and `slice(arguments, 1)` are gone: the
+//first argument is now the payload, where there is one.
+//
+//And the event name is validated against platform.js's EVENTS at subscribe time. A channel name
+//that drifts from what index.js sends used to be silent - a menu item that simply did nothing, with
+//nothing anywhere saying why. It now throws here, at startup, out of the first pass through this
+//file.
 Object.keys(menuCommands).forEach(function(channel){
   var command = menuCommands[channel];
-  ipcRenderer.on(channel, function(e){
+  platform.on(channel, function(){
     if(command.requiresFocus && !editorHasFocus())
       return;
-    command.run.apply(null, Array.prototype.slice.call(arguments, 1));
+    //Wrapped because several of these are async now and nothing reads what a menu channel returns
+    //- see detached(). The promise is handed back anyway: the bridge ignores it, but a test can
+    //await the handler instead of guessing how many ticks the command needs.
+    return detached(command.run)(...arguments);
   });
 });
 
 //Takes its own argument (the opened file's path) and has a distinct multi-branch shape - handling
 //a chapter missing from disk mirrors openAProject()'s own file-dialog callback - so it is kept as
 //an ordinary handler rather than forced into the single-argument shape above.
-ipcRenderer.on('file-opened-from-outside-warewoolf', function(event, fPath){
+platform.on('file-opened-from-outside-warewoolf', detached(async function(fPath){
   if (fPath) {
-    var missingChaps = project.loadFile(fPath);
-    if(projectFailedToLoad(fPath))
+    var missingChaps = await project.loadFile(fPath);
+    if(await projectFailedToLoad(fPath))
       return;
     if(missingChaps.length > 0){
       const promptForMissingPups = require('./components/views/missing-pups_display');
-      promptForMissingPups(project, function(resp){
-        displayProject();
+      await promptForMissingPups(project, function(resp){
+        displayProject().catch(reportDetachedFailure);
       });
     }
     else{
-      displayProject();
+      await displayProject();
     }
     userSettings.lastProject = fPath;
     userSettings.save();
   }
 
-});
-
-//Every handler above is registered by the time this runs, so it is safe for index.js's close guard
-//to hand a window close over to this renderer and wait. Anything at this file's top level throwing
-//before here - a damaged project file used to - means the guard never gets this and lets closes
-//through itself instead, rather than holding a dead window open.
-ipcRenderer.send('renderer-ready');
-
-//Exposed for testing only - nothing in the app itself reads this module's exports, since it's
-//loaded as a plain <script> tag rather than required. Limited to the chapter/reference/trash
-//list engine, the most bug-prone and highest-value part of this file to unit test directly.
-module.exports = {
-  project,
-  userSettings,
-  editorQuill,
-  notesQuill,
-  moveChapUp,
-  moveChapDown,
-  moveToTrash,
-  deleteChapter,
-  verifyToDelete,
-  restoreFromTrash,
-  updateFileList,
-  displayChapterByIndex,
-  addNewChapter,
-  addImportedChapter,
-  changeChapterTitle,
-  splitChapter,
-  editorHasFocus,
-  editorIsVisible,
-  //Tears down the keyboard listeners this module attaches on load. Nothing in the app itself calls
-  //this - there is exactly one of these for the app's whole lifetime - but a test harness that
-  //re-requires render.js per test needs it to undo the previous require's listeners, or they pile
-  //up on the shared `document` across every test in the file.
-  _unregisterKeybindings: unregisterKeybindings
-};
+}));

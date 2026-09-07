@@ -10,6 +10,16 @@ const errorLog = require('../src/components/controllers/error-log');
 const deltaToDocxPath = require.resolve('../src/components/controllers/delta-to-docx');
 const { convertDeltaToDocx } = require(deltaToDocxPath);
 
+//The modules under test hold their own createPlatform(createIpcBacking()) instance and reach the
+//machine through window.warewoolf, exactly as they do in the app. This puts a bridge there, with a
+//real node backing (and a real structured-clone boundary) behind it - so these tests still assert
+//against real files in real temp directories, and now also prove the arguments and results survive
+//being sent somewhere.
+const { installBridge, uninstallBridge } = require('./fake-bridge');
+
+test.before(function(){ installBridge(); });
+test.after(uninstallBridge);
+
 const project = { title: 'Test', author: 'Author', chapters: [], reference: [] };
 
 //saveDocx/packageDocxBase64 destructure `logError` from error-log.js at require-time, so a test that
@@ -188,7 +198,7 @@ test('convertDeltaToDocx does not leak an implicit global "i"', function(){
 test('saveDocx logs a packing failure instead of leaving it an unhandled rejection', async function(t){
   const logErrorMock = t.mock.method(errorLog, 'logError', function(){});
   const packError = new Error('packing failed');
-  t.mock.method(docx.Packer, 'toBuffer', function(){ return Promise.reject(packError); });
+  t.mock.method(docx.Packer, 'toBlob', function(){ return Promise.reject(packError); });
 
   const { saveDocx } = freshDeltaToDocx();
   const doc = convertDeltaToDocx({ ops: [{insert: 'x'}, {insert: '\n'}] }, {}, project, null);
@@ -242,7 +252,7 @@ test('saveDocx calls its completion callback with the filepath once the file has
 test('saveDocx calls its completion callback with \'error\' instead of throwing when packing fails', async function(t){
   t.mock.method(errorLog, 'logError', function(){});
   const packError = new Error('packing failed');
-  t.mock.method(docx.Packer, 'toBuffer', function(){ return Promise.reject(packError); });
+  t.mock.method(docx.Packer, 'toBlob', function(){ return Promise.reject(packError); });
 
   const { saveDocx } = freshDeltaToDocx();
   const doc = convertDeltaToDocx({ ops: [{insert: 'x'}, {insert: '\n'}] }, {}, project, null);
@@ -252,4 +262,35 @@ test('saveDocx calls its completion callback with \'error\' instead of throwing 
   });
 
   assert.strictEqual(result, 'error');
+});
+
+//Regression: saveDocx called Packer.toBuffer(), which is JSZip's own
+//generateAsync({type:'nodebuffer'}) under the hood and needs the Node Buffer global. A
+//contextIsolated, --platform=browser renderer has no Buffer at all, so every .docx export and
+//compile threw "nodebuffer is not supported by this platform" on a packaged build once Phase 9b
+//flipped the flag - invisible to this suite, since it runs delta-to-docx.js in plain Node, where
+//Buffer exists and toBuffer() works regardless of which build produced the .docx. Packer.toBlob()
+//is docx's browser build; writeBinaryFile already carries a Uint8Array across the boundary (see
+//platform-node.js), so the blob is read back out via arrayBuffer() rather than crossing as a Blob.
+test('saveDocx uses the browser build (Packer.toBlob) instead of Packer.toBuffer', async function(t){
+  const toBufferMock = t.mock.method(docx.Packer, 'toBuffer', function(){
+    throw new Error('saveDocx must not call Packer.toBuffer - it needs a Buffer global a contextIsolated renderer does not have');
+  });
+
+  const filepath = path.join(os.tmpdir(), 'delta-to-docx-test-' + Date.now() + '-' + Math.random().toString(36).slice(2) + '.docx');
+  t.after(function(){
+    if(fs.existsSync(filepath))
+      fs.unlinkSync(filepath);
+  });
+
+  const { saveDocx } = freshDeltaToDocx();
+  const doc = convertDeltaToDocx({ ops: [{insert: 'x'}, {insert: '\n'}] }, {}, project, null);
+
+  const result = await new Promise(function(resolve){
+    saveDocx(filepath, doc, resolve);
+  });
+
+  assert.strictEqual(toBufferMock.mock.calls.length, 0, 'saveDocx called Packer.toBuffer');
+  assert.strictEqual(result, filepath);
+  assert.ok(fs.existsSync(filepath), 'expected the .docx file to exist once written via Packer.toBlob');
 });

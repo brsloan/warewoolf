@@ -2,10 +2,11 @@ const { closePopups, createButton, removeElementsByClass, enableSearchView } = r
 const { runSpellcheck, addWordToPersonalDictFile } = require('../controllers/spellcheck');
 const { replace, replaceAllInAllChapters } = require('../controllers/findreplace');
 
-function showSpellcheck(editorQuill, project, sysDirectories, displayChapterByIndex, startingIndex = 0, wordsToIgnore = []){
+//Async now that loading the dictionaries goes through the platform facade.
+async function showSpellcheck(editorQuill, project, displayChapterByIndex, startingIndex = 0, wordsToIgnore = []){
     enableSearchView();
 
-    var invalidWord = runSpellcheck(editorQuill, sysDirectories, startingIndex, wordsToIgnore);
+    var invalidWord = await runSpellcheck(editorQuill, startingIndex, wordsToIgnore);
     if(invalidWord)
       editorQuill.setSelection(invalidWord.index, invalidWord.word.length);
 
@@ -74,7 +75,7 @@ function showSpellcheck(editorQuill, project, sysDirectories, displayChapterByIn
     var ignoreBtn = createButton("Ignore");
     ignoreBtn.onclick = function(){
       var nextIndex = invalidWord ? invalidWord.index + invalidWord.word.length : 0;
-      showSpellcheck(editorQuill, project, sysDirectories, displayChapterByIndex, nextIndex, wordsToIgnore);
+      return showSpellcheck(editorQuill, project, displayChapterByIndex, nextIndex, wordsToIgnore);
     }
     popup.appendChild(ignoreBtn);
 
@@ -82,7 +83,7 @@ function showSpellcheck(editorQuill, project, sysDirectories, displayChapterByIn
     ignoreAllBtn.onclick = function(){
       if(invalidWord){
         wordsToIgnore.push(invalidWord.word);
-        ignoreBtn.click();
+        return ignoreBtn.onclick();
       }
     }
     ignoreAllBtn.accessKey = "i";
@@ -99,13 +100,15 @@ function showSpellcheck(editorQuill, project, sysDirectories, displayChapterByIn
       if(invalidWord && selectedReplacement != null){
         editorQuill.setSelection(invalidWord.index, invalidWord.word.length);
         replace(editorQuill, selectedReplacement.value);
-        ignoreBtn.click();
+        return ignoreBtn.onclick();
       }
     }
     popup.appendChild(changeBtn);
 
     var changeAllBtn = createButton("C<span class='access-key'>h</span>ange All");
-    changeAllBtn.onclick = function(){
+    //Awaited so the redraw below shows a finished pass rather than one still reading chapters off
+    //disk.
+    changeAllBtn.onclick = async function(){
       var selectedReplacement = document.querySelector('input[name="suggestions"]:checked');
       if(customInput.value != "")
         selectedReplacement = customInput;
@@ -113,9 +116,9 @@ function showSpellcheck(editorQuill, project, sysDirectories, displayChapterByIn
       if(invalidWord && selectedReplacement != null){
         const caseSensitive = true;
         const wholeWordOnly = true;
-        replaceAllInAllChapters(project, invalidWord.word, selectedReplacement.value, caseSensitive, wholeWordOnly);
+        await replaceAllInAllChapters(project, invalidWord.word, selectedReplacement.value, caseSensitive, wholeWordOnly);
         displayChapterByIndex(project.activeChapterIndex);
-        ignoreBtn.click();
+        return ignoreBtn.onclick();
       }
     };
     changeAllBtn.accessKey = "h";
@@ -124,10 +127,10 @@ function showSpellcheck(editorQuill, project, sysDirectories, displayChapterByIn
     popup.appendChild(document.createElement('br'));
 
     var addToDic = createButton("<span class='access-key'>A</span>dd To Dictionary");
-    addToDic.onclick = function(){
+    addToDic.onclick = async function(){
       if(invalidWord){
-        addWordToPersonalDictFile(invalidWord.word, sysDirectories);
-        ignoreBtn.click();
+        await addWordToPersonalDictFile(invalidWord.word);
+        return ignoreBtn.onclick();
       }
     }
     addToDic.accessKey = "a";

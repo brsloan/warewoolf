@@ -55,8 +55,8 @@ function showItalicsOptions(project, onFinish){
       closePopups();
       //Converting can be slow on projects with many/large chapters, so show a working
       //indicator (deferred via showWorkingAndThen) instead of blocking with no feedback.
-      showWorkingAndThen('Converting marked italics...', function(){
-        convertMarkedItalicsForAllChapters(project, marker);
+      showWorkingAndThen('Converting marked italics...', async function(){
+        await convertMarkedItalicsForAllChapters(project, marker);
         hideWorking();
         onFinish();
       });

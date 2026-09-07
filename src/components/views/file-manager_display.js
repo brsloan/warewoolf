@@ -6,7 +6,8 @@ function stopDefaultPropagation(keyEvent){
   keyEvent.stopPropagation();
 }
 
-function showFileManager(sysDir, projDir){
+//Async now that every file-manager.js function it drives goes through the platform facade.
+async function showFileManager(sysDir, projDir){
     removeElementsByClass('popup');
     var popup = document.createElement("div");
     popup.classList.add("popup");
@@ -23,9 +24,9 @@ function showFileManager(sysDir, projDir){
     dirShortcutSelect.classList.add("file-dir-shortcuts");
     dirShortcutSelect.size = 20;
     selectFieldsContainer.appendChild(dirShortcutSelect);
-    dirShortcutSelect.addEventListener('keydown', function(e){
+    dirShortcutSelect.addEventListener('keydown', async function(e){
         if(e.key === "Enter"){
-            populateFMFileList(dirShortcutSelect.value, fileListSelect, currentDirDisplay);
+            await populateFMFileList(dirShortcutSelect.value, fileListSelect, currentDirDisplay);
         }
         else if(e.key === "ArrowRight"){
             fileListSelect.focus();
@@ -48,14 +49,14 @@ function showFileManager(sysDir, projDir){
 
     var newDirNameInput = document.createElement('input');
     newDirNameInput.type = "text";
-    newDirNameInput.addEventListener("keydown", function(e){
+    newDirNameInput.addEventListener("keydown", async function(e){
       if(e.key === 'Enter'){
         stopDefaultPropagation(e);
         console.log("entered: " + newDirNameInput.value);
 
-        createNewDirectory(newDirNameInput.value, currentDirDisplay.innerText);
-        populateFMFileList(currentDirDisplay.innerText, fileListSelect, currentDirDisplay);
- 
+        await createNewDirectory(newDirNameInput.value, currentDirDisplay.innerText);
+        await populateFMFileList(currentDirDisplay.innerText, fileListSelect, currentDirDisplay);
+
         newDirNameInput.value = "";
         newDirInputPanel.style.display = "none";
         fileListSelect.focus();
@@ -82,14 +83,14 @@ function showFileManager(sysDir, projDir){
     deleteVerifyPanel.appendChild(verifyDeleteList);
 
     var verifyDeleteBtn = createButton("Permanently Delete");
-    verifyDeleteBtn.onclick = function(){
+    verifyDeleteBtn.onclick = async function(){
       var selectedFiles = Array.from(fileListSelect.selectedOptions).map(({ value }) => value);
-      selectedFiles.forEach((item, i) => {
-        if(item != "uplevel")
-          deleteFile(currentDirDisplay.innerText + "/" + item);
-      });
+      for(var i = 0; i < selectedFiles.length; i++){
+        if(selectedFiles[i] != "uplevel")
+          await deleteFile(currentDirDisplay.innerText + "/" + selectedFiles[i]);
+      }
 
-      populateFMFileList(currentDirDisplay.innerText, fileListSelect, currentDirDisplay);
+      await populateFMFileList(currentDirDisplay.innerText, fileListSelect, currentDirDisplay);
       deleteVerifyPanel.style.display = "none";
       fileListSelect.focus();
     };
@@ -113,13 +114,13 @@ function showFileManager(sysDir, projDir){
 
     var renameInput = document.createElement('input');
     renameInput.type = "text";
-    renameInput.addEventListener("keydown", function(e){
+    renameInput.addEventListener("keydown", async function(e){
       if(e.key === "Enter"){
         var selectedFiles = Array.from(fileListSelect.selectedOptions).map(({ value }) => value);
 
-        renameFiles(selectedFiles, renameInput.value, currentDirDisplay.innerText);
+        await renameFiles(selectedFiles, renameInput.value, currentDirDisplay.innerText);
 
-        populateFMFileList(currentDirDisplay.innerText, fileListSelect, currentDirDisplay);
+        await populateFMFileList(currentDirDisplay.innerText, fileListSelect, currentDirDisplay);
 
         renamePanel.style.display = "none";
         fileListSelect.focus();
@@ -202,14 +203,14 @@ function showFileManager(sysDir, projDir){
     var filesToBeCut = [];
     var filesToBeCopied = [];
 
-    fileListSelect.addEventListener('keydown', function(e){
+    fileListSelect.addEventListener('keydown', async function(e){
         if(e.key === "Enter"){
             var selectedFiletype = fileListSelect.options[fileListSelect.selectedIndex].dataset.filetype;
             if (selectedFiletype == "dir"){
-                populateFMFileList(currentDirDisplay.innerText + "/" + fileListSelect.value, fileListSelect, currentDirDisplay);
+                await populateFMFileList(currentDirDisplay.innerText + "/" + fileListSelect.value, fileListSelect, currentDirDisplay);
             }
             else if(fileListSelect.value == "uplevel"){
-                populateFMFileList(getParentDirectory(currentDirDisplay.innerText), fileListSelect, currentDirDisplay);
+                await populateFMFileList(getParentDirectory(currentDirDisplay.innerText), fileListSelect, currentDirDisplay);
             }
         }
         else if(e.key === "ArrowLeft"){
@@ -264,22 +265,22 @@ function showFileManager(sysDir, projDir){
         else if(e.ctrlKey && e.key === "v"){
           stopDefaultPropagation(e);
           if(filesToBeCut.length > 0){
-            moveFiles(filesToBeCut, currentDirDisplay.innerText);
+            await moveFiles(filesToBeCut, currentDirDisplay.innerText);
             filesToBeCut = [];
 
-            populateFMFileList(currentDirDisplay.innerText, fileListSelect, currentDirDisplay);
+            await populateFMFileList(currentDirDisplay.innerText, fileListSelect, currentDirDisplay);
           }
           else if(filesToBeCopied.length > 0){
-            copyFiles(filesToBeCopied, currentDirDisplay.innerText);
+            await copyFiles(filesToBeCopied, currentDirDisplay.innerText);
             filesToBeCopied = [];
 
-            populateFMFileList(currentDirDisplay.innerText, fileListSelect, currentDirDisplay);
+            await populateFMFileList(currentDirDisplay.innerText, fileListSelect, currentDirDisplay);
           }
         }
     });
 
     populateFMShortcutsList(projDir, sysDir, dirShortcutSelect);
-    populateFMFileList(sysDir.docs, fileListSelect, currentDirDisplay);
+    await populateFMFileList(sysDir.docs, fileListSelect, currentDirDisplay);
 
     document.body.appendChild(popup);
     fileListSelect.focus();
@@ -308,14 +309,14 @@ function populateFMShortcutsList(projDir, sysDir, listElement){
     }
 }
 
-function populateFMFileList(directoryPath, listElement, currentDirDisplay){
+async function populateFMFileList(directoryPath, listElement, currentDirDisplay){
     currentDirDisplay.innerText = directoryPath;
 
     listElement.innerHTML = "";
 
-    var files = getFileList(directoryPath);
+    var files = await getFileList(directoryPath);
     files.sort(function(a,b){
-        return b.isDirectory() - a.isDirectory();
+        return b.isDirectory - a.isDirectory;
     });
 
     var parentDir = document.createElement("option");
@@ -327,8 +328,8 @@ function populateFMFileList(directoryPath, listElement, currentDirDisplay){
     for(var i=0;i<files.length;i++){
         var filename = document.createElement("option");
         filename.value = files[i].name;
-        filename.innerText = (files[i].isDirectory() ? "> " : "") + files[i].name;
-        filename.dataset.filetype = files[i].isDirectory() ? "dir" : "file";
+        filename.innerText = (files[i].isDirectory ? "> " : "") + files[i].name;
+        filename.dataset.filetype = files[i].isDirectory ? "dir" : "file";
 
         listElement.appendChild(filename);
     }

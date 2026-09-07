@@ -75,7 +75,9 @@ function showRenumberChapters(project, onFinish){
   renumberForm.appendChild(errorText);
 
   var submit = createButton("Submit");
-  submit.onclick = function(){
+  //Awaited so onFinish - which redraws the sidebar and the open chapter - only runs once every
+  //chapter has actually been renumbered, rather than partway through.
+  submit.onclick = async function(){
     if(project.chapters.length === 0){
       errorText.innerText = 'There are no chapters to renumber.';
       return;
@@ -84,7 +86,7 @@ function showRenumberChapters(project, onFinish){
       errorText.innerText = 'Start chapter must come before end chapter.';
       return;
     }
-    renumberChaps(project, parseInt(startChapDrop.value), parseInt(endChapDrop.value), insertReplaceCheck.checked, useNumeralsCheck.checked, formatInput.value);
+    await renumberChaps(project, parseInt(startChapDrop.value), parseInt(endChapDrop.value), insertReplaceCheck.checked, useNumeralsCheck.checked, formatInput.value);
     closePopups();
     onFinish();
   };

@@ -16,7 +16,7 @@ const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { builtinModules } = require('node:module');
+const vm = require('vm');
 
 const bundlePath = path.resolve(__dirname, '../src/render.bundle.js');
 
@@ -43,35 +43,52 @@ function bodyShell(){
 //None of these paths exist, so loadInitialProject() falls through to createNewProject() and leaves
 //a blank project behind a popup - the same blank slate render.test.js relies on. userData and docs
 //are real, since user-settings.js and the file dialogs read them for real.
-function fakeElectron(){
+//
+//(Phase 9b) This used to also patch require.cache for 'electron', because the bundle subscribed to
+//the menu channels on ipcRenderer directly. It does not any more, and build:renderer no longer
+//passes --external:electron - so a bundle that reached for electron would now fail the build rather
+//than need a fake here. What the renderer gets is exactly what preload.js publishes: invoke/on/off.
+function fakeBridge(){
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'warewoolf-bundle-ud-'));
   const docsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'warewoolf-bundle-docs-'));
   return {
-    ipcRenderer: {
-      sendSync: function(channel){
-        if(channel === 'get-directories')
-          return { app: '/no-such-app-dir', userData: userDataDir, docs: docsDir,
-                   home: '/no-such-home-dir', temp: os.tmpdir(), downloads: '/no-such-downloads' };
-        if(channel === 'get-file-requested-on-open')
-          return null;
-        if(channel === 'secure-storage-available')
-          return false;
-        return undefined;
-      },
-      send: function(){},
-      on: function(){}
-    }
+    invoke: function(channel){
+      if(channel === 'getAppPaths')
+        return Promise.resolve({ app: '/no-such-app-dir', userData: userDataDir, docs: docsDir,
+                 home: '/no-such-home-dir', temp: os.tmpdir(), downloads: '/no-such-downloads' });
+      if(channel === 'getFileRequestedOnOpen')
+        return Promise.resolve(null);
+      if(channel === 'getPlatform')
+        return Promise.resolve({ platform: process.platform, arch: process.arch });
+      return Promise.resolve(undefined);
+    },
+    on: function(){},
+    off: function(){}
   };
 }
 
-function loadBundle(){
-  const electronPath = require.resolve('electron');
-  require.cache[electronPath] = {
-    id: electronPath, filename: electronPath, loaded: true, exports: fakeElectron()
-  };
-  delete require.cache[bundlePath];
+//(Phase 9b) The bundle is *evaluated*, not require()d, and that is the point of the change rather
+//than a detail of it. index.html loads it with a plain <script> tag (index.html:35); it was being
+//tested through require(), which is the one way the app never loads it. That gap is exactly where
+//the flip could have shipped broken with the suite green: while nodeIntegration was on, esbuild's
+//CJS output left a bare top-level `module.exports.ready = ...` in the bundle and the page happened
+//to have a `module` for it. A context-isolated page has no `module`, so the very first statement of
+//the renderer would have thrown ReferenceError - and require() here would have gone on passing,
+//because under require() `module` is real.
+//
+//So build:renderer emits an IIFE assigned to a --global-name, and this runs the file the way a
+//<script> does: runInThisContext, top-level `var` landing on the global object, exports read off
+//that global. Nothing here supplies `module`, which is the assertion.
+async function loadBundle(){
+  globalThis.warewoolf = fakeBridge();
+  delete globalThis.warewoolfRenderer;
   document.body.innerHTML = bodyShell();
-  const mod = require(bundlePath);
+
+  vm.runInThisContext(fs.readFileSync(bundlePath, 'utf8'), { filename: bundlePath });
+
+  const mod = globalThis.warewoolfRenderer;
+  assert.ok(mod, 'the bundle should publish its API on the global name index.html loads it under');
+  await mod.ready;
   Array.from(document.querySelectorAll('.popup')).forEach(function(p){ p.remove(); });
   return mod;
 }
@@ -83,8 +100,8 @@ test('the renderer bundle exists', function(){
 
 //The load itself is the assertion: the bundle runs initialize() at require-time, which walks
 //almost the whole module graph. Anything esbuild mangled surfaces here as a throw.
-test('the renderer bundle loads and runs its startup path', function(){
-  const mod = loadBundle();
+test('the renderer bundle loads and runs its startup path', async function(){
+  const mod = await loadBundle();
 
   assert.ok(mod, 'the bundle should export the renderer API');
   if(mod._unregisterKeybindings)
@@ -93,8 +110,8 @@ test('the renderer bundle loads and runs its startup path', function(){
 
 //Proves the graph actually executed end to end rather than merely parsing: both Quill instances
 //are constructed near the end of startup, against DOM nodes that only exist here.
-test('the renderer bundle mounts both editors', function(){
-  const mod = loadBundle();
+test('the renderer bundle mounts both editors', async function(){
+  const mod = await loadBundle();
 
   assert.ok(document.querySelector('#editor-container .ql-editor'),
     'the main editor should be mounted');
@@ -107,8 +124,8 @@ test('the renderer bundle mounts both editors', function(){
 //index.html loads the bundle with a plain <script> tag, so anything the app reaches for has to be
 //on the exported object. A bundling change that dropped exports would leave the menu wired to
 //nothing, with every other test still green.
-test('the renderer bundle exports the API the app drives it through', function(){
-  const mod = loadBundle();
+test('the renderer bundle exports the API the app drives it through', async function(){
+  const mod = await loadBundle();
 
   ['project', 'userSettings', 'editorQuill', 'notesQuill', 'updateFileList',
    'displayChapterByIndex', 'addNewChapter'].forEach(function(key){
@@ -131,23 +148,97 @@ test('the renderer bundle resolves its own module graph at build time, not runti
     'the bundle still requires local modules at runtime, which contextIsolation would break');
 });
 
-//Only Node builtins and electron may remain external. Anything else means a dependency escaped
-//bundling and would have to be resolved from node_modules at runtime - which a packaged,
-//context-isolated renderer cannot do.
-test('the renderer bundle leaves only Node builtins and electron external', function(){
+//(Phase 9b) This replaced two tests, and the replacement is the point of the phase rather than a
+//tidy-up of it.
+//
+//The first was "the renderer bundle leaves only Node builtins and electron external". That was the
+//right rule while the renderer did its own filesystem work, and it is exactly the wrong rule now:
+//it would have gone on passing after the flip while asserting the opposite of what the flip is for,
+//and would have quietly stopped testing anything at all. The second was 9a's countdown, pinning the
+//exact pair (`fs`, `path`) that was left to remove. The countdown reached zero, so it becomes this
+//rather than being left asserting an empty array by coincidence.
+//
+//`--platform=browser` in build:renderer is the other half of this net and catches a different
+//thing: an import-shaped survivor fails there at build time. It does not catch a *bare global* -
+//`process.platform`, `__dirname`, `process.cwd()` - which is not an import and compiles through
+//verbatim. Neither does this test. Those are audited by grep over the source and caught by the
+//packaged build; a clean build and a green assertion here are not proof the renderer is Node-free.
+test('the renderer bundle leaves nothing external at all', function(){
   const bundle = fs.readFileSync(bundlePath, 'utf8');
-  const builtins = new Set(builtinModules);
 
   const externals = new Set();
   const pattern = /require\(["']([^"')]+)["']\)/g;
   var match;
   while((match = pattern.exec(bundle)) !== null)
-    externals.add(match[1]);
+    externals.add(match[1].replace(/^node:/, ''));
 
-  const unexpected = Array.from(externals).filter(function(name){
-    return name !== 'electron' && !builtins.has(name.replace(/^node:/, ''));
-  });
+  assert.deepStrictEqual(Array.from(externals).sort(), [],
+    'a context-isolated renderer can resolve nothing at runtime - not a Node builtin, not electron, '
+      + 'not a node_modules package. These were left external: '
+      + Array.from(externals).sort().join(', '));
+});
 
-  assert.deepStrictEqual(unexpected, [],
-    'these were left to resolve from node_modules at runtime: ' + unexpected.join(', '));
+//The flip's own assertion, and the only one in the suite that reads the flags rather than their
+//consequences. index.js requires 'electron' on its first line, so nothing here can load it; it is
+//read as text, the same way preload.test.js compile-checks it.
+//
+//`sandbox` is asserted explicitly because leaving it out would NOT have left it alone. Electron's
+//default has been `sandbox: true` since v20, disabled automatically only while
+//`nodeIntegration: true` is set - so removing nodeIntegration turns the OS-level sandbox on as a
+//side effect. Phase 9b kept the flip to one variable by pinning it false and evaluating it
+//separately; that evaluation has since run on a real writerDeck (Pi OS Lite, Xorg, Matchbox) and
+//turned it on. Asserted as `true` rather than "set to either" now the decision exists: this is
+//where turning it back off has to argue with a test instead of passing unnoticed.
+//Comments are stripped first, and not as tidiness: index.js explains at length *why* nodeIntegration
+//is gone, and the words "nodeIntegration: true" appear in that explanation. Matching raw source
+//would fail on the comment that documents the fix.
+function sourceWithoutComments(file){
+  return fs.readFileSync(file, 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^[ 	]*\/\/.*$/gm, '');
+}
+
+test('index.js configures the renderer as context-isolated with no node integration', function(){
+  const indexSource = sourceWithoutComments(path.join(__dirname, '..', 'src', 'index.js'));
+
+  assert.match(indexSource, /contextIsolation:\s*true/,
+    'contextIsolation must be true - the whole of Part 2 is in service of this line');
+  assert.doesNotMatch(indexSource, /nodeIntegration:\s*true/,
+    'nodeIntegration must not be re-enabled');
+  assert.match(indexSource, /sandbox:\s*true/,
+    'sandbox must be on, and set explicitly rather than inherited from an Electron default that '
+      + 'changes with nodeIntegration - it was verified starting on a real writerDeck before this '
+      + 'was turned on, and turning it back off is a decision that needs its own evidence');
+  assert.match(indexSource, /preload:/,
+    'the renderer reaches the main process only through the preload bridge');
+});
+
+//The build flag that makes the assertion above enforceable rather than aspirational. With
+//--platform=node, esbuild marks every Node builtin external and the bundle silently keeps a
+//require() the page cannot answer; with --platform=browser the same import is a build error.
+test('build:renderer targets the browser, so a surviving builtin import fails the build', function(){
+  const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
+
+  assert.match(pkg.scripts['build:renderer'], /--platform=browser/,
+    'build:renderer must target the browser - --platform=node would let a Node builtin import '
+      + 'through as an external require() that a context-isolated renderer cannot resolve');
+});
+
+//The preload bundle is the other half, and it has to be clean already: it is the file that keeps
+//working when `sandbox` stops being false, and a sandboxed preload gets no Node builtins at all.
+//Only 'electron' may remain, which the sandbox does still provide.
+test('the preload bundle leaves nothing but electron external', function(){
+  const preloadBundlePath = path.join(__dirname, '..', 'src', 'preload.bundle.js');
+  assert.ok(fs.existsSync(preloadBundlePath),
+    'src/preload.bundle.js is missing - run `npm run build` (pretest should have)');
+
+  const bundle = fs.readFileSync(preloadBundlePath, 'utf8');
+
+  const externals = new Set();
+  const pattern = /require\(["']([^"')]+)["']\)/g;
+  var match;
+  while((match = pattern.exec(bundle)) !== null)
+    externals.add(match[1].replace(/^node:/, ''));
+
+  assert.deepStrictEqual(Array.from(externals).sort(), ['electron']);
 });

@@ -1,20 +1,31 @@
-const fs = require('fs');
 const docx = require('docx');
 const { logError } = require('./error-log');
 const { parseDelta, getOrderedListNumbers, getListLevel, getListMarker } = require('./quill-utils');
-const { getTotalWordCount } = require('./wordcount');
+const { createPlatform } = require('./platform');
+const { createIpcBacking } = require('./platform-ipc');
 
+//writeBinaryFile takes no injected config - filepath is a full path - so this holds its own
+//standing instance, the same reason file-manager.js/epub.js do. docx has a browser build
+//(Packer.toBlob), so document generation stays in the webview; only the write crosses.
+var platform = createPlatform(createIpcBacking());
+
+//Packer.toBuffer() reaches for the Node Buffer global (JSZip's generateAsync({type:'nodebuffer'})
+//under the hood), which does not exist in a contextIsolated, --platform=browser renderer - it threw
+//"nodebuffer is not supported by this platform" on every packaged build once Phase 9b flipped the
+//flag. Packer.toBlob() is the browser build; writeBinaryFile already carries a Uint8Array across the
+//boundary (see the comment on it in platform-node.js), so the blob's bytes are read back out via
+//arrayBuffer() rather than handed across as a Blob itself.
 function saveDocx(filepath, doc, cback = function(){}){
-  docx.Packer.toBuffer(doc).then((buffer) => {
-    try{
-      fs.writeFileSync(filepath, buffer)
+  docx.Packer.toBlob(doc).then((blob) => {
+    return blob.arrayBuffer();
+  }).then((arrayBuffer) => {
+    platform.writeBinaryFile({ path: filepath, bytes: new Uint8Array(arrayBuffer) }).then(function(){
       console.log("Document created successfully");
       cback(filepath);
-    }
-    catch(err){
+    }).catch(function(err){
       logError(err);
       cback('error');
-    }
+    });
   }).catch((err) => {
     logError(err);
     cback('error');
@@ -27,7 +38,13 @@ function packageDocxBase64(doc, callback){
   }).catch(logError);
 }
 
-function convertDeltaToDocx(delt, options, project, addressInfo){
+//`totalWordCount` is handed in rather than computed here. It used to come from getTotalWordCount(),
+//which reads every chapter that is not already in memory - now an asynchronous read through the
+//platform facade. Making this whole module async for one line of a title page would be the wrong
+//trade: it generates a document from a delta and touches no I/O otherwise. Lifting the number out
+//to the caller also ends a quadratic re-read, since export.js calls this once per chapter and each
+//call used to re-count the entire project.
+function convertDeltaToDocx(delt, options, project, addressInfo, totalWordCount){
   if(options == null){
     options = {
       styleHeadingAsChapter: false
@@ -172,7 +189,7 @@ function convertDeltaToDocx(delt, options, project, addressInfo){
 
   var sections = [];
   if(options && options.generateTitlePage == true)
-    sections.push(getTitlePage(project, addressInfo));
+    sections.push(getTitlePage(project, addressInfo, totalWordCount));
 
   sections.push(getDocBody(xParagraphs, project));
 
@@ -362,10 +379,10 @@ function getDocBody(xParagraphs, project){
   }
 }
 
-function getTitlePage(project, addressInfo){
+function getTitlePage(project, addressInfo, totalWordCount){
   var titleParas = [];
   titleParas.push(new docx.Paragraph({
-    text: getTitlePageFirstLine(project),
+    text: getTitlePageFirstLine(project, totalWordCount),
     style: 'address'
   }));
 
@@ -423,8 +440,8 @@ function getTitlePage(project, addressInfo){
 
 }
 
-function getTitlePageFirstLine(project){
-  var wordCount = (Math.round(getTotalWordCount(project)/100)*100).toString();
+function getTitlePageFirstLine(project, totalWordCount){
+  var wordCount = (Math.round((totalWordCount || 0)/100)*100).toString();
   if(wordCount.length > 3){
     wordCount = wordCount.slice(0,-3) + ',' + wordCount.slice(-3);
   }

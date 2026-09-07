@@ -1,16 +1,19 @@
 const { getTempQuill } = require('./quill-utils');
 
-function convertFirstLinesToTitles(project){
+//Indexed loop rather than forEach because reading a chapter off disk is asynchronous now - see
+//center-all-heads.js.
+async function convertFirstLinesToTitles(project){
   var anyChanged = false;
 
-  project.chapters.forEach(function(chap){
+  for(let i = 0; i < project.chapters.length; i++){
+    let chap = project.chapters[i];
     //A chapter whose file failed to load reads back as null/undefined, which Quill treats as an
     //empty document - one with no header/align formatting at index 0. Without this check that
     //looks indistinguishable from a real chapter needing conversion, and the chapter's actual
     //content would be overwritten with a blank titled line below.
-    var contents = chap.getContentsOrFile();
+    var contents = await chap.getContentsOrFile();
     if(contents == null)
-      return;
+      continue;
 
     var result = convertFirstLineToTitle(contents);
 
@@ -19,7 +22,7 @@ function convertFirstLinesToTitles(project){
       chap.hasUnsavedChanges = true;
       anyChanged = true;
     }
-  });
+  }
 
   if(anyChanged)
     project.hasUnsavedChanges = true;

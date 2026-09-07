@@ -1,16 +1,20 @@
 const { getTempQuill } = require('./quill-utils');
 
-function centerAllHeadingsInAllChaps(project){
+//A chapter's text now comes off disk through the platform facade, so reading it is asynchronous -
+//hence the indexed loop rather than forEach, which would fire every read at once and return before
+//any of them landed.
+async function centerAllHeadingsInAllChaps(project){
     var anyChanged = false;
 
-    project.chapters.forEach(function(chap){
-        var result = centerHeads(chap.getContentsOrFile());
+    for(let i = 0; i < project.chapters.length; i++){
+        let chap = project.chapters[i];
+        var result = centerHeads(await chap.getContentsOrFile());
         if(result.changed > 0){
             chap.contents = result.delta;
             chap.hasUnsavedChanges = true;
             anyChanged = true;
         }
-    });
+    }
 
     if(anyChanged)
         project.hasUnsavedChanges = true;

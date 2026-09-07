@@ -9,7 +9,9 @@ const fileManagerControllerPath = require.resolve('../src/components/controllers
 //deleteFile/getParentDirectory from the file-manager controller at require-time (and separately
 //re-requires it for unzipProject inside the Unzip button's onclick), so mocking them only takes
 //effect if the cache is primed before file-manager_display.js is (re-)required - same pattern as
-//file-dialog_display.test.js's freshFileDialogDisplay().
+//file-dialog_display.test.js's freshFileDialogDisplay(). Every mocked function but
+//getParentDirectory/unzipProject is async now (file-manager.js routes them through the platform
+//facade), so every test below awaits showFileManager() and the handlers it wires up.
 function freshFileManagerDisplay(mocks){
   delete require.cache[fileManagerDisplayPath];
   require.cache[fileManagerControllerPath] = {
@@ -17,12 +19,12 @@ function freshFileManagerDisplay(mocks){
     filename: fileManagerControllerPath,
     loaded: true,
     exports: {
-      createNewDirectory: mocks.createNewDirectory || function(){},
-      renameFiles: mocks.renameFiles || function(){},
-      moveFiles: mocks.moveFiles || function(){},
-      copyFiles: mocks.copyFiles || function(){},
-      getFileList: mocks.getFileList || function(){ return []; },
-      deleteFile: mocks.deleteFile || function(){},
+      createNewDirectory: mocks.createNewDirectory || async function(){},
+      renameFiles: mocks.renameFiles || async function(){},
+      moveFiles: mocks.moveFiles || async function(){},
+      copyFiles: mocks.copyFiles || async function(){},
+      getFileList: mocks.getFileList || async function(){ return []; },
+      deleteFile: mocks.deleteFile || async function(){},
       getParentDirectory: mocks.getParentDirectory || function(p){ return p.slice(0, p.lastIndexOf('/')) || '/'; },
       unzipProject: mocks.unzipProject || function(path, callback){ callback(); }
     }
@@ -41,7 +43,7 @@ function bodyShell(){
 }
 
 function dirent(name, isDir){
-  return { name: name, isDirectory: function(){ return isDir; } };
+  return { name: name, isDirectory: isDir };
 }
 
 function keydown(target, key, modifiers){
@@ -50,6 +52,18 @@ function keydown(target, key, modifiers){
     bubbles: true,
     cancelable: true
   }, modifiers)));
+}
+
+//A keydown handler is now async, and dispatchEvent() (like native click()) discards its return
+//value - flush a microtask afterward so the handler's awaited work has actually landed before the
+//next assertion runs.
+function flushMicrotasks(){
+  return new Promise(function(resolve){ setImmediate(resolve); });
+}
+
+async function keydownAndFlush(target, key, modifiers){
+  keydown(target, key, modifiers);
+  await flushMicrotasks();
 }
 
 //fileListSelect is a multi-select, and populateFMFileList() leaves "< Parent Directory" selected -
@@ -87,16 +101,16 @@ test.afterEach(function(){
   delete global.document;
 });
 
-test('on open: lists deduped shortcuts, lists parent-dir plus directories-before-files, and focuses the file list', function(t){
+test('on open: lists deduped shortcuts, lists parent-dir plus directories-before-files, and focuses the file list', async function(t){
   var showFileManager = freshFileManagerDisplay({
-    getFileList: function(dirPath){
+    getFileList: async function(dirPath){
       if(dirPath === '/proj/docs')
         return [dirent('notes.docx', false), dirent('chapters', true)];
       return [];
     }
   });
 
-  showFileManager({ docs: '/proj/docs', home: '/proj/docs' }, '/proj/');
+  await showFileManager({ docs: '/proj/docs', home: '/proj/docs' }, '/proj/');
 
   var shortcutValues = Array.from(document.querySelector('.file-dir-shortcuts').options).map(function(o){ return o.value; });
   //sysDir.home === sysDir.docs, so home is not listed a second time; the trailing slash on
@@ -112,18 +126,18 @@ test('on open: lists deduped shortcuts, lists parent-dir plus directories-before
   assert.strictEqual(document.activeElement, fileListSelect);
 });
 
-test('dir shortcut list: Enter navigates to the selected shortcut, ArrowRight moves focus to the file list', function(t){
+test('dir shortcut list: Enter navigates to the selected shortcut, ArrowRight moves focus to the file list', async function(t){
   var getFileListCalls = [];
   var showFileManager = freshFileManagerDisplay({
-    getFileList: function(dirPath){ getFileListCalls.push(dirPath); return []; }
+    getFileList: async function(dirPath){ getFileListCalls.push(dirPath); return []; }
   });
 
-  showFileManager({ docs: '/proj/docs', home: '/home/user' }, '/proj');
+  await showFileManager({ docs: '/proj/docs', home: '/home/user' }, '/proj');
 
   var dirShortcutSelect = document.querySelector('.file-dir-shortcuts');
   var fileListSelect = document.querySelector('.file-manager-list');
   selectOnly(dirShortcutSelect, '/home/user');
-  keydown(dirShortcutSelect, 'Enter');
+  await keydownAndFlush(dirShortcutSelect, 'Enter');
 
   assert.deepStrictEqual(getFileListCalls, ['/proj/docs', '/home/user']);
   assert.strictEqual(document.querySelector('p').innerText, '/home/user');
@@ -132,10 +146,10 @@ test('dir shortcut list: Enter navigates to the selected shortcut, ArrowRight mo
   assert.strictEqual(document.activeElement, fileListSelect);
 });
 
-test('file list: Enter on a directory entry navigates into it; Enter on a file entry does nothing', function(t){
+test('file list: Enter on a directory entry navigates into it; Enter on a file entry does nothing', async function(t){
   var getFileListCalls = [];
   var showFileManager = freshFileManagerDisplay({
-    getFileList: function(dirPath){
+    getFileList: async function(dirPath){
       getFileListCalls.push(dirPath);
       if(dirPath === '/proj/docs')
         return [dirent('chapters', true), dirent('notes.docx', false)];
@@ -143,51 +157,51 @@ test('file list: Enter on a directory entry navigates into it; Enter on a file e
     }
   });
 
-  showFileManager({ docs: '/proj/docs', home: '/proj/docs' }, '/proj');
+  await showFileManager({ docs: '/proj/docs', home: '/proj/docs' }, '/proj');
   var fileListSelect = document.querySelector('.file-manager-list');
 
   selectOnly(fileListSelect, 'notes.docx');
-  keydown(fileListSelect, 'Enter');
+  await keydownAndFlush(fileListSelect, 'Enter');
   assert.deepStrictEqual(getFileListCalls, ['/proj/docs']);
   assert.strictEqual(document.querySelector('p').innerText, '/proj/docs');
 
   selectOnly(fileListSelect, 'chapters');
-  keydown(fileListSelect, 'Enter');
+  await keydownAndFlush(fileListSelect, 'Enter');
   assert.deepStrictEqual(getFileListCalls, ['/proj/docs', '/proj/docs/chapters']);
   assert.strictEqual(document.querySelector('p').innerText, '/proj/docs/chapters');
 });
 
-test('file list: Enter on "< Parent Directory" navigates up via getParentDirectory, and ArrowLeft moves focus back to shortcuts', function(t){
+test('file list: Enter on "< Parent Directory" navigates up via getParentDirectory, and ArrowLeft moves focus back to shortcuts', async function(t){
   var showFileManager = freshFileManagerDisplay({
-    getFileList: function(){ return []; },
+    getFileList: async function(){ return []; },
     getParentDirectory: function(p){ return '/proj'; }
   });
 
-  showFileManager({ docs: '/proj/docs', home: '/proj/docs' }, '/proj');
+  await showFileManager({ docs: '/proj/docs', home: '/proj/docs' }, '/proj');
   var dirShortcutSelect = document.querySelector('.file-dir-shortcuts');
   var fileListSelect = document.querySelector('.file-manager-list');
 
-  keydown(fileListSelect, 'Enter');
+  await keydownAndFlush(fileListSelect, 'Enter');
   assert.strictEqual(document.querySelector('p').innerText, '/proj');
 
   keydown(fileListSelect, 'ArrowLeft');
   assert.strictEqual(document.activeElement, dirShortcutSelect);
 });
 
-test('new folder: Enter creates the directory, refreshes the list, hides the panel and does not throw (regression: missing stopDefaultPropagation crashed this handler)', function(t){
+test('new folder: Enter creates the directory, refreshes the list, hides the panel and does not throw (regression: missing stopDefaultPropagation crashed this handler)', async function(t){
   var createNewDirectoryCalls = [];
   var getFileListCallCount = 0;
   var showFileManager = freshFileManagerDisplay({
-    createNewDirectory: function(name, loc){ createNewDirectoryCalls.push([name, loc]); },
-    getFileList: function(){ getFileListCallCount++; return []; }
+    createNewDirectory: async function(name, loc){ createNewDirectoryCalls.push([name, loc]); },
+    getFileList: async function(){ getFileListCallCount++; return []; }
   });
 
-  showFileManager({ docs: '/proj/docs', home: '/proj/docs' }, '/proj');
+  await showFileManager({ docs: '/proj/docs', home: '/proj/docs' }, '/proj');
   findButtonByAccessKey('f').onclick();
 
   var newDirInput = document.querySelector('input[type="text"]');
   newDirInput.value = 'New Chapter';
-  assert.doesNotThrow(function(){ keydown(newDirInput, 'Enter'); });
+  await assert.doesNotReject(function(){ return keydownAndFlush(newDirInput, 'Enter'); });
 
   assert.deepStrictEqual(createNewDirectoryCalls, [['New Chapter', '/proj/docs']]);
   assert.strictEqual(getFileListCallCount, 2);
@@ -195,13 +209,13 @@ test('new folder: Enter creates the directory, refreshes the list, hides the pan
   assert.strictEqual(newDirInput.parentElement.style.display, 'none');
 });
 
-test('new folder: Escape clears the input and hides the panel without creating anything', function(t){
+test('new folder: Escape clears the input and hides the panel without creating anything', async function(t){
   var createNewDirectoryCalls = [];
   var showFileManager = freshFileManagerDisplay({
-    createNewDirectory: function(){ createNewDirectoryCalls.push(1); }
+    createNewDirectory: async function(){ createNewDirectoryCalls.push(1); }
   });
 
-  showFileManager({ docs: '/proj/docs', home: '/proj/docs' }, '/proj');
+  await showFileManager({ docs: '/proj/docs', home: '/proj/docs' }, '/proj');
   findButtonByAccessKey('f').onclick();
 
   var newDirInput = document.querySelector('input[type="text"]');
@@ -213,12 +227,12 @@ test('new folder: Escape clears the input and hides the panel without creating a
   assert.strictEqual(newDirInput.parentElement.style.display, 'none');
 });
 
-test('delete: Delete key and Ctrl+D both open the confirm panel listing only the non-"uplevel" selection', function(t){
+test('delete: Delete key and Ctrl+D both open the confirm panel listing only the non-"uplevel" selection', async function(t){
   var showFileManager = freshFileManagerDisplay({
-    getFileList: function(){ return [dirent('a.txt', false), dirent('b.txt', false)]; }
+    getFileList: async function(){ return [dirent('a.txt', false), dirent('b.txt', false)]; }
   });
 
-  showFileManager({ docs: '/proj/docs', home: '/proj/docs' }, '/proj');
+  await showFileManager({ docs: '/proj/docs', home: '/proj/docs' }, '/proj');
   var fileListSelect = document.querySelector('.file-manager-list');
 
   selectMultiple(fileListSelect, ['uplevel', 'a.txt', 'b.txt']);
@@ -228,33 +242,33 @@ test('delete: Delete key and Ctrl+D both open the confirm panel listing only the
   assert.deepStrictEqual(listedNames, ['a.txt', 'b.txt']);
 });
 
-test('delete: confirming permanently deletes each selected file (skipping "uplevel"), refreshes, and hides the panel', function(t){
+test('delete: confirming permanently deletes each selected file (skipping "uplevel"), refreshes, and hides the panel', async function(t){
   var deleteFileCalls = [];
   var getFileListCallCount = 0;
   var showFileManager = freshFileManagerDisplay({
-    getFileList: function(){ getFileListCallCount++; return [dirent('a.txt', false), dirent('b.txt', false)]; },
-    deleteFile: function(fpth){ deleteFileCalls.push(fpth); }
+    getFileList: async function(){ getFileListCallCount++; return [dirent('a.txt', false), dirent('b.txt', false)]; },
+    deleteFile: async function(fpth){ deleteFileCalls.push(fpth); }
   });
 
-  showFileManager({ docs: '/proj/docs', home: '/proj/docs' }, '/proj');
+  await showFileManager({ docs: '/proj/docs', home: '/proj/docs' }, '/proj');
   var fileListSelect = document.querySelector('.file-manager-list');
   selectMultiple(fileListSelect, ['uplevel', 'a.txt', 'b.txt']);
   keydown(fileListSelect, 'd', { ctrlKey: true });
 
-  findButton('Permanently Delete').onclick();
+  await findButton('Permanently Delete').onclick();
 
   assert.deepStrictEqual(deleteFileCalls, ['/proj/docs/a.txt', '/proj/docs/b.txt']);
   assert.strictEqual(getFileListCallCount, 2);
 });
 
-test('delete: Cancel hides the panel without deleting anything', function(t){
+test('delete: Cancel hides the panel without deleting anything', async function(t){
   var deleteFileCalls = [];
   var showFileManager = freshFileManagerDisplay({
-    getFileList: function(){ return [dirent('a.txt', false)]; },
-    deleteFile: function(fpth){ deleteFileCalls.push(fpth); }
+    getFileList: async function(){ return [dirent('a.txt', false)]; },
+    deleteFile: async function(fpth){ deleteFileCalls.push(fpth); }
   });
 
-  showFileManager({ docs: '/proj/docs', home: '/proj/docs' }, '/proj');
+  await showFileManager({ docs: '/proj/docs', home: '/proj/docs' }, '/proj');
   var fileListSelect = document.querySelector('.file-manager-list');
   selectOnly(fileListSelect, 'a.txt');
   keydown(fileListSelect, 'Delete');
@@ -263,12 +277,12 @@ test('delete: Cancel hides the panel without deleting anything', function(t){
   assert.strictEqual(deleteFileCalls.length, 0);
 });
 
-test('rename: clicking Rename with nothing selected does nothing (regression: used to throw reading selectedOptions[0] of an empty list)', function(t){
+test('rename: clicking Rename with nothing selected does nothing (regression: used to throw reading selectedOptions[0] of an empty list)', async function(t){
   var showFileManager = freshFileManagerDisplay({
-    getFileList: function(){ return [dirent('a.txt', false)]; }
+    getFileList: async function(){ return [dirent('a.txt', false)]; }
   });
 
-  showFileManager({ docs: '/proj/docs', home: '/proj/docs' }, '/proj');
+  await showFileManager({ docs: '/proj/docs', home: '/proj/docs' }, '/proj');
   //populateFMFileList() leaves "< Parent Directory" selected by default, so the empty-selection
   //case has to be produced explicitly by deselecting it.
   selectMultiple(document.querySelector('.file-manager-list'), []);
@@ -279,15 +293,15 @@ test('rename: clicking Rename with nothing selected does nothing (regression: us
   assert.strictEqual(renameInput.parentElement.style.display, 'none');
 });
 
-test('rename: clicking Rename with a selection prefills the name, and Enter applies the rename and refreshes', function(t){
+test('rename: clicking Rename with a selection prefills the name, and Enter applies the rename and refreshes', async function(t){
   var renameFilesCalls = [];
   var getFileListCallCount = 0;
   var showFileManager = freshFileManagerDisplay({
-    getFileList: function(){ getFileListCallCount++; return [dirent('a.txt', false)]; },
-    renameFiles: function(files, newName, loc){ renameFilesCalls.push([files, newName, loc]); }
+    getFileList: async function(){ getFileListCallCount++; return [dirent('a.txt', false)]; },
+    renameFiles: async function(files, newName, loc){ renameFilesCalls.push([files, newName, loc]); }
   });
 
-  showFileManager({ docs: '/proj/docs', home: '/proj/docs' }, '/proj');
+  await showFileManager({ docs: '/proj/docs', home: '/proj/docs' }, '/proj');
   var fileListSelect = document.querySelector('.file-manager-list');
   selectOnly(fileListSelect, 'a.txt');
 
@@ -298,21 +312,21 @@ test('rename: clicking Rename with a selection prefills the name, and Enter appl
   assert.strictEqual(renameInput.value, 'a.txt');
 
   renameInput.value = 'b.txt';
-  keydown(renameInput, 'Enter');
+  await keydownAndFlush(renameInput, 'Enter');
 
   assert.deepStrictEqual(renameFilesCalls, [[['a.txt'], 'b.txt', '/proj/docs']]);
   assert.strictEqual(getFileListCallCount, 2);
   assert.strictEqual(renameInput.parentElement.style.display, 'none');
 });
 
-test('unzip: clicking Unzip with nothing selected does nothing (regression: used to throw reading selectedOptions[0] of an empty list)', function(t){
+test('unzip: clicking Unzip with nothing selected does nothing (regression: used to throw reading selectedOptions[0] of an empty list)', async function(t){
   var unzipProjectCalls = [];
   var showFileManager = freshFileManagerDisplay({
-    getFileList: function(){ return [dirent('archive.zip', false)]; },
+    getFileList: async function(){ return [dirent('archive.zip', false)]; },
     unzipProject: function(path, cb){ unzipProjectCalls.push(path); cb(); }
   });
 
-  showFileManager({ docs: '/proj/docs', home: '/proj/docs' }, '/proj');
+  await showFileManager({ docs: '/proj/docs', home: '/proj/docs' }, '/proj');
   //populateFMFileList() leaves "< Parent Directory" selected by default, so the empty-selection
   //case has to be produced explicitly by deselecting it.
   selectMultiple(document.querySelector('.file-manager-list'), []);
@@ -322,31 +336,32 @@ test('unzip: clicking Unzip with nothing selected does nothing (regression: used
   assert.strictEqual(unzipProjectCalls.length, 0);
 });
 
-test('unzip: clicking Unzip with a zip selected extracts it and refreshes the list', function(t){
+test('unzip: clicking Unzip with a zip selected extracts it and refreshes the list', async function(t){
   var unzipProjectCalls = [];
   var getFileListCallCount = 0;
   var showFileManager = freshFileManagerDisplay({
-    getFileList: function(){ getFileListCallCount++; return [dirent('archive.zip', false)]; },
+    getFileList: async function(){ getFileListCallCount++; return [dirent('archive.zip', false)]; },
     unzipProject: function(path, cb){ unzipProjectCalls.push(path); cb(); }
   });
 
-  showFileManager({ docs: '/proj/docs', home: '/proj/docs' }, '/proj');
+  await showFileManager({ docs: '/proj/docs', home: '/proj/docs' }, '/proj');
   var fileListSelect = document.querySelector('.file-manager-list');
   selectOnly(fileListSelect, 'archive.zip');
   findButtonByAccessKey('u').onclick();
+  await flushMicrotasks();
 
   assert.deepStrictEqual(unzipProjectCalls, ['/proj/docs/archive.zip']);
   assert.strictEqual(getFileListCallCount, 2);
 });
 
-test('cut/paste: Ctrl+X marks the selection for cut, a second Ctrl+X on a different item clears the earlier mark (regression: stale "to-be-cut" styling), and Ctrl+V moves the current selection', function(t){
+test('cut/paste: Ctrl+X marks the selection for cut, a second Ctrl+X on a different item clears the earlier mark (regression: stale "to-be-cut" styling), and Ctrl+V moves the current selection', async function(t){
   var moveFilesCalls = [];
   var showFileManager = freshFileManagerDisplay({
-    getFileList: function(){ return [dirent('a.txt', false), dirent('b.txt', false)]; },
-    moveFiles: function(files, loc){ moveFilesCalls.push([files, loc]); }
+    getFileList: async function(){ return [dirent('a.txt', false), dirent('b.txt', false)]; },
+    moveFiles: async function(files, loc){ moveFilesCalls.push([files, loc]); }
   });
 
-  showFileManager({ docs: '/proj/docs', home: '/proj/docs' }, '/proj');
+  await showFileManager({ docs: '/proj/docs', home: '/proj/docs' }, '/proj');
   var fileListSelect = document.querySelector('.file-manager-list');
   var optionA = Array.from(fileListSelect.options).find(function(o){ return o.value === 'a.txt'; });
   var optionB = Array.from(fileListSelect.options).find(function(o){ return o.value === 'b.txt'; });
@@ -360,18 +375,18 @@ test('cut/paste: Ctrl+X marks the selection for cut, a second Ctrl+X on a differ
   assert.ok(!optionA.classList.contains('to-be-cut'), 'previous cut mark should be cleared');
   assert.ok(optionB.classList.contains('to-be-cut'));
 
-  keydown(fileListSelect, 'v', { ctrlKey: true });
+  await keydownAndFlush(fileListSelect, 'v', { ctrlKey: true });
   assert.deepStrictEqual(moveFilesCalls, [[['/proj/docs/b.txt'], '/proj/docs']]);
 });
 
-test('copy/paste: Ctrl+C after a Ctrl+X clears the cut marks and copies the current selection on Ctrl+V (regression: copyFiles was never imported and threw on paste)', function(t){
+test('copy/paste: Ctrl+C after a Ctrl+X clears the cut marks and copies the current selection on Ctrl+V (regression: copyFiles was never imported and threw on paste)', async function(t){
   var copyFilesCalls = [];
   var showFileManager = freshFileManagerDisplay({
-    getFileList: function(){ return [dirent('a.txt', false), dirent('b.txt', false)]; },
-    copyFiles: function(files, loc){ copyFilesCalls.push([files, loc]); }
+    getFileList: async function(){ return [dirent('a.txt', false), dirent('b.txt', false)]; },
+    copyFiles: async function(files, loc){ copyFilesCalls.push([files, loc]); }
   });
 
-  showFileManager({ docs: '/proj/docs', home: '/proj/docs' }, '/proj');
+  await showFileManager({ docs: '/proj/docs', home: '/proj/docs' }, '/proj');
   var fileListSelect = document.querySelector('.file-manager-list');
   var optionA = Array.from(fileListSelect.options).find(function(o){ return o.value === 'a.txt'; });
 
@@ -383,16 +398,16 @@ test('copy/paste: Ctrl+C after a Ctrl+X clears the cut marks and copies the curr
   assert.doesNotThrow(function(){ keydown(fileListSelect, 'c', { ctrlKey: true }); });
   assert.ok(!optionA.classList.contains('to-be-cut'), 'switching to copy should clear cut marks');
 
-  assert.doesNotThrow(function(){ keydown(fileListSelect, 'v', { ctrlKey: true }); });
+  await assert.doesNotReject(function(){ return keydownAndFlush(fileListSelect, 'v', { ctrlKey: true }); });
   assert.deepStrictEqual(copyFilesCalls, [[['/proj/docs/b.txt'], '/proj/docs']]);
 });
 
-test('"uplevel" is never included in a cut or copy selection', function(t){
+test('"uplevel" is never included in a cut or copy selection', async function(t){
   var showFileManager = freshFileManagerDisplay({
-    getFileList: function(){ return [dirent('a.txt', false)]; }
+    getFileList: async function(){ return [dirent('a.txt', false)]; }
   });
 
-  showFileManager({ docs: '/proj/docs', home: '/proj/docs' }, '/proj');
+  await showFileManager({ docs: '/proj/docs', home: '/proj/docs' }, '/proj');
   var fileListSelect = document.querySelector('.file-manager-list');
 
   selectMultiple(fileListSelect, ['uplevel', 'a.txt']);
@@ -401,12 +416,12 @@ test('"uplevel" is never included in a cut or copy selection', function(t){
   assert.ok(!uplevelOption.classList.contains('to-be-cut'));
 });
 
-test('Close removes the popup', function(t){
+test('Close removes the popup', async function(t){
   var showFileManager = freshFileManagerDisplay({
-    getFileList: function(){ return []; }
+    getFileList: async function(){ return []; }
   });
 
-  showFileManager({ docs: '/proj/docs', home: '/proj/docs' }, '/proj');
+  await showFileManager({ docs: '/proj/docs', home: '/proj/docs' }, '/proj');
   assert.strictEqual(document.getElementsByClassName('popup').length, 1);
 
   findButton('Close').onclick();

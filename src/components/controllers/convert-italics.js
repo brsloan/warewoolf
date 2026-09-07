@@ -1,16 +1,19 @@
 const { getTempQuill } = require('./quill-utils');
 
-function convertMarkedItalicsForAllChapters(project, marker){
+//Indexed loop rather than forEach because reading a chapter off disk is asynchronous now - see
+//center-all-heads.js.
+async function convertMarkedItalicsForAllChapters(project, marker){
   var anyChanged = false;
 
-  project.chapters.forEach(function(chap){
-    var result = convertMarkedItalics(chap.contents ? chap.contents : chap.getFile(), marker);
+  for(let i = 0; i < project.chapters.length; i++){
+    let chap = project.chapters[i];
+    var result = convertMarkedItalics(chap.contents ? chap.contents : await chap.getFile(), marker);
     if(result.changed > 0){
       chap.contents = result.delta;
       chap.hasUnsavedChanges = true;
       anyChanged = true;
     }
-  });
+  }
 
   if(anyChanged)
     project.hasUnsavedChanges = true;

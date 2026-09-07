@@ -1,10 +1,15 @@
-const fs = require('fs');
 const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
 const { getUpdates, downloadUpdate } = require('../controllers/updates');
 const { logError } = require('../controllers/error-log');
 const showInstallUpdate = require('./install-update_display');
+const { createPlatform } = require('../controllers/platform');
+const { createIpcBacking } = require('../controllers/platform-ipc');
 
-function showAbout(sysDirectories, appVersion){
+//platformInfo (platform.getPlatform()'s own shape, resolved once at boot - see render.js) replaces
+//the direct `process.platform` read the Download handler used to do below - the last of the two
+//Group A reads this file's own note in native-command-inventory.md left deferred to Phase 8 (the
+//other, updates.js's own asset-matching, closed the same way in updates.js itself).
+function showAbout(appVersion, platformInfo){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup");
@@ -72,10 +77,10 @@ function showAbout(sysDirectories, appVersion){
         downloadBtn.onclick = function(){
           downloadBtn.innerText = 'Downloading...';
           downloadBtn.disabled = true;
-          if(process.platform == 'linux')
-            downloadUpdate(sysDirectories, latest.downloadInfo, showInstallUpdate);
+          if(platformInfo.platform == 'linux')
+            downloadUpdate(latest.downloadInfo, showInstallUpdate);
           else {
-            downloadUpdate(sysDirectories, latest.downloadInfo, function(fpath){
+            downloadUpdate(latest.downloadInfo, function(fpath){
               downloadBtn.innerText = "Downloaded Into Downloads Folder";
             });
           }
@@ -93,14 +98,17 @@ function showAbout(sysDirectories, appVersion){
   licensePanel.style.display = "none";
 
   var licenseText = document.createElement('pre');
-  licenseText.innerText = loadLicenseText(sysDirectories.app + '/licenses.txt');
   licenseText.tabIndex = 0;
 
   licensePanel.appendChild(licenseText);
 
   popup.appendChild(licensePanel);
 
-  displayLicBtn.onclick = function(){
+  //Loaded on demand rather than up front, now that reading it goes through the platform facade -
+  //this keeps showAbout() itself synchronous, so the rest of the popup (version, links, Check For
+  //Updates) still renders in one pass with nothing to await.
+  displayLicBtn.onclick = async function(){
+    licenseText.innerText = await loadLicenseText();
     licensePanel.style.display = "block";
     licenseText.focus();
   }
@@ -115,20 +123,20 @@ function showAbout(sysDirectories, appVersion){
   close.focus();
 }
 
-function loadLicenseText(licensesPath){
-  //var licenseLocation = 'licenses.txt';
-  var licenseText = '';
-
+//readLicenses used to need paths.app wired in, which is why this took sysDirectories. The main
+//process owns that path now, so the argument is gone - and as of Phase 9c so is showAbout()'s own
+//sysDirectories parameter, which outlived it only because downloadUpdate still composed the update
+//asset's destination path here. That path is the backing's to choose now (see updates.js), so this
+//view no longer names a filesystem location at all.
+async function loadLicenseText(){
   try {
-    if(fs.existsSync(licensesPath)){
-      licenseText = fs.readFileSync(licensesPath, "utf8");
-    }
+    var platform = createPlatform(createIpcBacking());
+    return await platform.readLicenses();
   }
   catch(err){
     logError(err);
+    return '';
   }
-
-  return licenseText;
 }
 
 module.exports = showAbout;

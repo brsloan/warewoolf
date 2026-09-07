@@ -39,12 +39,12 @@ test.afterEach(function(){
   delete global.document;
 });
 
-test('renders a row per chapter with title, word count, and summary', function(t){
+test('renders a row per chapter with title, word count, and summary', async function(t){
   var showOutliner = require(outlinerDisplayPath);
   var chap = makeChap({ title: 'Intro', summary: 'An intro' });
   var project = makeProject({ chapters: [chap] });
 
-  showOutliner(project);
+  await showOutliner(project);
 
   assert.strictEqual(document.querySelector('.outliner-title').innerText, 'Intro');
   assert.strictEqual(document.querySelector('.outliner-word-count').innerText, 3);
@@ -55,21 +55,21 @@ test('renders a row per chapter with title, word count, and summary', function(t
 //project on disk has summary: null for chapters that haven't been given one yet. Assigning
 //input.value = null coerces to the string "null" in the DOM, so the field displayed the literal
 //word "null" instead of being blank.
-test('a chapter with no summary yet shows a blank field instead of the literal word "null"', function(t){
+test('a chapter with no summary yet shows a blank field instead of the literal word "null"', async function(t){
   var showOutliner = require(outlinerDisplayPath);
   var project = makeProject({ chapters: [makeChap({ summary: null })] });
 
-  showOutliner(project);
+  await showOutliner(project);
 
   assert.strictEqual(document.querySelector('.outliner-summary input').value, '');
 });
 
-test('editing the summary field updates the chapter and marks the project as having unsaved changes', function(t){
+test('editing the summary field updates the chapter and marks the project as having unsaved changes', async function(t){
   var showOutliner = require(outlinerDisplayPath);
   var chap = makeChap({ summary: null });
   var project = makeProject({ chapters: [chap], hasUnsavedChanges: false });
 
-  showOutliner(project);
+  await showOutliner(project);
   var summaryInput = document.querySelector('.outliner-summary input');
   summaryInput.value = 'A new summary';
   summaryInput.dispatchEvent(new window.Event('change', { bubbles: true, cancelable: true }));
@@ -78,22 +78,22 @@ test('editing the summary field updates the chapter and marks the project as hav
   assert.strictEqual(project.hasUnsavedChanges, true);
 });
 
-test('Close removes the popup', function(t){
+test('Close removes the popup', async function(t){
   var showOutliner = require(outlinerDisplayPath);
   var project = makeProject();
 
-  showOutliner(project);
+  await showOutliner(project);
   var closeBtn = Array.from(document.querySelectorAll('button')).find(function(b){ return b.textContent === 'Close'; });
   closeBtn.onclick();
 
   assert.strictEqual(document.getElementsByClassName('popup').length, 0);
 });
 
-test('focuses the first summary field on open', function(t){
+test('focuses the first summary field on open', async function(t){
   var showOutliner = require(outlinerDisplayPath);
   var project = makeProject({ chapters: [makeChap(), makeChap()] });
 
-  showOutliner(project);
+  await showOutliner(project);
 
   var summaryInputs = document.querySelectorAll('.outliner-summary input');
   assert.strictEqual(document.activeElement, summaryInputs[0]);
@@ -106,8 +106,8 @@ test('does not throw when the project has no chapters', function(t){
   var showOutliner = require(outlinerDisplayPath);
   var project = makeProject({ chapters: [] });
 
-  assert.doesNotThrow(function(){
-    showOutliner(project);
+  assert.doesNotThrow(async function(){
+    await showOutliner(project);
   });
   assert.strictEqual(document.querySelectorAll('#outliner-table tr').length, 1, 'only the header row should be present');
 });

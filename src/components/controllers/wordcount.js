@@ -1,9 +1,12 @@
-function getTotalWordCount(project){
+//Async because a chapter whose text is not already in memory has to be read off disk, which now
+//goes through the platform facade. countWords/convertToPlainText below stay pure - they are the
+//parts every caller actually reuses.
+async function getTotalWordCount(project){
   var total = 0;
-  project.chapters.forEach(function(chap){
-      var text = convertToPlainText(chap.getContentsOrFile());
+  for(let i = 0; i < project.chapters.length; i++){
+      var text = convertToPlainText(await project.chapters[i].getContentsOrFile());
       total += countWords(text);
-  });
+  }
   return total;
 }
 

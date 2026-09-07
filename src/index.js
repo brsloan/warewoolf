@@ -1,6 +1,9 @@
 const { app, BrowserWindow, Menu, nativeTheme, safeStorage } = require('electron');
 const path = require('path');
 const { ipcMain } = require('electron');
+const { COMMANDS, createPlatform } = require('./components/controllers/platform');
+const { createNodeBacking } = require('./components/controllers/platform-node');
+const { createCommandHost } = require('./components/controllers/platform-host');
 const isLinux = process.platform === "linux";
 const isMac = process.platform === "darwin";
 var fileRequestedOnOpen = null;
@@ -52,8 +55,31 @@ const createWindow = () => {
   const mainWindow = new BrowserWindow({
     autoHideMenuBar: true,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
+      //Phase 9b, and the line the whole of Part 2 was in service of. The renderer runs in its own
+      //isolated world now: the page's `window` is not the preload's `window`, `require` does not
+      //exist in it, and the only thing reaching main is `window.warewoolf` - three functions
+      //(invoke/on/off), each of which checks its name against the COMMANDS/EVENTS tables in
+      //platform.js before anything crosses. `nodeIntegration` is not set to false, it is gone:
+      //false is already the default, and a named `false` invites someone to try `true` to fix a
+      //bug rather than adding a command.
+      contextIsolation: true,
+
+      //Explicit, and not the same decision as the two lines above it. Electron's default has been
+      //`sandbox: true` since v20; it was only ever off here because `nodeIntegration: true`
+      //disables it automatically. Removing nodeIntegration would therefore have turned the OS-level
+      //sandbox on as a *side effect* of the context-isolation flip, so 9b pinned it to `false` to
+      //keep that flip one variable, and left turning it on as its own step on its own evidence.
+      //
+      //This is that step. contextIsolation stops renderer code reaching Node; this stops it reaching
+      //the OS underneath - so a Chromium-level exploit behind a crafted .docx or .epub still cannot
+      //make arbitrary syscalls. The reason it waited for hardware: on Linux the sandbox needs either
+      //unprivileged user namespaces or the setuid chrome-sandbox helper, and without one Chromium
+      //refuses to start - a black screen on a kiosk: true device with nothing else to switch to.
+      //Verified starting on a real writerDeck (Pi OS Lite, Xorg, Matchbox) before this was set.
+      //preload.bundle.js is bundled precisely so it keeps working here, with no require() of its own.
+      sandbox: true,
+
+      preload: path.join(__dirname, 'preload.bundle.js'),
       spellcheck: false,
       devTools: !app.isPackaged
     },
@@ -100,11 +126,12 @@ const createWindow = () => {
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
 
   //Nothing in the renderer opens a new window or navigates away today - the one <a> tag in the
-  //About popup does not even set an href - but nodeIntegration is on for this window, so a
-  //navigation or new-window request succeeding here would run with full Node access rather than
-  //being sandboxed the way a browser tab would be. Deny both outright rather than leaving that
-  //open for whatever a future feature (or a bug in a dependency parsing an imported .docx/.epub)
-  //might one day attempt.
+  //About popup does not even set an href. This mattered more before Phase 9b, when a navigation
+  //succeeding here would have run with full Node access; it still matters now, because a new window
+  //inherits this one's webPreferences (preload included) and so would arrive holding
+  //window.warewoolf - the bridge, handed to whatever page a navigation had just loaded. Denied
+  //outright rather than left open for whatever a future feature (or a bug in a dependency parsing
+  //an imported .docx/.epub) might one day attempt.
   mainWindow.webContents.setWindowOpenHandler(() => {
     return { action: 'deny' };
   });
@@ -477,41 +504,79 @@ app.on('window-all-closed', () => {
 
 // In this file you can include the rest of your app's specific main process
 // code. You can also put them in separate files and import them here.
-ipcMain.on('exit-app-confirmed', function(e){
-  closeConfirmed = true;
-  app.quit();
-});
+//
+//The platform contract (src/components/controllers/platform.js), main-process side. One
+//ipcMain.handle per declared command - all 65, registered from the table itself rather than one
+//call per command, so a command cannot be added to the contract and forgotten here.
+//
+//Phase 9a moved the node backing out of the renderer and into this process. Through Phase 8 the
+//renderer held its own createNodeBacking() for groups B/C/D/E/F/G/H/I/J and reached fs directly,
+//node integration being on at the time; only group A (app.getPath, nativeTheme, the menu, app.quit
+//- none of them renderer-reachable under any flag) crossed by IPC. Now everything does, which is
+//what made 9b a flag change rather than a rewiring.
+//
+//Group A is still special, but the other way round: it is the only group whose implementation is
+//*here* rather than in the backing. platform-node.js takes those five as injected hooks, which
+//existed until now so platform.test.js could exercise the contract's shape against fakes. This is
+//what they were built for.
+//
+//A handler that fails resolves with a { __platformError, code, message, details } envelope rather
+//than rejecting - Electron forwards only .message across this boundary, and every documented
+//failure path in the contract branches on `code`. platform-host.js builds the envelope,
+//platform-ipc.js unwraps it. See either file for why that is not optional.
+var commandHost = null;
 
-//Sent by render.js as the last thing it does, once every handler is registered.
-ipcMain.on('renderer-ready', function(e){
-  rendererReady = true;
-});
+//Built on the first command rather than at module load. app.getPath() wants a ready app, and
+//`fileRequestedOnOpen` is still being written to by argv parsing and the macOS 'open-file' event at
+//that point - both settled by the time a renderer can ask for anything.
+function host(){
+  if(commandHost == null)
+    commandHost = createCommandHost(createPlatform(createNodeBacking({
+      paths: {
+        userData: app.getPath('userData').replaceAll('\\', '/'),
+        home: app.getPath('home').replaceAll('\\', '/'),
+        temp: app.getPath('temp').replaceAll('\\', '/'),
+        docs: app.getPath('documents').replaceAll('\\', '/'),
+        app: __dirname.replaceAll('\\', '/'),
+        downloads: app.getPath('downloads').replaceAll('\\', '/')
+      },
+      secureStorage: mainSecureStorage(),
+      //A function, not the value: the renderer asks once at startup, but macOS can set this from
+      //the 'open-file' event after this backing exists, and a value captured at construction would
+      //be the one from before the file was opened.
+      getFileRequestedOnOpen: function(){ return fileRequestedOnOpen; },
+      onSetTheme: function(mode){
+        if(mode == 'system')
+          nativeTheme.themeSource = 'system';
+        else if(mode == 'dark')
+          nativeTheme.themeSource = 'dark';
+        else if(mode == 'light')
+          nativeTheme.themeSource = 'light';
+      },
+      onShowAppMenu: function(){
+        app.applicationMenu.popup({ x: 0, y: 0 });
+      },
+      onConfirmExit: function(){
+        closeConfirmed = true;
+        app.quit();
+      },
+      //Sent by render.js as the last thing it does, once every handler is registered.
+      onNotifyRendererReady: function(){
+        rendererReady = true;
+      },
+      //The backing's own channel for non-fatal internal failures (a stray stash file it could not
+      //unlink, nmcli's stderr). The renderer's backing was given no logger at all before this, so
+      //these went nowhere; console is at least visible under `npm start`.
+      logError: function(err){ console.log(err); }
+    })));
 
-ipcMain.on('get-directories', function(e){
-  e.returnValue = {
-    userData: app.getPath('userData').replaceAll('\\', '/'),
-    home: app.getPath('home').replaceAll('\\', '/'),
-    temp: app.getPath('temp').replaceAll('\\', '/'),
-    docs: app.getPath('documents').replaceAll('\\', '/'),
-    app: __dirname.replaceAll('\\', '/'),
-    downloads: app.getPath('downloads').replaceAll('\\', '/')
-  }
-});
+  return commandHost;
+}
 
-ipcMain.on('get-file-requested-on-open', function(e){
-  e.returnValue = fileRequestedOnOpen;
-});
-
-ipcMain.on('set-dark-mode', function(e, darkMode){
-  if(darkMode == 'system'){
-    nativeTheme.themeSource = 'system';
-  }
-  else if(darkMode == 'dark'){
-    nativeTheme.themeSource = 'dark';
-  }
-  else if(darkMode == 'light') {
-    nativeTheme.themeSource = 'light';
-  }
+Object.keys(COMMANDS).forEach(function(name){
+  ipcMain.handle(name, function(event, args){
+    return host().invoke(name, args);
+  });
 });
 
 //safeStorage only reaches a real OS keystore when Chromium found one at startup. On Linux with no
@@ -538,31 +603,29 @@ function isSecureStorageAvailable(){
   }
 }
 
-ipcMain.on('secure-storage-available', function(e){
-  e.returnValue = isSecureStorageAvailable();
-});
-
-ipcMain.on('secure-storage-encrypt', function(e, text){
-  try{
-    e.returnValue = isSecureStorageAvailable() ? safeStorage.encryptString(text).toString('base64') : null;
-  }
-  catch(err){
-    e.returnValue = null;
-  }
-});
-
-ipcMain.on('secure-storage-decrypt', function(e, content){
-  try{
-    e.returnValue = isSecureStorageAvailable() ? safeStorage.decryptString(Buffer.from(content, 'base64')) : null;
-  }
-  catch(err){
-    e.returnValue = null;
-  }
-});
-
-ipcMain.on('show-menu', function(e){
-  app.applicationMenu.popup({
-    x: 0,
-    y: 0
-  });
-});
+//The shape createNodeBacking() (and, through it, credential-store.js) wants from a keystore. Group
+//J used to reach this from the renderer over three sendSync channels ('secure-storage-available',
+//'-encrypt', '-decrypt') driven by a secure-storage.js that no longer exists: with the backing in
+//this process it is a direct call, and the credential store the renderer used to hold is gone.
+function mainSecureStorage(){
+  return {
+    isAvailable: isSecureStorageAvailable,
+    //base64 ciphertext, or null when the OS keystore refused or is not really there.
+    encrypt: function(text){
+      try{
+        return isSecureStorageAvailable() ? safeStorage.encryptString(text).toString('base64') : null;
+      }
+      catch(err){
+        return null;
+      }
+    },
+    decrypt: function(content){
+      try{
+        return isSecureStorageAvailable() ? safeStorage.decryptString(Buffer.from(content, 'base64')) : null;
+      }
+      catch(err){
+        return null;
+      }
+    }
+  };
+}

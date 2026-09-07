@@ -6,13 +6,20 @@ const { EventEmitter } = require('events');
 
 const errorLog = require('../src/components/controllers/error-log');
 const batteryMonitorPath = require.resolve('../src/components/controllers/battery-monitor');
+const { installBridge, uninstallBridge } = require('./fake-bridge');
 
-//battery-monitor.js keeps its running interval id in module-level state (like autosave.js),
-//so each test needs a fresh module instance to avoid one test's timer id leaking into the next.
-//It also destructures `spawn` and `logError` from their modules at require-time, so any
-//mocking of those must happen before this re-require for the fresh module to pick it up.
+test.after(uninstallBridge);
+
+//battery-monitor.js keeps its running interval id in module-level state (like autosave.js), so
+//each test needs a fresh module instance to avoid one test's timer id leaking into the next.
+//Phase 8: getBatteryCapacity (group K) also holds its own standing platform instance. As of Phase
+//9a that instance is ipc-backed, and the node backing behind the bridge is what resolves
+//child_process.spawn/fs.readdirSync off the real modules - once, at construction, not fresh on
+//every call. So a test that mocks either has to do it *before* the bridge is installed here, same
+//reasoning as updates.test.js's/wifi-manager.test.js's own freshXxx() helpers.
 function freshBatteryMonitor(){
   delete require.cache[batteryMonitorPath];
+  installBridge();
   return require(batteryMonitorPath);
 }
 
@@ -58,96 +65,102 @@ function mockSpawnWithStderr(t, stderrText){
   });
 }
 
-test('getBatteryPercent resolves with N/A instead of hanging when no battery is found', function(t){
-  const { getBatteryPercent } = freshBatteryMonitor();
-  let result;
-  getBatteryPercent(null, function(resp){ result = resp; });
-  assert.strictEqual(result, 'N/A');
-});
-
-test('getBatteryPercent reads the capacity reported by the kernel', async function(t){
-  mockSpawnWithChunks(t, ['87\n']);
-  const { getBatteryPercent } = freshBatteryMonitor();
+//No BAT* entry (the readdirSync mock below returning an empty/battery-less directory) is
+//UNAVAILABLE, not a spawn failure - checkBatteryMinutely reports that as 'N/A' without logging,
+//since it is the everyday result on every machine that isn't a writerDeck.
+test('checkBatteryMinutely reports N/A without logging when no battery is present', async function(t){
+  t.mock.method(fs, 'readdirSync', function(){ return ['AC']; });
+  const logErrorMock = t.mock.method(errorLog, 'logError', function(){});
+  const { checkBatteryMinutely, endAutocheck } = freshBatteryMonitor();
+  t.after(endAutocheck);
 
   const result = await new Promise(function(resolve){
-    getBatteryPercent('BAT0', resolve);
+    checkBatteryMinutely(resolve);
   });
 
-  assert.strictEqual(result, '87');
+  assert.strictEqual(result, 'N/A');
+  assert.strictEqual(logErrorMock.mock.calls.length, 0, 'the ordinary "no battery" case must not spam the error log');
+});
+
+//Regression: the power_supply path itself can be missing (containers, restricted environments,
+//non-Linux) - readdirSync throwing must resolve the same UNAVAILABLE path as "no BAT* entry",
+//not crash checkBatteryMinutely's caller.
+test('checkBatteryMinutely reports N/A instead of throwing when the power supply path is missing', async function(t){
+  t.mock.method(fs, 'readdirSync', function(){
+    const err = new Error('ENOENT: no such file or directory');
+    err.code = 'ENOENT';
+    throw err;
+  });
+  const logErrorMock = t.mock.method(errorLog, 'logError', function(){});
+  const { checkBatteryMinutely, endAutocheck } = freshBatteryMonitor();
+  t.after(endAutocheck);
+
+  const result = await new Promise(function(resolve){
+    checkBatteryMinutely(resolve);
+  });
+
+  assert.strictEqual(result, 'N/A');
+  assert.strictEqual(logErrorMock.mock.calls.length, 0);
+});
+
+test('checkBatteryMinutely reports the initial percentage immediately', async function(t){
+  t.mock.method(fs, 'readdirSync', function(){ return ['BAT0']; });
+  mockSpawnWithChunks(t, ['42\n']);
+  const { checkBatteryMinutely, endAutocheck } = freshBatteryMonitor();
+  t.after(endAutocheck);
+
+  const result = await new Promise(function(resolve){
+    checkBatteryMinutely(resolve);
+  });
+
+  assert.strictEqual(result, '42');
 });
 
 //Regression: the old code called back on every stdout 'data' event instead of accumulating,
 //so a value split across chunks (e.g. "8" then "7\n") could be reported as a partial "8".
-test('getBatteryPercent assembles a value split across multiple stdout chunks', async function(t){
+test('checkBatteryMinutely assembles a value split across multiple stdout chunks', async function(t){
+  t.mock.method(fs, 'readdirSync', function(){ return ['BAT0']; });
   mockSpawnWithChunks(t, ['8', '7', '\n']);
-  const { getBatteryPercent } = freshBatteryMonitor();
+  const { checkBatteryMinutely, endAutocheck } = freshBatteryMonitor();
+  t.after(endAutocheck);
 
   const result = await new Promise(function(resolve){
-    getBatteryPercent('BAT0', resolve);
+    checkBatteryMinutely(resolve);
   });
 
   assert.strictEqual(result, '87');
 });
 
-//Regression: spawn() emitting an unhandled 'error' event (missing binary, EMFILE, etc.)
-//used to throw uncaught and crash the process.
-test('getBatteryPercent reports "no data" instead of crashing when spawn fails', async function(t){
+//Regression: spawn() emitting an unhandled 'error' event (missing binary, EMFILE, etc.) used to
+//throw uncaught and crash the process. A battery that exists but cannot be read is a real
+//failure (IO_ERROR), unlike "no battery at all" above, so it is reported as 'no data' *and* logged.
+test('checkBatteryMinutely reports "no data" and logs when a battery exists but spawn fails', async function(t){
+  t.mock.method(fs, 'readdirSync', function(){ return ['BAT0']; });
   const logErrorMock = t.mock.method(errorLog, 'logError', function(){});
   mockSpawnWithSpawnError(t, new Error('spawn cat ENOENT'));
-  const { getBatteryPercent } = freshBatteryMonitor();
+  const { checkBatteryMinutely, endAutocheck } = freshBatteryMonitor();
+  t.after(endAutocheck);
 
   const result = await new Promise(function(resolve){
-    getBatteryPercent('BAT0', resolve);
+    checkBatteryMinutely(resolve);
   });
 
   assert.strictEqual(result, 'no data');
   assert.strictEqual(logErrorMock.mock.calls.length, 1);
 });
 
-//Regression: stderr output used to be logged as a bare string, and error-log's logError()
-//reads e.stack when writing to disk - a string has no .stack, so the real message was lost
-//and "undefined" was written instead.
-test('stderr output is logged as an Error so the real message is preserved', async function(t){
+test('checkBatteryMinutely reports "no data" and logs when the kernel read produces non-numeric output', async function(t){
+  t.mock.method(fs, 'readdirSync', function(){ return ['BAT0']; });
   const logErrorMock = t.mock.method(errorLog, 'logError', function(){});
   mockSpawnWithStderr(t, 'cat: permission denied');
-  const { getBatteryPercent } = freshBatteryMonitor();
+  const { checkBatteryMinutely, endAutocheck } = freshBatteryMonitor();
+  t.after(endAutocheck);
 
-  await new Promise(function(resolve){
-    getBatteryPercent('BAT0', resolve);
+  const result = await new Promise(function(resolve){
+    checkBatteryMinutely(resolve);
   });
 
-  assert.strictEqual(logErrorMock.mock.calls.length, 1);
-  const loggedArg = logErrorMock.mock.calls[0].arguments[0];
-  assert.ok(loggedArg instanceof Error, 'logError should receive an Error, not a raw string');
-  assert.strictEqual(loggedArg.message, 'cat: permission denied');
-});
-
-test('getBatteryName returns the first BAT* entry from the power supply class', function(t){
-  t.mock.method(fs, 'readdirSync', function(){ return ['AC', 'BAT0', 'BAT1']; });
-  const { getBatteryName } = freshBatteryMonitor();
-
-  assert.strictEqual(getBatteryName(), 'BAT0');
-});
-
-test('getBatteryName returns null when no battery is present', function(t){
-  t.mock.method(fs, 'readdirSync', function(){ return ['AC']; });
-  const { getBatteryName } = freshBatteryMonitor();
-
-  assert.strictEqual(getBatteryName(), null);
-});
-
-//Regression: /sys/class/power_supply can be missing (containers, restricted environments,
-//non-Linux). readdirSync throwing was unhandled and crashed the caller synchronously.
-test('getBatteryName returns null instead of throwing when the power supply path is missing', function(t){
-  const logErrorMock = t.mock.method(errorLog, 'logError', function(){});
-  t.mock.method(fs, 'readdirSync', function(){
-    const err = new Error('ENOENT: no such file or directory');
-    err.code = 'ENOENT';
-    throw err;
-  });
-  const { getBatteryName } = freshBatteryMonitor();
-
-  assert.strictEqual(getBatteryName(), null);
+  assert.strictEqual(result, 'no data');
   assert.strictEqual(logErrorMock.mock.calls.length, 1);
 });
 
@@ -201,17 +214,4 @@ test('endAutocheck stops further checks and allows a later restart', function(t)
   updateAutocheck(1, function(){ calls++; });
   t.mock.timers.tick(60000);
   assert.strictEqual(calls, 2);
-});
-
-test('checkBatteryMinutely reports the initial percentage immediately', async function(t){
-  t.mock.method(fs, 'readdirSync', function(){ return ['BAT0']; });
-  mockSpawnWithChunks(t, ['42\n']);
-  const { checkBatteryMinutely, endAutocheck } = freshBatteryMonitor();
-  t.after(endAutocheck);
-
-  const result = await new Promise(function(resolve){
-    checkBatteryMinutely(resolve);
-  });
-
-  assert.strictEqual(result, '42');
 });

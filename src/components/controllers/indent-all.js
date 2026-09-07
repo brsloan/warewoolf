@@ -1,16 +1,19 @@
 const { getTempQuill } = require('./quill-utils');
 
-function indentAllParasInAllChaps(project){
+//Indexed loop rather than forEach because reading a chapter off disk is asynchronous now - see
+//center-all-heads.js.
+async function indentAllParasInAllChaps(project){
     var anyChanged = false;
 
-    project.chapters.forEach(function(chap){
-        var result = indentAllParas(chap.getContentsOrFile());
+    for(let i = 0; i < project.chapters.length; i++){
+        let chap = project.chapters[i];
+        var result = indentAllParas(await chap.getContentsOrFile());
         if(result.changed > 0){
             chap.contents = result.delta;
             chap.hasUnsavedChanges = true;
             anyChanged = true;
         }
-    });
+    }
 
     if(anyChanged)
         project.hasUnsavedChanges = true;

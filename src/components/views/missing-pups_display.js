@@ -1,13 +1,21 @@
 const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
-const fs = require('fs');
 const { getFileList } = require('../controllers/file-manager');
+const { createPlatform } = require('../controllers/platform');
+const { createIpcBacking } = require('../controllers/platform-ipc');
+
+//pathExists()/listDirectory() take no injected config, so this holds its own standing instance -
+//same reason file-manager.js and corkboard.js do.
+var platform = createPlatform(createIpcBacking());
+
 //Each document's notes are saved beside it under this prefix (chapter.js owns the convention), and
 //the corkboard has its own fixed name (corkboard.js). Both live in the chapters directory, so the
 //listing below has to know about them or it reports the project's own files as strays.
 const notesNamePrepend = '-notes_';
 const corkboardFilename = 'project_corkboard.txt';
 
-function promptForMissingPups(project, callback){
+//Async because working out which chapter files are actually missing now goes through the platform
+//facade. The popup is still appended in one pass at the end, so the reader never sees it half-drawn.
+async function promptForMissingPups(project, callback){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup");
@@ -46,11 +54,11 @@ function promptForMissingPups(project, callback){
   var dirExistsCheck = document.createElement('label');
   popup.appendChild(dirExistsCheck);
 
-  updateDirExists(project, dirExistsCheck);
+  await updateDirExists(project, dirExistsCheck);
 
   var subdirsList = document.createElement('div');
   subdirsList.id = 'subdirs-list';
-  fillSubdirsList(project, subdirsList);
+  await fillSubdirsList(project, subdirsList);
   popup.appendChild(subdirsList);
 
   var missingChapsList = document.createElement('div');
@@ -59,13 +67,14 @@ function promptForMissingPups(project, callback){
   var fileList = document.createElement('div');
   fileList.id = 'missing-file-list';
 
-  fillFileList(project, fileList, chapsDirIn);
+  await fillFileList(project, fileList, chapsDirIn);
 
   popup.appendChild(fileList);
 
   var saveChangesBtn = createButton('Save & Reload');
-  saveChangesBtn.onclick = function(){
-    project.saveFile();
+  //Awaited so the reload the callback triggers reads a project file that has actually been written.
+  saveChangesBtn.onclick = async function(){
+    await project.saveFile();
     closePopups();
     callback('save');
   }
@@ -79,28 +88,30 @@ function promptForMissingPups(project, callback){
   popup.appendChild(cancel);
 
 
-  fillMissingChapsList(project, missingChapsList, fileList, chapsDirIn);
+  await fillMissingChapsList(project, missingChapsList, fileList, chapsDirIn);
 
-  chapsDirIn.onkeyup = function(ev){
+  chapsDirIn.onkeyup = async function(ev){
     project.chapsDirectory = normalizeTrailingSlash(chapsDirIn.value);
-    updateDirExists(project, dirExistsCheck);
-    fillSubdirsList(project, subdirsList);
-    fillFileList(project, fileList, chapsDirIn);
-    fillMissingChapsList(project, missingChapsList, fileList, chapsDirIn);
+    await updateDirExists(project, dirExistsCheck);
+    await fillSubdirsList(project, subdirsList);
+    await fillFileList(project, fileList, chapsDirIn);
+    await fillMissingChapsList(project, missingChapsList, fileList, chapsDirIn);
   };
 
   document.body.appendChild(popup);
   chapsDirIn.focus();
 }
 
-function fillMissingChapsList(project, missingChapsList, fileList, chapsDirIn){
+async function fillMissingChapsList(project, missingChapsList, fileList, chapsDirIn){
+  var missingChaps = await project.testChapsDirectory();
+  //Cleared only once the answer is in hand, so a redraw that is still waiting on the check does not
+  //leave the reader looking at an empty list.
   missingChapsList.innerHTML = '';
-  var missingChaps = project.testChapsDirectory();
   var missingChapsLabel = document.createElement('h2');
   missingChapsLabel.innerText = "Missing Chapter Files: ";
   missingChapsList.appendChild(missingChapsLabel);
 
-  missingChaps.forEach(chap => {
+  for(const chap of missingChaps){
     let deleteBtn = createButton('Delete');
     missingChapsList.appendChild(deleteBtn);
 
@@ -116,27 +127,27 @@ function fillMissingChapsList(project, missingChapsList, fileList, chapsDirIn){
     let chapExistsCheck = document.createElement('label');
     missingChapsList.appendChild(chapExistsCheck);
 
-    updateChapExistsCheck(project, chapExistsCheck, chap);
+    await updateChapExistsCheck(project, chapExistsCheck, chap);
 
-    chapFilename.onkeyup = function(e){
+    chapFilename.onkeyup = async function(e){
       chap.filename = chapFilename.value;
-      updateChapExistsCheck(project, chapExistsCheck, chap);
-      fillFileList(project, fileList, chapsDirIn);
+      await updateChapExistsCheck(project, chapExistsCheck, chap);
+      await fillFileList(project, fileList, chapsDirIn);
     };
 
-    deleteBtn.onclick = function(){
+    deleteBtn.onclick = async function(){
       if(deleteBtn.innerText == 'Delete'){
         deleteBtn.innerText = 'Click Again To DELETE';
       }
       else{
         removeChapterFromProject(project, chap);
-        fillMissingChapsList(project, missingChapsList, fileList, chapsDirIn);
-        fillFileList(project, fileList, chapsDirIn);
+        await fillMissingChapsList(project, missingChapsList, fileList, chapsDirIn);
+        await fillFileList(project, fileList, chapsDirIn);
       }
     }
 
     missingChapsList.appendChild(document.createElement('br'));
-  });
+  }
 }
 
 //A missing document can be in any of the project's three lists, so it has to come out of the one
@@ -185,8 +196,10 @@ function expectedFilenames(project){
   return filenames;
 }
 
-function updateChapExistsCheck(project, chapExistsCheck, chap){
-  if(fs.existsSync(project.directory + project.chapsDirectory + chap.filename)){
+async function updateChapExistsCheck(project, chapExistsCheck, chap){
+  var exists = await platform.pathExists({ path: project.directory + project.chapsDirectory + chap.filename });
+
+  if(exists){
     if(allChapters(project).filter(function(ch){
       return ch.filename == chap.filename;
     }).length > 1){
@@ -211,7 +224,7 @@ function updateChapExistsCheck(project, chapExistsCheck, chap){
   }
 }
 
-function fillFileList(project, fileList, chapsDirIn){
+async function fillFileList(project, fileList, chapsDirIn){
   fileList.innerHTML = '';
 
   var fileListTitle = document.createElement('p');
@@ -219,11 +232,13 @@ function fillFileList(project, fileList, chapsDirIn){
   fileList.appendChild(fileListTitle);
 
   var chapsDir = normalizeTrailingSlash(chapsDirIn.value);
-  if(fs.existsSync(project.directory + chapsDir)){
-    var files = getFileList(project.directory + chapsDir);
+  var dirExists = await platform.pathExists({ path: project.directory + chapsDir });
+
+  if(dirExists){
+    var files = await getFileList(project.directory + chapsDir);
     files.forEach(function(file){
       let filename = document.createElement('label');
-      filename.innerText = file.isDirectory() ? '> ' + file.name : file.name;
+      filename.innerText = file.isDirectory ? '> ' + file.name : file.name;
       fileList.appendChild(filename);
 
       let fileExpected = document.createElement('label');
@@ -251,14 +266,14 @@ function fillFileList(project, fileList, chapsDirIn){
   }
 }
 
-function fillSubdirsList(project, subdirsList){
+async function fillSubdirsList(project, subdirsList){
   subdirsList.innerHTML = '';
 
   var subdirsTitle = document.createElement('p');
   subdirsTitle.innerText = 'Subdirectories Available:';
   subdirsList.appendChild(subdirsTitle);
 
-  var subdirs = getAvailableSubdirs(project);
+  var subdirs = await getAvailableSubdirs(project);
 
   for(let i=0;i<subdirs.length;i++){
     let thisDir = document.createElement('label');
@@ -284,9 +299,10 @@ function normalizeTrailingSlash(value){
   return value;
 }
 
-function updateDirExists(project, dirExistsCheck){
+async function updateDirExists(project, dirExistsCheck){
+  var exists = await platform.pathExists({ path: project.directory + project.chapsDirectory });
 
-  if(fs.existsSync(project.directory + project.chapsDirectory)){
+  if(exists){
     dirExistsCheck.classList.add('good-check');
     dirExistsCheck.classList.remove('bad-check');
     dirExistsCheck.innerText = ' ✔ Exists';
@@ -298,31 +314,19 @@ function updateDirExists(project, dirExistsCheck){
   }
 }
 
-function getAvailableSubdirs(project){
-  return getFirstLevelDirs(project.directory).map(function(dir){
+async function getAvailableSubdirs(project){
+  var dirs = await getFirstLevelDirs(project.directory);
+  return dirs.map(function(dir){
     return dir.replace(project.directory + '/', '') + '/';
   });
 }
 
-function getAllSubdirs(rootPath, dirs = []){
-  if(rootPath[rootPath.length - 1] == '/')
-    rootPath = rootPath.slice(0,-1);
-
-  var newDirs = getFirstLevelDirs(rootPath);
-  if(newDirs.length > 0){
-    dirs = dirs.concat(newDirs);
-    newDirs.forEach(function(dir){
-      dirs = getAllSubdirs(dir, dirs)
-    });
-  }
-  return dirs;
-}
-
-function getFirstLevelDirs(rootPath){
-  return fs.readdirSync(rootPath, {withFileTypes: true}).filter(function(d){
-    return d.isDirectory();
-  }).map(function(d){
-    return rootPath + '/' + d.name;
+async function getFirstLevelDirs(rootPath){
+  var entries = await platform.listDirectory({ path: rootPath });
+  return entries.filter(function(entry){
+    return entry.isDirectory;
+  }).map(function(entry){
+    return rootPath + '/' + entry.name;
   });
 }
 

@@ -1,154 +1,88 @@
-const { spawn } = require("child_process");
 const { logError } = require('./error-log');
+const { createPlatform } = require('./platform');
+const { createIpcBacking } = require('./platform-ipc');
 
-//nmcli's -t (terse) output escapes literal ':' and '\' inside a field as '\:' and '\\',
-//so a plain split(':') misaligns fields whenever a value (e.g. an SSID) contains a colon.
-function splitNmcliFields(line){
-  return line.split(/(?<!\\):/).map(function(field){
-    return field.replace(/\\(.)/g, '$1');
-  });
-}
+//All seven functions here take no injected config, so this holds its own standing instance, the
+//same reason file-manager.js/corkboard.js/epub.js do. As of the gap Phase 8 recorded being closed,
+//every one of them routes through a contract command - none of them spawns nmcli directly any more.
+var platform = createPlatform(createIpcBacking());
 
-function getIpAddress(cback){
-  const hostname = spawn('hostname', ['-I']);
-  var body = [];
-  var called = false;
-
-  function finish(result){
-    if(called) return;
-    called = true;
-    cback(result);
-  }
-
-  hostname.stdout.on('data', function(data){
-    body.push(data);
-  });
-
-  hostname.stderr.on('data', function(data){
-    logError(data.toString().trim());
-  })
-
-  hostname.on('error', function(err){
+//Logging is skipped for UNAVAILABLE specifically - nmcli/hostname simply not being installed is
+//the ordinary case on every machine that isn't a writerDeck, and this dialog gets opened by anyone
+//who clicks Wi-Fi Manager, not only on a Pi. A genuine failure (IO_ERROR and the rest) still logs.
+function reportUnlessUnavailable(err){
+  if(err == null || err.code !== 'UNAVAILABLE')
     logError(err);
-    finish('no data');
-  });
-
-  hostname.stdout.on('close', function(code){
-    var text = Buffer.concat(body).toString().trim().split(' ')[0];
-    finish(text || 'no data');
-  });
 }
 
-function getConnectionState(cback){
-  const args = ["-t", "device", "status"];
-
-  nmcliMulti(args, function(body){
-    var statusData = body.split('\n');
-    var wifiDataLine = statusData.find(function(line, index, arr){
-      return splitNmcliFields(line)[1] == 'wifi';
-    });
-
-    if(!wifiDataLine){
-      cback({state: 'unknown', connection: null});
-      return;
-    }
-
-    var splitData = splitNmcliFields(wifiDataLine);
-    cback({state: splitData[2], connection: splitData[3]});
-  });
-}
-
-function nmcliMulti(args, cback){
-  const nmcli = spawn('nmcli', args);
-  var body = [];
-  var called = false;
-
-  function finish(result){
-    if(called) return;
-    called = true;
-    cback(result);
+async function getIpAddress(){
+  try{
+    var address = await platform.wifiGetAddress();
+    return address || 'no data';
   }
-
-  nmcli.stdout.on('data', function(data){
-    body.push(data);
-  });
-
-  nmcli.stderr.on('data', function(data){
-    logError(data.toString());
-  });
-
-  nmcli.on('error', function(err){
-    logError(err);
-    finish('');
-  });
-
-  nmcli.on('close', function(code){
-    finish(Buffer.concat(body).toString());
-  });
-}
-
-function nmcliSingle(args, cback){
-  const nmcli = spawn('nmcli', args);
-  var body = [];
-  var called = false;
-
-  function finish(result){
-    if(called) return;
-    called = true;
-    cback(result);
+  catch(err){
+    reportUnlessUnavailable(err);
+    return 'no data';
   }
-
-  nmcli.stdout.on('data', function(data){
-    body.push(data);
-  });
-
-  nmcli.stderr.on('data', function(data){
-    logError(data.toString().trim());
-  })
-
-  nmcli.on('error', function(err){
-    logError(err);
-    finish('no data');
-  });
-
-  nmcli.on('close', function(code){
-    var text = Buffer.concat(body).toString().trim();
-    finish(text || 'no data');
-  });
 }
 
-function getWifiStatus(cback){
-  nmcliSingle(['radio', 'wifi'], cback);
+async function getConnectionState(){
+  try{
+    return await platform.wifiGetConnectionState();
+  }
+  catch(err){
+    reportUnlessUnavailable(err);
+    return { state: 'unknown', connection: null };
+  }
 }
 
-function getWifiNetworks(cback){
-  nmcliMulti(["-t", "device", "wifi", "list", "--rescan", "yes"], function(body){
-    var dataLines = body.split('\n');
-
-    var connections = dataLines.map(function(line, index, arr){
-      var splitLine = splitNmcliFields(line);
-      return {
-        ssid: splitLine[7],
-        isConnected: splitLine[0] == '*'
-      }
-    }).filter(function(obj, index, arr){
-      return obj.ssid && obj.ssid != "";
-    });
-
-    cback(connections);
-  });
+async function getWifiStatus(){
+  try{
+    return await platform.wifiGetStatus();
+  }
+  catch(err){
+    reportUnlessUnavailable(err);
+    return 'no data';
+  }
 }
 
-function disableWifi(cback){
-  nmcliSingle(['radio', 'wifi', 'off'], cback);
-};
-
-function enableWifi(cback){
-  nmcliSingle(['radio', 'wifi', 'on'], cback);
+async function getWifiNetworks(){
+  try{
+    return await platform.wifiListNetworks();
+  }
+  catch(err){
+    reportUnlessUnavailable(err);
+    return [];
+  }
 }
 
-function connectToNewWifi(ssidString, passString, cback){
-  nmcliSingle(['device','wifi','connect', ssidString, 'password', passString], cback);
+async function disableWifi(){
+  try{
+    await platform.wifiDisable();
+  }
+  catch(err){
+    reportUnlessUnavailable(err);
+  }
+}
+
+async function enableWifi(){
+  try{
+    await platform.wifiEnable();
+  }
+  catch(err){
+    reportUnlessUnavailable(err);
+  }
+}
+
+async function connectToNewWifi(ssidString, passString){
+  try{
+    await platform.wifiConnect({ ssid: ssidString, psk: passString });
+    return 'Connected.';
+  }
+  catch(err){
+    reportUnlessUnavailable(err);
+    return err.message;
+  }
 }
 
 module.exports = {

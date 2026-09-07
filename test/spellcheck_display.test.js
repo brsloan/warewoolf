@@ -9,7 +9,11 @@ const findReplaceControllerPath = require.resolve('../src/components/controllers
 //spellcheck_display.js destructures runSpellcheck/addWordToPersonalDictFile and replace/
 //replaceAllInAllChapters from these controllers at require-time, so mocking them only takes effect
 //if the cache is primed before spellcheck_display.js is (re-)required - same pattern as
-//findreplace_display.test.js's freshFindReplaceDisplay().
+//findreplace_display.test.js's freshFindReplaceDisplay(). Both spellcheck controller mocks return
+//plain values rather than promises - showSpellcheck() awaits them regardless, and a mocked
+//synchronous function resolves through await exactly the same as a real async one, one microtask
+//later - which is why every test below is async and awaits showSpellcheck()/the button handlers
+//directly (onclick(), not click(), since native click() discards a handler's return value).
 function freshSpellcheckDisplay(mocks){
   delete require.cache[spellcheckDisplayPath];
   require.cache[spellcheckControllerPath] = {
@@ -75,16 +79,16 @@ test.afterEach(function(){
 //Change All which all guard on invalidWord first. Once spellcheck finishes (invalidWord is null),
 //the button stayed enabled and clicking it (or its Alt+A access key) threw a TypeError instead of
 //being a no-op.
-test('Add To Dictionary does nothing when spellcheck has already finished', function(){
+test('Add To Dictionary does nothing when spellcheck has already finished', async function(){
   var addCalls = 0;
   var showSpellcheck = freshSpellcheckDisplay({
     runSpellcheck: function(){ return null; },
     addWordToPersonalDictFile: function(){ addCalls++; }
   });
 
-  assert.doesNotThrow(function(){
-    showSpellcheck(makeEditorQuill(), {}, {}, function(){});
-    getButtonByAccessKey('a').click();
+  await showSpellcheck(makeEditorQuill(), {}, {}, function(){});
+  await assert.doesNotReject(function(){
+    return getButtonByAccessKey('a').onclick();
   });
 
   assert.strictEqual(addCalls, 0);
@@ -92,7 +96,7 @@ test('Add To Dictionary does nothing when spellcheck has already finished', func
   assert.strictEqual(document.querySelector('h2').innerText, '*spellcheck finished*');
 });
 
-test('Add To Dictionary adds the current word and advances to the next one', function(){
+test('Add To Dictionary adds the current word and advances to the next one', async function(){
   var addedWords = [];
   var callCount = 0;
   var showSpellcheck = freshSpellcheckDisplay({
@@ -103,8 +107,8 @@ test('Add To Dictionary adds the current word and advances to the next one', fun
     addWordToPersonalDictFile: function(word){ addedWords.push(word); }
   });
 
-  showSpellcheck(makeEditorQuill(), {}, {}, function(){});
-  getButtonByAccessKey('a').click();
+  await showSpellcheck(makeEditorQuill(), {}, {}, function(){});
+  await getButtonByAccessKey('a').onclick();
 
   assert.deepStrictEqual(addedWords, ['zxqzxq']);
   assert.strictEqual(callCount, 2, 'adding the word should re-run spellcheck from the next index');
@@ -114,14 +118,14 @@ test('Add To Dictionary adds the current word and advances to the next one', fun
 //Regression: suggestion <label>s had no htmlFor/id pairing, so clicking the label text (rather
 //than the tiny radio button itself) did nothing - unlike the Custom Replacement label right below
 //it, which was already wired up correctly.
-test('clicking a suggestion label selects its radio button', function(){
+test('clicking a suggestion label selects its radio button', async function(){
   var showSpellcheck = freshSpellcheckDisplay({
     runSpellcheck: function(){
       return { word: 'zxqzxq', index: 0, suggestions: ['cat', 'hat'] };
     }
   });
 
-  showSpellcheck(makeEditorQuill(), {}, {}, function(){});
+  await showSpellcheck(makeEditorQuill(), {}, {}, function(){});
 
   var secondRadio = document.querySelectorAll('input[name="suggestions"]')[1];
   var secondLabel = document.querySelector('label[for="' + secondRadio.id + '"]');
@@ -132,7 +136,7 @@ test('clicking a suggestion label selects its radio button', function(){
   assert.strictEqual(secondRadio.checked, true);
 });
 
-test('displaying spellcheck replaces any existing popup and selects the first suggestion', function(){
+test('displaying spellcheck replaces any existing popup and selects the first suggestion', async function(){
   var stalePopup = document.createElement('div');
   stalePopup.classList.add('popup');
   document.body.appendChild(stalePopup);
@@ -143,7 +147,7 @@ test('displaying spellcheck replaces any existing popup and selects the first su
     }
   });
 
-  showSpellcheck(makeEditorQuill(), {}, {}, function(){});
+  await showSpellcheck(makeEditorQuill(), {}, {}, function(){});
 
   var popups = document.querySelectorAll('.popup');
   assert.strictEqual(popups.length, 1, 'the stale popup should be removed');

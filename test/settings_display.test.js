@@ -42,6 +42,10 @@ function sysDirectories(){
   return { docs: '/docs', home: '/home' };
 }
 
+function platformInfo(overrides){
+  return Object.assign({ platform: 'linux', arch: 'x64' }, overrides);
+}
+
 function findButton(text){
   return Array.from(document.querySelectorAll('button')).find(function(b){ return b.textContent === text; });
 }
@@ -70,7 +74,7 @@ test('clicking Change... opens the directory picker and applies the chosen path'
   };
 
   var showSettings = freshSettingsDisplay({ showFileDialog: showFileDialog });
-  showSettings(makeUserSettings(), { updateAutosave: function(){} }, sysDirectories(), function(){}, function(){});
+  showSettings(makeUserSettings(), { updateAutosave: function(){} }, sysDirectories(), function(){}, function(){}, platformInfo());
 
   findButton('Change...').onclick();
 
@@ -94,7 +98,7 @@ test('Save reschedules autosave with the real saveProject callback and closes th
   var callbackCalls = 0;
   var callback = function(){ callbackCalls++; };
 
-  showSettings(userSettings, autosaver, sysDirectories(), saveProject, callback);
+  showSettings(userSettings, autosaver, sysDirectories(), saveProject, callback, platformInfo());
   findButton('Save').onclick();
 
   assert.strictEqual(updateAutosaveCalls.length, 1);
@@ -113,7 +117,7 @@ test('Save coerces backupsToKeep to a Number', function(t){
   var showSettings = freshSettingsDisplay({});
   var userSettings = makeUserSettings();
 
-  showSettings(userSettings, { updateAutosave: function(){} }, sysDirectories(), function(){}, function(){});
+  showSettings(userSettings, { updateAutosave: function(){} }, sysDirectories(), function(){}, function(){}, platformInfo());
   document.querySelectorAll('.number-ticker')[0].value = '25';
   findButton('Save').onclick();
 
@@ -128,7 +132,7 @@ test('an unrecognized darkMode value falls back to System Default instead of lea
   var showSettings = freshSettingsDisplay({});
   var userSettings = makeUserSettings({ darkMode: 'some-future-value' });
 
-  showSettings(userSettings, { updateAutosave: function(){} }, sysDirectories(), function(){}, function(){});
+  showSettings(userSettings, { updateAutosave: function(){} }, sysDirectories(), function(){}, function(){}, platformInfo());
 
   assert.strictEqual(document.getElementById('dark-mode-sys').checked, true);
   assert.strictEqual(document.getElementById('dark-mode-dark').checked, false);
@@ -144,7 +148,7 @@ test('a recognized darkMode value is still checked and round-trips on Save', fun
   var showSettings = freshSettingsDisplay({});
   var userSettings = makeUserSettings({ darkMode: 'dark' });
 
-  showSettings(userSettings, { updateAutosave: function(){} }, sysDirectories(), function(){}, function(){});
+  showSettings(userSettings, { updateAutosave: function(){} }, sysDirectories(), function(){}, function(){}, platformInfo());
 
   assert.strictEqual(document.getElementById('dark-mode-dark').checked, true);
   assert.strictEqual(document.getElementById('dark-mode-sys').checked, false);

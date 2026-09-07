@@ -5,7 +5,20 @@ const os = require('os');
 const path = require('path');
 const unzipper = require('unzipper');
 
+const BACKSLASH = String.fromCharCode(92);
+
 const { backupProject, archiveProject, deleteOldBackups } = require('../src/components/controllers/backup-project');
+const { normalizeSlashes } = require('../src/components/controllers/path-utils');
+
+//The modules under test hold their own createPlatform(createIpcBacking()) instance and reach the
+//machine through window.warewoolf, exactly as they do in the app. This puts a bridge there, with a
+//real node backing (and a real structured-clone boundary) behind it - so these tests still assert
+//against real files in real temp directories, and now also prove the arguments and results survive
+//being sent somewhere.
+const { installBridge, uninstallBridge } = require('./fake-bridge');
+
+test.before(function(){ installBridge(); });
+test.after(uninstallBridge);
 
 function makeTempDir(t, prefix){
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -89,7 +102,13 @@ test('backupProject creates the backup directory on first run, persists it, and 
   });
 
   assert.strictEqual(finalMessage, 'Backup finished.');
-  assert.strictEqual(userSettings.backupDirectory, path.join(docsDir, 'backups'));
+  //(Phase 9b) Asserted as a forward-slash composition rather than as path.join(docsDir, 'backups'),
+  //which is what this said before and what it had to stop saying. createBackupsDirectory used to
+  //build this with path.join, so on Windows it persisted 'C:\...\Documents\backups' into
+  //user-settings.json even though docsDir arrived forward-slashed from index.js - and a test
+  //written with path.join agreed with it on both hosts while pinning two different answers. The
+  //renderer composes with '/' everywhere now (path-utils.js), so this states the one answer.
+  assert.strictEqual(userSettings.backupDirectory, normalizeSlashes(docsDir) + '/backups');
   assert.strictEqual(saveCalls, 1, 'userSettings.save() should be called once the backup directory is created');
 
   const backups = fs.readdirSync(userSettings.backupDirectory);
@@ -115,7 +134,7 @@ test('backupProject reports the error instead of silently finishing when archivi
   assert.ok(!messages.includes('Backup finished.'));
 });
 
-test('deleteOldBackups keeps only the most recent N backups, matching filenames that contain extra dots', function(t){
+test('deleteOldBackups keeps only the most recent N backups, matching filenames that contain extra dots', async function(t){
   const backupDir = makeTempDir(t, 'wwbackup-prune-');
   //Regression for the old `filename.split('.')[0]` parsing, which truncated at the first dot
   //and so never matched real backups for a project whose name contains a dot.
@@ -132,7 +151,7 @@ test('deleteOldBackups keeps only the most recent N backups, matching filenames 
     fs.writeFileSync(path.join(backupDir, 'other.project' + ts + '.zip'), '');
   });
 
-  deleteOldBackups(project, userSettings);
+  await deleteOldBackups(project, userSettings);
 
   const remaining = fs.readdirSync(backupDir).sort();
   assert.deepStrictEqual(remaining, [
@@ -143,14 +162,36 @@ test('deleteOldBackups keeps only the most recent N backups, matching filenames 
   ]);
 });
 
-test('deleteOldBackups does nothing when backupsToKeep is 0', function(t){
+//The other half of the change above: a settings file written by an earlier version holds a
+//backslash backupDirectory, and 9b must not have stranded it. splitPath/basename/join all
+//normalize on the way in, so the stored form still resolves - both for the prune paths built off
+//it and for the directory itself.
+test('deleteOldBackups still works from a backslash backupDirectory left by an older version', async function(t){
+  const backupDir = makeTempDir(t, 'wwbackup-legacy-');
+  const project = { filename: 'notes.final.woolf' };
+  //The exact shape path.join() used to persist on Windows.
+  const userSettings = {
+    backupDirectory: backupDir.split('/').join(BACKSLASH),
+    backupsToKeep: 1
+  };
+
+  ['20250101000001', '20250101000002'].forEach(function(ts){
+    fs.writeFileSync(path.join(backupDir, 'notes.final' + ts + '.zip'), '');
+  });
+
+  await deleteOldBackups(project, userSettings);
+
+  assert.deepStrictEqual(fs.readdirSync(backupDir), ['notes.final20250101000002.zip']);
+});
+
+test('deleteOldBackups does nothing when backupsToKeep is 0', async function(t){
   const backupDir = makeTempDir(t, 'wwbackup-prune-');
   const project = { filename: 'notes.final.woolf' };
   const userSettings = { backupDirectory: backupDir, backupsToKeep: 0 };
 
   fs.writeFileSync(path.join(backupDir, 'notes.final20250101000001.zip'), '');
 
-  deleteOldBackups(project, userSettings);
+  await deleteOldBackups(project, userSettings);
 
   assert.strictEqual(fs.readdirSync(backupDir).length, 1);
 });

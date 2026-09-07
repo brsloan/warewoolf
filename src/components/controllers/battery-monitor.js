@@ -1,27 +1,47 @@
-const { spawn } = require("child_process");
 const { logError } = require('./error-log');
-const fs = require('fs');
+const { createPlatform } = require('./platform');
+const { createIpcBacking } = require('./platform-ipc');
+
+//getBatteryCapacity (group K) takes no injected config, so this holds its own standing instance,
+//the same reason file-manager.js/corkboard.js/epub.js do. It folds what used to be this file's own
+//getBatteryName()/queryKernel() two-step into one native call - see platform-node.js's own note on
+//why "no battery" is UNAVAILABLE rather than a resolved null.
+var platform = createPlatform(createIpcBacking());
+
 var batteryCheckInterval;
 
 function checkBatteryMinutely(callback){
-    var batName = getBatteryName();
-
     //Do initial check
-    getBatteryPercent(batName, callback);
+    pollCapacity(callback);
 
     //Start timed updates
     updateAutocheck(1, function(){
-        getBatteryPercent(batName, function(newPercent){
-            callback(newPercent);
-        });
+        pollCapacity(callback);
     });
 };
+
+function pollCapacity(callback){
+    platform.getBatteryCapacity().then(function(capacity){
+        callback(String(capacity));
+    }).catch(function(err){
+        //UNAVAILABLE (no battery at all) is the everyday result on every machine that isn't a
+        //writerDeck - not worth writing to the error log once a minute for as long as the app is
+        //open. A read that genuinely failed (IO_ERROR, a spawn error) still logs.
+        if(err.code === 'UNAVAILABLE'){
+            callback('N/A');
+            return;
+        }
+
+        logError(err);
+        callback('no data');
+    });
+}
 
 function initiateAutocheck(minutes, updateBattery){
     if(minutes > 0)
       batteryCheckInterval = setInterval(updateBattery, minutes * 60000);
 }
-  
+
 
 function updateAutocheck(minutes, updateBattery){
     if(batteryCheckInterval == null)
@@ -40,70 +60,7 @@ function endAutocheck(){
     }
 }
 
-function getBatteryPercent(batName, updateBattery){
-    if(batName != null)
-        queryKernel(batName, function(resp){
-            updateBattery(resp);
-        });
-    else
-        updateBattery('N/A');
-}
-
-function getBatteryName(){
-    var batteryName = null;
-    var batDirs;
-    try{
-        batDirs = fs.readdirSync('/sys/class/power_supply');
-    }
-    catch(err){
-        logError(err);
-        return null;
-    }
-    var batNames = batDirs.filter(function(val){
-        return val.startsWith('BAT');
-    });
-    if(batNames.length > 0)
-        batteryName = batNames[0];
-
-    return batteryName;
-}
-
-function queryKernel(batName, cback){
-    if(batName != null){
-        const cat = spawn('cat', ['/sys/class/power_supply/' + batName + '/capacity']);
-
-        var output = '';
-        var cbackCalled = false;
-
-        function respond(value){
-            if(!cbackCalled){
-                cbackCalled = true;
-                cback(value);
-            }
-        }
-
-        cat.stdout.on('data', function(data){
-            output += data.toString();
-        });
-
-        cat.stderr.on('data', function(data){
-            logError(new Error(data.toString().trim()));
-        });
-
-        cat.on('error', function(err){
-            logError(err);
-            respond('no data');
-        });
-
-        cat.stdout.on('close', function(code){
-            respond(output.trim() || 'no data');
-        });
-    }
-}
-
 module.exports = {
-    getBatteryPercent,
-    getBatteryName,
     checkBatteryMinutely,
     initiateAutocheck,
     updateAutocheck,

@@ -1,6 +1,10 @@
 const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
 const { getCardsFromFile, saveCards } = require('../controllers/corkboard');
-const isMac = process.platform === "darwin";
+
+//Set from showCorkboard()'s platformInfo argument below rather than read here at module scope -
+//under contextIsolation there is no `process` in the renderer at all, and a module-scope read
+//would throw while the bundle is still being evaluated, taking the whole app down with it.
+var isMac = false;
 
 var loadedCards = [];
 var unsavedChanges = false;
@@ -11,7 +15,12 @@ var unsavedChanges = false;
 //project the caller actually passed in.
 var openProject = null;
 
-function showCorkboard(project){
+//Async now that loading the board's cards goes through the platform facade. The popup element
+//itself is created and appended before the await, so it exists in the DOM the instant the promise
+//this returns starts pending - only the cards themselves (and the focus that depends on them)
+//arrive a tick later.
+async function showCorkboard(project, platformInfo){
+    isMac = platformInfo.platform === "darwin";
     openProject = project;
     unsavedChanges = false;
     removeElementsByClass('popup');
@@ -24,7 +33,7 @@ function showCorkboard(project){
 
     document.body.appendChild(popup);
 
-    loadedCards = getCardsFromFile(project.directory + project.chapsDirectory);
+    loadedCards = await getCardsFromFile(project.directory + project.chapsDirectory);
     if(!loadedCards || loadedCards.length === 0)
       loadedCards = generateStarterCard();
 
@@ -285,11 +294,16 @@ function getElementWidthWithMargin(element) {
   return width + marginLeft + marginRight;
 }
 
-function boardCntrlEvents(e){
+//Async because saving the project it belongs to now goes through the platform facade. A keydown
+//listener's return value is never read, so the promise this returns goes nowhere - which is fine
+//here: saveFile() reports its own failures to the error log and returns false rather than throwing.
+async function boardCntrlEvents(e){
   if((e.ctrlKey || e.metaKey) && (e.key === "s")){
     stopDefaultPropagation(e);
-    saveCards(loadedCards, openProject.directory + openProject.chapsDirectory);
-    openProject.saveFile();
+    //Awaited so the board is only marked clean once both the corkboard file and the project file
+    //have actually been written.
+    await saveCards(loadedCards, openProject.directory + openProject.chapsDirectory);
+    await openProject.saveFile();
     unmarkUnsavedChanges();
   }
   else if(e.key === "Escape"){
@@ -434,9 +448,9 @@ function promptToSave(){
   popup.appendChild(subWarning);
 
   var save = createButton("Save");
-  save.onclick = function(){
-    saveCards(loadedCards, openProject.directory + openProject.chapsDirectory);
-    openProject.saveFile();
+  save.onclick = async function(){
+    await saveCards(loadedCards, openProject.directory + openProject.chapsDirectory);
+    await openProject.saveFile();
     unsavedChanges = false;
     closePopups();
   };

@@ -105,14 +105,16 @@ function showFindReplace(project, editorQuill, displayChapterByIndex){
 
     var replaceAllBtn = createButton("Replace <span class='access-key'>A</span>ll");
     replaceAllBtn.id = "replace-all-btn";
-    replaceAllBtn.onclick = function(){
+    //Awaited so the count and the redraw below describe a finished pass rather than one still
+    //reading chapters off disk.
+    replaceAllBtn.onclick = async function(){
       replacementCount.innerText = "";
       var numReplaced = 0;
 
       if(inAllChapters.checked)
-        numReplaced = replaceAllInAllChapters(project, findIn.value, replaceIn.value, caseSensitive.checked, wholeWordOnly.checked);
+        numReplaced = await replaceAllInAllChapters(project, findIn.value, replaceIn.value, caseSensitive.checked, wholeWordOnly.checked);
       else {
-        numReplaced = replaceAllInChapter(findIn.value, replaceIn.value, caseSensitive.checked, project.getActiveChapter(), wholeWordOnly.checked);
+        numReplaced = await replaceAllInChapter(findIn.value, replaceIn.value, caseSensitive.checked, project.getActiveChapter(), wholeWordOnly.checked);
       }
       displayChapterByIndex(project.activeChapterIndex);
       replacementCount.innerText = numReplaced + " instances replaced!";

@@ -1,8 +1,18 @@
 const fs = require('fs');
-const {
-  seal, open, deriveKey, generateKey, generateSalt, decryptLegacy, isLegacyBlob, KDF_PARAMS
-} = require('../controllers/crypto');
+const { seal, open, deriveKey, generateKey, generateSalt, KDF_PARAMS } = require('../controllers/crypto');
 const { logError } = require('../controllers/error-log');
+
+//As of Phase 7 nothing in the renderer requires this file or crypto.js. Its only caller is
+//platform-node.js, which drives it behind group J's seven commands - so the key derivation, the
+//session key, the sealing and the 0600 files below all live on the native side of the boundary,
+//and getPassword() is reachable only from there. It is left here rather than merged into
+//platform-node.js because that file is a backing, not an implementation: groups B/C/D keep their
+//models the same way.
+//
+//migrateLegacyPassword() used to live here and is gone: it took a userSettings object and wrote to
+//it, which is the renderer's file, not this store's. What replaced it is split along that line -
+//platform-node.js's migrateLegacyCredential() does the decrypt-and-reseal (never returning the
+//plaintext), and render.js clears userSettings.senderPass itself.
 
 const STORE_VERSION = 2;
 
@@ -31,9 +41,7 @@ function getCredentialStore(userDataDir, secureStorage){
     getPassword: getPassword,
     savePassword: savePassword,
     unlock: unlock,
-    clear: clear,
-    migrateLegacyPassword: migrateLegacyPassword,
-    getStoreFilepath: getStoreFilepath
+    clear: clear
   };
 
   //Everything a dialog needs to decide what to draw: whether a password is saved, whether it is
@@ -160,28 +168,6 @@ function getCredentialStore(userDataDir, secureStorage){
       logError(err);
       return false;
     }
-  }
-
-  //Versions up to 2.2.1 kept the password in user-settings.json, encrypted with a key that shipped
-  //in the source. Read it once with that key, re-save it properly, and take it out of the settings
-  //file. Returns true when something was moved.
-  function migrateLegacyPassword(userSettings){
-    if(!isLegacyBlob(userSettings.senderPass))
-      return false;
-
-    var password = decryptLegacy(userSettings.senderPass);
-
-    if(password != null && password !== '')
-      savePassword(password);
-
-    userSettings.senderPass = null;
-    userSettings.save();
-
-    return true;
-  }
-
-  function getStoreFilepath(){
-    return storeFilepath;
   }
 
   function isSecureStorageAvailable(){
