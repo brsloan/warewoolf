@@ -971,6 +971,311 @@ function encryptTheOldWay(text){
 }
 
 // ---------------------------------------------------------------------------------------------
+// Group D - user settings, corkboard, licenses
+// ---------------------------------------------------------------------------------------------
+
+test('loadUserSettings returns null when nothing has been saved yet', async function(t){
+  const built = platformIn(t);
+
+  assert.strictEqual(await built.platform.loadUserSettings(), null);
+});
+
+test('saveUserSettings and loadUserSettings round-trip an object', async function(t){
+  const built = platformIn(t);
+  const settings = { theme: 'dark', autosaveMinutes: 5 };
+
+  await built.platform.saveUserSettings({ settings: settings });
+
+  assert.deepStrictEqual(await built.platform.loadUserSettings(), settings);
+});
+
+test('user settings commands reject UNAVAILABLE without a userData directory configured', async function(){
+  const platform = createPlatform(createNodeBacking({}));
+
+  assert.strictEqual((await rejection(platform.loadUserSettings({}))).code, CODES.UNAVAILABLE);
+  assert.strictEqual((await rejection(platform.saveUserSettings({ settings: {} }))).code, CODES.UNAVAILABLE);
+});
+
+test('loadCorkboard returns null when the corkboard file does not exist yet', async function(t){
+  const built = platformIn(t);
+
+  assert.strictEqual(await built.platform.loadCorkboard({ chaptersDir: built.dir }), null);
+});
+
+//Raw text in, raw text out - corkboard.js does its own parsing, so the backing must not touch the
+//marker-escaping content in any way.
+test('saveCorkboard and loadCorkboard round-trip the raw corkboard text', async function(t){
+  const built = platformIn(t);
+  const raw = '# Card one\n[x] Card two\n';
+
+  await built.platform.saveCorkboard({ chaptersDir: built.dir, contents: raw });
+
+  assert.strictEqual(await built.platform.loadCorkboard({ chaptersDir: built.dir }), raw);
+});
+
+test('the corkboard commands refuse arguments they cannot act on', async function(t){
+  const built = platformIn(t);
+
+  assert.strictEqual((await rejection(built.platform.loadCorkboard({}))).code, CODES.INVALID_ARGUMENT);
+  assert.strictEqual((await rejection(built.platform.saveCorkboard({ chaptersDir: built.dir }))).code,
+    CODES.INVALID_ARGUMENT);
+});
+
+test('readLicenses returns the shipped license text', async function(t){
+  const appDir = tempDir(t).replaceAll('\\', '/');
+  fs.writeFileSync(appDir + 'licenses.txt', 'MIT License...', 'utf8');
+  const platform = createPlatform(createNodeBacking({ paths: { app: appDir } }));
+
+  assert.strictEqual(await platform.readLicenses(), 'MIT License...');
+});
+
+//about_display.js's own try/catch used to swallow exactly this and show an empty license panel -
+//so this resolves empty rather than rejecting, whether there is no app directory at all or the file
+//just is not there.
+test('readLicenses returns an empty string rather than rejecting when there is nothing to read', async function(t){
+  const withoutApp = createPlatform(createNodeBacking({}));
+  const emptyAppDir = tempDir(t).replaceAll('\\', '/');
+  const withApp = createPlatform(createNodeBacking({ paths: { app: emptyAppDir } }));
+
+  assert.strictEqual(await withoutApp.readLicenses(), '');
+  assert.strictEqual(await withApp.readLicenses(), '');
+});
+
+// ---------------------------------------------------------------------------------------------
+// Group E - the in-app file browser (the documented generic exception)
+// ---------------------------------------------------------------------------------------------
+
+//isDirectory has to cross as a plain boolean, not a dirent's isDirectory() method - a function
+//cannot survive IPC/Tauri serialization.
+test('listDirectory reports every entry with isDirectory as a plain boolean', async function(t){
+  const built = platformIn(t);
+  fs.writeFileSync(built.dir + 'chapter.txt', 'x', 'utf8');
+  fs.mkdirSync(built.dir + 'subfolder');
+
+  const entries = await built.platform.listDirectory({ path: built.dir });
+
+  assert.deepStrictEqual(entries.sort(function(a, b){ return a.name < b.name ? -1 : 1; }), [
+    { name: 'chapter.txt', isDirectory: false },
+    { name: 'subfolder', isDirectory: true }
+  ]);
+});
+
+test('listDirectory rejects NOT_FOUND for a directory that is not there', async function(t){
+  const built = platformIn(t);
+
+  const err = await rejection(built.platform.listDirectory({ path: built.dir + 'nowhere' }));
+  assert.strictEqual(err.code, CODES.NOT_FOUND);
+});
+
+test('pathExists reports true or false without ever rejecting', async function(t){
+  const built = platformIn(t);
+  fs.writeFileSync(built.dir + 'here.txt', 'x', 'utf8');
+
+  assert.strictEqual(await built.platform.pathExists({ path: built.dir + 'here.txt' }), true);
+  assert.strictEqual(await built.platform.pathExists({ path: built.dir + 'nowhere.txt' }), false);
+});
+
+test('statEntry describes a file and a directory', async function(t){
+  const built = platformIn(t);
+  fs.writeFileSync(built.dir + 'here.txt', 'hello', 'utf8');
+
+  const fileStat = await built.platform.statEntry({ path: built.dir + 'here.txt' });
+  assert.strictEqual(fileStat.isDirectory, false);
+  assert.strictEqual(fileStat.size, 5);
+  assert.strictEqual(typeof fileStat.modified, 'string');
+
+  const dirStat = await built.platform.statEntry({ path: built.dir });
+  assert.strictEqual(dirStat.isDirectory, true);
+});
+
+test('statEntry rejects NOT_FOUND for a path that is not there', async function(t){
+  const built = platformIn(t);
+
+  const err = await rejection(built.platform.statEntry({ path: built.dir + 'nowhere' }));
+  assert.strictEqual(err.code, CODES.NOT_FOUND);
+});
+
+test('createDirectory makes a new directory and reports the path it made', async function(t){
+  const built = platformIn(t);
+  const parent = built.dir.replaceAll('\\', '/');
+
+  const result = await built.platform.createDirectory({ parent: built.dir, name: 'Chapters' });
+
+  assert.strictEqual(result.path, parent + 'Chapters');
+  assert.ok(fs.statSync(result.path).isDirectory());
+});
+
+//Matches the fs.existsSync guard createNewDirectory used to apply itself (file-manager.js:106) -
+//an existing target is left alone rather than rejected or clobbered.
+test('createDirectory is idempotent: an existing target is left alone, not rejected', async function(t){
+  const built = platformIn(t);
+  const parent = built.dir.replaceAll('\\', '/');
+  fs.mkdirSync(built.dir + 'Chapters');
+  fs.writeFileSync(built.dir + 'Chapters/keepme.txt', 'do not lose this', 'utf8');
+
+  const result = await built.platform.createDirectory({ parent: built.dir, name: 'Chapters' });
+
+  assert.strictEqual(result.path, parent + 'Chapters');
+  assert.strictEqual(fs.readFileSync(built.dir + 'Chapters/keepme.txt', 'utf8'), 'do not lose this');
+});
+
+test('moveEntry moves a file to a free destination', async function(t){
+  const built = platformIn(t);
+  fs.writeFileSync(built.dir + 'source.txt', 'contents', 'utf8');
+
+  await built.platform.moveEntry({ source: built.dir + 'source.txt', destination: built.dir + 'dest.txt' });
+
+  assert.ok(!fs.existsSync(built.dir + 'source.txt'));
+  assert.strictEqual(fs.readFileSync(built.dir + 'dest.txt', 'utf8'), 'contents');
+});
+
+//The refuse-on-existing-destination guard file-manager.js used to apply itself (:54-56):
+//fs.renameSync is silent about clobbering, so this command has to check first and reject rather
+//than overwrite. moveFiles' cut-paste auto-uniquify policy is built from pathExists/statEntry on
+//the renderer side instead - this command only ever implements the stricter, refusing policy.
+test('moveEntry rejects ALREADY_EXISTS rather than overwriting the destination', async function(t){
+  const built = platformIn(t);
+  fs.writeFileSync(built.dir + 'source.txt', 'new', 'utf8');
+  fs.writeFileSync(built.dir + 'dest.txt', 'do not clobber this', 'utf8');
+
+  const err = await rejection(built.platform.moveEntry({
+    source: built.dir + 'source.txt', destination: built.dir + 'dest.txt'
+  }));
+
+  assert.strictEqual(err.code, CODES.ALREADY_EXISTS);
+  assert.strictEqual(fs.readFileSync(built.dir + 'dest.txt', 'utf8'), 'do not clobber this');
+  assert.ok(fs.existsSync(built.dir + 'source.txt'));
+});
+
+test('moveEntry rejects NOT_FOUND when the source does not exist', async function(t){
+  const built = platformIn(t);
+
+  const err = await rejection(built.platform.moveEntry({
+    source: built.dir + 'nowhere.txt', destination: built.dir + 'dest.txt'
+  }));
+
+  assert.strictEqual(err.code, CODES.NOT_FOUND);
+});
+
+test('copyEntry copies a single file, leaving the original in place', async function(t){
+  const built = platformIn(t);
+  fs.writeFileSync(built.dir + 'source.txt', 'contents', 'utf8');
+
+  await built.platform.copyEntry({ source: built.dir + 'source.txt', destination: built.dir + 'copy.txt' });
+
+  assert.strictEqual(fs.readFileSync(built.dir + 'copy.txt', 'utf8'), 'contents');
+  assert.ok(fs.existsSync(built.dir + 'source.txt'));
+});
+
+test('copyEntry copies a directory tree when recursive is set', async function(t){
+  const built = platformIn(t);
+  fs.mkdirSync(built.dir + 'srcdir');
+  fs.writeFileSync(built.dir + 'srcdir/inner.txt', 'nested', 'utf8');
+
+  await built.platform.copyEntry({
+    source: built.dir + 'srcdir', destination: built.dir + 'destdir', recursive: true
+  });
+
+  assert.strictEqual(fs.readFileSync(built.dir + 'destdir/inner.txt', 'utf8'), 'nested');
+});
+
+test('copyEntry rejects NOT_FOUND when the source does not exist', async function(t){
+  const built = platformIn(t);
+
+  const err = await rejection(built.platform.copyEntry({
+    source: built.dir + 'nowhere.txt', destination: built.dir + 'copy.txt'
+  }));
+
+  assert.strictEqual(err.code, CODES.NOT_FOUND);
+});
+
+test('deleteEntry removes a file', async function(t){
+  const built = platformIn(t);
+  fs.writeFileSync(built.dir + 'gone.txt', 'x', 'utf8');
+
+  await built.platform.deleteEntry({ path: built.dir + 'gone.txt' });
+
+  assert.ok(!fs.existsSync(built.dir + 'gone.txt'));
+});
+
+test('deleteEntry removes a directory tree when recursive is set', async function(t){
+  const built = platformIn(t);
+  fs.mkdirSync(built.dir + 'tree');
+  fs.writeFileSync(built.dir + 'tree/inner.txt', 'x', 'utf8');
+
+  await built.platform.deleteEntry({ path: built.dir + 'tree', recursive: true });
+
+  assert.ok(!fs.existsSync(built.dir + 'tree'));
+});
+
+//A path that is already gone is not a failure of anything the caller asked for - deleteEntry is a
+//no-op rather than rejecting NOT_FOUND, the same instinct as an idempotent createDirectory above.
+test('deleteEntry on a path that is already gone is a silent no-op', async function(t){
+  const built = platformIn(t);
+
+  await assert.doesNotReject(built.platform.deleteEntry({ path: built.dir + 'never-existed.txt' }));
+});
+
+// ---------------------------------------------------------------------------------------------
+// Group I - spellcheck dictionaries
+// ---------------------------------------------------------------------------------------------
+
+function writeSharedDictionary(appDir){
+  fs.mkdirSync(appDir + 'dictionaries', { recursive: true });
+  fs.writeFileSync(appDir + 'dictionaries/en_US-large.aff', 'SET UTF-8', 'utf8');
+  fs.writeFileSync(appDir + 'dictionaries/en_US-large.dic', '2\nhello\nworld', 'utf8');
+}
+
+//nspell is pure JS and stays in the webview - only the dictionary text crosses.
+test('loadDictionary returns the shipped .aff and .dic text', async function(t){
+  const appDir = tempDir(t).replaceAll('\\', '/');
+  writeSharedDictionary(appDir);
+  const platform = createPlatform(createNodeBacking({ paths: { app: appDir } }));
+
+  const dict = await platform.loadDictionary();
+
+  assert.strictEqual(dict.aff, 'SET UTF-8');
+  assert.strictEqual(dict.dic, '2\nhello\nworld');
+});
+
+test('loadDictionary rejects UNAVAILABLE without an app directory configured', async function(){
+  const platform = createPlatform(createNodeBacking({}));
+
+  assert.strictEqual((await rejection(platform.loadDictionary())).code, CODES.UNAVAILABLE);
+});
+
+test('loadDictionary rejects NOT_FOUND when the shipped dictionary files are missing', async function(t){
+  const appDir = tempDir(t).replaceAll('\\', '/');
+  const platform = createPlatform(createNodeBacking({ paths: { app: appDir } }));
+
+  assert.strictEqual((await rejection(platform.loadDictionary())).code, CODES.NOT_FOUND);
+});
+
+//Folds in the bootstrap write createPersonalDicIfNeeded() used to require the caller run first
+//(spellcheck.js:38-44) - the caller stops knowing the file has to be created before it can be read.
+test('loadPersonalDictionary seeds the file on first read', async function(t){
+  const built = platformIn(t);
+
+  assert.deepStrictEqual(await built.platform.loadPersonalDictionary(), ['WareWoolf']);
+  assert.ok(fs.existsSync(built.dir + 'dictionaries/personal.dic'));
+});
+
+test('savePersonalDictionary and loadPersonalDictionary round-trip the word list', async function(t){
+  const built = platformIn(t);
+
+  await built.platform.savePersonalDictionary({ words: ['WareWoolf', 'nspell', 'markdownfic'] });
+
+  assert.deepStrictEqual(await built.platform.loadPersonalDictionary(), ['WareWoolf', 'nspell', 'markdownfic']);
+});
+
+test('personal dictionary commands reject UNAVAILABLE without a userData directory configured', async function(){
+  const platform = createPlatform(createNodeBacking({}));
+
+  assert.strictEqual((await rejection(platform.loadPersonalDictionary())).code, CODES.UNAVAILABLE);
+  assert.strictEqual((await rejection(platform.savePersonalDictionary({ words: [] }))).code, CODES.UNAVAILABLE);
+});
+
+// ---------------------------------------------------------------------------------------------
 // What groups B and C give up
 // ---------------------------------------------------------------------------------------------
 
