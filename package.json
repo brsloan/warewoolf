@@ -86,7 +86,7 @@
     "@electron-forge/maker-rpm": "^7.11.2",
     "@electron-forge/maker-squirrel": "^7.11.2",
     "@electron-forge/maker-zip": "^7.11.2",
-    "electron": "^44.2.0",
+    "electron": "^32.3.3",
     "esbuild": "^0.28.2",
     "jsdom": "^29.1.1"
   }
