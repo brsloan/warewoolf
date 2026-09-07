@@ -2,8 +2,12 @@ const { closePopups, createButton, removeElementsByClass, generateRow } = requir
 const { loadErrorLog, clearErrorLog } = require('../controllers/error-log');
 const { APP_PASSWORD_HINT } = require('../controllers/credential-help');
 const { emailFile } = require('../controllers/email-doc');
+const { SAVED_SECRET } = require('../controllers/platform');
 
-async function showErrorLog(userSettings, credentialStore){
+//`platform` is render.js's node-backed instance, for the same reason email-doc_display.js needs
+//that one rather than a fresh one: an unlocked passphrase-protected credential is unlocked in that
+//backing's cached store and nowhere else.
+async function showErrorLog(userSettings, platform){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup");
@@ -46,11 +50,14 @@ async function showErrorLog(userSettings, credentialStore){
   var senderPassInput = document.createElement('input');
   senderPassInput.type = 'password';
   senderPassInput.id = 'sender-email-pass';
-  //This dialog only reads a saved password; it never stores one. A passphrase protected password
-  //that hasn't been unlocked in this session simply isn't filled in, and gets typed by hand.
-  var savedPassword = credentialStore.getPassword();
-  if(savedPassword != null)
-    senderPassInput.value = savedPassword;
+  //This dialog only refers to a saved password; it never stores one, and never learns it. The field
+  //gets the SAVED_SECRET sentinel, which emailFile resolves natively at send time - see
+  //platform.js. A passphrase protected password that hasn't been unlocked in this session has
+  //nothing to refer to, so the field is left empty and the password gets typed by hand, exactly as
+  //it did when this line read the plaintext and got null back.
+  var credentials = await platform.describeCredential({ service: 'email' });
+  if(credentials.hasPassword && !credentials.locked)
+    senderPassInput.value = SAVED_SECRET;
 
   emlTbl.appendChild(generateRow(senderPassLabel, senderPassInput));
 

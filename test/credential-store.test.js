@@ -5,7 +5,12 @@ const os = require('node:os');
 const path = require('node:path');
 
 const getCredentialStore = require('../src/components/models/credential-store');
-const { seal, generateKey } = require('../src/components/controllers/crypto');
+
+//migrateLegacyPassword() used to live on this store and its four tests used to live here. Phase 7
+//split it: the decrypt-and-reseal is platform-node.js's migrateLegacyCredential (covered in
+//platform.test.js, including the legacy-format fixture and the recognized/migrated distinction),
+//and clearing userSettings.senderPass is render.js's (covered in render.test.js, driven through a
+//real boot). Nothing about the old behaviour went untested; it is tested where it now runs.
 
 test('with no system keystore, the password is sealed under a key file', function(){
   const dir = tempDir();
@@ -109,46 +114,6 @@ test('clearing forgets the password and relocks the session', function(){
   assert.ok(store.clear());
 });
 
-test('a password saved by an older version moves out of the settings file', function(){
-  const dir = tempDir();
-  const settings = legacySettings('old-password');
-  const store = getCredentialStore(dir, keystore(false));
-
-  assert.strictEqual(store.migrateLegacyPassword(settings), true);
-  assert.strictEqual(settings.senderPass, null);
-  assert.strictEqual(settings.saveCount, 1);
-  assert.strictEqual(store.getPassword(), 'old-password');
-});
-
-test('migration runs once and leaves an already migrated settings file alone', function(){
-  const dir = tempDir();
-  const settings = legacySettings('old-password');
-  const store = getCredentialStore(dir, keystore(false));
-  store.migrateLegacyPassword(settings);
-
-  assert.strictEqual(store.migrateLegacyPassword(settings), false);
-  assert.strictEqual(settings.saveCount, 1);
-  assert.strictEqual(store.getPassword(), 'old-password');
-});
-
-//Migration must never mistake a current blob for a legacy one and try to read it with the old key.
-test('migration ignores a settings file holding a current blob', function(){
-  const dir = tempDir();
-  const settings = { senderPass: seal('hunter2', generateKey()), saveCount: 0, save: countSave };
-
-  assert.strictEqual(getCredentialStore(dir, keystore(false)).migrateLegacyPassword(settings), false);
-  assert.notStrictEqual(settings.senderPass, null);
-  assert.strictEqual(settings.saveCount, 0);
-});
-
-test('nothing to migrate when no password was ever saved', function(){
-  const dir = tempDir();
-  const settings = { senderPass: null, saveCount: 0, save: countSave };
-
-  assert.strictEqual(getCredentialStore(dir, keystore(false)).migrateLegacyPassword(settings), false);
-  assert.strictEqual(settings.saveCount, 0);
-});
-
 //Stands in for Electron's safeStorage over IPC. The "ciphertext" only has to be opaque to the
 //store, which never inspects it.
 function keystore(available){
@@ -163,25 +128,6 @@ function keystore(available){
         : null;
     }
   };
-}
-
-//The shape user-settings.json had up to 2.2.1: an aes-256-ctr blob under the key that shipped in
-//the source.
-function legacySettings(password){
-  const crypto = require('node:crypto');
-  const iv = crypto.randomBytes(16);
-  const cipher = crypto.createCipheriv('aes-256-ctr', 'o2V6h1BYiyMWiSFNNoKf6rp7maAr6Lb7', iv);
-  const encrypted = Buffer.concat([cipher.update(password), cipher.final()]);
-
-  return {
-    senderPass: { iv: iv.toString('hex'), content: encrypted.toString('hex') },
-    saveCount: 0,
-    save: countSave
-  };
-}
-
-function countSave(){
-  this.saveCount++;
 }
 
 function tempDir(){

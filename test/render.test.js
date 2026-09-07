@@ -1694,3 +1694,242 @@ test('a read-only legacy project is not converted, so nothing is written into th
     fs.readdirSync(path.join(bundled.exampleDir, 'Frankenstein_chapters')), [],
     'no chapter or notes file should have been written into the install directory');
 });
+
+//---------------------------------------------------------------------------
+// Lifting a password saved by version 2.2.1 or earlier
+//---------------------------------------------------------------------------
+
+//This runs on every launch, on real machines, and there is nothing to look at when it goes wrong:
+//a writer whose password fails to migrate gets no error and no log line, just an email dialog that
+//has forgotten their password, possibly months later. So it is driven here through a real boot -
+//a user-settings.json written the way 2.2.1 wrote one, and the real node backing that render.js
+//builds - rather than by calling the command directly.
+//
+//'o2V6h1BYiyMWiSFNNoKf6rp7maAr6Lb7' is the key that shipped inside every copy up to 2.2.1, and the
+//blob below is frozen rather than generated: a helper that re-derives the old format would drift
+//alongside crypto.js and keep passing while every real user's password stopped decrypting.
+const FROZEN_LEGACY_BLOB = {
+  iv: '9f1c4a77e5b30d2168ac5e91b3470ddf',
+  content: 'ffcdaeb4e695b8e2c9b13c01aa44988a9d74'
+};
+
+function writeSettings(settings){
+  fs.writeFileSync(path.join(userDataDir, 'user-settings.json'), JSON.stringify(settings), 'utf8');
+}
+
+function readSettingsFile(){
+  return JSON.parse(fs.readFileSync(path.join(userDataDir, 'user-settings.json'), 'utf8'));
+}
+
+//The credential store lands beside user-settings.json in userData, which is shared across this
+//file's tests - so it has to go, or the next boot here starts with a saved password.
+function clearCredentialFiles(t){
+  t.after(function(){
+    fs.rmSync(path.join(userDataDir, 'credentials.json'), { force: true });
+    fs.rmSync(path.join(userDataDir, '.warewoolf-key'), { force: true });
+  });
+}
+
+test('a password saved by version 2.2.1 is lifted out of user-settings.json at boot', async function(t){
+  clearCredentialFiles(t);
+  writeSettings({ senderEmail: 'writer@gmail.com', senderPass: FROZEN_LEGACY_BLOB });
+
+  var r = await freshRender();
+
+  //Out of the settings file, in memory and on disk.
+  assert.strictEqual(r.userSettings.senderPass, null);
+  assert.strictEqual(readSettingsFile().senderPass, null);
+
+  //And into the credential store, re-sealed - this test's fake ipcRenderer answers
+  //'secure-storage-available' with false, so it lands under the key file.
+  const stored = JSON.parse(fs.readFileSync(path.join(userDataDir, 'credentials.json'), 'utf8'));
+  assert.strictEqual(stored.backend, 'keyfile');
+  assert.ok(fs.existsSync(path.join(userDataDir, '.warewoolf-key')));
+  //Recovered, not merely copied: the old ciphertext is nowhere in the new file, and the plaintext
+  //is nowhere in it either.
+  assert.strictEqual(JSON.stringify(stored).indexOf(FROZEN_LEGACY_BLOB.content), -1);
+  assert.strictEqual(JSON.stringify(stored).indexOf('old-saved-password'), -1);
+});
+
+//The second launch, and every launch after it. Nothing to migrate must mean nothing written and
+//nothing touched - not a credential store rebuilt from an empty blob, and not a settings file
+//rewritten for no reason.
+test('a boot with nothing to migrate leaves the settings file and the credential store alone', async function(t){
+  clearCredentialFiles(t);
+  writeSettings({ senderEmail: 'writer@gmail.com', senderPass: null });
+
+  var r = await freshRender();
+
+  assert.strictEqual(r.userSettings.senderPass, null);
+  assert.strictEqual(fs.existsSync(path.join(userDataDir, 'credentials.json')), false);
+  assert.strictEqual(fs.existsSync(path.join(userDataDir, '.warewoolf-key')), false);
+});
+
+//Migrating twice would re-seal a blob that is no longer there, so what actually has to hold is that
+//the second boot finds nothing and leaves the first boot's credential exactly as it was.
+test('migration does not run again on the next boot, and does not disturb what it saved', async function(t){
+  clearCredentialFiles(t);
+  writeSettings({ senderEmail: 'writer@gmail.com', senderPass: FROZEN_LEGACY_BLOB });
+
+  await freshRender();
+  const afterFirstBoot = fs.readFileSync(path.join(userDataDir, 'credentials.json'), 'utf8');
+
+  //user-settings.json is not cleared between the two boots here, deliberately: the second boot has
+  //to read back exactly what the first one wrote, which is the real second-launch sequence.
+  var r = await freshRender();
+
+  assert.strictEqual(r.userSettings.senderPass, null);
+  assert.strictEqual(fs.readFileSync(path.join(userDataDir, 'credentials.json'), 'utf8'), afterFirstBoot);
+});
+
+//A legacy-shaped blob holding nothing - a 2.2.1 writer who ticked "remember" with an empty password
+//field. There is no password to recover, but the field is still dead and still has to go, or every
+//launch from here on re-reads and re-decrypts it forever with nothing ever saying so. This is the
+//case `{ migrated }` alone could not express, and the reason the command returns two flags.
+test('a legacy blob holding no password is still cleared out of the settings file', async function(t){
+  clearCredentialFiles(t);
+  const crypto = require('node:crypto');
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv('aes-256-ctr', 'o2V6h1BYiyMWiSFNNoKf6rp7maAr6Lb7', iv);
+  const empty = Buffer.concat([cipher.update(''), cipher.final()]);
+
+  writeSettings({
+    senderEmail: 'writer@gmail.com',
+    senderPass: { iv: iv.toString('hex'), content: empty.toString('hex') }
+  });
+
+  var r = await freshRender();
+
+  assert.strictEqual(r.userSettings.senderPass, null);
+  assert.strictEqual(readSettingsFile().senderPass, null);
+  //Nothing was recovered, so nothing was saved.
+  assert.strictEqual(fs.existsSync(path.join(userDataDir, 'credentials.json')), false);
+});
+
+//A current-format blob is not a legacy one and must never be handed to the old key. Nothing about
+//this settings file is dead, so nothing about it should change.
+test('a settings file holding a current-format blob is left completely alone', async function(t){
+  clearCredentialFiles(t);
+  const current = { v: 2, iv: 'aabbcc', tag: 'ddeeff', content: '001122' };
+  writeSettings({ senderEmail: 'writer@gmail.com', senderPass: current });
+
+  var r = await freshRender();
+
+  assert.deepStrictEqual(r.userSettings.senderPass, current);
+  assert.deepStrictEqual(readSettingsFile().senderPass, current);
+  assert.strictEqual(fs.existsSync(path.join(userDataDir, 'credentials.json')), false);
+});
+
+//A broken keystore, a full disk. The old code cleared userSettings.senderPass whether the re-save
+//worked or not, destroying the only copy of the password; the command rejects instead and this
+//catch leaves the blob where it is, so the next launch can try again. Either way the app starts -
+//a credential that will not migrate must never be the reason WareWoolf does not open.
+test('a migration that fails leaves the legacy blob in place and still boots', async function(t){
+  clearCredentialFiles(t);
+  writeSettings({ senderEmail: 'writer@gmail.com', senderPass: FROZEN_LEGACY_BLOB });
+
+  const realWriteFileSync = fs.writeFileSync;
+  fs.writeFileSync = function(filepath, ...rest){
+    if(String(filepath).indexOf('credentials.json') !== -1 || String(filepath).indexOf('.warewoolf-key') !== -1)
+      throw new Error('disk full');
+    return realWriteFileSync.call(fs, filepath, ...rest);
+  };
+  t.after(function(){ fs.writeFileSync = realWriteFileSync; });
+
+  var r = await freshRender();
+
+  assert.ok(r.project, 'the app should still have booted');
+  assert.deepStrictEqual(r.userSettings.senderPass, FROZEN_LEGACY_BLOB,
+    'the only copy of the password must survive a failed migration');
+  assert.deepStrictEqual(readSettingsFile().senderPass, FROZEN_LEGACY_BLOB);
+});
+
+//---------------------------------------------------------------------------
+// Wiring the saved-secret resolver into email-doc.js
+//---------------------------------------------------------------------------
+
+//Phase 7's one temporary seam, and the way it silently breaks. Both email dialogs put SAVED_SECRET
+//in the password field; emailFile() turns it back into the password through a resolver render.js
+//hands it. Forget to hand it over and nothing fails at boot, nothing fails when the dialog opens,
+//and nothing fails until the writer clicks Send - at which point the send is refused for a saved
+//password that is sitting right there and perfectly readable.
+//
+//It is wired from the menu commands rather than from loadPlatformState() because requiring
+//email-doc.js pulls in nodemailer, archiver and the docx/epub writers, which boot should not pay
+//for. That trade is only safe if every route to emailFile() goes through one of these two.
+const emailDocPath = require.resolve('../src/components/controllers/email-doc');
+
+async function openedEmailMenuCommand(channel){
+  //Cleared so the module is (re-)required by the menu command itself, exactly as it is on a cold
+  //launch - otherwise a previous test's require could be what makes this one pass.
+  delete require.cache[emailDocPath];
+  var r = await freshRender();
+  currentIpc().handlers[channel]();
+  await flushMicrotasks();
+  return r;
+}
+
+test('opening Send Via Email gives email-doc.js a resolver for the saved password', async function(t){
+  clearCredentialFiles(t);
+  await openedEmailMenuCommand('send-via-email-clicked');
+
+  const emailDoc = require(emailDocPath);
+  const { SAVED_SECRET } = require('../src/components/controllers/platform');
+
+  //Nothing is stored, so the resolver is reached and reports that rather than sending the sentinel
+  //as a password - which is the observable difference between "wired" and "not wired".
+  const resp = await new Promise(function(resolve){
+    emailDoc.emailFile('me@example.com', SAVED_SECRET, 'you@example.com', [], resolve);
+  });
+
+  assert.match(resp, /could not be read/);
+  assert.doesNotMatch(resp, /No saved password is available/,
+    'that message means no resolver was ever handed over');
+});
+
+test('opening the Error Log wires the resolver too, since it can send as well', async function(t){
+  clearCredentialFiles(t);
+  await openedEmailMenuCommand('view-error-log-clicked');
+
+  const emailDoc = require(emailDocPath);
+  const { SAVED_SECRET } = require('../src/components/controllers/platform');
+
+  const resp = await new Promise(function(resolve){
+    emailDoc.emailFile('me@example.com', SAVED_SECRET, 'you@example.com', [], resolve);
+  });
+
+  assert.doesNotMatch(resp, /No saved password is available/);
+});
+
+//And end to end: a password saved through the platform, then resolved through the wired seam and
+//handed to the transport as the real thing.
+test('a saved password is resolved for the mailer and never crosses as the sentinel', async function(t){
+  clearCredentialFiles(t);
+  writeSettings({ senderEmail: 'writer@gmail.com', senderPass: null });
+
+  var r = await openedEmailMenuCommand('send-via-email-clicked');
+
+  const emailDoc = require(emailDocPath);
+  const { SAVED_SECRET, createPlatform } = require('../src/components/controllers/platform');
+  const { createNodeBacking } = require('../src/components/controllers/platform-node');
+  const nodemailer = require('nodemailer');
+
+  await createPlatform(createNodeBacking({ paths: { userData: userDataDir } }))
+    .storeCredential({ service: 'email', secret: 'the-real-password' });
+
+  let sentAuth = null;
+  const realCreateTransport = nodemailer.createTransport;
+  nodemailer.createTransport = function(config){
+    sentAuth = config.auth;
+    return { sendMail: function(mailOptions, cb){ cb(null, { response: '250 OK' }); } };
+  };
+  t.after(function(){ nodemailer.createTransport = realCreateTransport; });
+
+  await new Promise(function(resolve){
+    emailDoc.emailFile('me@example.com', SAVED_SECRET, 'you@example.com', [], resolve);
+  });
+
+  assert.strictEqual(sentAuth.pass, 'the-real-password');
+  assert.notStrictEqual(sentAuth.pass, SAVED_SECRET);
+  assert.ok(r.project, 'the app booted normally alongside all of that');
+});

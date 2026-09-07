@@ -19,7 +19,7 @@ const os = require('os');
 //importDocx, buildEpub and archiveProject are native by necessity rather than by convenience.
 const unzipper = require('unzipper');
 const archiver = require('archiver');
-const { CODES, PlatformError, fromNodeError } = require('./platform');
+const { CODES, PlatformError, fromNodeError, SAVED_SECRET } = require('./platform');
 const { sanitizeFilename } = require('./utils');
 //Only the legacy-format pair is needed here. Everything else about key handling - derivation,
 //sealing, the session key - stays inside credential-store.js, which this backing drives rather
@@ -1032,13 +1032,30 @@ function createNodeBacking(deps){
     };
   }
 
+  //`secret` is either a literal the writer just typed or SAVED_SECRET. The sentinel means "re-seal
+  //what is already stored, under whatever protection this call asks for", which is what lets the
+  //dialog tick or untick "Protect With Passphrase" on a saved password without ever holding it.
+  //Resolving it here rather than in the caller is the whole point: the plaintext leaves the store,
+  //goes back into the store, and never crosses the boundary in either direction.
   function storeCredential(args){
     requireText(args.secret, 'secret');
 
     var store = storeFor(args.service);
     var passphrase = args.passphrase == null ? null : args.passphrase;
+    var secret = args.secret;
 
-    if(!store.savePassword(args.secret, { passphrase: passphrase }))
+    if(secret === SAVED_SECRET){
+      //resolveSecret throws LOCKED for a passphrase-protected credential that has not been
+      //unlocked, which is right: re-sealing one would need the plaintext it cannot reach, and
+      //saving the sentinel string as the password instead is the silent corruption this guards.
+      secret = resolveSecret({ service: args.service });
+
+      if(secret == null)
+        throw PlatformError(CODES.INVALID_ARGUMENT,
+          'Asked to re-seal a stored credential, but nothing is stored.', { service: args.service });
+    }
+
+    if(!store.savePassword(secret, { passphrase: passphrase }))
       throw PlatformError(CODES.IO_ERROR, 'Could not save the credential.', { service: args.service });
 
     return { backend: store.describe().backend };
@@ -1070,26 +1087,40 @@ function createNodeBacking(deps){
   }
 
   //Versions up to 2.2.1 kept the password in user-settings.json under a key that shipped in the
-  //source. The renderer hands over the blob it found there and learns only whether something moved
-  //- the decrypt and the re-seal both happen here, so the recovered plaintext never crosses.
+  //source. The renderer hands over the blob it found there and learns only what it needs - the
+  //decrypt and the re-seal both happen here, so the recovered plaintext never crosses.
   //
   //Clearing the settings field afterward stays with the caller: it owns user-settings.json, and
-  //this command has no business writing it.
+  //this command has no business writing it. That is why there are two flags rather than one, and
+  //why the difference matters (corrected in Phase 7 - the contract declared `{ migrated }` alone):
+  //
+  //  recognized - the blob was in the pre-2.2.2 format. The settings field is dead either way and
+  //               the caller should clear it. This is what the old migrateLegacyPassword returned.
+  //  migrated   - a password was actually recovered and re-sealed.
+  //
+  //They differ for a blob that is legacy-shaped but decrypts to nothing - a 2.2.1 user who ticked
+  //"remember" with an empty password field has exactly that in their settings file. The old code
+  //cleared the field for them; reporting only `migrated` would leave a dead blob there to be
+  //retried on every launch, forever, with nothing ever saying so.
   function migrateLegacyCredential(args){
     if(!isLegacyBlob(args.legacyBlob))
-      return { migrated: false };
+      return { recognized: false, migrated: false };
 
     var store = storeFor(args.service);
     var recovered = decryptLegacy(args.legacyBlob);
 
     if(recovered == null || recovered === '')
-      return { migrated: false };
+      return { recognized: true, migrated: false };
 
+    //Throwing rather than returning `migrated: false` is deliberate, and is the one place this
+    //command does not preserve migrateLegacyPassword's behaviour. The old code ignored a failed
+    //save and cleared userSettings.senderPass regardless, destroying the only copy of the
+    //password. A rejection leaves the legacy blob where it is, so the next launch tries again.
     if(!store.savePassword(recovered))
       throw PlatformError(CODES.IO_ERROR, 'Could not re-seal the legacy credential.',
         { service: args.service });
 
-    return { migrated: true };
+    return { recognized: true, migrated: true };
   }
 
   //Not a command. See the note where it is exported.

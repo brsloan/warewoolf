@@ -98,16 +98,24 @@ function fromNodeError(err, details){
 
 //Stands in for a stored secret wherever the UI would otherwise hold the plaintext.
 //
-//Today the saved email password is read into the renderer and written into an <input type=password>
-//value (email-doc_display.js:46, error-log_display.js:52), then read back out and handed to
-//nodemailer. Under contextIsolation that is a plaintext credential sitting in the DOM of a webview,
-//which is the one thing this exercise is meant to prevent. So the facade has no getCredential:
-//describeCredential() tells the UI whether a password exists and whether it is readable, the UI
-//puts this sentinel in the field, and sendEmail resolves it on the native side.
+//Until Phase 7 the saved email password was read into the renderer and written into an
+//<input type=password> value, then read back out and handed to nodemailer. Under contextIsolation
+//that is a plaintext credential sitting in the DOM of a webview, which is the one thing this
+//exercise is meant to prevent. So the facade has no getCredential: describeCredential() tells the
+//UI whether a password exists and whether it is readable, and the UI puts this sentinel in the
+//field instead of a password.
+//
+//Two commands take it, for the two things the UI does with a secret it must not hold:
+//
+//  sendEmail(secret)       - send using the saved password                  (group K, Phase 8)
+//  storeCredential(secret) - re-seal the saved password under new protection (group J, Phase 7)
+//
+//storeCredential was missed in Phase 1 and added in Phase 7. Without it, unticking "Protect With
+//Passphrase" on an already-saved password requires the plaintext in the renderer - which is the
+//leak this sentinel exists to close, arrived at from the other direction.
 //
 //This makes the UI's "did the writer type a new password?" check simpler rather than harder - it
-//becomes `value !== SAVED_SECRET` instead of a comparison against a plaintext the dialog had to
-//fetch first (email-doc_display.js:143).
+//becomes `value !== SAVED_SECRET`, with nothing fetched first.
 //
 //A password the writer just typed still crosses, outbound, once. That is unavoidable: they typed it
 //into the DOM. Nothing ever crosses inbound.
@@ -292,14 +300,16 @@ var COMMANDS = {
     returns: '{ hasPassword, backend, locked, secureStorageAvailable }',
     note: 'Everything the dialogs draw from, and the only thing they learn. Never the secret.' },
   storeCredential: { group: 'J', params: ['service', 'secret'], optional: ['passphrase'],
-    returns: '{ backend }' },
+    returns: '{ backend }',
+    note: '`secret` is either a literal the writer just typed or SAVED_SECRET, meaning "re-seal whatever is already stored, under whatever protection this call asks for". (corrected in Phase 7: the table had it taking a literal only, which left the UI unable to tick or untick "Protect With Passphrase" on an existing password without first holding the plaintext - the exact leak SAVED_SECRET exists to close. sendEmail is not the only place the UI has to name a secret it must not hold.)' },
   unlockCredential: { group: 'J', params: ['service', 'passphrase'], returns: 'boolean',
     note: 'Establishes the session key on the native side. A wrong passphrase is an ordinary false, not an error.' },
   lockCredential: { group: 'J', params: ['service'], returns: 'void',
     note: 'Has no equivalent today, because the session key lives in a renderer closure that dies with the window. Once it lives natively, something has to end its life explicitly.' },
   clearCredentials: { group: 'J', params: ['service'], returns: 'void' },
-  migrateLegacyCredential: { group: 'J', params: ['service', 'legacyBlob'], returns: '{ migrated }',
-    note: 'Decrypt-and-reseal happens entirely natively (crypto.js:80-93). The renderer hands over the blob it found in user-settings.json and learns only whether something moved.' },
+  migrateLegacyCredential: { group: 'J', params: ['service', 'legacyBlob'],
+    returns: '{ recognized, migrated }',
+    note: 'Decrypt-and-reseal happens entirely natively (crypto.js:80-93). The renderer hands over the blob it found in user-settings.json and learns only what it needs to decide two things. (corrected in Phase 7: `{ migrated }` alone collapsed two outcomes the caller has to tell apart. `recognized` means the blob was in the pre-2.2.2 format and the settings field is now dead - clear it. `migrated` means a password was actually recovered and re-sealed. A legacy blob that decrypts to nothing is recognized but not migrated, and the old migrateLegacyPassword cleared the settings field in exactly that case too; a single flag would have left it there to be retried on every launch forever.)' },
 
   // --- K. Network and hardware --------------------------------------------------------------
   checkForUpdate: { group: 'K', params: [], returns: '{ version, url } | null' },

@@ -10,7 +10,8 @@ const errorLog = require('../src/components/controllers/error-log');
 const epubModule = require('../src/components/controllers/epub');
 const newProject = require('../src/components/models/project');
 const emailDocPath = require.resolve('../src/components/controllers/email-doc');
-const { prepareAndEmail, emailFile } = require(emailDocPath);
+const { prepareAndEmail, emailFile, setSecretResolver } = require(emailDocPath);
+const { CODES, PlatformError, SAVED_SECRET } = require('../src/components/controllers/platform');
 
 //epub.js's htmlChaptersToEpub is destructured by email-doc.js at require-time, so a test that
 //mocks it must re-require email-doc.js afterward for the fresh destructure to see it - same
@@ -219,4 +220,126 @@ test('emailing the whole project as a zip cleans up the temp archive after sendi
 
   assert.strictEqual(resp, 'Email sent successfully.');
   assert.ok(!fs.existsSync(capturedMail.attachments[0].path), 'temp zip archive should be removed after sending');
+});
+
+//---------------------------------------------------------------------------
+// Phase 7: SAVED_SECRET, and the one place the plaintext still lives
+//---------------------------------------------------------------------------
+
+//Restores whatever resolver was in place, so one test's cannot leak into the next - and so the
+//module is left with none, which is what it has outside render.js.
+function withResolver(t, resolver){
+  setSecretResolver(resolver);
+  t.after(function(){
+    setSecretResolver(null);
+  });
+}
+
+//The dialogs put SAVED_SECRET in the password field, so this is the ordinary path for a writer who
+//has saved a password: emailFile turns it into the real one immediately before handing it to
+//nodemailer, and nothing above this line ever sees it. In Phase 8 even this goes native.
+test('emailFile resolves SAVED_SECRET rather than sending it as the password', async function(t){
+  const resolverCalls = [];
+  withResolver(t, function(args){
+    resolverCalls.push(args);
+    return 'the-real-password';
+  });
+
+  let capturedAuth;
+  t.mock.method(nodemailer, 'createTransport', function(config){
+    capturedAuth = config.auth;
+    return { sendMail: function(mailOptions, cb){ cb(null, { response: '250 OK' }); } };
+  });
+
+  const resp = await new Promise(function(resolve){
+    emailFile('me@example.com', SAVED_SECRET, 'you@example.com', [], resolve);
+  });
+
+  assert.strictEqual(resp, 'Email sent successfully.');
+  assert.strictEqual(capturedAuth.pass, 'the-real-password');
+  assert.deepStrictEqual(resolverCalls, [{ service: 'email' }]);
+});
+
+//A password the writer just typed is not a reference to anything and must go through untouched.
+test('a literal password is sent as-is and never reaches the resolver', async function(t){
+  let resolverCalls = 0;
+  withResolver(t, function(){
+    resolverCalls++;
+    return 'the-real-password';
+  });
+
+  let capturedAuth;
+  t.mock.method(nodemailer, 'createTransport', function(config){
+    capturedAuth = config.auth;
+    return { sendMail: function(mailOptions, cb){ cb(null, { response: '250 OK' }); } };
+  });
+
+  await new Promise(function(resolve){
+    emailFile('me@example.com', 'typed-by-hand', 'you@example.com', [], resolve);
+  });
+
+  assert.strictEqual(capturedAuth.pass, 'typed-by-hand');
+  assert.strictEqual(resolverCalls, 0);
+});
+
+//A passphrase-protected credential that was unlocked when the dialog opened and locked since (a
+//second window clearing it, say) throws LOCKED out of resolveSecret. Reported through the callback
+//rather than thrown, or the dialog sits on "Sending..." forever with nothing to say.
+test('a locked saved password is reported through the callback, not thrown', async function(t){
+  withResolver(t, function(){
+    throw PlatformError(CODES.LOCKED, 'The saved credential is passphrase-protected and locked.');
+  });
+
+  let transportCalls = 0;
+  t.mock.method(nodemailer, 'createTransport', function(){
+    transportCalls++;
+    return { sendMail: function(mailOptions, cb){ cb(null, { response: '250 OK' }); } };
+  });
+
+  const resp = await new Promise(function(resolve){
+    emailFile('me@example.com', SAVED_SECRET, 'you@example.com', [], resolve);
+  });
+
+  assert.match(resp, /^Error sending email: /);
+  assert.match(resp, /locked/);
+  assert.strictEqual(transportCalls, 0, 'nothing should be sent when the password could not be resolved');
+});
+
+//The credential went away between the dialog drawing itself and Send being clicked. Distinct from
+//LOCKED, and the same requirement: say so, send nothing.
+test('a saved password that has gone away is reported, not sent as the sentinel', async function(t){
+  withResolver(t, function(){ return null; });
+
+  let transportCalls = 0;
+  t.mock.method(nodemailer, 'createTransport', function(){
+    transportCalls++;
+    return { sendMail: function(mailOptions, cb){ cb(null, { response: '250 OK' }); } };
+  });
+
+  const resp = await new Promise(function(resolve){
+    emailFile('me@example.com', SAVED_SECRET, 'you@example.com', [], resolve);
+  });
+
+  assert.match(resp, /could not be read/);
+  assert.strictEqual(transportCalls, 0);
+});
+
+//Outside render.js nothing has injected a resolver. Sending the sentinel as a literal password
+//would be a login attempt with 24 characters of nothing, reported as a plain authentication
+//failure - which reads to a writer exactly like "your saved password is wrong".
+test('the sentinel is never sent as a password when no resolver was injected', async function(t){
+  setSecretResolver(null);
+
+  let transportCalls = 0;
+  t.mock.method(nodemailer, 'createTransport', function(){
+    transportCalls++;
+    return { sendMail: function(mailOptions, cb){ cb(null, { response: '250 OK' }); } };
+  });
+
+  const resp = await new Promise(function(resolve){
+    emailFile('me@example.com', SAVED_SECRET, 'you@example.com', [], resolve);
+  });
+
+  assert.match(resp, /No saved password/);
+  assert.strictEqual(transportCalls, 0);
 });

@@ -2,6 +2,8 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { JSDOM } = require('jsdom');
 
+const { SAVED_SECRET } = require('../src/components/controllers/platform');
+
 const errorLogDisplayPath = require.resolve('../src/components/views/error-log_display');
 const errorLogControllerPath = require.resolve('../src/components/controllers/error-log');
 const emailDocControllerPath = require.resolve('../src/components/controllers/email-doc');
@@ -25,9 +27,18 @@ function makeUserSettings(overrides){
   }, overrides);
 }
 
-function makeCredentialStore(overrides){
-  var state = Object.assign({ password: null }, overrides);
-  return { getPassword: function(){ return state.password; } };
+//This dialog only ever asks whether a password exists and whether it is readable, so the one group
+//J command it needs is describeCredential. It never stores, unlocks or clears anything, which is
+//why a plain stub is enough here where email-doc_display.test.js needs the real backing.
+function makePlatform(overrides){
+  var described = Object.assign({
+    hasPassword: false,
+    backend: 'safeStorage',
+    locked: false,
+    secureStorageAvailable: true
+  }, overrides);
+
+  return { describeCredential: function(){ return Promise.resolve(described); } };
 }
 
 test.beforeEach(function(){
@@ -49,7 +60,7 @@ test.afterEach(function(){
 //which does persist them. An edit made from the Error Log dialog was silently lost.
 test('clicking Send persists the sender/receiver email back to userSettings', async function(t){
   var userSettings = makeUserSettings();
-  var credentialStore = makeCredentialStore();
+  var platform = makePlatform();
 
   var emailFileCalls = [];
   var emailFile = function(sender, pass, receiver, attachments, callback){
@@ -62,7 +73,7 @@ test('clicking Send persists the sender/receiver email back to userSettings', as
     emailFile: emailFile
   });
 
-  await showErrorLog(userSettings, credentialStore);
+  await showErrorLog(userSettings, platform);
 
   var senderInput = document.getElementById('sender-email-input');
   var receiverInput = document.getElementById('receiver-email-input');
@@ -82,7 +93,7 @@ test('clicking Send persists the sender/receiver email back to userSettings', as
 
 test('the error log text box prefills from loadErrorLog and Clear Log reloads it', async function(t){
   var userSettings = makeUserSettings();
-  var credentialStore = makeCredentialStore();
+  var platform = makePlatform();
   var logText = 'first error';
 
   var clearCalls = 0;
@@ -92,7 +103,7 @@ test('the error log text box prefills from loadErrorLog and Clear Log reloads it
     emailFile: function(){}
   });
 
-  await showErrorLog(userSettings, credentialStore);
+  await showErrorLog(userSettings, platform);
 
   var pre = document.querySelector('pre');
   assert.strictEqual(pre.innerText, 'first error');
@@ -102,4 +113,68 @@ test('the error log text box prefills from loadErrorLog and Clear Log reloads it
 
   assert.strictEqual(clearCalls, 1);
   assert.strictEqual(pre.innerText, '(Log Empty)');
+});
+
+//---------------------------------------------------------------------------
+// Phase 7: the saved password stops passing through the DOM
+//---------------------------------------------------------------------------
+
+//This dialog used to call credentialStore.getPassword() and write the plaintext straight into an
+//<input type=password>. It now writes the sentinel, which emailFile resolves natively at send
+//time - so the password never reaches the DOM and never reaches this module either.
+test('a readable saved password puts the sentinel in the field, never the password', async function(t){
+  var userSettings = makeUserSettings();
+  var platform = makePlatform({ hasPassword: true, locked: false });
+
+  var emailFileCalls = [];
+  var showErrorLog = freshErrorLogDisplay({
+    loadErrorLog: function(){ return Promise.resolve('boom'); },
+    clearErrorLog: function(){ return Promise.resolve(); },
+    emailFile: function(sender, pass, receiver, attachments, callback){
+      emailFileCalls.push({ sender, pass, receiver });
+    }
+  });
+
+  await showErrorLog(userSettings, platform);
+
+  var senderPassInput = document.getElementById('sender-email-pass');
+  assert.strictEqual(senderPassInput.value, SAVED_SECRET);
+
+  Array.from(document.querySelectorAll('button')).find(function(b){ return b.innerHTML === 'Send'; }).onclick();
+
+  assert.strictEqual(emailFileCalls.length, 1);
+  assert.strictEqual(emailFileCalls[0].pass, SAVED_SECRET);
+});
+
+//A passphrase-protected password nobody has unlocked this session has nothing to refer to, so the
+//field is left empty and gets typed by hand - exactly what happened when this read the plaintext
+//and got null back. Filling in the sentinel here would produce a send that fails with a locked
+//credential rather than one the writer can simply type their way past.
+test('a locked saved password leaves the field empty', async function(t){
+  var userSettings = makeUserSettings();
+  var platform = makePlatform({ hasPassword: true, locked: true });
+
+  var showErrorLog = freshErrorLogDisplay({
+    loadErrorLog: function(){ return Promise.resolve('boom'); },
+    clearErrorLog: function(){ return Promise.resolve(); },
+    emailFile: function(){}
+  });
+
+  await showErrorLog(userSettings, platform);
+
+  assert.strictEqual(document.getElementById('sender-email-pass').value, '');
+});
+
+test('no saved password at all leaves the field empty', async function(t){
+  var userSettings = makeUserSettings();
+
+  var showErrorLog = freshErrorLogDisplay({
+    loadErrorLog: function(){ return Promise.resolve('boom'); },
+    clearErrorLog: function(){ return Promise.resolve(); },
+    emailFile: function(){}
+  });
+
+  await showErrorLog(userSettings, makePlatform());
+
+  assert.strictEqual(document.getElementById('sender-email-pass').value, '');
 });

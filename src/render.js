@@ -5,7 +5,6 @@ const { createPlatform } = require('./components/controllers/platform');
 const { createIpcBacking } = require('./components/controllers/platform-ipc');
 const { createNodeBacking } = require('./components/controllers/platform-node');
 const getUserSettings = require('./components/models/user-settings');
-const getCredentialStore = require('./components/models/credential-store');
 const getSecureStorage = require('./components/controllers/secure-storage');
 const newChapter = require('./components/models/chapter');
 const newProject = require('./components/models/project');
@@ -52,7 +51,7 @@ var project = newProject();
 //Populated by loadPlatformState() below, once getAppPaths()/getFileRequestedOnOpen() resolve.
 //Nothing above this line needs them; everything below runs from inside functions and reads these by
 //closure, not at define-time, so it does not matter that they start out undefined.
-var sysDirectories, fileRequestedOnOpen, userSettings, credentialStore, platformInfo, nodePlatform;
+var sysDirectories, fileRequestedOnOpen, userSettings, platformInfo, nodePlatform, nodeBacking;
 
 //Exposed for testing only - nothing in the app itself reads this module's exports, since it's
 //loaded as a plain <script> tag rather than required. `ready` is how a caller (render.test.js's
@@ -119,7 +118,21 @@ async function loadPlatformState(){
   //so it gets its own node-backed platform instance here rather than crossing through the ipc
   //backing `platform` above. That second instance is what has to be swapped for platform-ipc.js at
   //Phase 9, alongside C and J, once nodeIntegration goes away and fs stops being reachable at all.
-  nodePlatform = createPlatform(createNodeBacking({ paths: sysDirectories }));
+  //The backing is kept, not just the platform built from it, for one deliberately temporary
+  //reason: email-doc.js needs its resolveSecret() until Phase 8 replaces emailFile() with
+  //platform.sendEmail(). resolveSecret is not a declared command, so it is unreachable through
+  //`nodePlatform` - handing it over has to be done explicitly, by the one file that builds the
+  //backing. See openEmailController() below, and the note on setSecretResolver in email-doc.js.
+  //
+  //secureStorage is what group J's commands protect a saved password with when the machine has an
+  //OS keystore. It goes to the backing now instead of to a credential store the renderer held
+  //itself; nothing in the renderer derives a key, seals a secret or writes credentials.json any
+  //more.
+  nodeBacking = createNodeBacking({
+    paths: sysDirectories,
+    secureStorage: getSecureStorage()
+  });
+  nodePlatform = createPlatform(nodeBacking);
   require('./components/controllers/error-log').setPlatform(nodePlatform);
   //Groups B and C (projects and chapters) are plain fs too, so they take the same node-backed
   //instance and get swapped for the ipc backing alongside D at Phase 9.
@@ -132,10 +145,7 @@ async function loadPlatformState(){
   platformInfo = await platform.getPlatform();
 
   userSettings = await getUserSettings(sysDirectories.userData + "/user-settings.json").load();
-  credentialStore = getCredentialStore(sysDirectories.userData, getSecureStorage());
-  //Lift any password saved by an older version out of user-settings.json, where it sat under a
-  //key that shipped in the source, and re-seal it with whatever this machine can actually offer.
-  credentialStore.migrateLegacyPassword(userSettings);
+  await migrateLegacyCredential();
 
   await initialize();
 
@@ -198,6 +208,56 @@ async function loadPlatformState(){
     editorIsVisible,
     _unregisterKeybindings: unregisterKeybindings
   });
+}
+
+//Versions up to 2.2.1 kept the saved email password inside user-settings.json, encrypted with a
+//key that shipped in the packaged source. This runs on every launch, on real machines, and lifts
+//it out: migrateLegacyCredential decrypts it with that old key and re-seals it under whatever this
+//machine can actually offer, entirely natively - the recovered password never crosses back - and
+//clearing the settings field afterward is this file's job, since this file owns the settings.
+//
+//The two flags are not the same question, and treating them as one loses a case:
+//
+//  recognized - the field held a pre-2.2.2 blob. It is dead now either way, so clear it. A blob
+//               that decrypts to nothing (a 2.2.1 writer who ticked "remember" with an empty
+//               password field) is recognized but not migrated, and the code this replaced cleared
+//               the field for them too. Keying the clear off `migrated` instead would leave that
+//               blob sitting there, retried on every launch, forever, saying nothing.
+//  migrated   - a password was actually recovered and re-sealed.
+//
+//Failures are logged and swallowed, exactly as they were when this was a try/catch inside the
+//credential store: a broken keystore must not stop the app from starting. Swallowing also leaves
+//the legacy blob where it is, so the next launch tries again rather than destroying the writer's
+//only copy of the password - which is what the old code did when the re-save failed.
+async function migrateLegacyCredential(){
+  try{
+    var result = await nodePlatform.migrateLegacyCredential({
+      service: 'email',
+      legacyBlob: userSettings.senderPass
+    });
+
+    if(!result.recognized)
+      return;
+
+    userSettings.senderPass = null;
+    await userSettings.save();
+  }
+  catch(err){
+    require('./components/controllers/error-log').logError(err);
+  }
+}
+
+//Hands email-doc.js the resolver it needs to turn a SAVED_SECRET back into the saved password -
+//see the note on setSecretResolver there. Called from the two menu commands that open an email
+//dialog rather than from loadPlatformState(), because requiring email-doc.js pulls in nodemailer,
+//archiver and the docx/epub writers: ~300ms of module evaluation on this machine, and a good deal
+//more on a Pi. Boot should not pay that for a seam Phase 8 deletes, and neither dialog can open
+//without loading the module anyway. Idempotent, so calling it from both is fine.
+function openEmailController(){
+  const emailDoc = require('./components/controllers/email-doc');
+  emailDoc.setSecretResolver(nodeBacking.resolveSecret);
+
+  return emailDoc;
 }
 
 async function initialize(){
@@ -1213,12 +1273,14 @@ const menuCommands = {
     }));
   } },
   'send-via-email-clicked': { run: function(){
+    openEmailController();
     const showEmailOptions = require('./components/views/email-doc_display');
-    showEmailOptions(project, userSettings, credentialStore, editorQuill);
+    return showEmailOptions(project, userSettings, nodePlatform, editorQuill);
   } },
   'view-error-log-clicked': { run: function(){
+    openEmailController();
     const showErrorLog = require('./components/views/error-log_display');
-    showErrorLog(userSettings, credentialStore);
+    return showErrorLog(userSettings, nodePlatform);
   } },
   'file-manager-clicked': { run: function(){
     const showFileManager = require('./components/views/file-manager_display');

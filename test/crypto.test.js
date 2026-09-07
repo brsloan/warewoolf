@@ -60,11 +60,44 @@ test('the same passphrase and salt derive the same key, a different salt does no
   assert.ok(!deriveKey('a different passphrase', salt, testKdf).equals(key));
 });
 
+//A frozen blob, not a generated one. encryptTheOldWay() below is a second, independent
+//reimplementation of the pre-2.2.2 format, and the test above it is only as good as that
+//reimplementation is - change the algorithm, the key or the IV length in crypto.js and in the
+//helper together and the test stays green while every real user's saved password stops decrypting.
+//This one cannot drift, because nothing in the repo generates it: it is 'old-saved-password'
+//encrypted with aes-256-ctr under the key that shipped up to 2.2.1, written down once.
+//
+//It matters because of how this fails. A writer whose stored password stops migrating gets no
+//error, no log line and no artifact to inspect - the password is simply gone the next time they
+//open the email dialog, possibly months later, and nothing anywhere says it was ever there.
+const FROZEN_LEGACY_BLOB = {
+  iv: '9f1c4a77e5b30d2168ac5e91b3470ddf',
+  content: 'ffcdaeb4e695b8e2c9b13c01aa44988a9d74'
+};
+
 test('a password saved by version 2.2.1 or earlier still decrypts', function(){
   const legacyBlob = encryptTheOldWay('old-saved-password');
 
   assert.ok(isLegacyBlob(legacyBlob));
   assert.strictEqual(decryptLegacy(legacyBlob), 'old-saved-password');
+});
+
+test('a blob written down from a real 2.2.1 install still decrypts', function(){
+  assert.ok(isLegacyBlob(FROZEN_LEGACY_BLOB));
+  assert.strictEqual(decryptLegacy(FROZEN_LEGACY_BLOB), 'old-saved-password');
+});
+
+//The old scheme was unauthenticated, so decryptLegacy cannot tell a wrong key from a right one -
+//it returns plausible garbage rather than null. That is exactly why the constant above is
+//asserted against its plaintext and not merely against "did not throw": a changed LEGACY_KEY
+//still decrypts, still returns a string, and still looks like success from the outside.
+test('the legacy key is the one that shipped, not merely some key that decrypts', function(){
+  const recovered = decryptLegacy(FROZEN_LEGACY_BLOB);
+
+  assert.strictEqual(typeof recovered, 'string');
+  assert.strictEqual(recovered, 'old-saved-password');
+  assert.strictEqual(Buffer.from(recovered, 'utf8').length,
+    Buffer.from(FROZEN_LEGACY_BLOB.content, 'hex').length);
 });
 
 test('a current blob is not mistaken for a legacy one', function(){
@@ -74,6 +107,21 @@ test('a current blob is not mistaken for a legacy one', function(){
   assert.strictEqual(decryptLegacy(blob), null);
   assert.strictEqual(isLegacyBlob(null), false);
   assert.strictEqual(decryptLegacy(null), null);
+});
+
+//decryptLegacy has its own isLegacyBlob guard, and dropping it left every test above green -
+//a current blob's IV is 12 bytes and aes-256-ctr wants 16, so createDecipheriv threw and the
+//try/catch turned that into the same null the guard would have returned. The guard was being
+//tested by accident, through an IV length that has nothing to do with what it is for. This blob
+//is versioned like a current one but carries a legacy-length IV, so nothing but the guard itself
+//can refuse it - and it has to be refused, because "decrypt this with the key that shipped in the
+//source" must be reachable only for blobs that were actually written with it.
+test('a versioned blob is refused on its version, not on the shape of its iv', function(){
+  const versionedWithLegacyLengthIv = Object.assign(encryptTheOldWay('hunter2'), { v: 2 });
+
+  assert.strictEqual(versionedWithLegacyLengthIv.iv.length, 32);
+  assert.strictEqual(isLegacyBlob(versionedWithLegacyLengthIv), false);
+  assert.strictEqual(decryptLegacy(versionedWithLegacyLengthIv), null);
 });
 
 //Reproduces exactly what the pre-2.2.2 encrypt() wrote, hardcoded key and all, so the migration

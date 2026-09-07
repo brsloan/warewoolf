@@ -12,6 +12,27 @@ const { convertMdfcToMd } = require('./mdfc-to-md');
 const { convertMdfcToHtmlPage, convertMdfcToHtml } = require('./mdfc-to-html');
 const { htmlChaptersToEpub } = require('./epub');
 const { convertToPlainText } = require('./quill-utils');
+const { SAVED_SECRET } = require('./platform');
+
+//Phase 7 stopped the saved email password reaching the DOM. The dialogs now put SAVED_SECRET in the
+//password field instead of a password, and it arrives here as `pass` untouched, so the only place
+//in the renderer that ever sees the plaintext is the two lines of emailFile() below that hand it to
+//nodemailer.
+//
+//That is the one rule-6 ("secrets are referenced, never returned") violation Phase 7 leaves
+//standing, and it is deliberate and temporary. Phase 8 turns emailFile() into a single
+//platform.sendEmail() call, which takes SAVED_SECRET across the boundary and resolves it on the far
+//side - at which point the resolver below, and the plaintext, are gone from the renderer entirely.
+//
+//The resolver is injected by render.js from the node backing's resolveSecret(), which is
+//deliberately not a declared command (see platform-node.js) and so is unreachable through the
+//facade. Nothing can get at it by holding a platform instance; it has to be handed in here, on
+//purpose, by the one file that builds the backing.
+let resolveSavedSecret = null;
+
+function setSecretResolver(resolver){
+  resolveSavedSecret = resolver;
+}
 
 //Async because compiling the project, and building an .epub from it, read any chapter that is not
 //already in memory off disk - which now goes through the platform facade. Every caller already
@@ -194,11 +215,26 @@ async function emailAsEpub(filename, project, compileOptions, delt, sender, pass
 }
 
 function emailFile(sender, pass, receiver, attachments, callback){
+  var secret;
+
+  //Reported through `callback` rather than thrown: every caller here is a completion callback
+  //chain, and a throw from this point would leave the sending dialog stuck on "Sending..." with
+  //nothing to say. A locked passphrase-protected credential arrives as a LOCKED PlatformError,
+  //whose message is already the sentence to show the writer.
+  try{
+    secret = pass === SAVED_SECRET ? readSavedSecret() : pass;
+  }
+  catch(err){
+    logError(err);
+    callback('Error sending email: ' + err.message);
+    return;
+  }
+
   var transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
       user: sender,
-      pass: pass
+      pass: secret
     }
   });
 
@@ -221,7 +257,23 @@ function emailFile(sender, pass, receiver, attachments, callback){
   });
 }
 
+function readSavedSecret(){
+  if(resolveSavedSecret == null)
+    throw new Error('No saved password is available.');
+
+  var secret = resolveSavedSecret({ service: 'email' });
+
+  //Null means the credential went away between the dialog drawing itself and Send being clicked -
+  //cleared in another window, or a keystore that stopped answering. Distinct from LOCKED, which
+  //resolveSecret throws for itself.
+  if(secret == null)
+    throw new Error('The saved password could not be read.');
+
+  return secret;
+}
+
 module.exports = {
   prepareAndEmail,
-  emailFile
+  emailFile,
+  setSecretResolver
 }
