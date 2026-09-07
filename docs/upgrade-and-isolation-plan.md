@@ -574,9 +574,10 @@ untouched, exactly as planned — deferred to Phase 8.
 Verified: suite is now **876** (one new test, covering `logError` staying
 inert and non-throwing when nothing has configured a platform yet).
 
-**Part 2 is at Phase 7, complete. Suite is 1009.** Groups A, B, C, D, E, F, G, H,
-I and J are implemented in `platform-node.js` *and* called by the renderer; only
-K still rejects with `NOT_IMPLEMENTED`. Phase 8 is clear to start.
+**Part 2 is at Phase 8, complete. Suite is 1047.** All eleven groups, A through
+K, are implemented in `platform-node.js` and called by the renderer. Nothing
+in `COMMANDS` rejects `NOT_IMPLEMENTED` any more. Phase 9 — the flag flip — is
+clear to start, but has not been started.
 
 **Phase 4 — Groups B and C (projects, chapters) — done.** The core, and the
 best-tested. Line references were re-verified against the current tree before any
@@ -1199,12 +1200,158 @@ There is still no tool in this environment that can drive a native Electron
 window's menus — the same gap Phase 6 recorded — but the channel that menu item
 sends, and everything downstream of it, are exercised above.
 
-**Phase 8 — Group K.** Updates, email, wifi, battery. It inherits one specific
-obligation from this phase: `emailFile()` becomes `platform.sendEmail()`,
-`setSecretResolver` and `readSavedSecret()` are deleted from `email-doc.js`, and
-`render.js` stops holding the node backing at all. At that point nothing in the
-renderer can reach a stored secret by any route, and rule 6 holds without an
-exception.
+**Phase 8 — Group K, done.** Updates, email, wifi, battery. Unlike every phase
+since Phase 4, none of the eight commands existed in `platform-node.js` when
+this phase started — Phase 1 declared them and Phases 2–7 only ever wired
+call sites to implementations already written. This phase had to build
+`checkForUpdate`, `downloadUpdate`, `installUpdate`, `sendEmail`,
+`wifiListNetworks`, `wifiConnect`, `wifiGetAddress` and `getBatteryCapacity`
+from nothing. Four contract corrections came out of it, recorded in full in
+`native-command-inventory.md`'s group K section:
+
+1. `checkForUpdate()` returns the raw parsed GitHub release JSON, not a
+   packaged shape — the version-comparison and asset-matching logic stays in
+   `updates.js`, pure data work with no OS dependency, the same reasoning
+   group D and G corrections already established.
+2. `downloadUpdate` resolves on the destination write stream's `'close'`, not
+   when the HTTPS response finishes piping — the identical truncated-file risk
+   Phase 6 fixed in `buildEpub`/`archiveProject`, corrected the same way.
+3. `installUpdate`'s `path` is constrained to one this same backing produced
+   via a prior `downloadUpdate` call, tracked in a session-scoped set — not a
+   directory allowlist or filename pattern, both of which a renderer-composed
+   path could satisfy by construction.
+4. `sendEmail`'s `attachments` is a three-way shape (`content`, `projectArchive`,
+   `epubEntries`), not a flat `{filename, content, encoding}` for every case —
+   the two that need zipping are built into a `sendEmail`-owned temp file and
+   read back as bytes, so no attachment ever names a path the renderer
+   composed.
+
+**This phase inherited one specific obligation from Phase 7, closed as part of
+correction 4 above.** `emailFile()` no longer resolves `SAVED_SECRET` itself
+through an injected `backing.resolveSecret` — it forwards `secret` straight to
+`platform.sendEmail()`, which resolves the sentinel on the far side of the
+boundary exactly like `storeCredential` already did. `setSecretResolver` and
+`readSavedSecret()` are deleted from `email-doc.js` entirely, not merely
+unused, and `render.js` no longer holds the raw node backing at all — only the
+wrapped `platform` instance it already used for everything else. Nothing in
+the renderer can reach a stored secret by any route now, and rule 6 holds
+without an exception.
+
+**The three things flagged going in, and how each was resolved:**
+
+- **`sendEmail` and the residual rule-6 violation.** Covered above. The design
+  that made it possible without duplicating `archiveProject`'s or `buildEpub`'s
+  own logic: `sendEmail`'s `projectArchive`/`epubEntries` attachment builders
+  call those two group H/G functions directly, pointed at a temp file
+  `sendEmail` owns (`fs.mkdtempSync()`, read back as a `Buffer`, directory
+  removed before resolving or rejecting) rather than reimplementing the
+  zipping. `email-doc.js` itself lost `fs`, `os`, `path` and `nodemailer`
+  entirely — `emailAsZip` hands over a project's identity
+  (`projectDir`/`chapsDir`/`sourceFilename`) rather than archiving anything
+  itself, and `emailAsEpub` calls a new `assembleEpubEntries()` export split
+  out of `epub.js`'s `htmlChaptersToEpub` (pure entry-generation, no OS
+  dependency) instead of writing an epub to a path first. A real gap surfaced
+  while wiring this up: `archiveProject`'s "cannot back up a project with no
+  filename" guard lived only in `backup-project.js`'s own wrapper, one level
+  above the native command — `sendEmail`'s `projectArchive` path calls the
+  native command directly and would have had no guard at all, handing
+  `archiver` a directory where it expects a file. Moved into
+  `platform-node.js`'s `archiveProject` itself, so every caller gets it, not
+  only the one that happened to add it first.
+- **`installUpdate`'s path, and `wifiConnect`'s smaller version of the same
+  question.** Covered in correction 3 above. `wifiConnect` needed no new
+  guard: ssid/psk already cross as separate `spawn()` argv elements with no
+  shell, the same discipline `installUpdate`'s password-via-stdin follows, and
+  that was sufficient — the risk there is argv/shell injection, not a
+  privileged file-path primitive.
+- **`updates.js:117-130`'s platform/arch asset matching, and the release
+  workflow's naming comment.** Read before writing anything here. The
+  amd64/arm64/Windows_x64/MacOS_AppleSilicon substring matching stayed
+  completely unchanged in `updates.js` — only the source of platform/arch
+  moved, from `process.platform`/`process.arch` to `platform.getPlatform()`
+  (group A, already implemented). Nothing about the matching itself, or the
+  substrings it looks for, was touched.
+
+**Two of `wifi-manager.js`'s seven functions stay unconverted, recorded as an
+open item rather than silently left.** `getConnectionState`, `getWifiStatus`,
+`enableWifi` and `disableWifi` have no group K command behind them — they were
+never declared in `COMMANDS`, and extending the contract for Wi-Fi radio
+toggling and connection-state polling was not part of this phase's mandate.
+They still spawn `nmcli` directly. This is the same shape as the three stray
+`process.platform` reads Phase 2 found "owned by no phase at all" and Phase 3
+picked up — flagged here instead, since Phase 9's flip will break these four
+call sites outright (`child_process` stops being reachable from the renderer)
+and nothing currently owns fixing that.
+
+**Mutation-checked.** Deleting `installUpdate`'s vouched-path guard
+(`vouchedUpdatePaths.has(targetPath)`) fails exactly the two tests written for
+it — one in `platform.test.js`, one in `updates.test.js` — and nothing else.
+Swapping `downloadUpdate`'s `'close'` listener back to `'finish'` is
+independently observable here, unlike Phase 6's `buildEpub`/`archiveProject`
+finding: the direct proof test fails cleanly, and the error-path tests (a 404,
+a request error) hang outright rather than passing silently, since
+`file.destroy()` never emits `'finish'` at all — a stronger signal than the
+close-enough-together non-result Phase 6 got checking the success path on this
+machine's fast local filesystem. Removing `archiveProject`'s new empty-filename
+guard reproduces the same class of hang, confirming the gap it closes is real.
+
+**Verified: 1047 tests pass** (from 1009). Thirty-eight net new: forty-one in
+`platform.test.js` (contract coverage for all eight commands, including the
+documented error codes — `UNAVAILABLE` for a missing `nmcli`/battery is
+asserted as the ordinary case, not an edge case, matching the instruction this
+phase started from), one added to `updates.test.js` and one to
+`wifi-manager.test.js` (a `wifiConnect` failure-path regression neither had
+before), three fewer in `battery-monitor.test.js` (`getBatteryPercent`/
+`getBatteryName`'s own tests folded into `checkBatteryMinutely`-level ones now
+that both functions are gone), one fewer in `email-doc.test.js`, and one fewer
+in `render.test.js` (three tests proving Phase 7's resolver-wiring seam
+replaced by two proving the menu commands hand each dialog a working platform
+instance — the wiring step itself no longer exists to test). Every test file
+touched needed the same two mechanical fixes throughout: `platform.js`'s
+`createPlatform()` wraps every backing call in `Promise.resolve().then(...)`,
+so a call that used to observe a synchronous side effect (a spawned process, an
+HTTPS request) now needs a microtask flush first; and `createNodeBacking()`
+resolves its injectable `https`/`spawn`/`nodemailer` seams once, at
+construction, so a test mocking the real module has to do it *before*
+building (or rebuilding, via a `freshXxx()` require-cache bust) the platform
+instance under test — the same ordering `wifi-manager.test.js`'s and
+`battery-monitor.test.js`'s own `freshWifiManager()`/`freshBatteryMonitor()`
+helpers already required for `spawn`, now generalized to `updates.js`'s
+`https`/`spawn` and `email-doc.test.js`'s mail transport (the latter sidesteps
+the ordering question entirely by injecting `createMailTransport` straight
+into each test's own `createNodeBacking()` call rather than monkey-patching
+the real `nodemailer` module).
+
+**Verified against real external state, read-only.** `checkForUpdate()`,
+called directly against the packaged bundle's `platform-node.js` with no
+fakes, reached the real GitHub API and returned the real `v2.4.0` release
+(five assets) — proving the HTTPS transport is wired correctly end to end
+without ever attempting a write (no download, no install). On this same
+Windows machine, `getBatteryCapacity()` and `wifiListNetworks()` both reject
+`UNAVAILABLE` as expected (no `/sys/class/power_supply`, no `nmcli`), and
+`wifiGetAddress()` resolves `''` rather than erroring — Windows does have a
+`hostname` binary, unlike `nmcli`, but it doesn't understand `-I` and prints
+nothing to stdout, which resolves as "no address" rather than a spawn failure.
+None of this required a live SMTP server, a real release feed beyond the one
+read-only check above, real `nmcli`, or a real battery, matching the
+instruction this phase started from. Learning from Phase 7's own recorded
+mistake — an SMTP connection actually opened while trying to verify the send
+path from outside — nothing here sends mail or writes anywhere; `sendEmail`'s
+own correctness is covered by `platform.test.js`'s injected `createMailTransport`
+fakes instead, which is the "replace the transport inside the bundle" approach
+Phase 7's write-up asked for.
+
+**Verified as a packaged build.** `electron-forge package` produced a working
+`.exe`; launched against a clean `--user-data-dir`, it materialized the
+Frankenstein example and wrote no error log, matching every earlier phase's
+packaged-build check. Not covered, for the same reason as every phase before
+it: there is still no tool in this environment that can drive a native
+Electron window's menus, so the About/Wi-Fi Manager/Send Via Email dialogs
+were not clicked through the UI. What crosses the boundary underneath them
+(`platform.checkForUpdate`/`downloadUpdate`/`installUpdate`/`sendEmail`/
+`wifiListNetworks`/`wifiConnect`/`wifiGetAddress`/`getBatteryCapacity`) is
+exercised directly instead, both under the test suite and against real
+external state as described above.
 
 ## Phase 9 — Flip the flag
 

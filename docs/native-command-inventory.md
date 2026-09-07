@@ -13,8 +13,9 @@ at the end of Phase 1 are corrected here and marked **(corrected in Phase 1)**,
 the two Phase 4 found in group B are marked **(corrected in Phase 4)**, the one
 Phase 5 found in group D is marked **(corrected in Phase 5)**, the one
 Phase 6 found in group G — `buildEpub`'s signature — is marked
-**(corrected in Phase 6)**, and the two Phase 7 found in group J are marked
-**(corrected in Phase 7)**.
+**(corrected in Phase 6)**, the two Phase 7 found in group J are marked
+**(corrected in Phase 7)**, and the four Phase 8 found in group K are marked
+**(corrected in Phase 8)**.
 
 This is the API surface that must exist between the UI and the OS. It serves two
 purposes at once:
@@ -526,27 +527,142 @@ is service-keyed, and only `email` exists today.
 
 ---
 
-## K. Network and hardware
+## K. Network and hardware — **implemented in Phase 8**
 
-Everything here is already out-of-process work stuck in the renderer.
+Everything here was already out-of-process work stuck in the renderer. Unlike
+every group before it, none of these eight commands existed in
+`platform-node.js` when Phase 8 started — Phase 1 declared them, but building
+the implementations (not just wiring call sites to an existing one) was this
+phase's own work, the first time that was true since Phase 1 itself.
 
 | Command | Replaces | Tauri target |
 |---|---|---|
 | `checkForUpdate()` | `https.request` (`updates.js:40`) | `tauri-plugin-updater`, or `reqwest` |
-| `downloadUpdate(url, destPath)` + progress event | `updates.js:185-252` | same |
-| `installUpdate(path)` | `spawn('sudo', ['-S','apt','install'])` (`updates.js:259`) | same |
+| `downloadUpdate(url, destPath)` | `updates.js:185-252` | same |
+| `installUpdate(path, password)` | `spawn('sudo', ['-S','apt','install'])` (`updates.js:259`) | same |
 | `sendEmail({service, sender, secret, receiver, attachments})` | `nodemailer` (`email-doc.js:190`) | `lettre` |
 | `wifiListNetworks()` / `wifiConnect(ssid, psk)` / `wifiGetAddress()` | `nmcli` and `hostname -I` spawns (`wifi-manager.js:13,62,91`) | `Command` or D-Bus |
 | `getBatteryCapacity()` | `/sys/class/power_supply` reads + `cat` spawn (`battery-monitor.js:56,73`) | sysfs read, or the `battery` crate |
 
-`sendEmail`'s `secret` is either a literal the writer just typed or
-`platform.SAVED_SECRET`, resolved natively — see group J. A typed password still
-crosses, outbound, once; that is unavoidable, since they typed it into the DOM.
-Nothing ever crosses inbound.
+**Four corrections came out of actually building these, the same shape as every
+prior phase's "the signature was a hypothesis, not a specification."**
 
-`email-doc.js` also writes and unlinks temp files around `os.tmpdir()`
-(`:119-135`, `:147`, `:180`). Fold that into `sendEmail` — the renderer should
-hand over content and never learn a temp path.
+**(corrected in Phase 8) `checkForUpdate()` returns the raw parsed GitHub
+release JSON, not a packaged `{version, url}`.** The table's own placeholder
+return shape assumed the matching logic — comparing the release tag against
+the running version, then picking the asset whose filename contains this
+platform/arch's substring — would move natively alongside the fetch. It
+doesn't, for the reason group D and G corrections already established:
+`packageReleaseData`/`isUpdateAvailable`/`extractUpdateDownloadInfo` are pure
+data reshaping with no OS dependency, and moving them into `platform-node.js`
+would duplicate logic into the backing for no reason the HTTPS request
+actually requires. They stay in `updates.js`, unchanged except that
+`extractUpdateDownloadInfo` now takes a `platformInfo` argument
+(`platform.getPlatform()`'s own shape) instead of reading
+`process.platform`/`process.arch` directly — which also closes the two group A
+reads Phase 2 deferred here (`updates.js:117-130,179`) and the third at
+`about_display.js:75` (now threaded a `platformInfo` argument from render.js,
+the same way `settings_display.js` already receives one).
+
+**(corrected in Phase 8) `downloadUpdate` resolves on the destination write
+stream's `'close'`, not when the HTTPS response finishes piping into it.** The
+original `updates.js` resolved on `'finish'` — the identical truncated-file
+risk Phase 6 found and fixed in `buildEpub` and `archiveProject`. Corrected
+the same way here rather than carried over; unlike those two, this one *is*
+independently observable by mutation on this codebase's fixtures (swapping
+`'close'` back to `'finish'` hangs the error-path tests outright, since
+`file.destroy()` never emits `'finish'` at all — a stronger signal than the
+close-enough-together non-result Phase 6 got for the success path).
+
+**(corrected in Phase 8) `installUpdate`'s `path` is constrained to a path this
+same backing instance produced.** This is the one command in the whole
+contract that escalates privilege (`sudo apt install`), and `path` is
+otherwise exactly as renderer-composed as `downloadUpdate`'s own `destPath` —
+nothing about its *shape* distinguishes a legitimate downloaded installer from
+an arbitrary string. A directory allowlist or filename-pattern check was
+considered and rejected: both are properties a renderer-composed path could
+satisfy by construction. Instead, `downloadUpdate` records every path it
+successfully wrote to (or found already present) in a session-scoped set, and
+`installUpdate` rejects `INVALID_ARGUMENT` for any path not in it, before
+`sudo` is ever spawned. This is why `updates.js` holds one standing platform
+instance shared by both its `downloadUpdate` and `installUpdate` exports
+rather than a fresh one per call — the vouching only works if a download and
+the install that follows it go through the same backing. `wifiConnect` gets
+the smaller version of the same question — an SSID/passphrase the writer
+typed, not a path — and the existing discipline (argv array, no shell) already
+answers it; nothing new was needed there.
+
+**`sendEmail`'s `attachments` shape needed the same kind of correction group
+G's `buildEpub` did, for the same reason.** The inventory's own row already
+named the temp-file absorption (below) but not what that implies for the
+shape: an attachment that has to be *built* (a project zip, an epub) cannot
+cross as `{filename, content, encoding}` the way a literal one (a generated
+`.docx`/`.md`/`.html`/`.mdfc`/`.txt` string) can, because building either one
+means zipping, and zipping means a real file on disk somewhere, however
+briefly. `attachments[]` entries are now one of three shapes:
+
+- `{filename, content, encoding?}` — literal bytes/text, unchanged from the
+  original nodemailer attachment shape
+- `{filename?, projectArchive: {projectDir, chapsDir?, sourceFilename}}` —
+  built by calling `archiveProject` (group H) into a temp file this command
+  owns; `filename` defaults to whatever `archiveProject` allocates
+- `{filename, epubEntries}` — `epubEntries` is exactly the `{name, content}[]`
+  shape `buildEpub` (group G) already takes, built into a temp file the same
+  way
+
+Both of the zip-shaped kinds are built with `fs.mkdtempSync()`, read back as a
+`Buffer`, and the temp directory is removed before `sendEmail` resolves or
+rejects — the same "own the temp directory start to finish" shape `importDocx`
+(group F) already established. **This is the design constraint the inventory's
+own temp-file note was gesturing at without spelling out**: a `path` field on
+an attachment would have been exactly the arbitrary-file-read primitive Phase
+7 declined to pull `sendEmail` forward to close — any string the renderer
+names, read and attached. Absorbing the zipping natively is what avoids ever
+needing one.
+
+`sendEmail`'s `secret` is either a literal the writer just typed or
+`platform.SAVED_SECRET`, resolved natively — see group J. A typed password
+still crosses, outbound, once; that is unavoidable, since they typed it into
+the DOM. Nothing ever crosses inbound. This closes Phase 7's one standing
+rule-6 exception: `emailFile()` (`email-doc.js`) no longer resolves the
+sentinel itself through an injected `backing.resolveSecret` — it just forwards
+`secret` to `platform.sendEmail()`, which resolves it on the far side exactly
+like `storeCredential` already did. `setSecretResolver`/`readSavedSecret` and
+the module-level resolver they set are gone from `email-doc.js` entirely, and
+`render.js` no longer holds the raw node backing at all (only the wrapped
+`platform` it already used everywhere else) — see the Phase 8 write-up in
+`upgrade-and-isolation-plan.md`.
+
+**Two of `wifi-manager.js`'s seven functions stay unconverted, deliberately
+out of this phase's scope.** `getWifiNetworks`, `connectToNewWifi` and
+`getIpAddress` route through `wifiListNetworks`/`wifiConnect`/`wifiGetAddress`;
+`getConnectionState`, `getWifiStatus`, `enableWifi` and `disableWifi` have no
+group K command behind them — they were never declared in `platform.js`'s
+`COMMANDS` table, and extending the contract to cover Wi-Fi radio
+enable/disable and device connection-state polling was not part of this
+phase's mandate. They still spawn `nmcli` directly, unchanged. This is the
+same "owned by no phase" situation Phase 2 recorded for three stray
+`process.platform` reads (closed in Phase 3) — recorded here rather than
+quietly left for Phase 9's audit to discover, since these four calls will
+break outright once `nodeIntegration` goes away: `child_process` stops being
+reachable from the renderer at all, and nothing currently owns converting
+them. Whoever picks up Phase 9 should either extend group K's wifi commands
+first or budget time to do it as part of the flip.
+
+`getBatteryCapacity()` folds `battery-monitor.js`'s old two-step
+`getBatteryName()` + `queryKernel()` into one native call, and both functions
+— along with `getBatteryPercent` — are gone from that file entirely; nothing
+outside it called them directly. It rejects `UNAVAILABLE` rather than
+resolving `null` for "no battery," matching `CODES.UNAVAILABLE`'s own doc
+comment (`platform.js`), which already names "no battery" as its third
+example — this is the everyday result on every machine that is not a
+writerDeck, not a failure worth writing to the error log once a minute for as
+long as the app runs. A battery that exists but cannot be read (a spawn
+failure, non-numeric sysfs output) is `IO_ERROR` instead, so a caller can
+still tell "nothing to report" apart from "something is actually wrong" —
+`wifi-manager.js`'s equivalent `wifiListNetworks`/`wifiConnect`/
+`wifiGetAddress` wrappers apply the same distinction, logging a real failure
+but not the ordinary absence of `nmcli`/a battery off a Pi.
 
 ---
 
@@ -590,7 +706,17 @@ until the last one.
    side, and the deliverable was a removal — no key derivation, no session key
    and no `credentials.json` write happens in the renderer any more. Two
    corrections came out of it, both marked above.
-7. **Group K** — updates, email, wifi, battery.
+7. **Group K** — updates, email, wifi, battery. *Done in Phase 8.* Unlike every
+   group before it, the eight commands did not already exist in
+   `platform-node.js` — Phase 1 declared them, but Phase 8 was the first phase
+   since Phase 1 itself to have to build implementations rather than wire
+   call sites to ones already written. Four corrections came out of it, all
+   marked above. Two of `wifi-manager.js`'s seven functions
+   (`getConnectionState`/`getWifiStatus`/`enableWifi`/`disableWifi` — radio
+   toggle and connection-state polling) stay unconverted, deliberately out of
+   scope: they have no group K command behind them and were never part of the
+   declared contract. Recorded above as an open item for whoever picks up
+   Phase 9, since they will break outright once `nodeIntegration` goes away.
 8. Flip `contextIsolation: true` and drop `nodeIntegration` once nothing
    `require`s `fs`. `src/index.js:54-59` (the `webPreferences` block — this
    pointed at `:45-47` until Phase 1 re-verified it).
