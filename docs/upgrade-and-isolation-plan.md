@@ -1431,6 +1431,147 @@ tests converted to the async API, plus the two new tests described above).
 
 ## Phase 9 — Flip the flag
 
+**Split in two, and 9a shipped before 9b was started.** The reason is the one
+that made Part 1 unify electron-forge before touching Electron: a failure in
+9a-and-9b together is ambiguous between "the bridge is wrong" and "the flag
+broke something," and this is the worst place in the project to be debugging two
+things at once. 9a is reversible and testable; 9b is the moment the app either
+loads or does not.
+
+### Phase 9a — Build the bridge, flags untouched — **done**
+
+Shipped in two commits, and it is the largest phase in Part 2 by some distance:
+`platform-ipc.js` implemented 9 of 65 commands when it started, `index.js` had 6
+`ipcMain` handlers, `preload.js` did not exist, 36 events still ran on raw
+`ipcRenderer`, and the node backing was still in the renderer.
+
+**The structural problem was solved first, before any of the 56 commands.**
+`test/platform.test.js` had 179 tests and every one of them built
+`createPlatform(createNodeBacking(...))` directly — 59 sites, mostly through the
+`platformIn(t, options)` helper. There was no way to run any of them against the
+ipc backing, which means nothing in the suite said the two backings behave alike.
+That was the stated purpose of the Phase 5 backfill, and as written it could not
+be fulfilled.
+
+Not solved by duplicating the tests: `platformIn` is parameterized over a
+transport and the whole suite runs twice — once direct, once through a fake
+bridge. "Fake" is only the process hop. Both halves are the shipped code
+(`platform-ipc.js` on the near side, `platform-host.js` on the far side), with
+`structuredClone` — the same algorithm Electron's IPC uses — standing in for the
+boundary. The bugs that class of test catches are exactly the ones the boundary
+introduces:
+
+- **`PlatformError` does not cross as an `Error`.** `platform.js` says so in its
+  own comment. A `code` arriving `undefined` turns every documented failure path
+  into a silent generic `IO_ERROR` — rule 5 going quiet for all 65 commands at
+  once. `platform-host.js`'s envelope is what prevents it. Non-vacuous by
+  mutation: dropping the code from the envelope fails 37 of the bridge-side
+  tests; dropping the details fails 3 more (`saveChapterAtomic`'s `rolledBack`,
+  and group J's `service`).
+- **Buffers arrive as `Uint8Array`.** `writeBinaryFile` already coped
+  (`Buffer.isBuffer(x) ? x : Buffer.from(x)`); the transport is what proves it,
+  since the direct pass never sees anything but a real `Buffer`.
+- **`SAVED_SECRET` is a string with NUL bytes at both ends.** Phase 7 verified it
+  survives a Chromium password input; that said nothing about structured clone,
+  and now both are checked.
+
+**Two real bugs came out of it, neither visible to any test that existed.**
+
+`user-settings.js` sent the live settings object across `saveUserSettings`,
+`save`/`load`/`getSettingsFilepath` included. Structured clone throws on a
+function outright, so every save rejected the moment the write was in another
+process. It went unnoticed for the same reason it was easy to write: the write
+used to be a `JSON.stringify` in this same process, and stringify drops functions
+silently, so the file on disk was always right. Only the `SETTINGS_SCHEMA` fields
+cross now — which is also the schema's existing job, since a key it does not name
+can never be copied back onto the live object on load.
+
+`index.js` did not parse. It requires `'electron'` on its first line, so nothing
+in the suite loads it, and it is also the one file in `src/` that esbuild never
+sees — so it had neither of the two nets every other file has. The only symptom
+was a native "A JavaScript error occurred in the main process" dialog on a
+packaged build, found by packaging the app and reading the dialog with UI
+Automation. Both it and `preload.js` are compile-checked by the suite now
+(`new vm.Script(source)` — it does not run a line, but that is the failure with
+no other net), mutation-checked by breaking the file deliberately.
+
+**What shipped.** `preload.js` publishes exactly `invoke`/`on`/`off` as
+`window.warewoolf` and nothing else. The one-line version of that file would have
+been `exposeInMainWorld('ipc', ipcRenderer)`, and it would have given up the whole
+exercise: every channel in the app, plus `sendSync`, plus `sendTo`, reachable from
+anything running in the page. What crosses instead is a command name checked
+against `COMMANDS` and an event name checked against `EVENTS` — the same tables
+the renderer and the main process are written against, so there is one list and
+not three. Two things are dropped on the way through: the `IpcRendererEvent`
+(whose `sender` is a live handle back into the ipc machinery — handlers get the
+payload arguments only, which is the one call-shape change in `render.js`), and
+anything not in those tables.
+
+`preload.js` is bundled (`npm run build:preload`), not loaded as source. A
+preload script only keeps arbitrary `require()` while `sandbox` is false, which is
+true today *only because* `nodeIntegration` is on — the reasoning Part 1 recorded
+for leaving `sandbox` alone evaporates at 9b. Bundled, the one require left is
+`'electron'`, which a sandboxed preload still provides. A test asserts the preload
+bundle has nothing else external.
+
+`index.js` registers one `ipcMain.handle` per entry in `COMMANDS` — from the table,
+not one call per command, with a test asserting no command gets a hand-written
+registration alongside it. A command with no handler is not a build error or a
+crash; it is an `invoke()` that never settles, in the app only. The node backing
+moved into the main process, and group A's five injected hooks in
+`platform-node.js` (`onSetTheme`/`onShowAppMenu`/`onConfirmExit`/
+`onNotifyRendererReady`, and `paths`) — which existed so `platform.test.js` could
+exercise the contract's shape against fakes — became the real thing.
+`fileRequestedOnOpen` gained a getter form, because macOS's `'open-file'` can set
+it after the backing is constructed.
+
+On the renderer side, fifteen modules that held their own
+`createPlatform(createNodeBacking({}))` now hold an ipc-backed one, and `render.js`
+— which held two platforms — holds one. `secure-storage.js` and the three
+`sendSync` channels it drove are deleted; `safeStorage` is a direct call in the
+main process. Two commands stopped taking paths because the main process owns
+them: spellcheck's three (so `sysDirectories` no longer threads through
+`spellcheck_display.js`) and `about_display.js`'s `readLicenses`.
+
+**Confirmed rather than assumed, by reading the rebuilt bundle:** `crypto.js`,
+`credential-store.js`, `secure-storage.js`, `platform-node.js`, `nodemailer`,
+`archiver` and `unzipper` are all gone from the renderer. What is left external is
+exactly `fs` (`render.js`'s four `existsSync` checks in `loadInitialProject`) and
+`path` (`backup-project.js`'s basename/dirname/join and `import.js`'s
+basename/extname — pure string work, no I/O). `electron` is gone from that list
+too, which is 9a's deliverable in one line. A test pins the exact pair, so a
+builtin creeping back into the renderer fails now, naming itself, rather than at
+the flip as an esbuild resolution error several modules deep.
+
+**Verified on a packaged Windows build from a clean userData directory**, driven
+over CDP — the renderer through `--remote-debugging-port`, the main process
+through `--inspect`, so menu channels could be sent the way a menu click sends
+them. A green suite has failed to predict a working artifact three times in this
+project (the zstd `.deb`, the untested bundle, the close/finish guard), and it
+failed again here: the suite was green while `index.js` would not parse.
+
+What the driven pass established: the Frankenstein example opens with its 29
+chapters and no startup-failure popup; text typed through Chromium's own input
+pipeline and saved with File > Save lands in `Quick Start.txt`, the chapter the
+editor was showing; the File Manager browses a real directory; Spell Check loads
+the real 946KB dictionary across IPC; Send via Email shows the `SAVED_SECRET`
+sentinel in the password field rather than the plaintext, against a real
+`safeStorage` keystore; `writeTextFile`/`writeBinaryFile` (a genuine
+`Uint8Array`)/`buildEpub`/`archiveProject` all land on disk; both a plain menu
+channel (`word-count-clicked`) and a payload-carrying one (`about-clicked`) reach
+the renderer and render; a `PlatformError`'s `code` **and** `details` survive real
+Electron IPC; an undeclared command is refused at the bridge; `getCredential` does
+not exist; and the error log is empty throughout.
+
+Verified: **1262 tests pass** (from 1062). 200 net new — 169 of them the contract
+suite's second pass through the bridge, and 31 genuinely new: 10 in
+`preload.test.js`, 13 in `platform-host.test.js`, a rewritten
+`platform-ipc.test.js` (6 plumbing tests replaced by 10 behavioral ones), 2 in
+`user-settings.test.js` for the settings-object bug, and 2 in
+`render-bundle.test.js` pinning what is left to remove at 9b.
+
+### Phase 9b — Flip the flag — outstanding
+
 Set `contextIsolation: true`, remove `nodeIntegration`, mark Node builtins as
 genuinely unavailable in the esbuild config so any survivor fails loudly at build
 time rather than silently at runtime.
@@ -1449,6 +1590,31 @@ arbitrary-path primitive. Run `/security-review` over the diff.
 
 Full cross-platform smoke pass again, including the Pi.
 
+**What 9a leaves for it, all known, none needing new commands:**
+
+- `render.js`'s four `fs.existsSync` calls in `loadInitialProject()`. `pathExists`
+  (group E) already exists; this is the one place the renderer still opens the
+  filesystem, and making the checks `await`ed is the whole change.
+- `backup-project.js` (`path.basename`/`dirname`/`join`) and `import.js`
+  (`path.basename`/`extname`). Pure string manipulation on paths the caller
+  already has — local helpers, not new commands.
+- `crypto.js` and `credential-store.js` were on this list and are **already
+  gone**: they reached the bundle only through `platform-node.js`, which left the
+  renderer when the backing moved to the main process in 9a. Confirmed by reading
+  the built bundle, not assumed.
+- `--platform=node` becomes `--platform=browser` in `build:renderer`, and every
+  surviving builtin import then fails at build time. That is the point.
+- **`test/render-bundle.test.js`'s external assertion becomes wrong.** "the
+  renderer bundle leaves only Node builtins and electron external" would pass
+  while asserting the opposite of what 9b wants, and silently stop testing
+  anything. It has to become "nothing is external at all". 9a added a second test
+  beside it pinning the exact remaining pair (`fs`, `path`) so the delta is
+  explicit rather than inferred.
+- `sandbox` is still false, and the reasoning Part 1 recorded for that
+  (`nodeIntegration: true` disables it) stops applying. `preload.js` is already
+  bundled so it survives `sandbox: true`, but whether to turn it on is a decision
+  9b has to make rather than inherit.
+
 ---
 
 # Part 3 — Which model for which phase
@@ -1466,7 +1632,8 @@ line is unusually clear here.
 | Phases 2, 3, 5, 6, 8 | **Sonnet** | High-volume, repetitive sync→async conversion with a strong test oracle. This is the bulk of the hours and the best Sonnet fit in the project. |
 | Phase 4 — `saveChapterAtomic` | **Opus** | Hand-rolled rollback with ordering constraints. Failures are silent and corrupt manuscripts. |
 | Phase 7 — credentials | **Opus** | Crypto, key handling, and a legacy-format fallback whose breakage looks like nothing until a user's stored password stops decrypting. |
-| Phase 9 — flip and audit | **Opus** + `/security-review` | Adversarial review of a security boundary; the whole point of the exercise. |
+| Phase 9a — build the bridge | **Opus** | Two of its three hardest parts were invisible to the suite as it stood: the contract tests could not run against the ipc backing at all, and `index.js` has neither a test nor a build to catch it. |
+| Phase 9b — flip and audit | **Opus** + `/security-review` | Adversarial review of a security boundary; the whole point of the exercise. |
 
 Between phases, `/code-review` on each batch is worth more than model choice —
 the mechanical work fails in mechanical ways, and review catches those cheaply.

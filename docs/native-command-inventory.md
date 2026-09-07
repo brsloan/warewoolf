@@ -6,7 +6,7 @@ before Phase 4, for groups D/E/I before Phase 5, for groups F/G/H before
 Phase 6, and for group J before Phase 7.
 
 **Phase 1 has since turned this into executable form.**
-`src/components/controllers/platform.js` is now the authoritative contract — 61
+`src/components/controllers/platform.js` is now the authoritative contract — 65
 commands and 36 events, with the shapes below — and this document is its prose
 companion. Where the two disagree, the file wins; the three places they disagreed
 at the end of Phase 1 are corrected here and marked **(corrected in Phase 1)**,
@@ -23,6 +23,17 @@ purposes at once:
 1. It is the contract for a `contextIsolation: true` preload bridge.
 2. It is the `#[tauri::command]` list for a future Tauri port.
 
+**As of Phase 9a the first of those is built.** `src/preload.js` publishes exactly
+`invoke`/`on`/`off` as `window.warewoolf`, validating both names against the
+`COMMANDS` and `EVENTS` tables in `platform.js` before anything crosses;
+`src/components/controllers/platform-host.js` is the main-process half;
+`src/index.js` registers one `ipcMain.handle` per entry in `COMMANDS`, from the
+table itself. Every command in this document now crosses a process boundary in
+the running app, and the node backing runs in the main process. `contextIsolation`
+is still `false` and `nodeIntegration` still `true` — that is Phase 9b, shipped
+separately on purpose so a failure is attributable to the bridge or to the flag
+and not to both at once.
+
 The commands are written at **domain level**, not filesystem level, deliberately.
 A bridge that exposes `writeFile(path, data)` is a renaming of the current
 problem: the renderer still composes paths, still owns transactional ordering,
@@ -31,6 +42,10 @@ Rust port gets easier. The commands below take project/chapter identities and
 return finished results.
 
 ## Current state
+
+The table below is the state this document was written against, kept for what it
+records about the size of the job. **After Phase 9a none of it is true any more**,
+which is the point:
 
 | Layer | Node-free | Total |
 |---|---|---|
@@ -45,6 +60,23 @@ node-free set.
 - 9 `ipcMain` handlers exist today; 5 of the renderer's IPC calls are `sendSync`.
 - Renderer-side Node dependencies: `fs`, `path`, `os`, `crypto`, `https`,
   `child_process`, `archiver`, `unzipper`, `nodemailer`.
+
+**Where it stands after Phase 9a**, read off the built `render.bundle.js` rather
+than off the source tree:
+
+- No `fs.*Sync` calls anywhere in the renderer. Zero `sendSync`. 65
+  `ipcMain.handle` registrations, generated from `COMMANDS`.
+- Renderer-side Node dependencies are down to two, both on Phase 9b's list:
+  `fs` (`render.js`'s four `existsSync` checks in `loadInitialProject`) and `path`
+  (`backup-project.js`, `import.js` — pure string work on paths the caller
+  already holds, no I/O). `os`, `crypto`, `https`, `child_process`, `archiver`,
+  `unzipper` and `nodemailer` are gone, and so is `electron`: the renderer does
+  not reach `ipcRenderer` at all, only `window.warewoolf`.
+- `crypto.js`, `credential-store.js` and `platform-node.js` have left the bundle
+  entirely. `secure-storage.js` is deleted outright, along with the three
+  `secure-storage-*` `sendSync` channels it drove — group J predicted that
+  ("the existing `secure-storage-encrypt` / `-decrypt` IPC pair disappears into
+  these"), and this is where it happened.
 
 ---
 
@@ -75,9 +107,20 @@ menu item that does nothing.
 `platform.on(event, handler)` validates the name against the list and returns an
 unsubscribe function, so a typo fails at subscribe time rather than becoming a
 dead menu item. The list holds the **literal** channel names `index.js` sends on,
-since the ipc backing passes them straight to `ipcRenderer.on()` — Phase 1 tidied
-one of them to `file-opened-from-outside` and got it wrong, which a test now
-prevents by cross-checking the list against `index.js`.
+since the ipc backing passes them straight through — Phase 1 tidied one of them to
+`file-opened-from-outside` and got it wrong, which a test now prevents by
+cross-checking the list against `index.js`.
+
+**(Phase 9a) All 36 cross the bridge, and the handler's shape changed.** A handler
+is called with the event's **payload arguments only**. `preload.js` drops the
+`IpcRendererEvent` that used to arrive first: its `sender` is a live handle back
+into the ipc machinery, and forwarding it would hand the page exactly what not
+exposing `ipcRenderer` took away. So `render.js`'s menu loop lost its
+`function(e)` and its `slice(arguments, 1)`, and the file-open handler takes
+`fPath` directly. Validation now happens twice — in `platform.js` at the facade
+and again in `preload.js` before `ipcRenderer.on` — because preload is the guard
+the renderer cannot get past, and the facade is the one that gives a caller a
+`PlatformError` with a code instead of a bare throw.
 
 ---
 
@@ -757,6 +800,26 @@ until the last one.
    never part of the declared contract. *Closed afterward, before Phase 9*: see
    the note above the Summary. The remaining gap Phase 9 inherits is the flag
    flip itself, not any interface design work on top of it.
-8. Flip `contextIsolation: true` and drop `nodeIntegration` once nothing
-   `require`s `fs`. `src/index.js:54-59` (the `webPreferences` block — this
-   pointed at `:45-47` until Phase 1 re-verified it).
+8. **Build the bridge, flags untouched.** *Done in Phase 9a.* `preload.js`,
+   `platform-host.js`, `platform-ipc.js` grown from 9 commands to all 65, 65
+   `ipcMain.handle` registrations generated from `COMMANDS`, all 36 events across
+   the bridge, and the node backing moved out of the renderer into the main
+   process. Split out from step 9 deliberately: a failure with the bridge and the
+   flags landing together is ambiguous between "the bridge is wrong" and "the flag
+   broke something."
+
+   The work that had to come first was not a command at all. `test/platform.test.js`
+   built `createPlatform(createNodeBacking(...))` at all 59 of its construction
+   sites, so nothing in the suite said the two backings behave alike — the stated
+   purpose of the Phase 5 backfill, unfulfillable as written. `platformIn` is
+   parameterized over a transport now and the whole contract suite runs twice, the
+   second pass through a fake bridge that serializes with `structuredClone` and
+   reconstitutes errors the way the real boundary does. Both halves of that bridge
+   are the shipped code; only the process hop is faked. See the Phase 9a write-up
+   in `upgrade-and-isolation-plan.md` for the two real bugs it found, and for the
+   third — `index.js` failing to parse — that only a packaged build could find.
+
+9. Flip `contextIsolation: true` and drop `nodeIntegration` once nothing
+   `require`s `fs`. `src/index.js:62-63` (inside the `webPreferences` block —
+   this pointed at `:45-47` until Phase 1 re-verified it to `:54-59`, and Phase 9a
+   shifted it again by adding the `preload` entry and a comment above it).
