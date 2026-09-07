@@ -2,14 +2,18 @@
 
 Derived from every Node/Electron call site in the renderer as of `340d067`.
 Line references re-verified against `569cba4`, and again for groups B and C
-before Phase 4.
+before Phase 4, for groups D/E/I before Phase 5, and for groups F/G/H before
+Phase 6.
 
 **Phase 1 has since turned this into executable form.**
 `src/components/controllers/platform.js` is now the authoritative contract — 61
 commands and 36 events, with the shapes below — and this document is its prose
 companion. Where the two disagree, the file wins; the three places they disagreed
 at the end of Phase 1 are corrected here and marked **(corrected in Phase 1)**,
-and the two Phase 4 found in group B are marked **(corrected in Phase 4)**.
+the two Phase 4 found in group B are marked **(corrected in Phase 4)**, the one
+Phase 5 found in group D is marked **(corrected in Phase 5)**, and the one
+Phase 6 found in group G — `buildEpub`'s signature — is marked
+**(corrected in Phase 6)**.
 
 This is the API surface that must exist between the UI and the OS. It serves two
 purposes at once:
@@ -319,43 +323,97 @@ itself is verified by mutation: removing its `fs.existsSync` check in
 
 ---
 
-## F. Import
+## F. Import — **implemented in Phase 6**
 
 | Command | Replaces |
 |---|---|
-| `readTextFile(path)` | `import.js:94`, `:156` (already async — these port cheaply) |
-| `extractZip(zipPath, destPath)` | `file-manager.js:158-168` (`unzipper`) |
-| `importDocx(path)` → `{ documentXml, footnotesXml }` | `docx-import.js:8`, `:22`, `:32-34` |
+| `readTextFile(path)` | `import.js:94`, `:156` (already async — these ported cheaply) |
+| `extractZip(zipPath, destPath?)` → `{ path }` | `file-manager.js:200-224` (`unzipper`) — line references drifted from the `:158-168` this table originally cited; the function (`unzipProject`) had moved and grown by the time Phase 5 deferred it |
+| `importDocx(path)` → `{ documentXml, footnotesXml }` | `docx-import.js:8`, `:22`, `:30-38` (`tempUnzipDocx`) |
 
 `unzipper` is Node-stream-only and has no browser path; under Tauri it becomes
-the `zip` crate. Note that `importDocx` should return the XML *text*, not a temp
-directory — the XML parsing in `docx-import.js` is pure string work and stays in
-the webview.
+the `zip` crate. `importDocx` returns the XML *text*, not a temp directory — the
+XML parsing in `docx-import.js` is pure string work and stays in the webview.
+
+**The temp directory itself changed shape, not just location.** The old
+`tempUnzipDocx` unzipped every docx to the same fixed
+`sysDirectories.temp + '/docxguts'` and never removed it — residue from one
+import could bleed into the next, and the directory grew without bound over a
+session. The native `importDocx` unzips into its own `fs.mkdtempSync()`
+directory instead and removes it again before resolving, whether the import
+succeeded or failed (`finally{ cleanup(); }`). `sysDirectories` is no longer a
+parameter of `docx-import.js`'s `importDocx()` at all — the native command owns
+picking a temp location start to finish, which is what "the unzip destination
+must not leak across the boundary" means in practice, not just "don't return a
+path in the response object."
 
 ---
 
-## G. Export and compile
+## G. Export and compile — **implemented in Phase 6**
 
 | Command | Replaces |
 |---|---|
-| `ensureDirectory(path)` | `export.js:43-44` |
-| `writeTextFile(path, contents)` | `export.js:136,157,161,165`; `compile.js:70,80,90,100` |
-| `writeBinaryFile(path, bytes)` | `delta-to-docx.js:10` (docx buffer) |
-| `buildEpub(filepath, htmlChapters, meta)` | `epub.js:18-56` (`archiver` + `crypto.randomUUID`) |
+| `ensureDirectory(path)` | `export.js:47-48` (drifted from `:43-44` — Phase 4's async conversion of `getTotalWordCount` shifted four lines) |
+| `writeTextFile(path, contents)` | `export.js:146,167,171,175` (drifted from `:136,157,161,165`); `compile.js:75,85,95,105` (drifted from `:70,80,90,100`) |
+| `writeBinaryFile(path, bytes)` | `delta-to-docx.js:9` (drifted from `:10`) |
+| `buildEpub(filepath, entries)` | `epub.js:21-85` (`archiver`), replacing the whole `htmlChaptersToEpub` write path |
 
 `docx` (npm) has a browser build (`Packer.toBlob`), so the generation logic in
 `delta-to-docx.js` stays in the webview and only the write crosses the boundary.
-`archiver` does not — `buildEpub` takes the assembled HTML and zips it natively.
+`archiver` does not — `buildEpub` zips natively.
+
+**(corrected in Phase 6)** `buildEpub`'s signature is corrected from what this
+table originally proposed. It read `buildEpub(filepath, htmlChapters, meta)`, on
+the theory that
+the OPF/NCX/TOC generation (`getContentOpf`/`getTocNcx`/`getTocXhtml`/
+`getChapterXhtmlPages`/`escapeXmlText`/etc., all in `epub.js`) would move
+natively alongside the zipping. It cannot, for the same reason Phase 5 corrected
+`loadCorkboard`/`saveCorkboard`: that generation is pure string work with no OS
+dependency, and moving it into `platform-node.js` would duplicate roughly 250
+lines of format logic into the backing for no reason `archiver` actually
+requires. The command's own note already said the right thing — "the assembled
+HTML crosses and the zipping happens natively" — the correction is realizing
+that means the *assembled* content, not the raw chapters. `buildEpub` now takes
+`entries: { name, content }[]`, every one of them already-generated text, and
+does exactly one native thing: write them into a zip at `filepath`. The entry
+literally named `"mimetype"` is stored uncompressed (a zip-container detail the
+EPUB spec requires); every other entry is deflated. `epub.js` keeps every
+generation/escaping function unchanged and assembles `entries` itself before
+calling this — the same shape `loadChapter`/`saveChapter` already established
+for keeping format logic out of the backing.
+
+**`buildEpub` must resolve only once the write stream's `'close'` fires, not
+archiver's `'finish'`.** `'finish'` only means archiver pushed its last bytes
+into the pipe, not that `fs` flushed them to disk — resolving on it risks
+handing back a truncated `.epub` that looks successful until a reader (or
+`email-doc.js`, which attaches the result) opens it. This is the single most
+load-bearing line in the implementation; see the Phase 6 write-up in
+`upgrade-and-isolation-plan.md` for why it could not be verified by mutation on
+this codebase's fast local filesystem.
 
 ---
 
-## H. Backup
+## H. Backup — **implemented in Phase 6**
 
 | Command | Replaces |
 |---|---|
-| `archiveProject(projectDir, destDir, name)` → archive filename | `backup-project.js:66-79` (`archiver`) |
-| `listBackups(dir)` | `backup-project.js:130` |
-| `pruneBackups(paths)` | `backup-project.js:120-121` |
+| `archiveProject(projectDir, chapsDir, filename, destDir)` → `{ filename, path }` | `backup-project.js:71-101` (`archiver`) — drifted from `:66-79`, which was `createBackupsDirectory` plus the start of `archiveProject`, not the whole function |
+| `listBackups(directory)` | `backup-project.js:128-135` (`getFileList`) — drifted from `:130` |
+| `pruneBackups(paths)` | `backup-project.js:118-126` (`deleteFile`) — drifted from `:120-121` |
+
+**`archiveProject` allocates the timestamped archive name itself and returns
+it**, the same reason `saveChapterAtomic` allocates a chapter's filename rather
+than taking one.
+
+**A real bug found and fixed during the conversion, not carried over:** the
+original `archiveProject` listened on `archive.on('finish', ...)` rather than
+the output write stream's `'close'`, the exact mistake `buildEpub` above exists
+to avoid. It risked handing back a backup archive name before `fs` had actually
+flushed the file to disk — a truncated backup that looks successful. The native
+`archiveProject` listens on `'close'`, matching `buildEpub`. `email-doc.js`
+calls `backup-project.js`'s `archiveProject(project, archiveDir, callback)`
+directly (group K, Phase 8) and is untouched — that function keeps its
+callback-style signature and now delegates to the native command internally.
 
 ---
 
@@ -490,7 +548,7 @@ until the last one.
    bodies rather than production logic, but it cannot be staged — the models are
    one boundary and both halves have to cross it together.
 4. **Rest of D, then I and E** — settings, spellcheck, file browser.
-5. **Groups F, G, H** — import, export, backup.
+5. **Groups F, G, H** — import, export, backup. *Done in Phase 6.*
 6. **Group J** — credentials, with the collapse described above.
 7. **Group K** — updates, email, wifi, battery.
 8. Flip `contextIsolation: true` and drop `nodeIntegration` once nothing

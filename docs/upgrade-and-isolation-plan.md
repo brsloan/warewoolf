@@ -574,9 +574,9 @@ untouched, exactly as planned — deferred to Phase 8.
 Verified: suite is now **876** (one new test, covering `logError` staying
 inert and non-throwing when nothing has configured a platform yet).
 
-**Part 2 is at Phase 5, complete. Suite is 920.** Groups A, B, C, D, E, I and J
-are implemented in `platform-node.js`; F, G, H and K still reject with
-`NOT_IMPLEMENTED` naming their group. Phase 6 is clear to start.
+**Part 2 is at Phase 6, complete. Suite is 974.** Groups A, B, C, D, E, F, G, H,
+I and J are implemented in `platform-node.js`; only K still rejects with
+`NOT_IMPLEMENTED`. Phase 7 is clear to start.
 
 **Phase 4 — Groups B and C (projects, chapters) — done.** The core, and the
 best-tested. Line references were re-verified against the current tree before any
@@ -811,7 +811,169 @@ converted `listDirectory`, and Spell Check (Ctrl+7) loaded the real shipped
 dictionary through `loadDictionary()`/`loadPersonalDictionary()` and flagged a
 real misspelling with real suggestions. No error log was written by either.
 
-**Phase 6 — Groups F, G, H.** Import, export, backup.
+**Phase 6 — Groups F, G, H (import, export, backup) — done.** These are the
+commands that get a manuscript into and out of the app, so correctness was
+weighted over speed throughout: a silently truncated `.epub` or `.docx` is the
+worst failure this project can have, since the writer only discovers it when
+they send the file to an agent. Line references were re-derived rather than
+trusted - every one in groups F/G/H had drifted since the inventory was
+written, from earlier phases' own async conversions shifting surrounding code.
+Corrected in place; see the inventory.
+
+**The real design work was `buildEpub`, and the table was wrong about it, the
+same shape as Phase 5's `loadCorkboard`/`saveCorkboard` correction.** It
+declared `buildEpub(filepath, htmlChapters, meta)`, which would have moved
+`epub.js`'s ~250 lines of OPF/NCX/TOC/XML-escaping generation into
+`platform-node.js` alongside the zipping. That is exactly the class of
+format-generation logic groups B/C/D already keep out of the backing -
+`loadChapter`/`saveChapter` cross raw text, not a parsed chapter, for the same
+reason. Corrected to `buildEpub(filepath, entries)`, where `entries` is
+`{ name, content }[]` - every entry already-generated text. `epub.js` keeps
+every generation and escaping function completely unchanged and now assembles
+`entries` itself (mimetype, container.xml, content.opf, toc.ncx, toc.xhtml, one
+chapter_N.xhtml per chapter, the stylesheet) before handing them to the native
+command, which does exactly one thing: zip them to `filepath`. The one piece of
+zip-format knowledge that *is* native - the EPUB spec's requirement that the
+`"mimetype"` entry be first and stored uncompressed - lives in the native
+command, which is the right side of the boundary for it: it is a property of
+the zip container, not of epub generation.
+
+**A real bug surfaced and was fixed during the conversion, not carried over: the
+original `archiveProject` (backup-project.js) listened on `archive.on('finish',
+...)`.** `'finish'` only means archiver pushed its last bytes into the pipe, not
+that `fs` flushed them to disk - resolving on it risks handing back a backup
+archive name before the file is actually complete on disk, the identical
+failure mode `epub.js`'s own `htmlChaptersToEpub` was already written to avoid
+by listening on the write stream's `'close'` instead. The native `archiveProject`
+and the corrected `buildEpub` both listen on `'close'`, with the reasoning
+recorded as a comment directly on the code, since it is easy to "simplify" back
+to `'finish'` without noticing anything is wrong - archiver's own event fires
+first and looks equivalent under a synchronous read-back in a fast test.
+
+**That last point is not hypothetical - it is what mutation-checking this
+specific guard found.** Swapping `'close'` for `'finish'` in both `buildEpub`
+and `archiveProject` and re-running `platform.test.js`, `epub.test.js`, and
+`backup-project.test.js` left every test green. On this system's local
+filesystem, a small file's `'finish'` and `'close'` events land close enough in
+succession that no test built around reading the result straight back detects
+the difference - the race exists, but provoking it deterministically would need
+an artificial delay this suite doesn't have anywhere else. The correction is
+kept on the strength of the reasoning (and the epub precedent, which already
+had a passing regression test for the property before this phase touched it)
+rather than on a red-to-green mutation result. Recorded here rather than
+papered over, since the instruction to mutation-check what's preserved is only
+useful if a null result gets reported as a null result.
+
+**Two mutations *did* fail as expected**, confirming the guards they target are
+real: dropping `buildEpub`'s `store: entry.name === 'mimetype'` flag fails
+exactly `epub.test.js`'s "mimetype is the first zip entry and is stored
+uncompressed" and `platform.test.js`'s equivalent buildEpub test, and nothing
+else; removing the per-path `try/catch` in `pruneBackups` fails exactly
+`pruneBackups keeps deleting after an entry that throws` (added specifically
+because the first version of that test only exercised the
+already-missing-path branch, which never reaches the `try/catch` at all -
+`fs.existsSync` guards it first - and so passed with or without the mutation
+until rewritten to include a genuinely-throwing entry).
+
+**`importDocx`'s temp directory changed shape, not just which command owns
+it.** The old `tempUnzipDocx` unzipped every docx to the same fixed
+`sysDirectories.temp + '/docxguts'` and never removed it, so residue from one
+import could bleed into the next and the directory grew without bound over a
+session - and `sysDirectories` had to be threaded through `docx-import.js` as a
+parameter for that path to be reachable at all. The native `importDocx` unzips
+into its own `fs.mkdtempSync()` directory instead, reads `document.xml`/
+`footnotes.xml` out of it, and removes the directory again in a `finally` -
+whether the import succeeded or failed - before ever resolving or rejecting.
+`docx-import.js`'s own `importDocx(filepath, split, cback)` dropped the
+`sysDirectories` parameter entirely, since nothing in it needs one any more;
+`import.js`'s one call site was updated to match. Verified by mutation: deleting
+the `finally{ cleanup(); }` block fails exactly the two tests written for it
+(one in `platform.test.js`, one in `docx-import.test.js`) and nothing else.
+
+**`archiveProject` deliberately does not follow groups B/C's convention of
+concatenating onto an assumed trailing-slash directory - it uses `path.join`
+for every filesystem path it touches.** `saveProjectAs`/`saveChapterAtomic` can
+assume a trailing slash because `project.directory` always comes from
+`splitPath()`, which appends one; `archiveProject`'s `projectDir`/`destDir`
+carry no such guarantee - `backup-project.test.js`'s own fixtures build
+`project.directory` from `fs.mkdtempSync()` (no trailing slash), and
+`email-doc.js` passes `os.tmpdir()` as `destDir` (also none). Concatenating
+onto either would have silently produced a malformed path. This was reasoned
+out rather than discovered by a failing test - but a related mismatch *was*
+caught by one: `createBackupsDirectory` initially returned `createDirectory`'s
+own result path, which group E's command normalizes to forward slashes,
+against a test asserting `path.join(docsDir, 'backups')` - correct on POSIX,
+and a real failure on this Windows machine, since the two strings name the
+same directory with different separators and `assert.strictEqual` does not
+know that. Fixed by having `createBackupsDirectory` use the `createDirectory`
+call only for its side effect and build the path it returns the same way the
+original function did.
+
+**`saveDocx`'s public callback signature was deliberately left untouched.**
+`writeBinaryFile` only replaces its internal `fs.writeFileSync` call; every
+existing test in `delta-to-docx.test.js` that drives `saveDocx(filepath, doc,
+callback)` needed no changes at all. That mattered for a bug this phase fixed
+in passing: `compile.js`'s `compileDocx` used to call `saveDocx(filepath, doc)`
+with no completion callback, which is fire-and-forget - `docx.Packer`'s promise
+kept resolving in the background after `compileDocx` returned, so
+`compileProject`'s own completion callback could fire (and `compile_display.js`
+could report the compile done) while the `.docx` was still mid-write. `.epub`
+never had this problem, because `htmlChaptersToEpub` was always driven through
+its own completion callback. `compileDocx` now awaits `saveDocx` via its
+existing callback wrapped in a `Promise`, which closes the gap without changing
+`saveDocx`'s signature at all.
+
+**`export.js`'s plain-text writers (`.txt`/`.mdfc`/`.md`/`.html`) are awaited
+directly in `exportChapter`'s loop, not routed through the `taskStarted`/
+`taskDone` bookkeeping `.docx`/`.epub` use.** They are a single platform call
+each with no further async work of their own once that call resolves, unlike
+`.docx`/`.epub`, which finish on their own callback well after `exportChapter`
+returns - so awaiting them inline is what keeps `exportProject`'s loop, and
+therefore its own completion callback, from moving on before they land. This
+was checked by mutation and turned out **not** to be independently observable
+here either: removing the `await` and reverting to a bare call left
+`export.test.js` fully green, because the very next line in the same loop
+iteration (`await chap.getNotesContentOrFile()`) already yields a microtask,
+which was enough time in practice for the unawaited write to finish first. The
+explicit `await` is kept anyway - it removes the race outright rather than
+depending on an unrelated statement happening to yield at the right moment,
+which is exactly the kind of coincidental correctness that breaks the next time
+someone reorders this loop.
+
+Verified: **974 tests pass** (from 950). Twenty-four new tests, split across
+`test/platform.test.js` (contract coverage for all ten Phase 6 commands,
+including the argument-validation sweep the other groups have), one new test
+in `test/docx-import.test.js` (temp-directory cleanup), and two rewritten in
+`test/backup-project.test.js` (`deleteOldBackups` is now async, and the
+already-covered "bad path" case was split into "already missing" versus
+"genuinely throws" once the mutation check above showed the original only
+tested the former). `test/import.test.js`, `test/export.test.js`,
+`test/compile.test.js`, `test/epub.test.js`, and `test/delta-to-docx.test.js`
+needed **no changes** - the design goal throughout this phase was preserving
+every external callback/return shape those suites already drive, changing only
+what crosses to `fs` underneath.
+
+**Verified as a packaged build, and beyond it.** An `electron-forge package`
+build launched against a clean `--user-data-dir` came up with no error log
+written and materialized the bundled Frankenstein example correctly, matching
+every earlier phase's packaged-build check. Past that: this environment has no
+tool for driving a native Electron window's menus interactively (the available
+browser automation targets web pages, not native windows), so the Export/
+Compile menu items themselves were not clicked through the UI. In its place, a
+script loaded the real `project.js`/`chapter.js` models against the actual
+Frankenstein project the packaged app had just materialized on disk, and called
+the real, unmodified `compileProject/exportProject` - the same functions the UI
+calls - through the real node-backed platform. It produced a genuine 193,875-byte
+`.epub` (36 entries, `mimetype` first and stored uncompressed, real chapter
+text in `chapter_1.xhtml`) and a genuine 168,798-byte `.docx` (~75,373 words of
+real body text extracted from `word/document.xml`, including the generated
+title page), plus a 33-file `.txt` export with the expected `-notes_`/`-ref_`/
+numbered-prefix naming. Both archives were re-opened and read back
+programmatically rather than merely checked for existence, which is the
+non-UI equivalent of "open the results." What this does not cover: visually
+confirming either document renders correctly in Word/an EPUB reader, and the
+in-app Export/Compile dialogs themselves, which remain unexercised by anything
+in this phase.
 
 **Phase 7 — Group J (credentials).** The collapse to four commands described in
 the inventory. Security-sensitive: key material stops living in the renderer, and
