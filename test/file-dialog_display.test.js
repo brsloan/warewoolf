@@ -8,6 +8,8 @@ const fileManagerPath = require.resolve('../src/components/controllers/file-mana
 //file-dialog_display.js destructures getFileList/getParentDirectory from the file-manager
 //controller at require-time, so mocking them only takes effect if the cache is primed before
 //file-dialog_display.js is (re-)required - same pattern as corkboard_display.test.js.
+//getFileList now goes through the platform facade and is async, so showFileDialog() is too -
+//every test below awaits it (and any handler that lists a directory again) before asserting.
 function freshFileDialogDisplay(mocks){
   delete require.cache[fileDialogDisplayPath];
   require.cache[fileManagerPath] = {
@@ -29,11 +31,20 @@ function bodyShell(){
 }
 
 function dirent(name, isDir){
-  return { name: name, isDirectory: function(){ return isDir; } };
+  return { name: name, isDirectory: isDir };
 }
 
 function keydown(target, key){
   target.dispatchEvent(new window.KeyboardEvent('keydown', { key: key, bubbles: true, cancelable: true }));
+}
+
+function flushMicrotasks(){
+  return new Promise(function(resolve){ setImmediate(resolve); });
+}
+
+async function keydownAndFlush(target, key){
+  keydown(target, key);
+  await flushMicrotasks();
 }
 
 //fileListSelect is a multi-select, and populateFileList() leaves "< Parent Directory" selected -
@@ -67,13 +78,13 @@ test.afterEach(function(){
   delete global.document;
 });
 
-test('save dialog: pressing Enter in the filename field sanitizes the name and fixes the extension, same as clicking Save', function(t){
+test('save dialog: pressing Enter in the filename field sanitizes the name and fixes the extension, same as clicking Save', async function(t){
   var showFileDialog = freshFileDialogDisplay({
-    getFileList: function(){ return []; }
+    getFileList: async function(){ return []; }
   });
   var callbackArgs = [];
 
-  showFileDialog(baseOptions(), function(result){ callbackArgs.push(result); });
+  await showFileDialog(baseOptions(), function(result){ callbackArgs.push(result); });
 
   var filenameIn = document.querySelector('.save-input[type="text"]');
   //Multiple dots and an illegal Windows filename character, with the wrong extension -
@@ -86,13 +97,13 @@ test('save dialog: pressing Enter in the filename field sanitizes the name and f
   assert.strictEqual(callbackArgs[0], '/proj/docs/mynotes.v2.docx');
 });
 
-test('save dialog: clicking Save applies the same normalization as Enter', function(t){
+test('save dialog: clicking Save applies the same normalization as Enter', async function(t){
   var showFileDialog = freshFileDialogDisplay({
-    getFileList: function(){ return []; }
+    getFileList: async function(){ return []; }
   });
   var callbackArgs = [];
 
-  showFileDialog(baseOptions(), function(result){ callbackArgs.push(result); });
+  await showFileDialog(baseOptions(), function(result){ callbackArgs.push(result); });
 
   var filenameIn = document.querySelector('.save-input[type="text"]');
   filenameIn.value = 'my:notes.v2.pdf';
@@ -103,23 +114,23 @@ test('save dialog: clicking Save applies the same normalization as Enter', funct
   assert.strictEqual(callbackArgs[0], '/proj/docs/mynotes.v2.docx');
 });
 
-test('save dialog: an empty filters list does not throw and defaults the filename field to empty', function(t){
+test('save dialog: an empty filters list does not throw and defaults the filename field to empty', async function(t){
   var showFileDialog = freshFileDialogDisplay({
-    getFileList: function(){ return []; }
+    getFileList: async function(){ return []; }
   });
 
-  assert.doesNotThrow(function(){
-    showFileDialog(baseOptions({ filters: [] }), function(){});
+  await assert.doesNotReject(function(){
+    return showFileDialog(baseOptions({ filters: [] }), function(){});
   });
 
   var filenameIn = document.querySelector('.save-input[type="text"]');
   assert.strictEqual(filenameIn.value, '');
 });
 
-test('open dialog: pressing Enter on a directory entry navigates into it', function(t){
+test('open dialog: pressing Enter on a directory entry navigates into it', async function(t){
   var getFileListCalls = [];
   var showFileDialog = freshFileDialogDisplay({
-    getFileList: function(dirPath){
+    getFileList: async function(dirPath){
       getFileListCalls.push(dirPath);
       if(dirPath === '/proj/docs')
         return [dirent('sub', true), dirent('notes.docx', false)];
@@ -127,23 +138,23 @@ test('open dialog: pressing Enter on a directory entry navigates into it', funct
     }
   });
 
-  showFileDialog(baseOptions({ dialogType: 'open' }), function(){});
+  await showFileDialog(baseOptions({ dialogType: 'open' }), function(){});
 
   var fileListSelect = document.querySelector('.file-manager-list');
   selectOnly(fileListSelect, 'sub');
-  keydown(fileListSelect, 'Enter');
+  await keydownAndFlush(fileListSelect, 'Enter');
 
   assert.deepStrictEqual(getFileListCalls, ['/proj/docs', '/proj/docs/sub']);
   assert.strictEqual(document.querySelector('p').innerText, '/proj/docs/sub');
 });
 
-test('open dialog: pressing Enter on a file entry calls back with its full path', function(t){
+test('open dialog: pressing Enter on a file entry calls back with its full path', async function(t){
   var showFileDialog = freshFileDialogDisplay({
-    getFileList: function(){ return [dirent('sub', true), dirent('notes.docx', false)]; }
+    getFileList: async function(){ return [dirent('sub', true), dirent('notes.docx', false)]; }
   });
   var callbackArgs = [];
 
-  showFileDialog(baseOptions({ dialogType: 'open' }), function(result){ callbackArgs.push(result); });
+  await showFileDialog(baseOptions({ dialogType: 'open' }), function(result){ callbackArgs.push(result); });
 
   var fileListSelect = document.querySelector('.file-manager-list');
   selectOnly(fileListSelect, 'notes.docx');
@@ -161,35 +172,35 @@ function shortcutValues(){
   return Array.from(document.querySelectorAll('.file-dir-shortcuts option')).map(function(o){ return o.value; });
 }
 
-test('the open project folder is offered as a shortcut alongside the standing bookmarks', function(){
-  var showFileDialog = freshFileDialogDisplay({ getFileList: function(){ return []; } });
+test('the open project folder is offered as a shortcut alongside the standing bookmarks', async function(){
+  var showFileDialog = freshFileDialogDisplay({ getFileList: async function(){ return []; } });
 
-  showFileDialog(baseOptions({ bookmarkedPaths: ['/docs', '/home'] }), function(){});
+  await showFileDialog(baseOptions({ bookmarkedPaths: ['/docs', '/home'] }), function(){});
 
   //The trailing slash is trimmed so the entry matches how the bookmarks are written.
   assert.deepStrictEqual(shortcutValues(), ['/docs', '/home', '/proj']);
 });
 
-test('the project folder is not listed twice when it is already a bookmark', function(){
-  var showFileDialog = freshFileDialogDisplay({ getFileList: function(){ return []; } });
+test('the project folder is not listed twice when it is already a bookmark', async function(){
+  var showFileDialog = freshFileDialogDisplay({ getFileList: async function(){ return []; } });
 
-  showFileDialog(baseOptions({ bookmarkedPaths: ['/docs', '/proj'] }), function(){});
+  await showFileDialog(baseOptions({ bookmarkedPaths: ['/docs', '/proj'] }), function(){});
 
   assert.deepStrictEqual(shortcutValues(), ['/docs', '/proj']);
 });
 
 //An unsaved project has no directory yet, and previously this read `project.directory` off a
 //global that may not have been there at all.
-test('an unsaved project contributes no shortcut instead of throwing', function(){
-  var showFileDialog = freshFileDialogDisplay({ getFileList: function(){ return []; } });
+test('an unsaved project contributes no shortcut instead of throwing', async function(){
+  var showFileDialog = freshFileDialogDisplay({ getFileList: async function(){ return []; } });
 
-  assert.doesNotThrow(function(){
-    showFileDialog(baseOptions({ bookmarkedPaths: ['/docs'], projectDirectory: '' }), function(){});
+  await assert.doesNotReject(function(){
+    return showFileDialog(baseOptions({ bookmarkedPaths: ['/docs'], projectDirectory: '' }), function(){});
   });
   assert.deepStrictEqual(shortcutValues(), ['/docs']);
 
   document.body.innerHTML = bodyShell();
-  assert.doesNotThrow(function(){
-    showFileDialog(baseOptions({ bookmarkedPaths: ['/docs'], projectDirectory: undefined }), function(){});
+  await assert.doesNotReject(function(){
+    return showFileDialog(baseOptions({ bookmarkedPaths: ['/docs'], projectDirectory: undefined }), function(){});
   });
 });

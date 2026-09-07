@@ -93,7 +93,7 @@ async function exportProject(project, userSettings, options, filepath, cback = f
       }
 
       try{
-        var corkboardMd = getCorkboardForExport(project.directory + project.chapsDirectory, options);
+        var corkboardMd = await getCorkboardForExport(project.directory + project.chapsDirectory, options);
         if(corkboardMd){
           //Override heading styles for just this document since it is not a chapter
           options.styleHeadingAsChapter = false;

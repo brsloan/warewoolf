@@ -52,6 +52,18 @@ function keyup(target, key){
   target.dispatchEvent(new window.KeyboardEvent('keyup', { key: key, bubbles: true, cancelable: true }));
 }
 
+//onkeyup handlers are async now (updateDirExists/fillSubdirsList/fillFileList/updateChapExistsCheck
+//all go through the platform facade), and dispatchEvent() discards a handler's return value the
+//same way native click() does - flush a microtask so the awaited work has landed before asserting.
+function flushMicrotasks(){
+  return new Promise(function(resolve){ setImmediate(resolve); });
+}
+
+async function keyupAndFlush(target, key){
+  keyup(target, key);
+  await flushMicrotasks();
+}
+
 //Simulates a real user typing text into a field character-by-character: the browser appends one
 //character to .value and fires keyup after each keystroke.
 function typeInto(input, text){
@@ -157,7 +169,11 @@ test('Delete requires a confirming second click before removing the chapter', as
   assert.strictEqual(deleteBtn.innerText, 'Click Again To DELETE');
   assert.deepStrictEqual(project.chapters, [chap], 'a single click should not delete yet');
 
-  deleteBtn.onclick();
+  //The state assertion above only depends on what removeChapterFromProject() does synchronously,
+  //before the handler's first await - but the rest of it (redrawing via fillMissingChapsList/
+  //fillFileList, both async now) keeps running afterward, so it has to be awaited out here or it
+  //dangles past the test's own teardown of `document`.
+  await deleteBtn.onclick();
   assert.deepStrictEqual(project.chapters, [], 'a second click should remove the chapter');
 });
 
@@ -173,7 +189,7 @@ test('editing a missing chapter\'s filename updates the chapter object and re-ch
   assert.strictEqual(filenameInput.value, 'missing.txt');
 
   filenameInput.value = 'found.txt';
-  keyup(filenameInput, 't');
+  await keyupAndFlush(filenameInput, 't');
 
   assert.strictEqual(chap.filename, 'found.txt', 'typing in the filename field should update the chapter');
   assert.strictEqual(filenameInput.nextElementSibling.innerText, ' ✔ Exists');
@@ -192,6 +208,9 @@ test('typing a multi-character subdirectory name is not fragmented by a forced s
   var chapsDirIn = document.querySelector('input[type="text"]');
 
   typeInto(chapsDirIn, 'NewChapters');
+  //Each keystroke's onkeyup handler is async and dangles past this point otherwise - flushed once,
+  //after every keystroke has fired, rather than once per character.
+  await flushMicrotasks();
 
   assert.strictEqual(chapsDirIn.value, 'NewChapters', 'the field itself should hold exactly what was typed');
   assert.strictEqual(project.chapsDirectory, 'NewChapters/', 'the model should still get a normalized trailing slash');
@@ -211,7 +230,7 @@ test('removing the trailing slash from the subdirectory field is not immediately
   assert.strictEqual(chapsDirIn.value, 'chapters/');
 
   chapsDirIn.value = 'chapters';
-  keyup(chapsDirIn, 'Backspace');
+  await keyupAndFlush(chapsDirIn, 'Backspace');
 
   assert.strictEqual(chapsDirIn.value, 'chapters', 'the backspace should stick instead of being reverted');
   assert.strictEqual(project.chapsDirectory, 'chapters/', 'the model value is still normalized for disk checks');
@@ -229,7 +248,7 @@ test('the file list looks up files using a normalized trailing slash even if the
   await promptForMissingPups(project, function(){});
   var chapsDirIn = document.querySelector('input[type="text"]');
   chapsDirIn.value = 'newdir';
-  keyup(chapsDirIn, 'r');
+  await keyupAndFlush(chapsDirIn, 'r');
 
   assert.ok(getFileListCalls.includes('/proj/newdir/'), 'expected getFileList to be called with a normalized trailing slash, got: ' + getFileListCalls);
 });
@@ -252,7 +271,7 @@ test('a missing chapter\'s filename is flagged as already used when it collides 
   await promptForMissingPups(project, function(){});
   var filenameInput = document.querySelectorAll('input[type="text"]')[1];
   filenameInput.value = 'shared.txt';
-  keyup(filenameInput, 't');
+  await keyupAndFlush(filenameInput, 't');
 
   assert.strictEqual(filenameInput.nextElementSibling.innerText, ' !! File Already Used By Another Chapter');
   assert.ok(filenameInput.nextElementSibling.classList.contains('unsure-check'));
@@ -283,7 +302,7 @@ test('Delete removes a missing reference document without touching the chapters 
   var deleteBtn = findButton('Delete');
   deleteBtn.innerText = 'Delete';
   deleteBtn.onclick();
-  deleteBtn.onclick();
+  await deleteBtn.onclick();
 
   assert.deepStrictEqual(project.reference, []);
   assert.deepStrictEqual(project.chapters, [keeper, lastChap],
@@ -307,7 +326,7 @@ test('Delete removes a missing trashed chapter from the trash', async function(t
   var deleteBtn = findButton('Delete');
   deleteBtn.innerText = 'Delete';
   deleteBtn.onclick();
-  deleteBtn.onclick();
+  await deleteBtn.onclick();
 
   assert.deepStrictEqual(project.trash, []);
   assert.deepStrictEqual(project.chapters, [keeper]);
@@ -348,8 +367,8 @@ test('a trashed chapter\'s file is not listed as an unexpected file in the subdi
   var promptForMissingPups = freshMissingPupsDisplay({
     getFileList: function(){
       return [
-        { name: 'ch1.txt', isDirectory: function(){ return false; } },
-        { name: 'old.txt', isDirectory: function(){ return false; } }
+        { name: 'ch1.txt', isDirectory: false },
+        { name: 'old.txt', isDirectory: false }
       ];
     }
   });
@@ -377,7 +396,7 @@ function listedFiles(){
 }
 
 function fileEntry(name){
-  return { name: name, isDirectory: function(){ return false; } };
+  return { name: name, isDirectory: false };
 }
 
 //Every document's notes are saved beside it as '-notes_<filename>', and the project-wide notes as

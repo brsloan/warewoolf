@@ -1,24 +1,30 @@
-const fs = require('fs');
 const { logError } = require('../controllers/error-log');
-const cardsFilename = 'project_corkboard.txt';
+const { createPlatform } = require('./platform');
+const { createNodeBacking } = require('./platform-node');
+
+//loadCorkboard()/saveCorkboard() take the chapters directory directly (like loadChapter/
+//saveChapter in group C) rather than any injected app/userData path, so this module needs no
+//boot-time wiring - it holds its own node-backed instance, the same way file-manager.js holds its
+//own for group E below.
+var platform = createPlatform(createNodeBacking({}));
 
 function getCorkboardForExport(chaptersPath, options){
-    var returnText = getCorkboardAsMd(chaptersPath);
+    return getCorkboardAsMd(chaptersPath).then(function(returnText){
+        //Most projects have no corkboard file at all, which getCardsFile() reports as undefined. That
+        //is the ordinary case, not a failure: hand it straight back so export.js's own `if(corkboardMd)`
+        //skips the corkboard document. Falling through to .replace() below threw instead, and export.js
+        //counted the throw as a failed export - so every .docx export of a project without a corkboard
+        //told the reader it had finished with errors.
+        if(!returnText)
+            return returnText;
 
-    //Most projects have no corkboard file at all, which getCardsFile() reports as undefined. That
-    //is the ordinary case, not a failure: hand it straight back so export.js's own `if(corkboardMd)`
-    //skips the corkboard document. Falling through to .replace() below threw instead, and export.js
-    //counted the throw as a failed export - so every .docx export of a project without a corkboard
-    //told the reader it had finished with errors.
-    if(!returnText)
+        if(options.type == '.docx'){
+            //Remove extra blank lines after headings
+            var headingsWithExtraBlank = /^(# .*\n)\n/gm;
+            returnText = returnText.replace(headingsWithExtraBlank,'$1');
+        }
         return returnText;
-
-    if(options.type == '.docx'){
-        //Remove extra blank lines after headings
-        var headingsWithExtraBlank = /^(# .*\n)\n/gm;
-        returnText = returnText.replace(headingsWithExtraBlank,'$1');
-    }
-    return returnText;
+    });
 }
 
 function getCorkboardAsMd(chaptersPath){
@@ -27,8 +33,8 @@ function getCorkboardAsMd(chaptersPath){
 
 function cardStringToMd(str){
     str = convertWindowsToLinuxLineEndings(str);
-    let colorNums = /^# \[(\d)\] (\[[xX]\] )?/gm; 
-    let checkMarkers = /^# \[[xX]\] /gm; 
+    let colorNums = /^# \[(\d)\] (\[[xX]\] )?/gm;
+    let checkMarkers = /^# \[[xX]\] /gm;
 
     str = str.replace(colorNums,'# ');
     str = str.replace(checkMarkers, '# ');
@@ -40,25 +46,22 @@ function getCardsFromFile(chaptersPath){
     return getCardsFile(chaptersPath, parseCardsString);
 }
 
-function getCardsFile(chaptersPath, processFunction){
-    const cardsFilepath = chaptersPath + cardsFilename;
+async function getCardsFile(chaptersPath, processFunction){
         try {
-            if(fs.existsSync(cardsFilepath)){
-                var cardsString = fs.readFileSync(cardsFilepath, "utf8");
+            var cardsString = await platform.loadCorkboard({ chaptersDir: chaptersPath });
+            if(cardsString != null)
                 return processFunction(cardsString);
-            }  
         }
         catch(err){
             logError(err);
         }
 }
 
-function saveCards(cards, chaptersPath){
-    const cardsFilepath = chaptersPath + cardsFilename;
+async function saveCards(cards, chaptersPath){
     var fileString = generateCardsString(cards);
 
     try {
-        fs.writeFileSync(cardsFilepath, fileString, "utf8");
+        await platform.saveCorkboard({ chaptersDir: chaptersPath, contents: fileString });
     }
     catch(err){
         logError(err);
@@ -91,8 +94,8 @@ function parseCardsString(str){
     str = str.replaceAll('\\','\\\\');
     str = str.replaceAll('/','\\/');
     str = str.replaceAll('"','\\"');
-    str = str.replaceAll('\t','\\t'); 
- 
+    str = str.replaceAll('\t','\\t');
+
     str = str.replace(firstLabel, '[{"label":"$1", "descr":"');
     str = str.replace(label, '"}, {"label":"$1", "descr":"');
     str = str.replace(newLines, '\\n');

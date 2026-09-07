@@ -4,7 +4,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const { getCardsFromFile, saveCards } = require('../src/components/controllers/corkboard');
+const { getCardsFromFile, saveCards, getCorkboardForExport } = require('../src/components/controllers/corkboard');
 
 function makeTempChaptersPath(t){
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wwcorkboard-'));
@@ -14,15 +14,15 @@ function makeTempChaptersPath(t){
   return dir + path.sep;
 }
 
-test('saveCards/getCardsFromFile round-trips label, description, color and checked state', function(t){
+test('saveCards/getCardsFromFile round-trips label, description, color and checked state', async function(t){
   const chaptersPath = makeTempChaptersPath(t);
   const cards = [
     { label: 'Card One', descr: 'Some notes.', color: 0, checked: false },
     { label: 'Card Two', descr: 'Second card text.', color: 2, checked: true }
   ];
 
-  saveCards(cards, chaptersPath);
-  const loaded = getCardsFromFile(chaptersPath);
+  await saveCards(cards, chaptersPath);
+  const loaded = await getCardsFromFile(chaptersPath);
 
   assert.strictEqual(loaded.length, 2);
   assert.strictEqual(loaded[0].label, 'Card One');
@@ -36,7 +36,7 @@ test('saveCards/getCardsFromFile round-trips label, description, color and check
 
 //Regression: a description line starting with "# " looked identical to the next card's heading marker,
 //so loading silently split one card into two and reassigned its text between them.
-test('a description line starting with "# " does not get mistaken for the next card heading', function(t){
+test('a description line starting with "# " does not get mistaken for the next card heading', async function(t){
   const chaptersPath = makeTempChaptersPath(t);
   const descr = 'Some notes.\n\n# Not actually a heading\n\nMore notes.';
   const cards = [
@@ -44,8 +44,8 @@ test('a description line starting with "# " does not get mistaken for the next c
     { label: 'Card Two', descr: 'Second card text.', color: 0, checked: false }
   ];
 
-  saveCards(cards, chaptersPath);
-  const loaded = getCardsFromFile(chaptersPath);
+  await saveCards(cards, chaptersPath);
+  const loaded = await getCardsFromFile(chaptersPath);
 
   assert.strictEqual(loaded.length, 2, 'card count should be unchanged');
   assert.strictEqual(loaded[0].label, 'Card One');
@@ -55,65 +55,63 @@ test('a description line starting with "# " does not get mistaken for the next c
 
 //Regression: a label that itself started with "[x] " or "[<digit>] " was mistaken for the checkmark/color
 //marker syntax and silently stripped off on load.
-test('a label starting with "[x] " is preserved instead of being read as a checkmark marker', function(t){
+test('a label starting with "[x] " is preserved instead of being read as a checkmark marker', async function(t){
   const chaptersPath = makeTempChaptersPath(t);
   const cards = [
     { label: '[x] marks the spot', descr: 'treasure map', color: 0, checked: false }
   ];
 
-  saveCards(cards, chaptersPath);
-  const loaded = getCardsFromFile(chaptersPath);
+  await saveCards(cards, chaptersPath);
+  const loaded = await getCardsFromFile(chaptersPath);
 
   assert.strictEqual(loaded[0].label, '[x] marks the spot');
   assert.strictEqual(loaded[0].checked, false);
 });
 
-test('a label starting with "[2] " is preserved alongside a real color and checked marker', function(t){
+test('a label starting with "[2] " is preserved alongside a real color and checked marker', async function(t){
   const chaptersPath = makeTempChaptersPath(t);
   const cards = [
     { label: '[2] second place', descr: 'note', color: 5, checked: true }
   ];
 
-  saveCards(cards, chaptersPath);
-  const loaded = getCardsFromFile(chaptersPath);
+  await saveCards(cards, chaptersPath);
+  const loaded = await getCardsFromFile(chaptersPath);
 
   assert.strictEqual(loaded[0].label, '[2] second place');
   assert.strictEqual(loaded[0].color, '5');
   assert.strictEqual(loaded[0].checked, true);
 });
 
-test('getCardsFromFile returns undefined when no corkboard file exists yet', function(t){
+test('getCardsFromFile returns undefined when no corkboard file exists yet', async function(t){
   const chaptersPath = makeTempChaptersPath(t);
-  assert.strictEqual(getCardsFromFile(chaptersPath), undefined);
+  assert.strictEqual(await getCardsFromFile(chaptersPath), undefined);
 });
 
 //Regression: an existing-but-empty corkboard file used to fail JSON.parse and get logged as an error
 //before falling back to undefined. It's a legitimate empty state, not an error.
-test('getCardsFromFile returns an empty array for an existing empty corkboard file, without erroring', function(t){
+test('getCardsFromFile returns an empty array for an existing empty corkboard file, without erroring', async function(t){
   const chaptersPath = makeTempChaptersPath(t);
   fs.writeFileSync(chaptersPath + 'project_corkboard.txt', '', 'utf8');
 
-  assert.deepStrictEqual(getCardsFromFile(chaptersPath), []);
+  assert.deepStrictEqual(await getCardsFromFile(chaptersPath), []);
 });
 
 //A project with no corkboard file is the ordinary case, not a failure. getCorkboardForExport()
 //used to run getCardsFile()'s undefined straight into .replace() for .docx, and export.js counted
 //the throw as a failed export - so exporting a corkboard-less project to .docx always reported
 //that it had finished with errors.
-test('getCorkboardForExport returns nothing instead of throwing when there is no corkboard file', function(t){
-  const { getCorkboardForExport } = require('../src/components/controllers/corkboard');
+test('getCorkboardForExport returns nothing instead of throwing when there is no corkboard file', async function(t){
   const chaptersPath = makeTempChaptersPath(t);
 
-  assert.strictEqual(getCorkboardForExport(chaptersPath, { type: '.docx' }), undefined);
-  assert.strictEqual(getCorkboardForExport(chaptersPath, { type: '.txt' }), undefined);
+  assert.strictEqual(await getCorkboardForExport(chaptersPath, { type: '.docx' }), undefined);
+  assert.strictEqual(await getCorkboardForExport(chaptersPath, { type: '.txt' }), undefined);
 });
 
-test('getCorkboardForExport still strips the blank line after headings for .docx', function(t){
-  const { getCorkboardForExport } = require('../src/components/controllers/corkboard');
+test('getCorkboardForExport still strips the blank line after headings for .docx', async function(t){
   const chaptersPath = makeTempChaptersPath(t);
-  saveCards([{ label: 'Card One', descr: 'Body text.', color: 0, checked: false }], chaptersPath);
+  await saveCards([{ label: 'Card One', descr: 'Body text.', color: 0, checked: false }], chaptersPath);
 
-  const docx = getCorkboardForExport(chaptersPath, { type: '.docx' });
+  const docx = await getCorkboardForExport(chaptersPath, { type: '.docx' });
 
   assert.ok(docx.includes('Card One'));
   assert.ok(!/^(# .*\n)\n/m.test(docx), 'no blank line left directly after a heading');

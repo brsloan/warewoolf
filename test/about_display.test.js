@@ -217,7 +217,7 @@ test('on Linux, clicking Download hands off to showInstallUpdate instead of the 
   assert.deepStrictEqual(showInstallUpdateCalls, ['/tmp/warewoolf_2.4.0_amd64.deb']);
 });
 
-test('View License loads and displays the license text from sysDirectories.app and focuses it', function(t){
+test('View License loads and displays the license text from sysDirectories.app and focuses it', async function(t){
   t.mock.method(fs, 'existsSync', function(p){ return p === '/app/licenses.txt'; });
   //Node's own module loader uses the real fs.readFileSync to read source files, so this mock must
   //pass through anything that isn't the licenses path rather than always returning fake text -
@@ -231,7 +231,9 @@ test('View License loads and displays the license text from sysDirectories.app a
   var showAbout = freshAboutDisplay({});
 
   showAbout(sysDirs(), '2.3.1');
-  findButton('View License').onclick();
+  //Loaded on demand now, through the platform facade - awaited so the assertions below see the
+  //text rather than racing the microtask that fetches it.
+  await findButton('View License').onclick();
 
   var licenseText = document.querySelector('pre');
   assert.strictEqual(licenseText.innerText, 'MIT License text here.');
@@ -239,12 +241,12 @@ test('View License loads and displays the license text from sysDirectories.app a
   assert.strictEqual(document.activeElement, licenseText);
 });
 
-test('View License shows empty text when the licenses file does not exist', function(t){
+test('View License shows empty text when the licenses file does not exist', async function(t){
   t.mock.method(fs, 'existsSync', function(){ return false; });
   var showAbout = freshAboutDisplay({});
 
   showAbout(sysDirs(), '2.3.1');
-  findButton('View License').onclick();
+  await findButton('View License').onclick();
 
   assert.strictEqual(document.querySelector('pre').innerText, '');
 });

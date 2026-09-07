@@ -1,8 +1,9 @@
-const fs = require('fs');
 const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
 const { getUpdates, downloadUpdate } = require('../controllers/updates');
 const { logError } = require('../controllers/error-log');
 const showInstallUpdate = require('./install-update_display');
+const { createPlatform } = require('../controllers/platform');
+const { createNodeBacking } = require('../controllers/platform-node');
 
 function showAbout(sysDirectories, appVersion){
   removeElementsByClass('popup');
@@ -93,14 +94,17 @@ function showAbout(sysDirectories, appVersion){
   licensePanel.style.display = "none";
 
   var licenseText = document.createElement('pre');
-  licenseText.innerText = loadLicenseText(sysDirectories.app + '/licenses.txt');
   licenseText.tabIndex = 0;
 
   licensePanel.appendChild(licenseText);
 
   popup.appendChild(licensePanel);
 
-  displayLicBtn.onclick = function(){
+  //Loaded on demand rather than up front, now that reading it goes through the platform facade -
+  //this keeps showAbout() itself synchronous, so the rest of the popup (version, links, Check For
+  //Updates) still renders in one pass with nothing to await.
+  displayLicBtn.onclick = async function(){
+    licenseText.innerText = await loadLicenseText(sysDirectories);
     licensePanel.style.display = "block";
     licenseText.focus();
   }
@@ -115,20 +119,15 @@ function showAbout(sysDirectories, appVersion){
   close.focus();
 }
 
-function loadLicenseText(licensesPath){
-  //var licenseLocation = 'licenses.txt';
-  var licenseText = '';
-
+async function loadLicenseText(sysDirectories){
   try {
-    if(fs.existsSync(licensesPath)){
-      licenseText = fs.readFileSync(licensesPath, "utf8");
-    }
+    var platform = createPlatform(createNodeBacking({ paths: sysDirectories }));
+    return await platform.readLicenses();
   }
   catch(err){
     logError(err);
+    return '';
   }
-
-  return licenseText;
 }
 
 module.exports = showAbout;

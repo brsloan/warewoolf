@@ -866,6 +866,9 @@ test('open-clicked opens the file dialog directly when there are no unsaved chan
   r.project.hasUnsavedChanges = false;
 
   currentIpc().handlers['open-clicked']();
+  //showFileDialog() is async now (its initial directory listing goes through the platform facade),
+  //so the dialog is only appended to the DOM a tick later.
+  await flushMicrotasks();
 
   assert.ok(document.querySelector('.popup-dialog'), 'the open dialog should appear with nothing to confirm first');
 });
@@ -880,6 +883,7 @@ test('open-clicked asks to save first when there are unsaved changes, and does n
   assert.ok(findButton('Continue Without Saving'), 'the unsaved-changes prompt should be showing instead');
 
   findButton('Continue Without Saving').onclick();
+  await flushMicrotasks();
   assert.ok(document.querySelector('.popup-dialog'), 'answering the prompt should proceed to the open dialog');
 });
 
@@ -1456,6 +1460,10 @@ test('saving an open Help doc offers Save As instead of writing to the install d
   Array.from(document.querySelectorAll('.popup, .popup-dialog')).forEach(function(p){ p.remove(); });
 
   await currentIpc().handlers['save-clicked']();
+  //saveProjectAs() doesn't await showFileDialog() (deliberately - see its own comment), and
+  //showFileDialog() is itself async now, so the dialog is appended to the DOM a tick after
+  //save-clicked's own handler resolves.
+  await flushMicrotasks();
 
   assert.ok(document.querySelector('.popup-dialog'),
     'a Save As dialog should have opened');
@@ -1651,6 +1659,10 @@ test('saving the read-only example fallback offers Save As instead of writing to
   Array.from(document.querySelectorAll('.popup, .popup-dialog')).forEach(function(p){ p.remove(); });
 
   await currentIpc().handlers['save-clicked']();
+  //saveProjectAs() doesn't await showFileDialog() (deliberately - see its own comment), and
+  //showFileDialog() is itself async now, so the dialog is appended to the DOM a tick after
+  //save-clicked's own handler resolves.
+  await flushMicrotasks();
 
   assert.ok(document.querySelector('.popup-dialog'), 'a Save As dialog should have opened');
   assert.strictEqual(fs.readFileSync(path.join(bundled.exampleDir, 'Frankenstein.woolf'), 'utf8'), before,

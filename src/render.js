@@ -125,10 +125,13 @@ async function loadPlatformState(){
   //instance and get swapped for the ipc backing alongside D at Phase 9.
   newProject.setPlatform(nodePlatform);
   newChapter.setPlatform(nodePlatform);
+  //loadUserSettings()/saveUserSettings() are the rest of group D - same node-backed instance, same
+  //reason.
+  getUserSettings.setPlatform(nodePlatform);
   fileRequestedOnOpen = await platform.getFileRequestedOnOpen();
   platformInfo = await platform.getPlatform();
 
-  userSettings = getUserSettings(sysDirectories.userData + "/user-settings.json").load();
+  userSettings = await getUserSettings(sysDirectories.userData + "/user-settings.json").load();
   credentialStore = getCredentialStore(sysDirectories.userData, getSecureStorage());
   //Lift any password saved by an older version out of user-settings.json, where it sat under a
   //key that shipped in the source, and re-seal it with whatever this machine can actually offer.
@@ -679,7 +682,10 @@ async function saveProject(onComplete){
     saveProjectAs(onComplete);
 }
 
-//Not async: the dialog is what takes time, and it reports through onComplete, exactly as before.
+//Not awaited by the caller: the dialog is what takes time, and it reports through onComplete,
+//exactly as before. showFileDialog() itself is async now (listing its initial directory goes
+//through the platform facade), so the call is `.catch()`-ed rather than awaited - see detached()'s
+//own comment for why a dropped rejection here would otherwise vanish silently.
 function saveProjectAs(onComplete) {
   const options = {
     title: 'Save project as...',
@@ -709,7 +715,7 @@ function saveProjectAs(onComplete) {
     }
     if(onComplete)
       onComplete(false);
-  }));
+  })).catch(reportDetachedFailure);
 }
 
 function saveProjectCopy() {
@@ -732,7 +738,7 @@ function saveProjectCopy() {
 
     updateFileList();
     updateTitleBar();
-  }))
+  })).catch(reportDetachedFailure);
 }
 
 function openAProject() {
@@ -765,7 +771,7 @@ function openAProject() {
       userSettings.lastProject = filepath[0];
       userSettings.save();
     }
-  }));
+  })).catch(reportDetachedFailure);
 }
 
 
@@ -1156,7 +1162,7 @@ const menuCommands = {
     const { getBeginningOfCurrentWord } = require('./components/controllers/spellcheck');
     var currentIndex = editorQuill.getSelection(true).index;
     var beginningOfWord = getBeginningOfCurrentWord(editorQuill.getText(), currentIndex);
-    showSpellcheck(editorQuill, project, sysDirectories, detached(displayChapterByIndex), beginningOfWord);
+    return showSpellcheck(editorQuill, project, sysDirectories, detached(displayChapterByIndex), beginningOfWord);
   } },
   'convert-first-lines-clicked': { requiresFocus: true, run: function(){
     const showConvertFirstLines = require('./components/views/convert-first-lines_display');
@@ -1194,7 +1200,7 @@ const menuCommands = {
   } },
   'about-clicked': { run: function(appVersion){
     const showAbout = require('./components/views/about_display');
-    showAbout(sysDirectories, appVersion);
+    return showAbout(sysDirectories, appVersion);
   } },
   'exit-app-clicked': { run: function(){ proceedOrConfirmSave(exitApp, true); } },
   'save-copy-clicked': { run: function(){ saveProjectCopy(); } },
@@ -1216,7 +1222,7 @@ const menuCommands = {
   } },
   'file-manager-clicked': { run: function(){
     const showFileManager = require('./components/views/file-manager_display');
-    showFileManager(sysDirectories, project.directory);
+    return showFileManager(sysDirectories, project.directory);
   } },
   'wifi-manager-clicked': { run: function(){
     const showWifiManager = require('./components/views/wifi-manager_display');
@@ -1228,13 +1234,13 @@ const menuCommands = {
   } },
   'settings-clicked': { run: function(){
     const showSettings = require('./components/views/settings_display');
-    showSettings(userSettings, autosaver, sysDirectories, detached(autosaveProject), function(){
+    return showSettings(userSettings, autosaver, sysDirectories, detached(autosaveProject), function(){
       setDarkMode();
     }, platformInfo);
   } },
   'corkboard-clicked': { run: function(){
     const showCorkboard = require('./components/views/corkboard_display');
-    showCorkboard(project, platformInfo);
+    return showCorkboard(project, platformInfo);
   } },
   'indent-all-clicked': { run: async function(){
     const { indentAllParasInAllChaps } = require('./components/controllers/indent-all');

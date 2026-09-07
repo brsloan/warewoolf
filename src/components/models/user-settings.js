@@ -1,5 +1,13 @@
-const fs = require('fs');
 const { logError } = require('../controllers/error-log');
+
+//Set once by render.js's loadPlatformState(), the same node-backed instance error-log.js uses -
+//loadUserSettings()/saveUserSettings() are plain fs, reachable directly through nodeIntegration
+//like groups B, C and D's error-log slice, so there is nothing to swap here until Phase 9.
+let platform = null;
+
+function setPlatform(p){
+  platform = p;
+}
 
 //Each field's expected type, keyed by name. A hand-edited or corrupted user-settings.json is only
 //ever merged through this schema on load: a value of the wrong type is skipped (the previous/default
@@ -66,29 +74,34 @@ function getUserSettings(userSettingsFilepath){
 
   return settings;
 
+  //Async now that writing goes through the platform facade, but stays fire-and-forget like
+  //logError - nearly every call site (togglePanelDisplay, increaseFontSizeSetting, and the rest)
+  //calls this and moves on without awaiting. The promise is returned anyway, purely so a test can
+  //await a specific call, and it is always caught here first so a failed write can never surface as
+  //an unhandled rejection.
   function save(){
-    var fileString = JSON.stringify(settings, null, '\t');
+    if(platform == null)
+      return Promise.resolve();
 
-    try{
-      fs.writeFileSync(userSettingsFilepath, fileString, 'utf8');
-    }
-    catch(err){
+    return platform.saveUserSettings({ settings: settings }).catch(function(err){
       logError(err);
-    }
+    });
   }
 
+  //Catches internally and always resolves to `settings` - a corrupt or missing file falls back to
+  //the current (default) values exactly as the old synchronous try/catch did, rather than rejecting.
   function load(){
+    if(platform == null)
+      return Promise.resolve(settings);
 
-    try{
-      if(fs.existsSync(userSettingsFilepath)){
-        var settingsFile = JSON.parse(fs.readFileSync(userSettingsFilepath, "utf8"));
+    return platform.loadUserSettings().then(function(settingsFile){
+      if(settingsFile != null)
         applySettings(settingsFile);
-      }
-    }
-    catch(err){
+      return settings;
+    }).catch(function(err){
       logError(err);
-    }
-    return settings;
+      return settings;
+    });
   }
 
   function applySettings(settingsFile){
@@ -119,3 +132,4 @@ function getUserSettings(userSettingsFilepath){
 }
 
 module.exports = getUserSettings;
+module.exports.setPlatform = setPlatform;

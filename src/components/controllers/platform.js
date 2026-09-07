@@ -203,8 +203,17 @@ var COMMANDS = {
   // --- D. Settings, corkboard, error log ----------------------------------------------------
   loadUserSettings: { group: 'D', params: [], returns: 'object | null' },
   saveUserSettings: { group: 'D', params: ['settings'], returns: 'void' },
-  loadCorkboard: { group: 'D', params: ['projectDir'], returns: 'card[] | null' },
-  saveCorkboard: { group: 'D', params: ['projectDir', 'cards'], returns: 'void' },
+  //Phase 5 correction: this table originally declared loadCorkboard(projectDir) / saveCorkboard(
+  //projectDir, cards) - returning/taking parsed cards, which would mean the marker-escaping parse
+  //in corkboard.js (parseCardsString/generateCardsString - which card labels collide with the "# "
+  //heading marker or a "[x] "/"[<digit>] " prefix, and how to escape them) moves natively. That is
+  //exactly the format-parsing logic groups B/C keep out of platform-node - loadChapter/saveChapter
+  //cross raw text, not a parsed chapter, for the same reason. So these take/return the corkboard
+  //file's raw text instead, exactly like loadChapter/saveChapter, and corkboard.js keeps parsing it.
+  //`chaptersDir` rather than `projectDir` because that is what the caller has always had - the
+  //corkboard file lives beside the chapters, not the .woolf.
+  loadCorkboard: { group: 'D', params: ['chaptersDir'], returns: 'string | null (raw corkboard text)' },
+  saveCorkboard: { group: 'D', params: ['chaptersDir', 'contents'], returns: 'void' },
   logError: { group: 'D', params: ['text'], returns: 'void',
     note: 'Called from nearly every module; the widest blast radius of the async conversion, which is why Phase 3 does it alone.' },
   readErrorLog: { group: 'D', params: [], returns: 'string' },
@@ -212,12 +221,26 @@ var COMMANDS = {
   readLicenses: { group: 'D', params: [], returns: 'string' },
 
   // --- E. Filesystem browser (the documented generic exception) -----------------------------
+  //isDirectory crosses as a plain boolean, not a dirent's isDirectory() method - a function cannot
+  //survive IPC/Tauri serialization. file-manager.js's own dotfile filter stays a caller-side policy
+  //rather than moving into this command, for the same reason moveEntry stays a bare refuse-on-
+  //collision primitive below: the generic command does the filesystem operation, and app-specific
+  //policy (which entries to hide, how to pick a non-colliding name) is built out of these on the
+  //renderer side, exactly as the design note above the table describes.
   listDirectory: { group: 'E', params: ['path'], returns: '{ name, isDirectory }[]' },
   pathExists: { group: 'E', params: ['path'], returns: 'boolean' },
   statEntry: { group: 'E', params: ['path'], returns: '{ isDirectory, size, modified }' },
+  //Idempotent - a target that already exists is left alone rather than rejected, matching
+  //createNewDirectory's original fs.existsSync guard (file-manager.js:106).
   createDirectory: { group: 'E', params: ['parent', 'name'], returns: '{ path }' },
-  moveEntry: { group: 'E', params: ['source', 'destination'], returns: 'void',
-    note: 'Must keep the refuse-on-existing-destination guard (file-manager.js:54-56) and reject ALREADY_EXISTS. fs.renameSync overwrites silently; that is what the guard exists to stop.' },
+  //Must keep the refuse-on-existing-destination guard (file-manager.js:54-56) and reject
+  //ALREADY_EXISTS. fs.renameSync overwrites silently; that is what the guard exists to stop.
+  //moveFiles' cut-paste behavior (auto-uniquify the destination name instead of refusing) is a
+  //different policy from renameFiles' - both used to live in file-manager.js as two different
+  //fs.renameSync call sites with two different collision policies. moveEntry only implements the
+  //stricter one (refuse); the renderer computes a non-colliding name itself via pathExists/statEntry
+  //before calling moveEntry when it wants the other policy, the same way copyFiles already does.
+  moveEntry: { group: 'E', params: ['source', 'destination'], returns: 'void' },
   copyEntry: { group: 'E', params: ['source', 'destination'], optional: ['recursive'], returns: 'void' },
   deleteEntry: { group: 'E', params: ['path'], optional: ['recursive'], returns: 'void' },
 

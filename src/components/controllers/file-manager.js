@@ -1,40 +1,58 @@
 const fs = require('fs');
-const path = require('path');
 const { logError } = require('./error-log');
+const { createPlatform } = require('./platform');
+const { createNodeBacking } = require('./platform-node');
 
-function copyFiles(filesToCopy, newLocation){
-    filesToCopy.forEach((ftc) => {
-      try {
-        var newFileLoc = newLocation + "/" + path.basename(ftc);
-        newFileLoc = makeFilenameUniqueIfExists(newFileLoc);
+//Group E's commands take no injected config at all - every one of them operates purely on the
+//path(s) it is given, unlike groups A/D/I which need paths.app/userData wired in. So this module
+//holds its own standing instance rather than needing setPlatform() wiring from render.js, the same
+//reason corkboard.js does.
+var platform = createPlatform(createNodeBacking({}));
 
-        fs.cpSync(ftc, newFileLoc, { recursive: true });
-      }
-      catch(err){
-        logError(err);
-      }
-    });
+//Every path this module is handed is normalized to forward slashes before any string-splitting is
+//done on it, the same reason platform-node.js's own normalizePath() does this for group B/C paths -
+//it means every helper below can split on '/' alone and still work with a Windows backslash path
+//coming from an Electron dialog or a user-typed field.
+function normalizeSlashes(p){
+  return String(p).replaceAll('\\', '/');
 }
 
-//Splits only the basename's last extension (via path.basename/extname), not every "." in the
-//full path - splitting the whole path broke on any parent directory name containing a dot
-//(e.g. "C:/Users/John.Doe/notes" produced "C:/Users/John_copy.Doe/notes"), and multi-dot
-//filenames lost everything between the first and last dot (e.g. "archive.tar.gz" -> "archive_copy.gz").
-function makeFilenameUniqueIfExists(fullpath){
+function splitPath(fullPath){
+  var normalized = normalizeSlashes(fullPath);
+  var parts = normalized.split('/');
+  var base = parts.pop();
+  return { dir: parts.join('/'), base: base };
+}
+
+function basename(fullPath){
+  return splitPath(fullPath).base;
+}
+
+//Splits only the base name's LAST extension - mirroring path.basename/path.extname rather than
+//path's whole-path splitting, which is what corrupted a path with a dot in a parent directory's
+//name (see the copyFiles regression tests). A name with no dot, or a dotfile with nothing before
+//the dot, has no extension.
+function extAndStem(base){
+  var dot = base.lastIndexOf('.');
+  if(dot <= 0)
+    return { stem: base, ext: '' };
+  return { stem: base.slice(0, dot), ext: base.slice(dot) };
+}
+
+//Renderer-side policy built out of the generic pathExists/statEntry primitives, exactly as the
+//design note on moveEntry in platform.js describes - the uniqueness scheme itself (append "_copy"
+//before the extension, recursing until free) is app behavior, not a filesystem concern.
+async function makeFilenameUniqueIfExists(fullpath){
   try{
-    var uniqueName = fullpath;
+    var exists = await platform.pathExists({ path: fullpath });
+    if(!exists)
+      return fullpath;
 
-    if(fs.existsSync(fullpath)){
-      var dir = path.dirname(fullpath);
-      var base = path.basename(fullpath);
-      var isDirectory = fs.statSync(fullpath).isDirectory();
-      var ext = isDirectory ? '' : path.extname(base);
-      var nameWithoutExt = ext ? base.slice(0, -ext.length) : base;
+    var split = splitPath(fullpath);
+    var stat = await platform.statEntry({ path: fullpath });
+    var extInfo = stat.isDirectory ? { stem: split.base, ext: '' } : extAndStem(split.base);
 
-      uniqueName = makeFilenameUniqueIfExists(dir + "/" + nameWithoutExt + "_copy" + ext);
-    }
-
-    return uniqueName;
+    return await makeFilenameUniqueIfExists(split.dir + '/' + extInfo.stem + '_copy' + extInfo.ext);
   }
   catch(err){
     logError(err);
@@ -42,41 +60,58 @@ function makeFilenameUniqueIfExists(fullpath){
   }
 }
 
-function renameOneFile(location, oldName, newName){
-  var source = location + "/" + oldName;
-  var destination = location + "/" + newName;
+async function copyFiles(filesToCopy, newLocation){
+  for(var i = 0; i < filesToCopy.length; i++){
+    try{
+      var newFileLoc = normalizeSlashes(newLocation) + '/' + basename(filesToCopy[i]);
+      newFileLoc = await makeFilenameUniqueIfExists(newFileLoc);
+
+      await platform.copyEntry({ source: filesToCopy[i], destination: newFileLoc, recursive: true });
+    }
+    catch(err){
+      logError(err);
+    }
+  }
+}
+
+async function renameOneFile(location, oldName, newName){
+  var source = normalizeSlashes(location) + '/' + oldName;
+  var destination = normalizeSlashes(location) + '/' + newName;
 
   //Renaming to the same name (e.g. a case-only edit on a case-insensitive filesystem, or
   //submitting the input unchanged) isn't a collision - it's a no-op.
-  if(path.resolve(source) === path.resolve(destination))
+  if(source === destination)
     return;
 
-  //fs.renameSync silently overwrites an existing destination - refuse instead of destroying
-  //another file, rather than clobbering it the way this used to.
-  if(fs.existsSync(destination)){
-    logError(new Error('Cannot rename "' + oldName + '" to "' + newName + '": "' + newName + '" already exists in ' + location));
-    return;
+  try{
+    await platform.moveEntry({ source: source, destination: destination });
   }
-
-  fs.renameSync(source, destination);
+  catch(err){
+    //moveEntry refuses rather than overwriting an existing destination - report it the same way
+    //this used to (logged, not thrown), rather than destroying the other file.
+    if(err.code === 'ALREADY_EXISTS'){
+      logError(new Error('Cannot rename "' + oldName + '" to "' + newName + '": "' + newName + '" already exists in ' + location));
+      return;
+    }
+    logError(err);
+  }
 }
 
-function renameFiles(filesToRename, newName, location){
+async function renameFiles(filesToRename, newName, location){
   try{
     if(filesToRename.length === 0)
       return;
 
     if(filesToRename.length === 1){
-        renameOneFile(location, filesToRename[0], newName);
+        await renameOneFile(location, filesToRename[0], newName);
     }
     else {
-      for(var i=0;i<filesToRename.length;i++){
-        var fileExt = path.extname(filesToRename[i]);
-        var newNameExt = path.extname(newName);
-        var newNameBase = newNameExt ? newName.slice(0, -newNameExt.length) : newName;
-        var numberedName = newNameBase + "_" + i + fileExt;
+      var newNameStem = extAndStem(newName).stem;
+      for(var i = 0; i < filesToRename.length; i++){
+        var fileExt = extAndStem(filesToRename[i]).ext;
+        var numberedName = newNameStem + '_' + i + fileExt;
 
-        renameOneFile(location, filesToRename[i], numberedName);
+        await renameOneFile(location, filesToRename[i], numberedName);
       }
     }
   }
@@ -85,75 +120,83 @@ function renameFiles(filesToRename, newName, location){
   }
 }
 
-function moveFiles(filesToMove, newLocation){
-  filesToMove.forEach((ftm) => {
+async function moveFiles(filesToMove, newLocation){
+  for(var i = 0; i < filesToMove.length; i++){
     try{
-      var newFileLoc = newLocation + "/" + path.basename(ftm);
-      //Same overwrite risk as renameFiles - without this, cutting and pasting onto a file with
-      //the same name used to silently destroy it, unlike copyFiles which already protects against it.
-      newFileLoc = makeFilenameUniqueIfExists(newFileLoc);
+      var newFileLoc = normalizeSlashes(newLocation) + '/' + basename(filesToMove[i]);
+      //Same overwrite risk moveEntry itself refuses on - moveFiles' cut-paste policy is to
+      //auto-uniquify instead, computed here the same way copyFiles does, rather than baked into the
+      //generic command.
+      newFileLoc = await makeFilenameUniqueIfExists(newFileLoc);
 
-      fs.renameSync(ftm, newFileLoc);
+      await platform.moveEntry({ source: filesToMove[i], destination: newFileLoc });
     }
     catch(err){
       logError(err);
     }
-  });
+  }
 }
 
-function createNewDirectory(dirName, dirLoc){
+async function createNewDirectory(dirName, dirLoc){
   try{
-    if(fs.existsSync(dirLoc + "/" + dirName) == false)
-      fs.mkdirSync(dirLoc + "/" + dirName);
+    await platform.createDirectory({ parent: dirLoc, name: dirName });
   }
   catch(err){
     logError(err);
   }
 }
 
-function deleteFile(fpth){
-  try {
-    if(fs.existsSync(fpth))
-      fs.rmSync(fpth, { recursive: true, force: true });
+async function deleteFile(fpth){
+  try{
+    await platform.deleteEntry({ path: fpth, recursive: true });
   }
   catch(err){
     logError(err);
   }
 }
 
+//Pure string work - stays synchronous, since it never touches the filesystem.
 function getParentDirectory(filepath){
-    var cutIndex = filepath.lastIndexOf('/');
+  var normalized = normalizeSlashes(filepath);
+  var cutIndex = normalized.lastIndexOf('/');
 
-    if(cutIndex < 0)
-      return filepath;
+  if(cutIndex < 0)
+    return filepath;
 
-    //A path like "/etc" has its one "/" at index 0 - slicing to that index would return "",
-    //not the root, so this used to return the path unchanged instead of climbing to "/".
-    return cutIndex === 0 ? '/' : filepath.slice(0,cutIndex);
+  //A path like "/etc" has its one "/" at index 0 - slicing to that index would return "",
+  //not the root, so this used to return the path unchanged instead of climbing to "/".
+  return cutIndex === 0 ? '/' : normalized.slice(0, cutIndex);
 }
 
-function getFileList(dirPath){
+//Dotfile filtering is this module's own policy, not the generic listDirectory command's - see the
+//note on that command in platform.js.
+async function getFileList(dirPath){
   if(dirPath == '' || dirPath.slice(-1) == ':')
     dirPath += '/';
 
-  try {
-      return fs.readdirSync(dirPath, {withFileTypes: true}).filter(function(dirent){
-        return dirent.name.charAt(0) !== '.';
-      });
-  } catch (err) {
-      logError(err);
-  }
-}
-
-function thisFileExists(filepath){
   try{
-    return fs.existsSync(filepath);
+    var entries = await platform.listDirectory({ path: dirPath });
+    return entries.filter(function(entry){
+      return entry.name.charAt(0) !== '.';
+    });
   }
   catch(err){
     logError(err);
   }
 }
 
+async function thisFileExists(filepath){
+  try{
+    return await platform.pathExists({ path: filepath });
+  }
+  catch(err){
+    logError(err);
+  }
+}
+
+//Group F (Phase 6), left untouched: extractZip is a documented exception to this phase's scope,
+//since unzipper is Node-stream-only and has no browser path (see the inventory). Kept on plain fs
+//rather than folded into the group E rewrite above.
 function unzipProject(zipPath, callback){
   const unzipper = require('unzipper');
   if(zipPath.toLowerCase().endsWith('.zip')){

@@ -15,7 +15,11 @@ var unsavedChanges = false;
 //project the caller actually passed in.
 var openProject = null;
 
-function showCorkboard(project, platformInfo){
+//Async now that loading the board's cards goes through the platform facade. The popup element
+//itself is created and appended before the await, so it exists in the DOM the instant the promise
+//this returns starts pending - only the cards themselves (and the focus that depends on them)
+//arrive a tick later.
+async function showCorkboard(project, platformInfo){
     isMac = platformInfo.platform === "darwin";
     openProject = project;
     unsavedChanges = false;
@@ -29,7 +33,7 @@ function showCorkboard(project, platformInfo){
 
     document.body.appendChild(popup);
 
-    loadedCards = getCardsFromFile(project.directory + project.chapsDirectory);
+    loadedCards = await getCardsFromFile(project.directory + project.chapsDirectory);
     if(!loadedCards || loadedCards.length === 0)
       loadedCards = generateStarterCard();
 
@@ -296,8 +300,9 @@ function getElementWidthWithMargin(element) {
 async function boardCntrlEvents(e){
   if((e.ctrlKey || e.metaKey) && (e.key === "s")){
     stopDefaultPropagation(e);
-    saveCards(loadedCards, openProject.directory + openProject.chapsDirectory);
-    //Awaited so the board is only marked clean once the project file has actually been written.
+    //Awaited so the board is only marked clean once both the corkboard file and the project file
+    //have actually been written.
+    await saveCards(loadedCards, openProject.directory + openProject.chapsDirectory);
     await openProject.saveFile();
     unmarkUnsavedChanges();
   }
@@ -444,7 +449,7 @@ function promptToSave(){
 
   var save = createButton("Save");
   save.onclick = async function(){
-    saveCards(loadedCards, openProject.directory + openProject.chapsDirectory);
+    await saveCards(loadedCards, openProject.directory + openProject.chapsDirectory);
     await openProject.saveFile();
     unsavedChanges = false;
     closePopups();

@@ -8,9 +8,9 @@
 //Phase 9 it survives the switch to `--platform=browser` untouched, and this file is the one that
 //has to be gone. If the contract file ever grows a `require('fs')`, that property is lost.
 //
-//Groups A, B, C, D's error-log slice and J are implemented. Everything else in COMMANDS is
-//deliberately absent and rejects with NOT_IMPLEMENTED, so the remaining phases fill the table in
-//one group at a time and the suite says what is still outstanding.
+//Groups A, B, C, D, E, I and J are implemented. Everything else in COMMANDS is deliberately absent
+//and rejects with NOT_IMPLEMENTED, so the remaining phases fill the table in one group at a time
+//and the suite says what is still outstanding.
 
 const fs = require('fs');
 const path = require('path');
@@ -39,6 +39,17 @@ const CHAPS_DIR_SUFFIX = '_chapters/';
 //growing forever.
 const LOG_FILENAME = 'error_log.txt';
 const MAX_LOG_SIZE_BYTES = 1024 * 1024;
+//The rest of group D: settings, corkboard, licenses.
+const SETTINGS_FILENAME = 'user-settings.json';
+const CORKBOARD_FILENAME = 'project_corkboard.txt';
+const LICENSES_FILENAME = 'licenses.txt';
+//Group I: spellcheck dictionaries. The shared dictionary ships under the app directory; the
+//personal one is a per-user file under userData, seeded on first read exactly as
+//createPersonalDicIfNeeded() used to (spellcheck.js:35-51).
+const DICTIONARIES_DIR = 'dictionaries';
+const SHARED_DICT_BASENAME = 'en_US-large';
+const PERSONAL_DICT_FILENAME = 'personal.dic';
+const PERSONAL_DICT_SEED = 'WareWoolf\n';
 
 //`services` maps a credential service name to the directory its store lives in. Only 'email' exists
 //today, in userData, which is exactly where credential-store.js already keeps credentials.json and
@@ -96,10 +107,29 @@ function createNodeBacking(deps){
     loadChapterNotes: loadChapterNotes,
     saveChapterNotes: saveChapterNotes,
 
-    // --- D. Error log (the rest of group D is still NOT_IMPLEMENTED) ------------------------
+    // --- D. Settings, corkboard, error log, licenses -----------------------------------------
+    loadUserSettings: loadUserSettings,
+    saveUserSettings: saveUserSettings,
+    loadCorkboard: loadCorkboard,
+    saveCorkboard: saveCorkboard,
     logError: logError,
     readErrorLog: readErrorLog,
     clearErrorLog: clearErrorLog,
+    readLicenses: readLicenses,
+
+    // --- E. Filesystem browser (the documented generic exception) ---------------------------
+    listDirectory: listDirectory,
+    pathExists: pathExists,
+    statEntry: statEntry,
+    createDirectory: createDirectory,
+    moveEntry: moveEntry,
+    copyEntry: copyEntry,
+    deleteEntry: deleteEntry,
+
+    // --- I. Spellcheck -----------------------------------------------------------------------
+    loadDictionary: loadDictionary,
+    loadPersonalDictionary: loadPersonalDictionary,
+    savePersonalDictionary: savePersonalDictionary,
 
     // --- J. Credentials --------------------------------------------------------------------
     isSecureStorageAvailable: isSecureStorageAvailable,
@@ -532,6 +562,175 @@ function createNodeBacking(deps){
     var logLocation = errorLogPath();
     if(fs.existsSync(logLocation))
       fs.writeFileSync(logLocation, '', 'utf8');
+  }
+
+  // ------------------------------------------------------------------------------------------
+  // Group D (settings, corkboard, licenses)
+  // ------------------------------------------------------------------------------------------
+
+  function settingsPath(){
+    if(paths.userData == null)
+      throw PlatformError(CODES.UNAVAILABLE, 'No userData directory configured for user settings.');
+
+    return normalizePath(paths.userData, 'userData') + '/' + SETTINGS_FILENAME;
+  }
+
+  //JSON.parse is left free to throw on a corrupt file - user-settings.js's load() already catches
+  //and falls back to defaults, exactly as its own try/catch did before this moved here.
+  function loadUserSettings(){
+    var p = settingsPath();
+    return fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf8')) : null;
+  }
+
+  //JSON.stringify drops function-valued properties on its own, so passing the live settings object
+  //(methods and all) writes exactly the same file user-settings.js's own save() used to.
+  function saveUserSettings(args){
+    fs.writeFileSync(settingsPath(), JSON.stringify(args == null ? undefined : args.settings, null, '\t'), 'utf8');
+  }
+
+  //Raw text in, raw text out - see the correction note on these two in platform.js. `chaptersDir` is
+  //handed through as-is rather than normalized: it is always the concatenation of two already-
+  //normalized pieces (project.directory + project.chapsDirectory) by the time it reaches here.
+  function loadCorkboard(args){
+    var chaptersDir = args == null ? undefined : args.chaptersDir;
+    requireText(chaptersDir, 'chaptersDir');
+
+    var p = chaptersDir + CORKBOARD_FILENAME;
+    return fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : null;
+  }
+
+  function saveCorkboard(args){
+    requireText(args == null ? undefined : args.chaptersDir, 'chaptersDir');
+    requireText(args.contents, 'contents');
+
+    fs.writeFileSync(args.chaptersDir + CORKBOARD_FILENAME, args.contents, 'utf8');
+  }
+
+  //Silently empty rather than rejecting when the file (or the app directory itself) is missing -
+  //about_display.js's own try/catch used to swallow exactly this and show an empty license panel.
+  function readLicenses(){
+    if(paths.app == null)
+      return '';
+
+    var p = normalizePath(paths.app, 'app') + '/' + LICENSES_FILENAME;
+    return fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : '';
+  }
+
+  // ------------------------------------------------------------------------------------------
+  // Group E (filesystem browser - the documented generic exception)
+  // ------------------------------------------------------------------------------------------
+
+  //Every entry, dotfiles included - file-manager.js's getFileList() applies its own dotfile filter
+  //on top, which keeps that UI policy out of a command meant to stay generic. isDirectory crosses as
+  //a plain boolean (a dirent's isDirectory() method cannot survive serialization).
+  function listDirectory(args){
+    var p = normalizePath(args == null ? undefined : args.path, 'path');
+
+    return fs.readdirSync(p, { withFileTypes: true }).map(function(entry){
+      return { name: entry.name, isDirectory: entry.isDirectory() };
+    });
+  }
+
+  function pathExists(args){
+    return fs.existsSync(normalizePath(args == null ? undefined : args.path, 'path'));
+  }
+
+  function statEntry(args){
+    var p = normalizePath(args == null ? undefined : args.path, 'path');
+    var stats = fs.statSync(p);
+
+    return { isDirectory: stats.isDirectory(), size: stats.size, modified: stats.mtime.toISOString() };
+  }
+
+  //Idempotent: an existing target is left alone rather than rejected, matching the
+  //fs.existsSync guard createNewDirectory used to apply itself (file-manager.js:106).
+  function createDirectory(args){
+    var parent = normalizePath(args == null ? undefined : args.parent, 'parent');
+    requireText(args.name, 'name');
+
+    var target = parent + (parent.endsWith('/') ? '' : '/') + args.name;
+    if(!fs.existsSync(target))
+      fs.mkdirSync(target);
+
+    return { path: target };
+  }
+
+  //Refuses rather than overwriting - fs.renameSync is silent about clobbering an existing
+  //destination, which is exactly the bug the guard this replaces (file-manager.js:54-56) existed to
+  //stop. A caller that wants the destination auto-uniquified instead (moveFiles' cut-paste policy)
+  //computes a non-colliding name itself via pathExists/statEntry before calling this, the same way
+  //copyFiles already does - see the note on this command in platform.js.
+  function moveEntry(args){
+    var source = normalizePath(args == null ? undefined : args.source, 'source');
+    var destination = normalizePath(args.destination, 'destination');
+
+    if(fs.existsSync(destination))
+      throw PlatformError(CODES.ALREADY_EXISTS,
+        'Cannot move "' + source + '" to "' + destination + '": the destination already exists.',
+        { source: source, destination: destination });
+
+    fs.renameSync(source, destination);
+  }
+
+  function copyEntry(args){
+    var source = normalizePath(args == null ? undefined : args.source, 'source');
+    var destination = normalizePath(args.destination, 'destination');
+
+    fs.cpSync(source, destination, { recursive: args.recursive === true });
+  }
+
+  function deleteEntry(args){
+    var p = normalizePath(args == null ? undefined : args.path, 'path');
+
+    if(fs.existsSync(p))
+      fs.rmSync(p, { recursive: args.recursive === true, force: true });
+  }
+
+  // ------------------------------------------------------------------------------------------
+  // Group I (spellcheck dictionaries)
+  // ------------------------------------------------------------------------------------------
+
+  function loadDictionary(){
+    if(paths.app == null)
+      throw PlatformError(CODES.UNAVAILABLE, 'No app directory configured for the dictionary.');
+
+    var base = normalizePath(paths.app, 'app') + '/' + DICTIONARIES_DIR + '/' + SHARED_DICT_BASENAME;
+
+    return {
+      aff: fs.readFileSync(base + '.aff', 'utf8'),
+      dic: fs.readFileSync(base + '.dic', 'utf8')
+    };
+  }
+
+  //Seeds the personal dictionary on first read, folding in the bootstrap write
+  //createPersonalDicIfNeeded() used to require the caller run first (spellcheck.js:35-51).
+  function personalDictPath(){
+    if(paths.userData == null)
+      throw PlatformError(CODES.UNAVAILABLE, 'No userData directory configured for the personal dictionary.');
+
+    var dir = normalizePath(paths.userData, 'userData') + '/' + DICTIONARIES_DIR;
+    if(!fs.existsSync(dir))
+      fs.mkdirSync(dir);
+
+    var p = dir + '/' + PERSONAL_DICT_FILENAME;
+    if(!fs.existsSync(p))
+      fs.writeFileSync(p, PERSONAL_DICT_SEED, 'utf8');
+
+    return p;
+  }
+
+  function loadPersonalDictionary(){
+    return fs.readFileSync(personalDictPath(), 'utf8').split('\n').filter(function(word){
+      return word.trim() !== '';
+    });
+  }
+
+  //No trailing newline added by the join, matching addWordToPersonalDictFile's original
+  //personal.join("\n") - the regression it exists to preserve is the seed's own trailing newline
+  //surviving as a blank entry that split()/filter() above already drops before this ever sees it.
+  function savePersonalDictionary(args){
+    var words = (args == null || args.words == null) ? [] : args.words;
+    fs.writeFileSync(personalDictPath(), words.join('\n'), 'utf8');
   }
 
   // ------------------------------------------------------------------------------------------

@@ -2,10 +2,11 @@ const { closePopups, createButton, removeElementsByClass, enableSearchView } = r
 const { runSpellcheck, addWordToPersonalDictFile } = require('../controllers/spellcheck');
 const { replace, replaceAllInAllChapters } = require('../controllers/findreplace');
 
-function showSpellcheck(editorQuill, project, sysDirectories, displayChapterByIndex, startingIndex = 0, wordsToIgnore = []){
+//Async now that loading the dictionaries goes through the platform facade.
+async function showSpellcheck(editorQuill, project, sysDirectories, displayChapterByIndex, startingIndex = 0, wordsToIgnore = []){
     enableSearchView();
 
-    var invalidWord = runSpellcheck(editorQuill, sysDirectories, startingIndex, wordsToIgnore);
+    var invalidWord = await runSpellcheck(editorQuill, sysDirectories, startingIndex, wordsToIgnore);
     if(invalidWord)
       editorQuill.setSelection(invalidWord.index, invalidWord.word.length);
 
@@ -74,7 +75,7 @@ function showSpellcheck(editorQuill, project, sysDirectories, displayChapterByIn
     var ignoreBtn = createButton("Ignore");
     ignoreBtn.onclick = function(){
       var nextIndex = invalidWord ? invalidWord.index + invalidWord.word.length : 0;
-      showSpellcheck(editorQuill, project, sysDirectories, displayChapterByIndex, nextIndex, wordsToIgnore);
+      return showSpellcheck(editorQuill, project, sysDirectories, displayChapterByIndex, nextIndex, wordsToIgnore);
     }
     popup.appendChild(ignoreBtn);
 
@@ -82,7 +83,7 @@ function showSpellcheck(editorQuill, project, sysDirectories, displayChapterByIn
     ignoreAllBtn.onclick = function(){
       if(invalidWord){
         wordsToIgnore.push(invalidWord.word);
-        ignoreBtn.click();
+        return ignoreBtn.onclick();
       }
     }
     ignoreAllBtn.accessKey = "i";
@@ -99,7 +100,7 @@ function showSpellcheck(editorQuill, project, sysDirectories, displayChapterByIn
       if(invalidWord && selectedReplacement != null){
         editorQuill.setSelection(invalidWord.index, invalidWord.word.length);
         replace(editorQuill, selectedReplacement.value);
-        ignoreBtn.click();
+        return ignoreBtn.onclick();
       }
     }
     popup.appendChild(changeBtn);
@@ -117,7 +118,7 @@ function showSpellcheck(editorQuill, project, sysDirectories, displayChapterByIn
         const wholeWordOnly = true;
         await replaceAllInAllChapters(project, invalidWord.word, selectedReplacement.value, caseSensitive, wholeWordOnly);
         displayChapterByIndex(project.activeChapterIndex);
-        ignoreBtn.click();
+        return ignoreBtn.onclick();
       }
     };
     changeAllBtn.accessKey = "h";
@@ -126,10 +127,10 @@ function showSpellcheck(editorQuill, project, sysDirectories, displayChapterByIn
     popup.appendChild(document.createElement('br'));
 
     var addToDic = createButton("<span class='access-key'>A</span>dd To Dictionary");
-    addToDic.onclick = function(){
+    addToDic.onclick = async function(){
       if(invalidWord){
-        addWordToPersonalDictFile(invalidWord.word, sysDirectories);
-        ignoreBtn.click();
+        await addWordToPersonalDictFile(invalidWord.word, sysDirectories);
+        return ignoreBtn.onclick();
       }
     }
     addToDic.accessKey = "a";
