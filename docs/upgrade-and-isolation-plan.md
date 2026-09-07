@@ -1699,7 +1699,10 @@ anyway.
 **Verified on a packaged Windows build from a clean userData directory**, driven
 over CDP — the renderer through `--remote-debugging-port`, the main process
 through `--inspect` so menu channels could be sent the way a menu click sends
-them. 29 checks, all passing:
+them. The scripts are committed at `test/driven/` (outside `npm test`'s glob, and
+already excluded from packages by `packagerConfig.ignore`), so the Pi pass below
+is `WAREWOOLF_EXE=/opt/WareWoolf/warewoolf node test/driven/drive.js` rather than
+a rewrite. 29 checks, all passing:
 
 - The isolation itself: no `require`/`module`/`process`/`Buffer`/`__dirname` in
   the page; `window.warewoolf` has exactly `invoke`/`on`/`off`; no `ipcRenderer`
@@ -1819,7 +1822,28 @@ this phase did.
   typing latency in a long chapter — none of it. The Windows pass above is real
   and the Linux one is simply not done, so nothing here should be read as
   cross-platform verification. This is the same gap that produced the zstd `.deb`,
-  and it is the gate on the sandbox decision above.
+  and it is the gate on the sandbox decision above. Run it against what the `.deb`
+  installed, not against `out/` — that distinction is the whole lesson of the zstd
+  bug, and `WAREWOOLF_EXE` exists for it:
+
+  ```
+  WAREWOOLF_EXE=/opt/WareWoolf/warewoolf node test/driven/drive.js
+  WAREWOOLF_EXE=/opt/WareWoolf/warewoolf node test/driven/sandbox-probe.js
+  ```
+
+  Two things the driven checks deliberately do not cover, because they are not
+  assertable this way and have to be looked at: kiosk mode behaving (the Linux
+  build sets `kiosk: true`, so a startup failure is a black screen rather than a
+  dialog), and typing latency in a long chapter. Latency is the one thing this
+  phase could plausibly have made worse — `loadInitialProject`'s checks became four
+  awaited IPC round trips, and every chapter read and save now crosses a process
+  boundary. It measured fine on Windows; the Pi is a slower machine on slower
+  storage.
+
+  Note also that `sandbox-probe.js` may legitimately report the keystore missing on
+  Pi OS Lite. That is not a failure — group J's passphrase fallback exists for it,
+  and the checks assert the two ways of asking agree rather than that a keystore
+  exists.
 - **macOS is untested too**, including the `open-file` path that
   `fileRequestedOnOpen`'s getter form exists for.
 - The `installUpdate` finding above.
