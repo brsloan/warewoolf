@@ -321,25 +321,46 @@ var COMMANDS = {
   //process.platform/process.arch directly, which also closes the two Group A reads this file's
   //own note left deferred to this phase (updates.js:117-130,179 and about_display.js's own read).
   checkForUpdate: { group: 'K', params: [], returns: 'the parsed GitHub release JSON (releases/latest)' },
-  //destPath is the full target path, computed by the caller from getAppPaths()'s temp/downloads and
-  //the asset name it matched - this command's job is only the download: skip it when the file is
-  //already there (and still report the path, so a caller that always calls this can stay simple),
-  //follow one redirect, and resolve only once the destination write stream's 'close' fires, not the
-  //response's completion - the identical truncated-file risk buildEpub/archiveProject (Phase 6)
-  //exist to avoid, corrected the same way here rather than carried over from the original
-  //updates.js, which resolved on 'finish'.
-  downloadUpdate: { group: 'K', params: ['url', 'destPath'], returns: '{ path }' },
+  //Phase 9c correction: `destPath` is gone. It used to be the full target path, composed by the
+  //renderer from getAppPaths()'s temp/downloads and the asset name it matched - which is precisely
+  //what made installUpdate's vouch forgeable (see below), because the only producer of vouches took
+  //its path from the caller. This command allocates the destination itself now, the same discipline
+  //saveChapterAtomic, archiveProject and sendEmail's attachment temp files already follow: on linux
+  //a directory it creates with fs.mkdtempSync (installUpdate's own platform, so the installer never
+  //has to be a file the writer can find), on Windows/macOS the downloads directory, since there the
+  //writer is told to go run it themselves. The filename comes off the URL's last path segment, and
+  //the URL has to be a release asset on this project's own repo - so nothing about the path is
+  //renderer-composed, and a renderer cannot name a path it has already written to.
+  //
+  //The rest is unchanged: follow one redirect, and resolve only once the destination write stream's
+  //'close' fires, not the response's completion - the identical truncated-file risk
+  //buildEpub/archiveProject (Phase 6) exist to avoid, corrected the same way here rather than
+  //carried over from the original updates.js, which resolved on 'finish'. The already-downloaded
+  //shortcut is narrowed rather than removed: it short-circuits a path this session already vouched
+  //(all it ever saved was a re-download), and never vouches one it has not downloaded.
+  downloadUpdate: { group: 'K', params: ['url'], returns: '{ path }' },
   //The one command in the whole contract that escalates privilege, and the one whose `path` cannot
   //be trusted just because it looks like a path. Phase 8 correction: `path` must be one this same
   //backing instance itself produced via a prior downloadUpdate call - rejected with
   //INVALID_ARGUMENT otherwise, before sudo is ever spawned. A directory allowlist or filename
-  //pattern was considered and rejected: destPath is caller-composed (see downloadUpdate above), so
-  //either check is a property a renderer-composed path could still satisfy by construction: only
-  //"this backing watched the bytes land here" is not renderer-forgeable. The password crosses once,
-  //outbound, exactly as before - the writer typed it into the DOM - written to the child's stdin
-  //rather than argv so it never appears in `ps`, with `path` as a separate argv element from the
-  //sudo/apt/install tokens so a hostile asset filename cannot inject additional shell commands
-  //(there is no shell: this is spawn(), not exec()).
+  //pattern was considered and rejected: both are properties a renderer-composed path could satisfy
+  //by construction.
+  //
+  //Phase 9c correction: so was the vouch, for exactly the same reason, and post-9b this is the only
+  //renderer-to-root path in the app. downloadUpdate took `destPath` from the renderer and vouched it
+  //on fs.existsSync alone, so writeBinaryFile -> downloadUpdate -> installUpdate installed an
+  //attacker's .deb as root. A vouch now records the sha256 of the bytes this backing actually
+  //downloaded, keyed by a path this backing allocated - and installUpdate re-hashes the file
+  //immediately before spawning, so overwriting a vouched path (writeBinaryFile can still write
+  //anywhere) makes it stop matching rather than makes it trusted. The read-hash-compare-spawn
+  //sequence is deliberately synchronous: the main process is single-threaded, so no other command
+  //can run between the check and the spawn.
+  //
+  //The password crosses once, outbound, exactly as before - the writer typed it into the DOM -
+  //written to the child's stdin rather than argv so it never appears in `ps`, with `path` as a
+  //separate argv element from the sudo/apt/install tokens so a hostile asset filename cannot inject
+  //additional shell commands (there is no shell: this is spawn(), not exec()) and behind a `--`
+  //terminator so a path could not be read as an apt option either.
   installUpdate: { group: 'K', params: ['path', 'password'], returns: 'void' },
   //Takes SAVED_SECRET or a literal the writer just typed. This command is why getCredential does
   //not exist: the password never needed to reach the renderer, because the thing that consumes it

@@ -1239,7 +1239,7 @@ const menuCommands = {
   } },
   'about-clicked': { run: function(appVersion){
     const showAbout = require('./components/views/about_display');
-    return showAbout(sysDirectories, appVersion, platformInfo);
+    return showAbout(appVersion, platformInfo);
   } },
   'exit-app-clicked': { run: function(){ proceedOrConfirmSave(exitApp, true); } },
   'save-copy-clicked': { run: function(){ saveProjectCopy(); } },

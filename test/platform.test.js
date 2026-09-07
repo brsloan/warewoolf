@@ -2088,73 +2088,205 @@ test('checkForUpdate sets a request timeout and destroys the request once it fir
   await pending;
 });
 
-function updateFixture(t){
-  return { dir: tempDir(t) };
+//Every update test below goes through a backing that was told which platform it is on, because both
+//halves of this command pair turn on it: installUpdate is linux-only, and downloadUpdate picks its
+//own destination directory differently there. Without the seam neither branch would be exercisable
+//on the machine this suite usually runs on, and the branch that matters for privilege is the one
+//that would go untested.
+function updatePlatform(t, deps){
+  const options = Object.assign({}, deps);
+  const dirs = [];
+
+  //downloadUpdate allocates its own directories now, so the test cannot register them for cleanup
+  //up front the way tempDir() does - it learns the path only from the result.
+  t.after(function(){
+    dirs.forEach(function(dir){
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
+  });
+
+  return {
+    platform: wrap(createNodeBacking(options)),
+    //Call on any path a command handed back, so a real download's temp directory does not outlive
+    //the test that made it.
+    cleanUp: function(filePath){
+      dirs.push(path.dirname(filePath));
+      return filePath;
+    }
+  };
 }
 
-test('downloadUpdate downloads a fresh asset, writes it to disk, and vouches the path', async function(t){
-  const dir = updateFixture(t).dir;
-  const destPath = dir + 'warewoolf_2.0.0_amd64.deb';
-  const platform = wrap(createNodeBacking({
+//The shape checkForUpdate's own response actually carries: a browser_download_url on this project's
+//repo. downloadUpdate accepts nothing else.
+function assetUrl(name){
+  return 'https://github.com/brsloan/warewoolf/releases/download/v2.0.0/' + name;
+}
+
+function isUnderTempDir(filePath){
+  return filePath.replaceAll('\\', '/').indexOf(os.tmpdir().replaceAll('\\', '/') + '/warewoolf-update-') === 0;
+}
+
+//Phase 9c: destPath is gone from this command's parameters, and this is the test that says so. The
+//path comes back from a directory the backing made and a filename it took off the URL, so there is
+//nothing here for a caller to have named.
+test('downloadUpdate allocates its own destination and writes the asset there', async function(t){
+  const fixture = updatePlatform(t, {
+    platform: 'linux',
     httpsGet: fakeHttpsGet([{ statusCode: 200, body: 'binary-content-stand-in' }])
-  }));
+  });
 
-  const result = await platform.downloadUpdate({ url: 'https://example.com/amd64.deb', destPath: destPath });
+  const result = await fixture.platform.downloadUpdate({ url: assetUrl('warewoolf_2.0.0_amd64.deb') });
+  fixture.cleanUp(result.path);
 
-  assert.strictEqual(result.path, destPath);
-  assert.strictEqual(fs.readFileSync(destPath, 'utf8'), 'binary-content-stand-in');
+  assert.ok(isUnderTempDir(result.path), result.path + ' should be in a directory this backing made');
+  assert.strictEqual(path.basename(result.path), 'warewoolf_2.0.0_amd64.deb');
+  assert.strictEqual(fs.readFileSync(result.path, 'utf8'), 'binary-content-stand-in');
 });
 
-test('downloadUpdate resolves immediately, without a network call, when the file already exists', async function(t){
-  const dir = updateFixture(t).dir;
-  const destPath = dir + 'already-here.deb';
-  fs.writeFileSync(destPath, 'already here');
+//The other branch, and the reason the destination is not simply "always a temp directory this
+//command owns": off linux there is no installUpdate, the download is the whole deliverable, and the
+//About panel tells the writer to go find it in their downloads folder.
+test('downloadUpdate writes into the downloads directory on platforms that cannot install', async function(t){
+  const dir = tempDir(t);
+  const fixture = updatePlatform(t, {
+    platform: 'win32',
+    paths: { downloads: dir },
+    httpsGet: fakeHttpsGet([{ statusCode: 200, body: 'windows-binary' }])
+  });
+
+  const result = await fixture.platform.downloadUpdate({ url: assetUrl('warewoolf_2.0.0_Windows_x64.zip') });
+
+  assert.strictEqual(result.path, dir.replaceAll('\\', '/') + 'warewoolf_2.0.0_Windows_x64.zip');
+  assert.strictEqual(fs.readFileSync(result.path, 'utf8'), 'windows-binary');
+});
+
+//A URL is the only thing about this download that still crosses inbound, so it is the only thing
+//left to check - and it is checked against the repo the release API itself is read from, not against
+//a general "looks like https" rule.
+test('downloadUpdate refuses a url that is not a release asset on this project\'s own repo', async function(t){
   const getFake = fakeHttpsGet([]);
-  const platform = wrap(createNodeBacking({ httpsGet: getFake }));
+  const fixture = updatePlatform(t, { platform: 'linux', httpsGet: getFake });
 
-  const result = await platform.downloadUpdate({ url: 'https://example.com/x', destPath: destPath });
+  const refused = [
+    'https://evil.example.com/brsloan/warewoolf/releases/download/v2.0.0/pkg.deb',
+    'http://github.com/brsloan/warewoolf/releases/download/v2.0.0/pkg.deb',
+    'https://github.com/someone-else/warewoolf/releases/download/v2.0.0/pkg.deb',
+    'https://github.com/brsloan/warewoolf/issues/pkg.deb',
+    'https://github.com.evil.example.com/brsloan/warewoolf/releases/download/v2.0.0/pkg.deb',
+    'not a url at all'
+  ];
 
-  assert.strictEqual(result.path, destPath);
+  for(const url of refused){
+    const err = await rejection(fixture.platform.downloadUpdate({ url: url }));
+    assert.strictEqual(err.code, CODES.INVALID_ARGUMENT, url + ' should not be downloadable');
+  }
+
+  assert.strictEqual(getFake.calls.length, 0, 'nothing should have been fetched');
+});
+
+//The filename is taken off the URL rather than from the caller, so it is the URL's last segment that
+//has to be unable to name something else. An allowlist rather than a sanitizer: a name that does not
+//match is refused outright, so nothing is quietly rewritten into a path the caller did not expect.
+test('downloadUpdate refuses an asset filename that could name something other than a file', async function(t){
+  const getFake = fakeHttpsGet([]);
+  const fixture = updatePlatform(t, { platform: 'linux', httpsGet: getFake });
+
+  const refused = [
+    'https://github.com/brsloan/warewoolf/releases/download/v2.0.0/..%2F..%2Fetc%2Fcron.d%2Fx',
+    'https://github.com/brsloan/warewoolf/releases/download/v2.0.0/-oDPkg%3A%3APre-Invoke%3A%3A%3Dtouch%20x',
+    'https://github.com/brsloan/warewoolf/releases/download/v2.0.0/.bashrc',
+    'https://github.com/brsloan/warewoolf/releases/download/v2.0.0/'
+  ];
+
+  for(const url of refused){
+    const err = await rejection(fixture.platform.downloadUpdate({ url: url }));
+    assert.strictEqual(err.code, CODES.INVALID_ARGUMENT, url + ' should not be downloadable');
+  }
+
   assert.strictEqual(getFake.calls.length, 0);
 });
 
-test('downloadUpdate follows one redirect to the real asset location', async function(t){
-  const dir = updateFixture(t).dir;
-  const destPath = dir + 'redirected.deb';
+//The already-downloaded shortcut, narrowed. Phase 8 skipped the download whenever fs.existsSync was
+//true and vouched the path on that alone, which is what made the vouch forgeable; all the shortcut
+//was ever worth is saving a re-download of something this session already has, so that is all it
+//does now.
+test('downloadUpdate skips the network only for a path it already vouched this session', async function(t){
+  const dir = tempDir(t);
   const getFake = fakeHttpsGet([
-    { statusCode: 302, headers: { location: 'https://cdn.example.com/real-asset.deb' } },
+    { statusCode: 200, body: 'the real asset' },
+    { statusCode: 200, body: 'should not be needed' }
+  ]);
+  const fixture = updatePlatform(t, { platform: 'win32', paths: { downloads: dir }, httpsGet: getFake });
+
+  const first = await fixture.platform.downloadUpdate({ url: assetUrl('pkg.deb') });
+  const second = await fixture.platform.downloadUpdate({ url: assetUrl('pkg.deb') });
+
+  assert.strictEqual(second.path, first.path);
+  assert.strictEqual(getFake.calls.length, 1, 'the second call should have been served from the vouch');
+});
+
+test('downloadUpdate downloads over a file it did not put there, rather than trusting it', async function(t){
+  const dir = tempDir(t);
+  const getFake = fakeHttpsGet([{ statusCode: 200, body: 'the real asset' }]);
+  const fixture = updatePlatform(t, { platform: 'win32', paths: { downloads: dir }, httpsGet: getFake });
+  fs.writeFileSync(dir + 'pkg.deb', 'planted');
+
+  const result = await fixture.platform.downloadUpdate({ url: assetUrl('pkg.deb') });
+
+  assert.strictEqual(getFake.calls.length, 1, 'an unvouched file must not short-circuit the download');
+  assert.strictEqual(fs.readFileSync(result.path, 'utf8'), 'the real asset');
+});
+
+test('downloadUpdate follows one redirect to the real asset location', async function(t){
+  const getFake = fakeHttpsGet([
+    { statusCode: 302, headers: { location: 'https://objects.githubusercontent.com/real-asset.deb' } },
     { statusCode: 200, body: 'redirected-content' }
   ]);
-  const platform = wrap(createNodeBacking({ httpsGet: getFake }));
+  const fixture = updatePlatform(t, { platform: 'linux', httpsGet: getFake });
 
-  const result = await platform.downloadUpdate({ url: 'https://github.com/release/amd64.deb', destPath: destPath });
+  const result = await fixture.platform.downloadUpdate({ url: assetUrl('warewoolf_2.0.0_amd64.deb') });
+  fixture.cleanUp(result.path);
 
-  assert.deepStrictEqual(getFake.calls, ['https://github.com/release/amd64.deb', 'https://cdn.example.com/real-asset.deb']);
+  assert.deepStrictEqual(getFake.calls, [
+    assetUrl('warewoolf_2.0.0_amd64.deb'),
+    'https://objects.githubusercontent.com/real-asset.deb'
+  ]);
   assert.strictEqual(fs.readFileSync(result.path, 'utf8'), 'redirected-content');
 });
 
-test('downloadUpdate rejects and removes the partial file when the server responds with an error status', async function(t){
-  const dir = updateFixture(t).dir;
-  const destPath = dir + 'missing.deb';
-  const platform = wrap(createNodeBacking({
-    httpsGet: fakeHttpsGet([{ statusCode: 404 }])
-  }));
+//The redirect target is not checked against a hostname - GitHub's asset CDN has moved more than
+//once, and the redirect is chosen by the host we just authenticated over TLS. That it stays on https
+//is the part worth pinning, and it is pinned here.
+test('downloadUpdate refuses to follow a redirect off https', async function(t){
+  const getFake = fakeHttpsGet([
+    { statusCode: 302, headers: { location: 'http://objects.example.com/asset.deb' } }
+  ]);
+  const fixture = updatePlatform(t, { platform: 'linux', httpsGet: getFake });
 
-  const err = await rejection(platform.downloadUpdate({ url: 'https://example.com/missing.deb', destPath: destPath }));
+  const err = await rejection(fixture.platform.downloadUpdate({ url: assetUrl('warewoolf_2.0.0_amd64.deb') }));
+
   assert.strictEqual(err.code, CODES.IO_ERROR);
-  assert.strictEqual(fs.existsSync(destPath), false);
+  assert.strictEqual(getFake.calls.length, 1);
+});
+
+test('downloadUpdate rejects and removes the partial file when the server responds with an error status', async function(t){
+  const fixture = updatePlatform(t, {
+    platform: 'linux',
+    httpsGet: fakeHttpsGet([{ statusCode: 404 }])
+  });
+
+  const err = await rejection(fixture.platform.downloadUpdate({ url: assetUrl('missing.deb') }));
+  assert.strictEqual(err.code, CODES.IO_ERROR);
 });
 
 test('downloadUpdate rejects and removes the partial file when the request itself errors', async function(t){
-  const dir = updateFixture(t).dir;
-  const destPath = dir + 'flaky.deb';
-  const platform = wrap(createNodeBacking({
+  const fixture = updatePlatform(t, {
+    platform: 'linux',
     httpsGet: fakeHttpsGet([{ triggerError: new Error('socket hang up') }])
-  }));
+  });
 
-  const err = await rejection(platform.downloadUpdate({ url: 'https://example.com/flaky.deb', destPath: destPath }));
+  const err = await rejection(fixture.platform.downloadUpdate({ url: assetUrl('flaky.deb') }));
   assert.ok(err.isPlatformError);
-  assert.strictEqual(fs.existsSync(destPath), false);
 });
 
 //Direct proof, mirroring buildEpub/archiveProject's own tests: downloadUpdate resolves on the
@@ -2162,18 +2294,17 @@ test('downloadUpdate rejects and removes the partial file when the request itsel
 //resolved as soon as the response piped through, the same truncated-file risk Phase 6 fixed
 //elsewhere - corrected here rather than carried over. See platform.js's note on this command.
 test('downloadUpdate resolves on the write stream\'s "close", not when the response finishes piping', async function(t){
-  const dir = updateFixture(t).dir;
-  const destPath = dir + 'slow-close.deb';
   const output = controllableWriteStream();
-  const platform = wrap(createNodeBacking({
+  const fixture = updatePlatform(t, {
+    platform: 'linux',
     createWriteStream: function(){ return output; },
     httpsGet: fakeHttpsGet([{ statusCode: 200, body: 'content' }])
-  }));
+  });
 
   let settled = false;
   const finished = new Promise(function(resolve){ output.once('finish', resolve); });
 
-  const promise = platform.downloadUpdate({ url: 'https://example.com/x', destPath: destPath });
+  const promise = fixture.platform.downloadUpdate({ url: assetUrl('slow-close.deb') });
   promise.then(function(){ settled = true; }, function(){ settled = true; });
 
   await finished;
@@ -2186,68 +2317,128 @@ test('downloadUpdate resolves on the write stream\'s "close", not when the respo
 });
 
 //installUpdate is the one command in the whole contract that escalates privilege - see the note on
-//it in platform.js. Every test below shares one backing so a path downloadUpdate vouches for is
-//visible to installUpdate against the exact same instance, the way updates.js's own single standing
-//instance keeps them together in the real app.
-function updatePlatform(deps){
-  return wrap(createNodeBacking(deps || {}));
+//it in platform.js. Every test below shares one backing with the downloadUpdate that vouched the
+//path, the way updates.js's own single standing instance keeps them together in the real app.
+async function vouchedInstaller(fixture, name, body){
+  const result = await fixture.platform.downloadUpdate({ url: assetUrl(name) });
+  fixture.cleanUp(result.path);
+  return result.path;
 }
 
-async function vouchedInstallerPath(platform, dir, name){
-  const destPath = dir + name;
-  fs.writeFileSync(destPath, 'stand-in-installer');
-  const result = await platform.downloadUpdate({ url: 'https://example.com/' + name, destPath: destPath });
-  return result.path;
+function installFixture(t, responses, spawnFake){
+  return updatePlatform(t, {
+    platform: 'linux',
+    spawnProcess: spawnFake,
+    httpsGet: fakeHttpsGet(responses)
+  });
 }
 
 test('installUpdate refuses a path this backing never downloaded, without spawning anything', async function(t){
   const spawnFake = fakeSpawn([]);
-  const platform = updatePlatform({ spawnProcess: spawnFake });
+  const fixture = installFixture(t, [], spawnFake);
 
-  const err = await rejection(platform.installUpdate({ path: '/tmp/some-other-pkg.deb', password: 'secret' }));
+  const err = await rejection(fixture.platform.installUpdate({ path: '/tmp/some-other-pkg.deb', password: 'secret' }));
 
   assert.strictEqual(err.code, CODES.INVALID_ARGUMENT);
   assert.strictEqual(spawnFake.calls.length, 0);
 });
 
-test('installUpdate runs sudo/apt via spawn with the vouched path as a separate argv element, no shell', async function(t){
-  const dir = updateFixture(t).dir;
+//----------------------------------------------------------------------------------------------
+//The attack this pair of commands exists to refuse, written out as the attack.
+//
+///security-review found it against Phase 9b: three declared commands, all reachable from an
+//untrusted renderer over the bridge, composing into the only renderer-to-root path left in the app
+//once contextIsolation landed. Phase 8's vouch did not stop it, because downloadUpdate took the
+//destination path from the renderer and vouched it on fs.existsSync alone - so "a path this backing
+//produced" meant "a path the renderer named", and step 2 below cost one extra IPC call and no
+//network traffic at all.
+//
+//If a change to these commands makes either of the two tests below pass a path through to spawn,
+//that change has reopened it. Neither test is about a message or a code: both assert that sudo was
+//never reached.
+//----------------------------------------------------------------------------------------------
+test('regression: writeBinaryFile then downloadUpdate cannot vouch an attacker-supplied installer', async function(t){
+  const dir = tempDir(t);
   const spawnFake = fakeSpawn([{ code: 0 }]);
-  const platform = updatePlatform({ spawnProcess: spawnFake });
-  const installerPath = await vouchedInstallerPath(platform, dir, 'pkg.deb');
+  //The renderer would be calling these three across the bridge; this is the same facade, and under
+  //the bridge transport the same serialization too.
+  const fixture = installFixture(t, [{ statusCode: 200, body: 'the real asset' }], spawnFake);
+  const platform = fixture.platform;
+  const plantedPath = dir + 'x.deb';
 
-  await platform.installUpdate({ path: installerPath, password: 'secret' });
+  // 1. Group G's conceded arbitrary write: put a hostile .deb anywhere.
+  await platform.writeBinaryFile({ path: plantedPath, bytes: Buffer.from('hostile postinst') });
+  assert.strictEqual(fs.existsSync(plantedPath), true, 'writeBinaryFile is still an arbitrary write');
+
+  // 2. Ask downloadUpdate to bless it, passing the destPath that used to do exactly that. An
+  //    untrusted renderer is not held to the declared parameter list - COMMANDS['downloadUpdate']
+  //    .params is documentation, and nothing strips an extra key on the way across - so the attack
+  //    keeps sending the argument whether or not the contract still lists it. It has to be ignored,
+  //    not merely absent: this assertion is what fails if destPath is ever wired back up.
+  const downloaded = await platform.downloadUpdate({ url: assetUrl('x.deb'), destPath: plantedPath });
+  fixture.cleanUp(downloaded.path);
+  assert.notStrictEqual(downloaded.path, plantedPath, 'destPath must not steer the download');
+  assert.strictEqual(fs.readFileSync(plantedPath, 'utf8'), 'hostile postinst', 'the planted file is untouched, and unvouched');
+
+  // 3. Install it as root.
+  const err = await rejection(platform.installUpdate({ path: plantedPath, password: 'whatever' }));
+
+  assert.strictEqual(err.code, CODES.INVALID_ARGUMENT);
+  assert.strictEqual(spawnFake.calls.length, 0, 'sudo must not have been spawned');
+});
+
+//The same attack against the one path that *is* vouched. A backing-allocated destination is not a
+//secret - it comes back to the renderer, which needs it for installUpdate - and writeBinaryFile can
+//still write to it. So the vouch cannot be about the path: it records the sha256 of the bytes this
+//backing downloaded, and installUpdate re-reads and re-hashes immediately before spawning.
+test('regression: overwriting the file downloadUpdate did produce does not inherit its vouch', async function(t){
+  const spawnFake = fakeSpawn([{ code: 0 }]);
+  const fixture = installFixture(t, [{ statusCode: 200, body: 'the real asset' }], spawnFake);
+  const platform = fixture.platform;
+
+  const installerPath = await vouchedInstaller(fixture, 'pkg.deb');
+  await platform.writeBinaryFile({ path: installerPath, bytes: Buffer.from('hostile postinst') });
+
+  const err = await rejection(platform.installUpdate({ path: installerPath, password: 'whatever' }));
+
+  assert.strictEqual(err.code, CODES.INVALID_ARGUMENT);
+  assert.match(err.message, /contents changed/);
+  assert.strictEqual(spawnFake.calls.length, 0, 'sudo must not have been spawned');
+});
+
+test('installUpdate runs sudo/apt via spawn with the vouched path after a "--", no shell', async function(t){
+  const spawnFake = fakeSpawn([{ code: 0 }]);
+  const fixture = installFixture(t, [{ statusCode: 200, body: 'installer bytes' }], spawnFake);
+  const installerPath = await vouchedInstaller(fixture, 'pkg.deb');
+
+  await fixture.platform.installUpdate({ path: installerPath, password: 'secret' });
 
   assert.strictEqual(spawnFake.calls[0].command, 'sudo');
-  assert.deepStrictEqual(spawnFake.calls[0].args, ['-S', 'apt', 'install', installerPath]);
+  assert.deepStrictEqual(spawnFake.calls[0].args, ['-S', 'apt', 'install', '--', installerPath]);
   assert.ok(!spawnFake.calls[0].options || !spawnFake.calls[0].options.shell);
 });
 
 test('installUpdate writes the password to the child\'s stdin, never into argv', async function(t){
-  const dir = updateFixture(t).dir;
   let capturedChild;
-  const platform = updatePlatform({
-    spawnProcess: function(command, args){
-      capturedChild = fakeChildProcess();
-      setImmediate(function(){ capturedChild.emit('close', 0); });
-      return capturedChild;
-    }
+  const fixture = installFixture(t, [{ statusCode: 200, body: 'installer bytes' }], function(){
+    capturedChild = fakeChildProcess();
+    setImmediate(function(){ capturedChild.emit('close', 0); });
+    return capturedChild;
   });
-  const installerPath = await vouchedInstallerPath(platform, dir, 'pkg.deb');
+  const installerPath = await vouchedInstaller(fixture, 'pkg.deb');
   const dangerousPass = 'p"a$s\'w`ord; rm -rf /; #';
 
-  await platform.installUpdate({ path: installerPath, password: dangerousPass });
+  await fixture.platform.installUpdate({ path: installerPath, password: dangerousPass });
 
   assert.strictEqual(capturedChild.stdinChunks.join(''), dangerousPass + '\n');
 });
 
 test('installUpdate rejects IO_ERROR with the process output when apt exits non-zero', async function(t){
-  const dir = updateFixture(t).dir;
   const spawnFake = fakeSpawn([{ stderrChunks: ['Sorry, try again.'], code: 1 }]);
-  const platform = updatePlatform({ spawnProcess: spawnFake });
-  const installerPath = await vouchedInstallerPath(platform, dir, 'pkg.deb');
+  const fixture = installFixture(t, [{ statusCode: 200, body: 'installer bytes' }], spawnFake);
+  const installerPath = await vouchedInstaller(fixture, 'pkg.deb');
 
-  const err = await rejection(platform.installUpdate({ path: installerPath, password: 'wrong' }));
+  const err = await rejection(fixture.platform.installUpdate({ path: installerPath, password: 'wrong' }));
 
   assert.strictEqual(err.code, CODES.IO_ERROR);
   assert.strictEqual(err.exitCode, 1);
@@ -2255,11 +2446,10 @@ test('installUpdate rejects IO_ERROR with the process output when apt exits non-
 });
 
 test('installUpdate resolves once apt closes with exit code 0', async function(t){
-  const dir = updateFixture(t).dir;
-  const platform = updatePlatform({ spawnProcess: fakeSpawn([{ code: 0 }]) });
-  const installerPath = await vouchedInstallerPath(platform, dir, 'pkg.deb');
+  const fixture = installFixture(t, [{ statusCode: 200, body: 'installer bytes' }], fakeSpawn([{ code: 0 }]));
+  const installerPath = await vouchedInstaller(fixture, 'pkg.deb');
 
-  await assert.doesNotReject(platform.installUpdate({ path: installerPath, password: 'secret' }));
+  await assert.doesNotReject(fixture.platform.installUpdate({ path: installerPath, password: 'secret' }));
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -2724,6 +2914,7 @@ test('the network/hardware commands refuse arguments they cannot act on', async 
 
   assert.strictEqual((await rejection(platform.installUpdate({}))).code, CODES.INVALID_ARGUMENT);
   assert.strictEqual((await rejection(platform.installUpdate({ path: '/tmp/x' }))).code, CODES.INVALID_ARGUMENT);
+  assert.strictEqual((await rejection(platform.downloadUpdate({}))).code, CODES.INVALID_ARGUMENT);
   assert.strictEqual((await rejection(platform.wifiConnect({}))).code, CODES.INVALID_ARGUMENT);
 });
 

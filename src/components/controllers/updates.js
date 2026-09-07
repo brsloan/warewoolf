@@ -119,23 +119,23 @@ function isUpdateAvailable(latestTag, thisAppVersion = '1.0.0'){
     return avail;
 }
 
-//sysDirectories/downloadInfo/callback is unchanged from before this conversion - about_display.js
-//needs no changes at all. Only the platform/arch check moved off process.* (deferred to this phase
-//since Phase 2 - see native-command-inventory.md's group A note) and the download itself moved
-//native, behind platform.downloadUpdate.
-function downloadUpdate(sysDirectories, downloadInfo, callback){
+//Phase 9c: sysDirectories is gone from this function's signature, and that removal is the point
+//rather than a tidy-up. This is where the destination path used to be composed - temp on linux,
+//downloads elsewhere - and a path composed here is a path the renderer chose, which is exactly what
+//made installUpdate's vouch forgeable once the renderer became untrusted at Phase 9b. The native
+//command picks the directory now (same platform split, decided on the far side) and reports back a
+//path this file could not have produced; all that crosses outbound is the asset URL, which the
+//backing checks against the project's own releases prefix before fetching anything.
+//
+//downloadInfo/callback are otherwise unchanged, and the extra getPlatform() round trip this used to
+//need for the temp-vs-downloads decision is gone with it.
+function downloadUpdate(downloadInfo, callback){
     if(!downloadInfo){
         logError(new Error('No compatible update binary found for this platform/architecture.'));
         return;
     }
 
-    platform.getPlatform().then(function(platformInfo){
-        var destPath = platformInfo.platform == 'linux'
-            ? sysDirectories.temp + '/' + downloadInfo.name
-            : sysDirectories.downloads + '/' + downloadInfo.name;
-
-        return platform.downloadUpdate({ url: downloadInfo.url, destPath: destPath });
-    }).then(function(result){
+    platform.downloadUpdate({ url: downloadInfo.url }).then(function(result){
         callback(result.path);
     }).catch(function(err){
         logError(err);

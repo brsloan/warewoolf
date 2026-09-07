@@ -1575,7 +1575,7 @@ suite's second pass through the bridge, and 31 genuinely new: 10 in
 `user-settings.test.js` for the settings-object bug, and 2 in
 `render-bundle.test.js` pinning what is left to remove at 9b.
 
-### Phase 9b — Flip the flag — **done, with one open finding and one gap**
+### Phase 9b — Flip the flag — **done, with one gap; its open finding closed in 9c**
 
 `contextIsolation: true`, `nodeIntegration` gone, `--platform=browser`. The
 renderer runs isolated: `require`, `module`, `process`, `Buffer` and `__dirname`
@@ -1751,6 +1751,9 @@ format fails three bundle tests.
 
 #### Open finding from `/security-review` — renderer to root, on Linux
 
+**Closed in Phase 9c** (below). Left here as found, because what it says about how
+the Phase 8 guard was reasoned about is the part worth keeping.
+
 The review found nothing wrong with the bridge itself. `preload.js` validates
 against `COMMANDS`/`EVENTS` with `hasOwnProperty` (so `constructor`/`__proto__`
 cannot be smuggled as a command name), strips the `IpcRendererEvent`, and exposes
@@ -1816,6 +1819,11 @@ plus an absolute-path/`.deb` check. That is a contract change to a group K
 command, and it belongs in its own commit for the same reason everything else in
 this phase did.
 
+*That list turned out to be right about four things and incomplete about one.
+Allocating the path is necessary but not sufficient: the path comes back to the
+renderer, which can `writeBinaryFile` over it, so the vouch also had to stop being
+about a path at all. See Phase 9c.*
+
 #### Outstanding
 
 - **The Pi pass has not been run.** Pi OS Lite, Xorg, Matchbox, kiosk mode, and
@@ -1846,7 +1854,227 @@ this phase did.
   exists.
 - **macOS is untested too**, including the `open-file` path that
   `fileRequestedOnOpen`'s getter form exists for.
-- The `installUpdate` finding above.
+- ~~The `installUpdate` finding above.~~ Closed in Phase 9c, below — which adds two
+  items of its own to the Pi pass: `installUpdate`'s `sudo` spawn has still never
+  run, and the `chmod` hardening for the post-spawn window is deferred to where it
+  can be tested.
+
+---
+
+### Phase 9c — Close the `installUpdate` finding — **done**
+
+The one open finding from 9b, in its own commit for the reason 9a and 9b were split
+in the first place: a contract change and a flag flip landing together is ambiguous
+when something breaks.
+
+**Severity first, because it is what kept the fix proportionate.**
+`installUpdate` requires `args.password` — the sudo password, typed by the writer
+into the update dialog. So this was never silent escalation. It needs a person who
+believes they are installing an update and types their password to do it, which is
+a real gate and rules out the drive-by version of this attack.
+
+It does not dissolve the finding, for three reasons, and they are worth writing
+down because "the user consented" is the argument that would have justified doing
+nothing. First, what the writer consents to is *installing an update*, not
+installing an arbitrary attacker-supplied `.deb`; consent to the former is not
+consent to the latter, and the dialog gives them no way to tell the two apart.
+Second, the renderer draws that dialog (`install-update_display.js`), so a hostile
+renderer is the thing asking for the password. Third, the target hardware is the
+weak case: Raspberry Pi OS commonly ships its first user with `NOPASSWD` sudo, where
+any string satisfies the gate. And the route to a hostile renderer is not exotic —
+this app parses untrusted `.docx`, `.epub` and `.woolf` files, which is the
+realistic path to script execution in the page.
+
+So: a real hole, worth fixing directly and completely, and not worth a fortress.
+
+**The core defect, stated precisely: a path could enter `vouchedUpdatePaths`
+without a download having happened.** Everything else in the chain was already
+conceded. `writeBinaryFile` is group G's arbitrary write and always has been;
+`installUpdate` running `sudo` is the command's whole job. The only load-bearing
+claim was the vouch, and `downloadUpdate`'s `fs.existsSync` shortcut granted one
+for free.
+
+Note what the shortcut was actually worth, because it shapes the fix: the set is
+session-scoped, so the shortcut only ever saved a re-download across restarts. It
+is kept, narrowed to a path *already vouched this session* — resolving early for a
+path this session downloaded is fine; vouching an unvouched one is what had to
+stop. An unvouched file sitting at the destination is now downloaded over rather
+than trusted, which also makes a half-finished download from an earlier run
+self-correcting.
+
+#### The fix, and the decisions around it
+
+**1. The vouch records bytes, not a path.** `vouchedUpdatePaths` became a `Map`:
+`downloadUpdate` hashes the response as it streams and records the sha256 against
+the path, and `installUpdate` re-reads and re-hashes the file immediately before
+spawning. This is the part that answers the requirement in general form — *a
+renderer that has written a file somewhere must not be able to make `installUpdate`
+accept it* — rather than answering only the specific three-command chain. It has to
+be a content check rather than a path check, because a path is not a secret: the
+path comes back to the renderer (it has to; `installUpdate` takes it), and
+`writeBinaryFile` can still write to it.
+
+The read-hash-compare-spawn sequence is deliberately synchronous. The main process
+is single-threaded, so no other `ipcMain.handle` can be serviced between the check
+and the spawn — a `writeBinaryFile` racing the check cannot be scheduled in
+between. `fs.readFileSync` on an ~80MB `.deb` is not free, but it happens once, on a
+click that is about to run `apt install`, behind a modal that already says
+"Installing...".
+
+**2. `downloadUpdate` owns its destination. Decided yes.** Phase 8 made exactly this
+call for `sendEmail`'s attachments — "a temp file `sendEmail` owns and cleans up
+itself, never a renderer-named path" — and the reasoning that rejected a directory
+allowlist for `installUpdate` ("a renderer-composed path could satisfy it by
+construction") applies here with more force, because `downloadUpdate` is the only
+producer of vouches. `destPath` is gone from the parameters. On Linux the backing
+creates an `fs.mkdtempSync` directory; elsewhere it uses the downloads directory the
+main process already holds, because off Linux there is no `installUpdate` and the
+download *is* the deliverable — the About panel tells the writer to go run it. The
+filename comes off the URL's last path segment, against an allowlist that refuses a
+leading `-` or `.`, so the path is absolute and `.deb`-shaped by construction rather
+than by a check bolted on at install time.
+
+Unlike `sendEmail`'s temp files, this one is not cleaned up before resolving: it has
+to outlive the call, because `installUpdate` reads it from a separate click.
+
+This is a contract change with a visible tail. `updates.js`'s `downloadUpdate` loses
+its `sysDirectories` parameter, and so does `about_display.js`'s `showAbout` — that
+argument had already outlived its original purpose (9a took the licenses path off
+it) and survived only because the destination was still composed in the view. The
+extra `getPlatform()` round trip the renderer needed for the temp-vs-downloads
+decision goes with it.
+
+**3. The URL's host is constrained. Decided yes.** Cheap, and the release workflow
+already couples asset naming to `updates.js`'s matching, so coupling the host to the
+same repo constant costs nothing: `https://github.com/brsloan/warewoolf/releases/download/…`,
+spelled off the same `RELEASE_REPO` the API path is built from, so the two cannot
+drift. This matters for the benign flow too, not only the hostile one —
+`downloadInfo.url` is parsed in the renderer, so before this an unexpected release
+JSON could point the download anywhere.
+
+The redirect is deliberately *not* pinned to a hostname. GitHub answers an asset URL
+with a 302 to its object CDN, and that hostname has moved more than once
+(`objects.githubusercontent.com`, `release-assets.githubusercontent.com`). Pinning
+it buys nothing — the redirect is chosen by the host we just authenticated over
+TLS — and the failure mode of getting it wrong is updates silently breaking in the
+field, which is this project's recurring way of losing. Requiring the redirect to
+stay on `https` is the part that is worth having, and that is checked.
+
+**4. Argument injection: `--` before the path.** The 9b review's secondary finding.
+`platform.js`'s design note correctly ruled out *shell* injection (there is no
+shell) but not *argument* injection: a path beginning with `-` is read by `apt` as
+an option. With the filename allowlist above this is now belt and braces, which is
+the point of having both.
+
+**5. Is `writeBinaryFile` worth scoping? Decided no, deliberately.** It is examined
+rather than left unexamined, and the answer is that scoping it would be the same
+mistake as scoping `installUpdate`'s path. It legitimately writes wherever the
+writer pointed the export dialog, so any scope it could be given is a property a
+renderer-composed path satisfies by construction — and a scope tight enough to be
+meaningful would break exporting to a chosen location, which is the feature. The
+correct response to a conceded arbitrary write is that nothing downstream may treat
+a written file as trustworthy. That is what the digest does.
+
+#### What is still open, named rather than closed
+
+**There is a window between the spawn and `dpkg` opening the file.** The digest
+check and the spawn cannot be interleaved (single-threaded main process), but once
+`sudo` is running, a renderer that calls `writeBinaryFile` on the vouched path
+before `apt` gets round to reading it would install the substituted bytes. It is a
+genuine race and it is narrow: the attacker must also have driven a real download
+from the real releases host and got the writer to type a sudo password.
+
+Closing it deterministically means filesystem permissions — `chmod 0400` the file
+and `0500` its directory, so the app's own uid cannot rewrite it — and that was
+considered and deferred, not overlooked. Two reasons. It is Linux behavior that
+Windows cannot verify (Windows `chmod` sets a read-only attribute and does nothing
+useful to the directory), so it would ship untested on the only platform where it
+matters; and a `chmod` that fails on some Pi filesystem would break updates outright
+unless made non-fatal, at which point it is no longer a guarantee. **The decision:
+add it as its own commit during the Pi pass, where it can be run.** That is the same
+disposition the sandbox flag already has, and for the same reason.
+
+#### Tests
+
+**1296 pass, from 1279.** 17 net new, and the count is not the artifact — the chain
+test is.
+
+- **`test/platform.test.js`, the two regression tests that read as the attack.**
+  `writeBinaryFile then downloadUpdate cannot vouch an attacker-supplied installer`
+  walks the exact three commands the review's write-up numbered, in order, through
+  `createPlatform` — and therefore twice, once direct and once through the fake
+  bridge with real serialization. Its sibling,
+  `overwriting the file downloadUpdate did produce does not inherit its vouch`,
+  attacks the one path that *is* vouched. Both assert that `spawn` was never
+  reached, not that a particular message came back.
+
+  The first of those got one detail wrong on the first attempt, and it is the
+  detail the mutation check exists to catch: it originally called
+  `downloadUpdate({ url })`, matching the *new* contract, so reinstating Phase 8's
+  `destPath`+`existsSync` vouch left it green. It sends `destPath` anyway now —
+  which is what an untrusted renderer would do, since `COMMANDS[…].params` is
+  documentation and nothing strips an extra key crossing the bridge — and asserts
+  it is ignored. That assertion is what fails if `destPath` is ever wired back up.
+
+- **Contract tests for the new signatures, both backings, through the parameterized
+  transport**: the destination is allocated (and is a temp directory on Linux, the
+  downloads directory off it); a non-release URL and an unusable asset filename are
+  both refused before a socket opens; the shortcut fires only for an
+  already-vouched path; an unvouched file at the destination is downloaded over; a
+  redirect off `https` is refused. Plus the Phase 8 behaviors they replaced —
+  redirect following, error status, request error, and the `'close'`-not-`'finish'`
+  proof — rewritten against the new shape rather than deleted.
+
+- **`test/updates.test.js`**: the same properties at the renderer's own level,
+  including that a hostile asset name never becomes a downloaded path at all (the
+  case the original shell-injection regression was written for, now refused a step
+  earlier), and that a refused URL reaches the writer through the error log.
+
+- **`test/driven/checks.js`**: two new checks in the packaged app, 31 now rather
+  than 29. Both are assertable on Windows because both refusals happen before any
+  network or spawn: `downloadUpdate` refuses a non-release URL, and `installUpdate`
+  refuses a file `writeBinaryFile` wrote earlier in the same pass — the first two
+  steps of the chain, run for real through Electron IPC. These assert against
+  `platform-host.js`'s error *envelope*, not a rejection: called on the raw bridge
+  they are below the layer that reconstitutes a `PlatformError`. Getting that wrong
+  is how the first version of these two checks failed, and it is worth recording
+  that the failure was in the check and not in the guard.
+
+**Mutation-checked, all six.** Each of these fails at least one test, and the two
+that matter fail the regression tests specifically:
+
+| Mutation | What fails |
+|---|---|
+| Reinstate Phase 8's `destPath` + `existsSync` vouch | the chain regression test, both transports |
+| Drop `installUpdate`'s digest re-check | the overwrite regression test, both transports |
+| Drop the release-host URL check | the URL test, both transports, and `updates.test.js` |
+| Drop the asset-filename allowlist | the filename test, both transports, and `updates.test.js` |
+| Drop the `--` terminator | the argv tests in both suites |
+| Widen the shortcut back to `fs.existsSync` | the download-over-an-unvouched-file test |
+
+#### What is not verified
+
+**The `sudo` spawn itself has never run.** `installUpdate` is Linux-only past its
+guards, and this was verified on Windows: everything below the refusal — that `apt`
+accepts `--`, that the argv reaches `sudo` intact, that the password lands on its
+stdin, that a real `.deb` installs — is exercised through the injected
+`spawnProcess` seam against a fake child, not against a live `sudo`. The same is
+true of the temp-directory branch of `downloadUpdate`: it runs on Windows only
+because the `platform` seam tells the backing it is on Linux.
+
+That seam is new in this phase and worth naming as such: `createNodeBacking` takes an
+optional `platform`, read at call time rather than captured, purely so both branches
+of a Linux-only pair are exercisable off Linux. Without it the branch that matters
+for privilege would have been the untested one.
+
+**No real release has been downloaded through the new URL check.** The host and path
+prefix are asserted against the shape `checkForUpdate` returns, not against a live
+GitHub response. If GitHub ever changed `browser_download_url`'s shape, this would
+refuse legitimate updates — which is a failure the Pi pass should look for, since it
+is the one place a wrong constant here would show up before a release does.
+
+The Pi pass therefore now owes three things rather than two: the 9b list, the `sudo`
+path above, and the `chmod` hardening decision recorded under "What is still open".
 
 ---
 
@@ -1867,6 +2095,7 @@ line is unusually clear here.
 | Phase 7 — credentials | **Opus** | Crypto, key handling, and a legacy-format fallback whose breakage looks like nothing until a user's stored password stops decrypting. |
 | Phase 9a — build the bridge | **Opus** | Two of its three hardest parts were invisible to the suite as it stood: the contract tests could not run against the ipc backing at all, and `index.js` has neither a test nor a build to catch it. |
 | Phase 9b — flip and audit | **Opus** + `/security-review` | Adversarial review of a security boundary; the whole point of the exercise. |
+| Phase 9c — close the finding | **Opus** | Small diff, and the judgment is all in what *not* to build: the severity gate, the redirect that must stay unpinned, the `chmod` that belongs on the Pi. A suite cannot tell you a security fix is the right size. |
 
 Between phases, `/code-review` on each batch is worth more than model choice —
 the mechanical work fails in mechanical ways, and review catches those cheaply.

@@ -9,7 +9,7 @@ const { createIpcBacking } = require('../controllers/platform-ipc');
 //the direct `process.platform` read the Download handler used to do below - the last of the two
 //Group A reads this file's own note in native-command-inventory.md left deferred to Phase 8 (the
 //other, updates.js's own asset-matching, closed the same way in updates.js itself).
-function showAbout(sysDirectories, appVersion, platformInfo){
+function showAbout(appVersion, platformInfo){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup");
@@ -78,9 +78,9 @@ function showAbout(sysDirectories, appVersion, platformInfo){
           downloadBtn.innerText = 'Downloading...';
           downloadBtn.disabled = true;
           if(platformInfo.platform == 'linux')
-            downloadUpdate(sysDirectories, latest.downloadInfo, showInstallUpdate);
+            downloadUpdate(latest.downloadInfo, showInstallUpdate);
           else {
-            downloadUpdate(sysDirectories, latest.downloadInfo, function(fpath){
+            downloadUpdate(latest.downloadInfo, function(fpath){
               downloadBtn.innerText = "Downloaded Into Downloads Folder";
             });
           }
@@ -124,8 +124,10 @@ function showAbout(sysDirectories, appVersion, platformInfo){
 }
 
 //readLicenses used to need paths.app wired in, which is why this took sysDirectories. The main
-//process owns that path now, so the argument is gone; showAbout() still takes sysDirectories
-//because downloadUpdate above genuinely uses it.
+//process owns that path now, so the argument is gone - and as of Phase 9c so is showAbout()'s own
+//sysDirectories parameter, which outlived it only because downloadUpdate still composed the update
+//asset's destination path here. That path is the backing's to choose now (see updates.js), so this
+//view no longer names a filesystem location at all.
 async function loadLicenseText(){
   try {
     var platform = createPlatform(createIpcBacking());

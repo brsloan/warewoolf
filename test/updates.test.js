@@ -20,7 +20,7 @@ const { installBridge, uninstallBridge } = require('./fake-bridge');
 //of those has to do it before updates.js's module body runs, exactly like wifi-manager.test.js and
 //battery-monitor.test.js's own freshXxx() helpers already require for the same reason - this is
 //the same pattern applied to every test in this file now, not just the ones that used to need it.
-function freshUpdates(){
+function freshUpdates(deps){
   delete require.cache[updatesPath];
   //Phase 9a: the standing instance is ipc-backed now, so the node backing that resolves
   //https.request/https.get/child_process.spawn lives behind the bridge instead of inside this
@@ -28,7 +28,10 @@ function freshUpdates(){
   //backing is constructed here, after the mock and before the re-require. It also has to be *one*
   //backing per test run: installUpdate only accepts a path a prior downloadUpdate vouched for, and
   //re-installing the bridge mid-test would throw that set away.
-  installBridge();
+  //Phase 9c: `deps` reach the node backing on the far side of that bridge. downloadUpdate allocates
+  //its own destination now, so a test that needs a real download either mocks https.get on the
+  //module before this call (as the download tests below still do) or injects httpsGet here.
+  installBridge(deps);
   return require(updatesPath);
 }
 
@@ -134,18 +137,45 @@ function makeFakeChild(){
   return child;
 }
 
+//The only URL shape downloadUpdate accepts: a release asset on this project's own repo, which is
+//the only shape checkForUpdate's own response ever carries.
+function assetUrl(name){
+  return 'https://github.com/brsloan/warewoolf/releases/download/v2.0.0/' + name;
+}
+
 //Vouches a path for installUpdate the same way the real app does: a successful downloadUpdate call
-//against the same standing platform instance. Writing the file first takes downloadUpdate's
-//already-downloaded shortcut, so this needs no https mock of its own - see
-//platform-node.js's downloadUpdate, which vouches on that path too.
-function vouchedPath(downloadUpdate, dir, name){
-  const filePath = path.join(dir, name);
-  fs.writeFileSync(filePath, 'stand-in-installer');
-  //Both temp and downloads point at the same dir so this vouches the same path regardless of which
-  //one downloadUpdate picks for the machine actually running this suite.
+//against the same standing platform instance.
+//
+//Phase 9c: it has to be a real download. Writing the file first used to be enough, because
+//downloadUpdate vouched anything fs.existsSync could see at a path the caller named - which is
+//precisely the hole this phase closed, so a helper that still worked that way would be asserting
+//against a vouch the app no longer grants. The backing picks the directory, so the path comes back
+//from the call rather than going into it, and the test cleans up what it is handed.
+function vouchedPath(t, downloadUpdate, name){
   return new Promise(function(resolve){
-    downloadUpdate({ temp: dir, downloads: dir }, { name: name, url: 'https://example.com/' + name }, resolve);
+    downloadUpdate({ name: name, url: assetUrl(name) }, function(filePath){
+      t.after(function(){
+        fs.rmSync(path.dirname(filePath), { recursive: true, force: true });
+      });
+      resolve(filePath);
+    });
   });
+}
+
+//Downloads for the install tests are injected rather than mocked on the https module, so a test that
+//also mocks child_process.spawn does not have to sequence two module mocks against one construction.
+function installerBytes(){
+  return function(url, callback){
+    const req = new EventEmitter();
+    req.end = function(){};
+    setImmediate(function(){
+      const res = Readable.from([Buffer.from('stand-in-installer')]);
+      res.statusCode = 200;
+      res.headers = {};
+      callback(res);
+    });
+    return req;
+  };
 }
 
 //---------------------------------------------------------------------------
@@ -386,28 +416,55 @@ test('getUpdates regression: leaves downloadInfo undefined instead of throwing o
 // downloadUpdate
 //---------------------------------------------------------------------------
 
-test('downloadUpdate calls back immediately without a network request when the file already exists', async function(t){
+//Phase 9c: what "already downloaded" means. It used to mean "fs.existsSync says something is
+//there", which vouched any file the renderer had written; it now means "this session already
+//downloaded to this path", which is all the shortcut was ever worth. A file the app did not put
+//there is downloaded over instead of trusted.
+test('downloadUpdate skips the network on a second call for a path this session already downloaded', async function(t){
   const dir = freshTempDir(t);
-  const filePath = dir + '/warewoolf_2.0.0_amd64.deb';
-  fs.writeFileSync(filePath, 'already here');
-  const calls = mockHttpsGetSequence(t, []);
+  const calls = mockHttpsGetSequence(t, [
+    { statusCode: 200, body: 'the real asset' },
+    { statusCode: 200, body: 'should not be needed' }
+  ]);
+  const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
+  Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+  t.after(function(){ Object.defineProperty(process, 'platform', origPlatform); });
+  const { downloadUpdate } = freshUpdates({ paths: { downloads: dir } });
+
+  const first = await new Promise(function(resolve){
+    downloadUpdate({ name: 'warewoolf_2.0.0_amd64.deb', url: assetUrl('warewoolf_2.0.0_amd64.deb') }, resolve);
+  });
+  const second = await new Promise(function(resolve){
+    downloadUpdate({ name: 'warewoolf_2.0.0_amd64.deb', url: assetUrl('warewoolf_2.0.0_amd64.deb') }, resolve);
+  });
+
+  assert.strictEqual(second, first);
+  assert.strictEqual(calls.length, 1);
+});
+
+//The renderer cannot name the destination any more, which is the whole of the fix - so this asserts
+//the negative directly, at the level updates.js actually calls: whatever comes back is somewhere
+//this file never mentioned.
+test('downloadUpdate hands back a path the renderer did not compose', async function(t){
+  const dir = freshTempDir(t);
+  mockHttpsGetSequence(t, [{ statusCode: 200, body: 'binary-content-stand-in' }]);
   const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
   Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
   t.after(function(){ Object.defineProperty(process, 'platform', origPlatform); });
-  const { downloadUpdate } = freshUpdates();
+  const { downloadUpdate } = freshUpdates({ paths: { downloads: dir } });
 
-  const result = await new Promise(function(resolve){
-    downloadUpdate({ temp: dir }, { name: 'warewoolf_2.0.0_amd64.deb', url: 'https://example.com/x' }, resolve);
+  const filePath = await new Promise(function(resolve){
+    downloadUpdate({ name: 'warewoolf_2.0.0_amd64.deb', url: assetUrl('warewoolf_2.0.0_amd64.deb') }, resolve);
   });
+  t.after(function(){ fs.rmSync(path.dirname(filePath), { recursive: true, force: true }); });
 
-  assert.strictEqual(result, filePath);
-  assert.strictEqual(calls.length, 0);
+  assert.strictEqual(filePath.indexOf(dir), -1, 'linux downloads do not land in the downloads directory');
+  assert.ok(path.dirname(filePath).includes('warewoolf-update-'), filePath + ' should be in a directory the backing made');
 });
 
 //Regression: fs was used throughout this function (existsSync/createWriteStream/unlink) but
 //never required, so this whole path threw "ReferenceError: fs is not defined" as soon as it ran.
 test('downloadUpdate regression: downloads the asset and writes it to disk', async function(t){
-  const dir = freshTempDir(t);
   const calls = mockHttpsGetSequence(t, [{ statusCode: 200, body: 'binary-content-stand-in' }]);
   const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
   Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
@@ -416,34 +473,54 @@ test('downloadUpdate regression: downloads the asset and writes it to disk', asy
 
   const filePath = await new Promise(function(resolve){
     downloadUpdate(
-      { temp: dir },
-      { name: 'warewoolf_2.0.0_amd64.deb', url: 'https://example.com/release/amd64.deb' },
+      { name: 'warewoolf_2.0.0_amd64.deb', url: assetUrl('warewoolf_2.0.0_amd64.deb') },
       resolve
     );
   });
+  t.after(function(){ fs.rmSync(path.dirname(filePath), { recursive: true, force: true }); });
 
-  assert.strictEqual(filePath, dir + '/warewoolf_2.0.0_amd64.deb');
+  assert.strictEqual(path.basename(filePath), 'warewoolf_2.0.0_amd64.deb');
   assert.strictEqual(fs.readFileSync(filePath, 'utf8'), 'binary-content-stand-in');
-  assert.deepStrictEqual(calls, ['https://example.com/release/amd64.deb']);
+  assert.deepStrictEqual(calls, [assetUrl('warewoolf_2.0.0_amd64.deb')]);
 });
 
+//Still the downloads folder off linux, and still for the reason the About panel's own message gives
+//- the writer goes and runs it. The difference is that the directory now comes from the app paths
+//the main process already holds, not from an argument this file passed in.
 test('downloadUpdate uses the downloads directory instead of temp on non-linux platforms', async function(t){
   const dir = freshTempDir(t);
   mockHttpsGetSequence(t, [{ statusCode: 200, body: 'windows-binary' }]);
   const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
   Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
   t.after(function(){ Object.defineProperty(process, 'platform', origPlatform); });
-  const { downloadUpdate } = freshUpdates();
+  const { downloadUpdate } = freshUpdates({ paths: { downloads: dir } });
 
   const filePath = await new Promise(function(resolve){
     downloadUpdate(
-      { downloads: dir },
-      { name: 'warewoolf_2.0.0_Windows_x64.zip', url: 'https://example.com/release/win.zip' },
+      { name: 'warewoolf_2.0.0_Windows_x64.zip', url: assetUrl('warewoolf_2.0.0_Windows_x64.zip') },
       resolve
     );
   });
 
-  assert.strictEqual(filePath, dir + '/warewoolf_2.0.0_Windows_x64.zip');
+  assert.strictEqual(filePath, dir.replaceAll('\\', '/') + '/warewoolf_2.0.0_Windows_x64.zip');
+  assert.strictEqual(fs.readFileSync(filePath, 'utf8'), 'windows-binary');
+});
+
+//End to end at this level: a URL that is not a release asset on this project's repo never reaches
+//the network, and the writer is told through the error log rather than by a download appearing.
+test('downloadUpdate refuses a download URL that is not a release asset on this project\'s repo', async function(t){
+  const logErrorMock = t.mock.method(errorLog, 'logError', function(){});
+  const calls = mockHttpsGetSequence(t, []);
+  const { downloadUpdate } = freshUpdates();
+
+  let called = false;
+  downloadUpdate({ name: 'pkg.deb', url: 'https://evil.example.com/pkg.deb' }, function(){ called = true; });
+
+  await new Promise(function(resolve){ setTimeout(resolve, 20); });
+
+  assert.strictEqual(called, false);
+  assert.strictEqual(calls.length, 0);
+  assert.strictEqual(logErrorMock.mock.calls.length, 1);
 });
 
 test('downloadUpdate follows a redirect to the real asset location', async function(t){
@@ -456,16 +533,18 @@ test('downloadUpdate follows a redirect to the real asset location', async funct
   Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
   t.after(function(){ Object.defineProperty(process, 'platform', origPlatform); });
   const { downloadUpdate } = freshUpdates();
+  //The redirect target is deliberately not on github.com: only the first URL is checked, because
+  //the redirect is chosen by the host that answered it.
 
   const filePath = await new Promise(function(resolve){
     downloadUpdate(
-      { temp: dir },
-      { name: 'warewoolf_2.0.0_amd64.deb', url: 'https://github.com/release/amd64.deb' },
+      { name: 'warewoolf_2.0.0_amd64.deb', url: assetUrl('warewoolf_2.0.0_amd64.deb') },
       resolve
     );
   });
+  t.after(function(){ fs.rmSync(path.dirname(filePath), { recursive: true, force: true }); });
 
-  assert.deepStrictEqual(calls, ['https://github.com/release/amd64.deb', 'https://cdn.example.com/real-asset.deb']);
+  assert.deepStrictEqual(calls, [assetUrl('warewoolf_2.0.0_amd64.deb'), 'https://cdn.example.com/real-asset.deb']);
   assert.strictEqual(fs.readFileSync(filePath, 'utf8'), 'redirected-content');
 });
 
@@ -473,12 +552,13 @@ test('downloadUpdate regression: removes the partial file and never calls back w
   const dir = freshTempDir(t);
   mockHttpsGetSequence(t, [{ statusCode: 404 }]);
   const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
-  Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+  //win32 so the destination is the injected downloads directory and this test can look at it.
+  Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
   t.after(function(){ Object.defineProperty(process, 'platform', origPlatform); });
-  const { downloadUpdate } = freshUpdates();
+  const { downloadUpdate } = freshUpdates({ paths: { downloads: dir } });
 
   let called = false;
-  downloadUpdate({ temp: dir }, { name: 'missing.deb', url: 'https://example.com/missing.deb' }, function(){ called = true; });
+  downloadUpdate({ name: 'missing.deb', url: assetUrl('missing.deb') }, function(){ called = true; });
 
   await new Promise(function(resolve){ setTimeout(resolve, 50); });
 
@@ -490,12 +570,12 @@ test('downloadUpdate regression: removes the partial file when the download requ
   const dir = freshTempDir(t);
   mockHttpsGetSequence(t, [{ triggerError: new Error('socket hang up') }]);
   const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
-  Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+  Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
   t.after(function(){ Object.defineProperty(process, 'platform', origPlatform); });
-  const { downloadUpdate } = freshUpdates();
+  const { downloadUpdate } = freshUpdates({ paths: { downloads: dir } });
 
   let called = false;
-  downloadUpdate({ temp: dir }, { name: 'flaky.deb', url: 'https://example.com/flaky.deb' }, function(){ called = true; });
+  downloadUpdate({ name: 'flaky.deb', url: assetUrl('flaky.deb') }, function(){ called = true; });
 
   await new Promise(function(resolve){ setTimeout(resolve, 50); });
 
@@ -512,7 +592,7 @@ test('downloadUpdate regression: logs and does nothing instead of crashing when 
 
   let called = false;
   assert.doesNotThrow(function(){
-    freshDownloadUpdate({ temp: tempDir() }, undefined, function(){ called = true; });
+    freshDownloadUpdate(undefined, function(){ called = true; });
   });
 
   assert.strictEqual(called, false);
@@ -526,16 +606,13 @@ test('downloadUpdate regression: logs and does nothing instead of crashing when 
 //Regression: installUpdate used to build ' sudo -S <<< "<pass>" apt install <filePath>' as one
 //string and run it through /bin/bash, so a filePath (or password) containing shell
 //metacharacters could inject arbitrary commands. It must now be spawned as an argv array with
-//no shell.
-test('installUpdate regression: runs sudo/apt via spawn with the file path as a separate argv element instead of a shell string', async function(t){
-  const dir = freshTempDir(t);
-  const dangerousName = 'some pkg $(touch INJECTED).deb';
-
+//no shell - and, as of Phase 9c, with a `--` terminator, so a path cannot be read as an apt option
+//either. The argv array answers shell injection; only the `--` answers argument injection.
+test('installUpdate regression: runs sudo/apt via spawn with the file path as a separate argv element after a "--", instead of a shell string', async function(t){
   //spawn must be mocked before freshUpdates() reconstructs the standing platform instance -
   //createNodeBacking() resolves child_process.spawn once, at construction, the same ordering
   //requirement platform-node.js's https/nodemailer seams have (see the file-level comment on
-  //freshUpdates() above). vouchedPath itself never touches spawn - it only downloads (via the
-  //already-exists shortcut), so mocking spawn first does not affect it.
+  //freshUpdates() above). vouchedPath itself never touches spawn - it only downloads.
   let capturedCommand, capturedArgs, capturedOptions, fakeChild;
   t.mock.method(child_process, 'spawn', function(command, args, options){
     capturedCommand = command;
@@ -545,16 +622,16 @@ test('installUpdate regression: runs sudo/apt via spawn with the file path as a 
     return fakeChild;
   });
 
-  const { downloadUpdate, installUpdate } = freshUpdates();
-  const dangerousPath = await vouchedPath(downloadUpdate, dir, dangerousName);
+  const { downloadUpdate, installUpdate } = freshUpdates({ httpsGet: installerBytes() });
+  const filePath = await vouchedPath(t, downloadUpdate, 'pkg.deb');
 
-  installUpdate('secret', dangerousPath, { innerText: '' });
+  installUpdate('secret', filePath, { innerText: '' });
   //platform.installUpdate() crosses createPlatform's Promise wrapper, so the backing's spawn call
   //lands one microtask after installUpdate() returns rather than synchronously within it.
   await flushMicrotask();
 
   assert.strictEqual(capturedCommand, 'sudo');
-  assert.deepStrictEqual(capturedArgs, ['-S', 'apt', 'install', dangerousPath]);
+  assert.deepStrictEqual(capturedArgs, ['-S', 'apt', 'install', '--', filePath]);
   assert.ok(!capturedOptions || !capturedOptions.shell, 'spawn must not run the command through a shell');
 
   //Let installUpdate's own promise settle rather than leaving it dangling past the test's end.
@@ -562,12 +639,35 @@ test('installUpdate regression: runs sudo/apt via spawn with the file path as a 
   await new Promise(function(resolve){ setImmediate(resolve); });
 });
 
+//The other half of the same worry, and the reason the argv shape above is no longer the only
+//defence: a hostile asset filename can no longer become a path at all. The name is taken off the
+//release URL's last segment and checked against an allowlist, so the shell-metacharacter case this
+//file's original regression was written for is refused before anything is downloaded.
+test('installUpdate regression: an asset name full of shell metacharacters never becomes a downloaded path', async function(t){
+  const logErrorMock = t.mock.method(errorLog, 'logError', function(){});
+  let spawnCalled = false;
+  t.mock.method(child_process, 'spawn', function(){
+    spawnCalled = true;
+    return makeFakeChild();
+  });
+
+  const dangerousName = 'some pkg $(touch INJECTED).deb';
+  const { downloadUpdate } = freshUpdates({ httpsGet: installerBytes() });
+
+  let called = false;
+  downloadUpdate({ name: dangerousName, url: assetUrl(encodeURIComponent(dangerousName)) }, function(){ called = true; });
+
+  await new Promise(function(resolve){ setTimeout(resolve, 20); });
+
+  assert.strictEqual(called, false, 'nothing should have been downloaded');
+  assert.strictEqual(spawnCalled, false);
+  assert.strictEqual(logErrorMock.mock.calls.length, 1);
+});
+
 //Regression: the sudo password was interpolated straight into the spawned command string,
 //so it was briefly visible to other local users via `ps`. It must be written to the child's
 //stdin instead.
 test('installUpdate regression: writes the password to the child\'s stdin instead of embedding it in argv', async function(t){
-  const dir = freshTempDir(t);
-
   let capturedArgs;
   let fakeChild;
   t.mock.method(child_process, 'spawn', function(command, args){
@@ -576,8 +676,8 @@ test('installUpdate regression: writes the password to the child\'s stdin instea
     return fakeChild;
   });
 
-  const { downloadUpdate, installUpdate } = freshUpdates();
-  const filePath = await vouchedPath(downloadUpdate, dir, 'pkg.deb');
+  const { downloadUpdate, installUpdate } = freshUpdates({ httpsGet: installerBytes() });
+  const filePath = await vouchedPath(t, downloadUpdate, 'pkg.deb');
 
   const dangerousPass = 'p"a$s\'w`ord; rm -rf /; #';
   installUpdate(dangerousPass, filePath, { innerText: '' });
@@ -614,16 +714,14 @@ test('installUpdate regression: refuses a path it did not itself download, witho
 });
 
 test('installUpdate relays the final outcome to the status element when the process closes successfully', async function(t){
-  const dir = freshTempDir(t);
-
   let fakeChild;
   t.mock.method(child_process, 'spawn', function(){
     fakeChild = makeFakeChild();
     return fakeChild;
   });
 
-  const { downloadUpdate, installUpdate } = freshUpdates();
-  const filePath = await vouchedPath(downloadUpdate, dir, 'pkg.deb');
+  const { downloadUpdate, installUpdate } = freshUpdates({ httpsGet: installerBytes() });
+  const filePath = await vouchedPath(t, downloadUpdate, 'pkg.deb');
 
   const statusElement = { innerText: '' };
   installUpdate('secret', filePath, statusElement);
@@ -640,16 +738,14 @@ test('installUpdate relays the final outcome to the status element when the proc
 //to complete." no matter the exit code, so a failed install (bad password, apt error, etc.)
 //still ended with a success message layered on top of the error text already shown.
 test('installUpdate regression: reports failure instead of a false success message when the process exits with a non-zero code', async function(t){
-  const dir = freshTempDir(t);
-
   let fakeChild;
   t.mock.method(child_process, 'spawn', function(){
     fakeChild = makeFakeChild();
     return fakeChild;
   });
 
-  const { downloadUpdate, installUpdate } = freshUpdates();
-  const filePath = await vouchedPath(downloadUpdate, dir, 'pkg.deb');
+  const { downloadUpdate, installUpdate } = freshUpdates({ httpsGet: installerBytes() });
+  const filePath = await vouchedPath(t, downloadUpdate, 'pkg.deb');
 
   const statusElement = { innerText: '' };
   installUpdate('wrong-password', filePath, statusElement);
@@ -667,16 +763,14 @@ test('installUpdate regression: reports failure instead of a false success messa
 //Regression: installUpdate had no way to tell its caller whether the install succeeded, so a
 //UI showing an "Install" button had no signal to re-enable it after a failure.
 test('installUpdate regression: invokes the onDone callback with the process exit code', async function(t){
-  const dir = freshTempDir(t);
-
   let fakeChild;
   t.mock.method(child_process, 'spawn', function(){
     fakeChild = makeFakeChild();
     return fakeChild;
   });
 
-  const { downloadUpdate, installUpdate } = freshUpdates();
-  const filePath = await vouchedPath(downloadUpdate, dir, 'pkg.deb');
+  const { downloadUpdate, installUpdate } = freshUpdates({ httpsGet: installerBytes() });
+  const filePath = await vouchedPath(t, downloadUpdate, 'pkg.deb');
 
   const calls = [];
   installUpdate('secret', filePath, { innerText: '' }, function(exitCode){ calls.push(exitCode); });

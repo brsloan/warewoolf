@@ -14,8 +14,10 @@ the two Phase 4 found in group B are marked **(corrected in Phase 4)**, the one
 Phase 5 found in group D is marked **(corrected in Phase 5)**, the one
 Phase 6 found in group G — `buildEpub`'s signature — is marked
 **(corrected in Phase 6)**, the two Phase 7 found in group J are marked
-**(corrected in Phase 7)**, and the four Phase 8 found in group K are marked
-**(corrected in Phase 8)**.
+**(corrected in Phase 7)**, the four Phase 8 found in group K are marked
+**(corrected in Phase 8)**, and the two Phase 9c found in group K — `downloadUpdate`'s
+`destPath` and what `installUpdate`'s vouch actually records — are marked
+**(corrected in Phase 9c)**.
 
 This is the API surface that must exist between the UI and the OS. It serves two
 purposes at once:
@@ -38,9 +40,10 @@ build, and `window.warewoolf` is the only thing that reaches the main process. T
 renderer is now untrusted in the sense the whole exercise was for — which also
 means every command below is an interface offered to untrusted code, and the two
 places that matters most are group E (generic by design, see its own note) and
-group K's `installUpdate` (which escalates privilege, and whose guard 9b's
-security review found forgeable — see the Phase 9b write-up in
-`upgrade-and-isolation-plan.md`).
+group K's `installUpdate`, the only command that escalates privilege. 9b's
+security review found that command's guard forgeable; **Phase 9c fixed it**, and
+in doing so changed `downloadUpdate`'s contract. See group K below and the Phase
+9c write-up in `upgrade-and-isolation-plan.md`.
 
 `sandbox` is still `false`, but it is an explicit line now rather than a
 consequence of `nodeIntegration: true`. Turning it on passes the same driven
@@ -602,7 +605,7 @@ phase's own work, the first time that was true since Phase 1 itself.
 | Command | Replaces | Tauri target |
 |---|---|---|
 | `checkForUpdate()` | `https.request` (`updates.js:40`) | `tauri-plugin-updater`, or `reqwest` |
-| `downloadUpdate(url, destPath)` | `updates.js:185-252` | same |
+| `downloadUpdate(url)` | `updates.js:185-252` | same |
 | `installUpdate(path, password)` | `spawn('sudo', ['-S','apt','install'])` (`updates.js:259`) | same |
 | `sendEmail({service, sender, secret, receiver, attachments})` | `nodemailer` (`email-doc.js:190`) | `lettre` |
 | `wifiListNetworks()` / `wifiConnect(ssid, psk)` / `wifiGetAddress()` | `nmcli` and `hostname -I` spawns (`wifi-manager.js:13,62,91`) | `Command` or D-Bus |
@@ -628,6 +631,31 @@ actually requires. They stay in `updates.js`, unchanged except that
 reads Phase 2 deferred here (`updates.js:117-130,179`) and the third at
 `about_display.js:75` (now threaded a `platformInfo` argument from render.js,
 the same way `settings_display.js` already receives one).
+
+**(corrected in Phase 9c) `downloadUpdate` does not take `destPath`.** It
+allocates the destination itself: on Linux a directory it creates with
+`fs.mkdtempSync`, everywhere else the downloads directory the main process
+already holds, with the filename taken off the URL's own last path segment. The
+URL has to be a release asset on this repo (`https://github.com/brsloan/warewoolf/releases/download/…`),
+checked before a socket is opened, and the filename has to match an allowlist —
+so nothing about the destination is renderer-composed. This is the same call
+Phase 8 made for `sendEmail`'s attachments ("a temp file `sendEmail` owns and
+cleans up itself, never a renderer-named path") applied to the one command where
+not making it was load-bearing: `downloadUpdate` is the only producer of
+`installUpdate`'s vouches, so a renderer that chooses this path chooses what gets
+installed as root. The one difference from `sendEmail`'s temp files is that this
+one is *not* cleaned up before resolving — `installUpdate` reads it later, from a
+separate click, so it has to outlive the call that made it.
+
+The visible consequence, and the reason this is a contract change rather than an
+implementation detail: `updates.js`'s own `downloadUpdate(sysDirectories,
+downloadInfo, callback)` loses its first parameter, and with it
+`about_display.js`'s `showAbout(sysDirectories, …)` — that argument had already
+outlived its original purpose (Phase 9a took the licenses path off it) and
+survived only because the update destination was still composed in the view.
+Off Linux the writer is still told the file is in their downloads folder, because
+it still is; that split moved to the far side of the boundary rather than
+disappearing.
 
 **(corrected in Phase 8) `downloadUpdate` resolves on the destination write
 stream's `'close'`, not when the HTTPS response finishes piping into it.** The
@@ -657,26 +685,47 @@ the smaller version of the same question — an SSID/passphrase the writer
 typed, not a path — and the existing discipline (argv array, no shell) already
 answers it; nothing new was needed there.
 
-**(Phase 9b, open) That guard does not hold, and the flip is what makes it
+**(Phase 9b, found) That guard did not hold, and the flip is what made it
 matter.** `/security-review` over the 9b diff found the vouch forgeable in one
-extra call. `downloadUpdate` is the only producer of vouches and it takes *both*
+extra call. `downloadUpdate` was the only producer of vouches and it took *both*
 `url` and `destPath` from the renderer unvalidated; worse, its
-already-downloaded shortcut (`platform-node.js:1276-1280`) vouches `destPath` on
-nothing but `fs.existsSync`, with no HTTP request at all. So a renderer that
-already holds group G's conceded arbitrary write can `writeBinaryFile` a `.deb`,
-call `downloadUpdate` on that path to have it vouched, and then `installUpdate`
-it as root. The paragraph above rejects a directory allowlist because "a
-renderer-composed path could satisfy [it] by construction" — the vouch turns out
-to be satisfiable by construction too, for the same reason: the backing does not
-choose the path, the renderer does. Before Phase 9b the renderer had
-`child_process` and could spawn `sudo` itself, so there was no boundary here to
-fail; after it, this is the only remaining renderer-to-root path. Secondary, same
-function: `targetPath` is a bare argv element, so a vouched path starting with
-`-` is read by `apt` as an option. Not fixed in 9b — the fix changes this
-command's contract (the backing allocates `destPath` itself, the `url` is
-validated, the `existsSync` vouch goes, `installUpdate` gets `'--'`) and belongs
-in its own commit. See the Phase 9b write-up in
-`upgrade-and-isolation-plan.md`.
+already-downloaded shortcut vouched `destPath` on nothing but `fs.existsSync`,
+with no HTTP request at all. So a renderer holding group G's conceded arbitrary
+write could `writeBinaryFile` a `.deb`, call `downloadUpdate` on that path to have
+it vouched, and then `installUpdate` it as root. The paragraph above rejects a
+directory allowlist because "a renderer-composed path could satisfy [it] by
+construction" — the vouch turned out to be satisfiable by construction too, for
+the same reason: the backing did not choose the path, the renderer did. Before
+Phase 9b the renderer had `child_process` and could spawn `sudo` itself, so there
+was no boundary here to fail; after it, this is the only remaining
+renderer-to-root path.
+
+**(corrected in Phase 9c) The vouch records the bytes, not the path.**
+`vouchedUpdatePaths` is a `Map` now, not a `Set`: `downloadUpdate` records the
+sha256 of what it actually downloaded, against a path it allocated itself (see
+its own correction above), and `installUpdate` re-reads and re-hashes the file
+immediately before spawning. Both halves are needed and neither is sufficient
+alone. A backing-allocated path stops the chain above, because there is no
+argument that points `downloadUpdate` at a file the renderer wrote. The digest
+stops the variant that a backing-allocated path opens up instead: the path comes
+back to the renderer — it has to, `installUpdate` takes it — and `writeBinaryFile`
+can still write to it, so the vouch cannot be about a name. Read, hash, compare
+and spawn run in one synchronous block, which is what keeps another command from
+being serviced in between; the main process is single-threaded.
+
+The secondary finding is fixed too: `installUpdate` spawns
+`sudo -S apt install -- <path>`, so a path cannot be read as an `apt` option.
+With the filename now coming from an allowlist that forbids a leading `-`, that
+is belt and braces, which is the point of having it.
+
+`writeBinaryFile` was re-examined here and deliberately left alone. It is group
+G's conceded arbitrary write, and the concession is real: it writes wherever the
+export dialog's file picker put the user. Scoping it to some directory set would
+be the same mistake as scoping `installUpdate`'s path — a property a
+renderer-composed path satisfies by construction — and it would break exporting
+to a chosen location, which is the feature. The right response is that nothing
+downstream may treat a written file as trustworthy, which is what the digest
+does.
 
 **`sendEmail`'s `attachments` shape needed the same kind of correction group
 G's `buildEpub` did, for the same reason.** The inventory's own row already
@@ -875,3 +924,13 @@ until the last one.
    one variable. Verified on a packaged Windows build over CDP, 29 checks. The Pi
    pass is still owed, and `/security-review` left one open finding against
    `installUpdate` — both recorded in the Phase 9b write-up.
+
+10. **Close the `installUpdate` finding.** *Done in Phase 9c.* The contract
+    change group K records above: `downloadUpdate` allocates its own destination
+    and validates the URL, the vouch becomes a content digest re-checked at
+    install time, and `apt` gets a `--`. Kept out of 9b deliberately, for the same
+    reason 9a and 9b were split — a contract change and a flag flip landing
+    together is ambiguous when something breaks. Verified on a packaged Windows
+    build, 31 checks now; the Linux half of `installUpdate` (the `sudo` spawn
+    itself) still waits on the Pi pass, which is why the seams are injected rather
+    than live.

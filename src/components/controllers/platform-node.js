@@ -27,6 +27,7 @@ const archiver = require('archiver');
 //httpsGet, spawnProcess, createMailTransport) can override the same seam without either backing
 //behaving differently depending on which came first.
 const httpsModule = require('https');
+const nodeCrypto = require('crypto');
 const childProcessModule = require('child_process');
 const nodemailer = require('nodemailer');
 const { CODES, PlatformError, fromNodeError, SAVED_SECRET } = require('./platform');
@@ -73,9 +74,21 @@ const PERSONAL_DICT_SEED = 'WareWoolf\n';
 const ARCHIVE_EXTENSION = '.zip';
 
 //Group K: the GitHub Releases endpoint updates.js used to hit directly.
+const RELEASE_REPO = 'brsloan/warewoolf';
 const RELEASE_API_HOSTNAME = 'api.github.com';
-const RELEASE_API_PATH = '/repos/brsloan/warewoolf/releases/latest';
+const RELEASE_API_PATH = '/repos/' + RELEASE_REPO + '/releases/latest';
 const RELEASE_CHECK_TIMEOUT_MS = 10000;
+//Where downloadUpdate is allowed to fetch from, spelled off the same repo constant as the API path
+//above so the two cannot drift. checkForUpdate's own response is the only legitimate source of an
+//asset URL, and every browser_download_url in it has exactly this shape.
+const RELEASE_ASSET_HOSTNAME = 'github.com';
+const RELEASE_ASSET_PATH_PREFIX = '/' + RELEASE_REPO + '/releases/download/';
+//The asset filename downloadUpdate will accept off that URL's last path segment. An allowlist, not
+//a sanitizer: a name that does not match is refused rather than scrubbed into something else, and
+//refusing a leading '-' or '.' means the path this backing builds can never be read as an option or
+//climb out of the directory it allocated.
+const RELEASE_ASSET_NAME_PATTERN = /^[A-Za-z0-9_][A-Za-z0-9._+-]*$/;
+const UPDATE_DIR_PREFIX = 'warewoolf-update-';
 //Linux-only sysfs path for battery state - absent by construction on Windows/macOS, which is what
 //makes getBatteryCapacity's UNAVAILABLE path exercisable in this test suite without a real Pi.
 const POWER_SUPPLY_PATH = '/sys/class/power_supply';
@@ -113,7 +126,19 @@ function createNodeBacking(deps){
   //asserts is an installer. This backing only trusts a path it produced itself, via a downloadUpdate
   //call against this same instance (session-scoped - the state disappears once the app or a test
   //discards this backing, same lifetime as the credential stores' cached session key above).
-  var vouchedUpdatePaths = new Set();
+  //
+  //Phase 9c: a Map, not a Set, and that is the fix rather than a detail of it. A vouch keyed only by
+  //path says "the renderer asked for this path once"; keyed to the sha256 of the bytes this backing
+  //downloaded, it says "these are the bytes I fetched from the releases host", which is the thing
+  //installUpdate actually needs to know. writeBinaryFile is a conceded arbitrary write (group G) and
+  //stays one, so the vouched path remains writable by the renderer - what changes is that rewriting
+  //it invalidates the vouch instead of inheriting it.
+  var vouchedUpdates = new Map();
+  //A test seam, not a configuration knob: installUpdate is linux-only, and downloadUpdate's choice
+  //of destination directory turns on the same platform, so without this neither branch could be
+  //exercised on the machine this suite usually runs on. Read at call time, not captured here, so a
+  //test that redefines process.platform after constructing a backing still sees it.
+  var platformOverride = options.platform || null;
 
   //Group A is the exception to this file's own rule. C and J are direct fs/crypto - exactly what
   //nodeIntegration already gives the renderer, so this backing can run inside it unchanged. None of
@@ -255,9 +280,13 @@ function createNodeBacking(deps){
   }
 
   //process.platform/process.arch are plain Node globals, present with or without nodeIntegration -
-  //nothing to inject.
+  //nothing to inject, apart from the `platform` test seam described above.
   function getPlatform(){
-    return { platform: process.platform, arch: process.arch };
+    return { platform: currentPlatform(), arch: process.arch };
+  }
+
+  function currentPlatform(){
+    return platformOverride || process.platform;
   }
 
   function getFileRequestedOnOpen(){
@@ -1254,32 +1283,102 @@ function createNodeBacking(deps){
     });
   }
 
-  //destPath is fully resolved by the caller (updates.js builds it from getAppPaths()'s own
-  //temp/downloads and the asset name checkForUpdate's caller matched) - this command's own
-  //contribution is the download itself: skip it if the file is already there, follow one GitHub
-  //redirect, and resolve only once the write stream's 'close' fires. The original updates.js
-  //resolved on 'finish' here, the identical truncated-file risk Phase 6 fixed in buildEpub and
-  //archiveProject - corrected the same way rather than carried over.
+  //Phase 9c: this command owns its destination. It used to take `destPath` fully resolved by the
+  //renderer (updates.js composed it from getAppPaths()'s temp/downloads and the asset name it had
+  //matched), and it was the only producer of installUpdate's vouches - so "a path this backing
+  //produced" was really "a path the renderer named", and the guard reduced to one extra IPC call.
+  //Nothing about the destination crosses inbound now: the directory is this backing's to pick, and
+  //the filename comes off the URL's own last path segment after the URL itself has been checked
+  //against the repo's release-download prefix.
   //
-  //A path this resolves to is remembered as "produced by this backing" so a later installUpdate
-  //call against the *same path* is allowed to proceed - see installUpdate below. Vouching on the
-  //already-downloaded shortcut too, not only a fresh download, is deliberate: a file this backing
-  //can see sitting at the exact path it would itself have written the release asset to is exactly
-  //as trustworthy as one it just wrote.
+  //The url check is deliberately strict on the *first* request and permissive on the redirect.
+  //GitHub answers a release-asset URL with a 302 to its object CDN, and that hostname has changed
+  //more than once (objects.githubusercontent.com, release-assets.githubusercontent.com); pinning it
+  //would buy nothing - the redirect is chosen by the host we just authenticated over TLS - and would
+  //break updates in the field silently the next time it moves. Requiring https on the redirect is
+  //the part that is worth having.
+  function updateAssetFilename(url){
+    var parsed = null;
+    try{
+      parsed = new URL(url);
+    }
+    catch(parseErr){
+      parsed = null;
+    }
+
+    if(parsed == null || parsed.protocol !== 'https:' || parsed.hostname !== RELEASE_ASSET_HOSTNAME
+       || parsed.pathname.indexOf(RELEASE_ASSET_PATH_PREFIX) !== 0)
+      throw PlatformError(CODES.INVALID_ARGUMENT,
+        'Refusing to download "' + url + '": update assets come only from https://'
+          + RELEASE_ASSET_HOSTNAME + RELEASE_ASSET_PATH_PREFIX + '.',
+        { command: 'downloadUpdate' });
+
+    var segments = parsed.pathname.split('/');
+    var name = '';
+    try{
+      name = decodeURIComponent(segments[segments.length - 1]);
+    }
+    catch(decodeErr){
+      name = '';
+    }
+
+    if(!RELEASE_ASSET_NAME_PATTERN.test(name))
+      throw PlatformError(CODES.INVALID_ARGUMENT,
+        'Refusing to download "' + url + '": "' + name + '" is not a usable asset filename.',
+        { command: 'downloadUpdate' });
+
+    return name;
+  }
+
+  //linux is where installUpdate exists, so there the asset is a working file and belongs in a
+  //directory this backing creates and nobody has to find - the same fs.mkdtempSync discipline
+  //importDocx and sendEmail's attachments already use. It is not removed before resolving the way
+  //theirs are, because unlike theirs the file has to outlive the call that made it: installUpdate
+  //reads it later, from a separate click. Everywhere else the download *is* the deliverable - the
+  //About panel tells the writer it is in their downloads folder and they go run it themselves - so
+  //that is where it goes.
+  function updateDestinationDir(){
+    if(currentPlatform() !== 'linux' && paths.downloads != null)
+      return normalizePath(paths.downloads, 'downloads').replace(/\/+$/, '');
+
+    return normalizePath(fs.mkdtempSync(path.join(os.tmpdir(), UPDATE_DIR_PREFIX)), 'updateDirectory')
+      .replace(/\/+$/, '');
+  }
+
+  //Resolves only once the write stream's 'close' fires. The original updates.js resolved on
+  //'finish', the identical truncated-file risk Phase 6 fixed in buildEpub and archiveProject -
+  //corrected the same way rather than carried over.
+  //
+  //What it records on success is the sha256 of the bytes it fetched, against the path it allocated:
+  //that pair is what installUpdate below checks, and the hash is what makes the vouch about content
+  //rather than about a name. Hashed off the response as it streams rather than by reading the file
+  //back afterwards, so a release asset does not have to be read into memory twice.
+  //
+  //The already-downloaded shortcut survives in narrowed form. All it ever saved was a re-download,
+  //and it is now conditioned on the path already being vouched *by this session* rather than on
+  //fs.existsSync - which was the hole: an existsSync vouch is satisfied by any file the renderer
+  //wrote, and the comment that justified it ("a file this backing can see sitting at the exact path
+  //it would itself have written the release asset to") rested on a false premise, since the backing
+  //did not choose the path. An unvouched file already sitting at the destination is simply
+  //overwritten by the download now, which also makes a stale asset from an interrupted run
+  //self-correcting.
   function downloadUpdate(args){
     return new Promise(function(resolve, reject){
       var url = args == null ? undefined : args.url;
-      var destPath = args == null ? undefined : args.destPath;
       requireText(url, 'url');
-      requireText(destPath, 'destPath');
 
-      if(fs.existsSync(destPath)){
-        vouchedUpdatePaths.add(destPath);
+      //Filename first: it is the half that can refuse, and updateDestinationDir() has a side effect
+      //(fs.mkdtempSync) that would otherwise leave an empty directory behind for every rejected URL.
+      var filename = updateAssetFilename(url);
+      var destPath = updateDestinationDir() + '/' + filename;
+
+      if(vouchedUpdates.has(destPath)){
         resolve({ path: destPath });
         return;
       }
 
       var file = createWriteStream(destPath);
+      var digest = nodeCrypto.createHash('sha256');
       var settled = false;
       var downloadErr = null;
 
@@ -1296,7 +1395,7 @@ function createNodeBacking(deps){
           return;
         }
 
-        vouchedUpdatePaths.add(destPath);
+        vouchedUpdates.set(destPath, digest.digest('hex'));
         settle(resolve, { path: destPath });
       });
 
@@ -1306,7 +1405,15 @@ function createNodeBacking(deps){
         var req = httpsGet(currentUrl, function(response){
           if(response.statusCode == 302){
             response.resume();
-            requestUrl(response.headers.location);
+            var location = response.headers == null ? undefined : response.headers.location;
+
+            if(typeof location !== 'string' || location.indexOf('https://') !== 0){
+              downloadErr = new Error('Update download redirected somewhere other than https.');
+              file.destroy();
+              return;
+            }
+
+            requestUrl(location);
             return;
           }
 
@@ -1317,6 +1424,10 @@ function createNodeBacking(deps){
             return;
           }
 
+          //Attached in the same synchronous block as the pipe below, so no chunk reaches the file
+          //without also reaching the hash - a 'data' listener resumes the stream on the next tick,
+          //not on this one.
+          response.on('data', function(chunk){ digest.update(chunk); });
           response.pipe(file);
         });
 
@@ -1333,33 +1444,60 @@ function createNodeBacking(deps){
   }
 
   //The one command in the whole contract that escalates privilege - sudo apt install, run behind
-  //a bridge, on a path a renderer could otherwise name however it likes. The guard: `path` must be
-  //one this same backing instance vouched for via a prior downloadUpdate call (see above), or this
-  //rejects before ever spawning sudo. That is a session-scoped allowlist of exactly one kind of
-  //entry - "a release asset this process itself downloaded" - not a filename pattern or directory
-  //check, which a renderer-composed path could still satisfy by construction.
+  //a bridge, on a path a renderer could otherwise name however it likes. Two things have to hold
+  //before sudo is spawned: the path must be one downloadUpdate above allocated and vouched on this
+  //same backing instance, and the bytes at it must still hash to what that download recorded.
+  //
+  //The second check is what the first cannot do on its own. writeBinaryFile is group G's conceded
+  //arbitrary write and stays conceded, so the renderer can still write over the path this command is
+  //about to install - it just cannot make the result acceptable, because a rewritten file no longer
+  //matches the digest. Read, hash, compare and spawn happen in one synchronous run: the main process
+  //is single-threaded, so no other command can be serviced between the check and the spawn. What
+  //remains open is the window after the spawn, before dpkg opens the file - see the Phase 9c
+  //write-up in upgrade-and-isolation-plan.md, which records why that was left standing rather than
+  //closed with filesystem permissions this project cannot verify off a Pi.
   //
   //The password crosses once, outbound, exactly as it did before this conversion - the writer
   //typed it into the DOM, same as sendEmail's literal-password case - and is written to the
   //child's stdin rather than argv, so it never appears in `ps`. `path` is a separate argv element
-  //from the sudo/apt/install tokens, so shell metacharacters in it (which a malicious release
-  //asset filename could contain) cannot inject additional commands.
+  //from the sudo/apt/install tokens, so shell metacharacters in it cannot inject additional
+  //commands (there is no shell here), and it sits after a `--` so apt cannot read it as an option
+  //either - the argument-injection half of the same question, which the argv array alone does not
+  //answer.
   function installUpdate(args){
     return new Promise(function(resolve, reject){
       var targetPath = args == null ? undefined : args.path;
       requireText(targetPath, 'path');
       requireText(args.password, 'password');
 
-      if(!vouchedUpdatePaths.has(targetPath)){
+      var vouchedDigest = vouchedUpdates.get(targetPath);
+
+      if(vouchedDigest == null){
         reject(PlatformError(CODES.INVALID_ARGUMENT,
           'Refusing to install "' + targetPath + '": it was not produced by this session\'s downloadUpdate.',
           { command: 'installUpdate' }));
         return;
       }
 
+      var currentDigest;
+      try{
+        currentDigest = nodeCrypto.createHash('sha256').update(fs.readFileSync(targetPath)).digest('hex');
+      }
+      catch(readErr){
+        reject(fromNodeError(readErr, { command: 'installUpdate' }));
+        return;
+      }
+
+      if(currentDigest !== vouchedDigest){
+        reject(PlatformError(CODES.INVALID_ARGUMENT,
+          'Refusing to install "' + targetPath + '": its contents changed after downloadUpdate wrote it.',
+          { command: 'installUpdate' }));
+        return;
+      }
+
       var updater;
       try{
-        updater = spawnProcess('sudo', ['-S', 'apt', 'install', targetPath], { stdio: 'pipe' });
+        updater = spawnProcess('sudo', ['-S', 'apt', 'install', '--', targetPath], { stdio: 'pipe' });
       }
       catch(spawnErr){
         reject(fromNodeError(spawnErr, { command: 'installUpdate' }));
