@@ -574,9 +574,9 @@ untouched, exactly as planned — deferred to Phase 8.
 Verified: suite is now **876** (one new test, covering `logError` staying
 inert and non-throwing when nothing has configured a platform yet).
 
-**Part 2 is at Phase 6, complete. Suite is 974.** Groups A, B, C, D, E, F, G, H,
-I and J are implemented in `platform-node.js`; only K still rejects with
-`NOT_IMPLEMENTED`. Phase 7 is clear to start.
+**Part 2 is at Phase 7, complete. Suite is 1009.** Groups A, B, C, D, E, F, G, H,
+I and J are implemented in `platform-node.js` *and* called by the renderer; only
+K still rejects with `NOT_IMPLEMENTED`. Phase 8 is clear to start.
 
 **Phase 4 — Groups B and C (projects, chapters) — done.** The core, and the
 best-tested. Line references were re-verified against the current tree before any
@@ -975,12 +975,236 @@ confirming either document renders correctly in Word/an EPUB reader, and the
 in-app Export/Compile dialogs themselves, which remain unexercised by anything
 in this phase.
 
-**Phase 7 — Group J (credentials).** The collapse to four commands described in
-the inventory. Security-sensitive: key material stops living in the renderer, and
-the legacy-format decrypt fallback (`crypto.js:85`) must keep working or existing
-users lose stored credentials.
+**Phase 7 — Group J (credentials) — done.** Unlike every phase before it, the
+commands already existed: Phase 1 built and contract-tested all seven in
+`platform-node.js`. The work was the renderer side, and it is the first phase
+whose deliverable is a *removal* — no key derivation, no session key, no seal,
+no `credentials.json` write and no `chmod` happens in the renderer any more.
 
-**Phase 8 — Group K.** Updates, email, wifi, battery.
+**The decision this phase had to make first, and what it turned on.** Rule 6 is
+"secrets are referenced, never returned", and its enforcement is `sendEmail`
+resolving `SAVED_SECRET` natively. `sendEmail` is group K, Phase 8. So converting
+group J now meant choosing between (a) leaving a documented, temporary rule-6
+violation for Phase 8 to remove, and (b) pulling `sendEmail` forward so no
+version ever has both the new store and a plaintext round-trip.
+
+**Chose (a)**, on two grounds.
+
+The first is that (b)'s benefit is about *released* versions, and there are none
+in the middle of Part 2. `main` is still at `569cba4`, the last tag is `v2.4.0`
+on the pre-Part-2 baseline, and every phase from 1 to 9 ships to writers as a
+single release once the flag is flipped. There is no version in between for (b)
+to protect.
+
+The second is what (b) actually costs. `sendEmail`'s contract entry says it also
+absorbs the temp-file dance around `os.tmpdir()` (`email-doc.js:126-135,147,
+172-192`). Pulling it forward *without* that means shipping a command whose
+`attachments` may name an arbitrary path the renderer composed — an
+arbitrary-file-read primitive across the boundary, which is materially worse than
+the leak it was meant to close and which Phase 9's audit would then have to
+catch. Pulling it forward *with* it means reopening `archiveProject` and
+`buildEpub`'s call sites, which is group G/H work from Phase 6, inside Phase 7,
+on top of unrelated group K work. It is not "mixing two groups"; it is three.
+
+**What (a) actually costs turned out to be much less than the framing suggested,
+because the sentinel could be adopted immediately even though its resolver could
+not.** The naive reading of (a) is "keep `getPassword()`", which would have meant
+adding a `getCredential` command to `COMMANDS` — contaminating the one artifact
+this whole exercise produces — or handing the dialogs a plaintext to put in the
+DOM, which is the leak itself. Neither was necessary. The dialogs now put
+`SAVED_SECRET` in the password field *today*, exactly as the contract intends,
+and the sentinel travels untouched to `emailFile()`, which turns it into the
+password on the last line before `nodemailer`. So:
+
+- The saved password never reaches the DOM. That is the leak rule 6 exists to
+  close, and it is closed now, not in Phase 8.
+- The residual violation is five lines in `email-doc.js`: a local variable, for
+  as long as it takes to hand it to `nodemailer`. It is never stored, never
+  rendered, and never held by a dialog across a user interaction.
+- The resolver is `backing.resolveSecret`, which is deliberately not a declared
+  command and therefore unreachable through a `platform` instance. It has to be
+  handed over explicitly, by `render.js`, the one file that builds the backing —
+  `require('./components/controllers/email-doc').setSecretResolver(nodeBacking.
+  resolveSecret)`. Phase 8 deletes that line and the seam with it.
+- `COMMANDS` is untouched by the compromise. Nothing temporary entered the
+  contract.
+
+**One contract correction, deliberate, the same shape as Phases 4–6's:
+`storeCredential` takes `SAVED_SECRET` too.** Phase 1 identified `sendEmail` as
+the place the UI names a secret it must not hold, and stopped there. It is not
+the only one. Unticking "Protect With Passphrase" on an already-saved password
+re-seals it under the unattended backend — and the dialog does not have the
+password to re-seal, and must not. Without this the sentinel string itself gets
+stored *as* the password: silently, reporting success, destroying a real saved
+password with 24 characters of nothing, discovered weeks later as an
+authentication failure that reads like "your saved password is wrong". The
+sentinel now means "re-seal what is already stored" on the way in, resolved
+inside the backing, so the plaintext leaves the store and goes back into it
+without crossing. It is refused with `INVALID_ARGUMENT` when nothing is stored
+and with `LOCKED` when the credential is locked, for the same reason.
+
+**A second correction: `migrateLegacyCredential` returns `{ recognized,
+migrated }`, not `{ migrated }`.** One flag collapsed two outcomes the caller
+has to tell apart, because clearing `userSettings.senderPass` stays with the
+caller. `recognized` means the blob was in the pre-2.2.2 format and the settings
+field is dead — clear it. `migrated` means a password was actually recovered and
+re-sealed. They differ for a legacy-shaped blob that decrypts to nothing, which
+a 2.2.1 writer who ticked "remember" with an empty password field has in their
+settings file today. The old `migrateLegacyPassword` cleared the field for them;
+keying the clear off `migrated` would have left a dead blob to be re-read and
+re-decrypted on every launch from then on, with nothing anywhere saying so.
+
+**One deliberate departure from "preserve the behaviour exactly", recorded
+because it is a departure.** The old `migrateLegacyPassword` ignored a failed
+re-save and cleared `userSettings.senderPass` regardless — destroying the only
+copy of the password when the keystore was broken or the disk was full. The
+command rejects instead, and `render.js`'s catch leaves the settings field
+alone, so the next launch tries again. Everything else about the migration is
+preserved to the letter, including doing nothing when there is nothing to
+migrate and doing nothing on the second launch.
+
+**Unticking "Remember Password?" now clears after the send rather than before
+it.** Not a design flourish — a forced consequence. That checkbox has always
+meant "send with it this once, then forget it", and the old dialog could clear
+the store immediately and still send because it was holding the plaintext. It
+now holds only a reference, so clearing first would leave the send with a
+sentinel and nothing to resolve it against. The clear moved to the send's
+completion, on both the success and the failure path, so the password is
+forgotten either way exactly as before.
+
+**The sentinel goes into an `<input type=password>` value and contains NUL
+characters, so that was checked against real Chromium before anything was built
+on it** — a real `BrowserWindow`, `value` set and read back: 24 characters in,
+24 characters out, `charCodeAt(0) === 0`. Had Chromium sanitised it, every
+"unchanged" check would have failed silently and every Send would have tried to
+store a mangled sentinel over the writer's real password. A jsdom equivalent is
+pinned as a test so the unit suite cannot quietly stop depending on it.
+
+**Deletions.** `credential-store.js` lost `migrateLegacyPassword()` (replaced by
+the command plus `render.js`'s own clear — it took a `userSettings` object and
+wrote to it, which was never this store's file) and `getStoreFilepath()` (dead
+since before this phase). `crypto.js` is unchanged and `credential-store.js`
+keeps its `fs` writes and its scrypt/AES calls, because they are still called —
+by `platform-node.js`, on the native side of the boundary, which is the point.
+The renderer requires neither file any more.
+
+**Mutation-checked, fifteen mutations across the legacy path, the migration, the
+sentinel and the resolver wiring.** Thirteen were killed immediately. Two survived and were worth the
+exercise:
+
+- **`decryptLegacy`'s own `isLegacyBlob` guard could be removed with every test
+  still green.** It was being tested by accident: a current-format blob's IV is
+  12 bytes (GCM) and `aes-256-ctr` demands 16, so `createDecipheriv` threw and
+  the `try/catch` produced the same `null` the guard would have. The guard's
+  actual job — refusing a versioned blob outright, rather than by luck of IV
+  length — had nothing asserting it. Now pinned by a blob that is versioned like
+  a current one but carries a legacy-length IV.
+- **`savedPlaceholder`'s `!credentials.locked` term could be dropped with every
+  test still green.** Send still refused on `credentials.locked`, so nothing was
+  overwritten and no assertion moved; what broke was only what the writer is
+  *told* — a password field full of dots for a password that cannot be read.
+  Now pinned by a test on the field and the unlock row.
+
+The frozen legacy fixture is the same idea applied to the thing that matters
+most. `crypto.test.js` already tested the legacy path against `encryptTheOldWay()`,
+a second reimplementation of the pre-2.2.2 format living in the test file — which
+would drift alongside `crypto.js` and keep passing while every real writer's
+password stopped decrypting. There is now a written-down blob nothing in the repo
+generates, asserted in `crypto.test.js`, `platform.test.js` and `render.test.js`.
+Changing `LEGACY_KEY` by one character fails five tests; changing
+`LEGACY_ALGORITHM` fails nine. This matters more here than anywhere else in the
+project because of *how* it fails: the writer gets no error, no log line and no
+artifact to inspect — the password is simply gone, possibly months later, with
+nothing to say it was ever there. Same silent-failure class as the close/finish
+bug, minus the file you could go and look at.
+
+**Verified: 1009 tests pass** (from 976). Four were removed — the
+`migrateLegacyPassword` tests in `credential-store.test.js`, whose subject no
+longer exists — and **thirty-seven added**: seven in `platform.test.js`
+(`storeCredential` and the sentinel, the frozen legacy fixture, the
+recognized/migrated matrix, the failed re-seal), ten in
+`email-doc_display.test.js` (which now drives a **real node backing over a real
+temp directory** rather than the hand-written credential-store fake it used to,
+since a fake would have had to reimplement the sentinel re-seal and would then
+agree with itself rather than with the backing the app runs), five in
+`email-doc.test.js` (the resolver seam and its three failure paths), three in
+`error-log_display.test.js`, three in `crypto.test.js` and nine in
+`render.test.js` — six driving the boot migration through a **real
+`freshRender()` boot** against a `user-settings.json` written the way 2.2.1 wrote
+one, because that is where it actually runs, and three driving the menu commands
+that wire the resolver.
+
+**The resolver is wired from the two menu commands, not from
+`loadPlatformState()`, and that was a measurement rather than a preference.**
+Requiring `email-doc.js` pulls in `nodemailer`, `archiver` and the docx/epub
+writers: **308ms of module evaluation** on this machine, and a good deal more on
+the Pi this project's writerDeck actually runs on. Boot should not pay that for a
+seam Phase 8 deletes, and neither dialog can open without loading the module
+anyway. The risk that buys is a third route to `emailFile()` appearing without
+the wiring — which fails silently until a writer clicks Send and is told there is
+no saved password while one sits there perfectly readable — so both routes have a
+test, and removing `openEmailController()` from either menu command fails them
+(mutations N and O).
+
+**Verified as a packaged build, twice over, both backends, across a real process
+restart.** `electron-forge package`, then the packaged `src/index.html` and
+`src/render.bundle.js` loaded into a real `BrowserWindow` by a harness main that
+registers the same group A and `secure-storage-*` IPC handlers `src/index.js`
+does — including the real `safeStorage` availability detection, copied verbatim,
+not stood in for. `nodemailer.createTransport` was replaced so nothing was
+actually sent; everything else was the shipped code.
+
+- **safeStorage backend.** A `user-settings.json` holding a real 2.2.1-era blob
+  was migrated during the app's own boot: `senderPass` null in the file,
+  `credentials.json` written with `backend: "safeStorage"` (Windows DPAPI), no
+  startup error and an empty error log. The dialog then opened with the sentinel
+  in the password field and neither the migrated password nor the new one
+  anywhere in the DOM; a password typed and saved through the real dialog
+  survived a **fresh process**, and the real `emailFile()` resolved the sentinel
+  and handed `nodemailer` the actual password.
+- **passphrase backend.** Saved under a passphrase, then relaunched: found
+  `locked: true`, `resolveSecret` refused with `LOCKED` rather than returning
+  null, the password field was left empty, the unlock row was shown, a wrong
+  passphrase gave "Wrong passphrase.", the right one filled the field with the
+  sentinel, and the send got the real password. `credentials.json` was
+  byte-identical before and after, so unlocking and sending rewrote nothing.
+
+- **the real menu path, through the real bundled renderer.** The two checks above
+  drove the packaged `src/` modules; this one drove `src/render.bundle.js` as
+  `index.html` loads it, with main sending the same `send-via-email-clicked`
+  channel `src/index.js` sends, into `render.js`'s own `menuCommands` table and
+  its own platform instance. A 2.2.1 blob migrated during boot (`senderPass`
+  null, `credentials.json` written, empty error log, the recovered password
+  readable only through `resolveSecret` from main); the menu opened the real
+  dialog with the sentinel in the field and the migrated password nowhere in the
+  DOM; Send stored a newly typed password and put the field back to the
+  sentinel, with the password nowhere in the DOM afterwards.
+
+**A mistake worth recording, since this document is the record.** That last check
+clicked Send, and Send sends. The intent was to stop it at the network by
+replacing `dns.lookup` from `executeJavaScript`, and that does not work — Node's
+`net` layer does not go through the reference being replaced. So two runs opened
+an SMTP connection to Gmail and attempted a login, both rejected with
+`535-5.7.8 Username and Password not accepted`. The credentials were synthetic
+(`writer@example.invalid` / `app-password-under-test`), invented for the check;
+no real credential was involved. It was still an outbound request to a third
+party that nothing about this phase needed, and the second one happened after the
+first was noticed and believed fixed. Phase 8 owns `sendEmail` and will want to
+exercise it: the transport has to be replaced *inside* the bundle — mark
+`nodemailer` external, or inject the transport the way `createWriteStream` is
+injected — never a network-level block bolted on from outside.
+
+What this does not cover: clicking the Send Via Email menu item with a mouse.
+There is still no tool in this environment that can drive a native Electron
+window's menus — the same gap Phase 6 recorded — but the channel that menu item
+sends, and everything downstream of it, are exercised above.
+
+**Phase 8 — Group K.** Updates, email, wifi, battery. It inherits one specific
+obligation from this phase: `emailFile()` becomes `platform.sendEmail()`,
+`setSecretResolver` and `readSavedSecret()` are deleted from `email-doc.js`, and
+`render.js` stops holding the node backing at all. At that point nothing in the
+renderer can reach a stored secret by any route, and rule 6 holds without an
+exception.
 
 ## Phase 9 — Flip the flag
 

@@ -2,8 +2,8 @@
 
 Derived from every Node/Electron call site in the renderer as of `340d067`.
 Line references re-verified against `569cba4`, and again for groups B and C
-before Phase 4, for groups D/E/I before Phase 5, and for groups F/G/H before
-Phase 6.
+before Phase 4, for groups D/E/I before Phase 5, for groups F/G/H before
+Phase 6, and for group J before Phase 7.
 
 **Phase 1 has since turned this into executable form.**
 `src/components/controllers/platform.js` is now the authoritative contract — 61
@@ -11,9 +11,10 @@ commands and 36 events, with the shapes below — and this document is its prose
 companion. Where the two disagree, the file wins; the three places they disagreed
 at the end of Phase 1 are corrected here and marked **(corrected in Phase 1)**,
 the two Phase 4 found in group B are marked **(corrected in Phase 4)**, the one
-Phase 5 found in group D is marked **(corrected in Phase 5)**, and the one
+Phase 5 found in group D is marked **(corrected in Phase 5)**, the one
 Phase 6 found in group G — `buildEpub`'s signature — is marked
-**(corrected in Phase 6)**.
+**(corrected in Phase 6)**, and the two Phase 7 found in group J are marked
+**(corrected in Phase 7)**.
 
 This is the API surface that must exist between the UI and the OS. It serves two
 purposes at once:
@@ -431,31 +432,42 @@ callback-style signature and now delegates to the native command internally.
 
 ## J. Credentials
 
-The biggest simplification available. Today `crypto.js` (scrypt, AES-GCM) and
-`credential-store.js` run key derivation and hold key material **in the
-renderer**, and apply `chmodSync(0o600)` from there too.
+The biggest simplification available. Before Phase 7 `crypto.js` (scrypt,
+AES-GCM) and `credential-store.js` ran key derivation and held key material **in
+the renderer**, and applied `chmodSync(0o600)` from there too. As of Phase 7
+neither file is reachable from the renderer at all: `platform-node.js` drives
+both, behind the seven commands below.
 
 **(corrected in Phase 1)** This document proposed four commands, one of them
 `getCredential(service)` returning the plaintext. Both numbers were wrong, and the
 `getCredential` entry was wrong in kind rather than in detail.
 
-**`getCredential` does not exist.** Today the saved password *is* read into the
-renderer — `credentialStore.getPassword()` at `email-doc_display.js:14` and
-`error-log_display.js:51` — and written straight into an `<input type=password>`
-value (`:46` and `:52`). Under `contextIsolation` that is a plaintext credential
-living in the DOM of a webview, which is the single thing this exercise exists to
-prevent. Keeping the command would have carried the leak across the boundary
-intact and called it a fix.
+**`getCredential` does not exist.** Before Phase 7 the saved password *was* read
+into the renderer — `credentialStore.getPassword()` in `email-doc_display.js` and
+`error-log_display.js` — and written straight into an `<input type=password>`
+value. Under `contextIsolation` that is a plaintext credential living in the DOM
+of a webview, which is the single thing this exercise exists to prevent. Keeping
+the command would have carried the leak across the boundary intact and called it
+a fix.
 
 It is not needed, because **the thing that consumes the password is also native.**
 `sendEmail` (group K) takes either a literal the writer just typed or the sentinel
 `platform.SAVED_SECRET`, and resolves the sentinel on the far side. The resolver
 is deliberately not a command, so it is unreachable through the facade at all.
 
-This makes the UI *simpler*. The "did the writer type a new password?" check at
-`email-doc_display.js:143` currently compares the field against a plaintext the
-dialog had to fetch first; it becomes `value !== SAVED_SECRET`, which needs
-nothing fetched.
+This makes the UI *simpler*. The "did the writer type a new password?" check
+compared the field against a plaintext the dialog had to fetch first; it is now
+`value !== SAVED_SECRET`, which needs nothing fetched.
+
+**Done in Phase 7, with `sendEmail` still outstanding.** Both dialogs put the
+sentinel in the password field today. It travels untouched to `emailFile()`
+(`email-doc.js`), which resolves it on the last line before `nodemailer` through
+an injected `backing.resolveSecret` — not a command, and not reachable from a
+`platform` instance, so `render.js` has to hand it over on purpose. That is the
+one rule-6 violation left standing, deliberately and temporarily; Phase 8 turns
+`emailFile()` into `sendEmail()` and deletes the seam. The saved password no
+longer reaches the DOM, which is the part that could be fixed without `sendEmail`
+and was.
 
 Seven commands, and the renderer never touches a key or a secret:
 
@@ -463,11 +475,11 @@ Seven commands, and the renderer never touches a key or a secret:
 |---|---|
 | `isSecureStorageAvailable()` | `secure-storage.js:14` (`sendSync`) |
 | `describeCredential(service)` → `{hasPassword, backend, locked, secureStorageAvailable}` | `credential-store.js:41-51`; everything the dialogs draw from, and the only thing they learn |
-| `storeCredential(service, secret, passphrase?)` → `{backend}` | `credential-store.js:72-125` + the `crypto.js` encrypt path |
+| `storeCredential(service, secret, passphrase?)` → `{backend}` | `credential-store.js:72-125` + the `crypto.js` encrypt path. **(corrected in Phase 7)** `secret` may be `SAVED_SECRET`, not only a literal — see below |
 | `unlockCredential(service, passphrase)` → boolean | `credential-store.js:128-148`. A wrong passphrase is an ordinary `false`, not an error |
 | `lockCredential(service)` | nothing — see below |
 | `clearCredentials(service)` | `credential-store.js:154-155` |
-| `migrateLegacyCredential(service, legacyBlob)` → `{migrated}` | `credential-store.js:168-181` + `crypto.js:80-93` |
+| `migrateLegacyCredential(service, legacyBlob)` → `{recognized, migrated}` | `credential-store.js`'s `migrateLegacyPassword` + `crypto.js:80-93`. **(corrected in Phase 7)** two flags, not one — see below |
 
 Two of these have no equivalent today and are easy to miss:
 
@@ -476,10 +488,34 @@ Two of these have no equivalent today and are easy to miss:
   window. Once it lives natively, something has to end its life explicitly.
   (In the node backing it is exactly that: the store instance is discarded, and
   the key has nowhere else to be.)
-- **`migrateLegacyCredential`** takes the blob and returns only whether something
-  moved. The decrypt-and-reseal happens entirely on the native side, so the
+- **`migrateLegacyCredential`** takes the blob and returns only what the caller
+  needs. The decrypt-and-reseal happens entirely on the native side, so the
   recovered plaintext never crosses. Clearing `userSettings.senderPass`
   afterward stays with the caller, which owns `user-settings.json`.
+
+**(corrected in Phase 7)** Two corrections came out of actually calling these.
+
+**`storeCredential` takes `SAVED_SECRET` as well.** Phase 1 identified
+`sendEmail` as the place the UI names a secret it must not hold and stopped
+there; it is not the only one. Re-protecting an already-saved password — the
+writer unticking "Protect With Passphrase" without retyping it — has to re-seal
+a plaintext the dialog does not have and must not have. Passing the sentinel
+means "re-seal what is already stored, under whatever protection this call asks
+for", resolved inside the backing. Without it the sentinel string is stored *as*
+the password, silently and reporting success. It is refused with
+`INVALID_ARGUMENT` when nothing is stored, and with `LOCKED` when the credential
+is locked.
+
+**`migrateLegacyCredential` returns `{recognized, migrated}`.** A single flag
+collapsed two outcomes, and the caller needs both because clearing the settings
+field is the caller's job. `recognized` — the blob was in the pre-2.2.2 format,
+so the settings field is dead and should be cleared; this is what the old
+`migrateLegacyPassword` returned. `migrated` — a password was actually recovered
+and re-sealed. They differ for a legacy-shaped blob that decrypts to nothing,
+which is what a 2.2.1 writer who ticked "remember" with an empty password field
+has in their settings file. The old code cleared the field for them too; one
+flag would have left a dead blob there to be retried on every launch forever,
+with nothing ever saying so.
 
 The existing `secure-storage-encrypt` / `-decrypt` IPC pair (`index.js:545`,
 `:554`) disappears into these — it is an implementation detail of the store, not
@@ -549,7 +585,11 @@ until the last one.
    one boundary and both halves have to cross it together.
 4. **Rest of D, then I and E** — settings, spellcheck, file browser.
 5. **Groups F, G, H** — import, export, backup. *Done in Phase 6.*
-6. **Group J** — credentials, with the collapse described above.
+6. **Group J** — credentials, with the collapse described above. *Done in
+   Phase 7.* The commands already existed from Phase 1; the work was the renderer
+   side, and the deliverable was a removal — no key derivation, no session key
+   and no `credentials.json` write happens in the renderer any more. Two
+   corrections came out of it, both marked above.
 7. **Group K** — updates, email, wifi, battery.
 8. Flip `contextIsolation: true` and drop `nodeIntegration` once nothing
    `require`s `fs`. `src/index.js:54-59` (the `webPreferences` block — this
