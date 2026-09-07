@@ -182,7 +182,7 @@ can still ship to:
   out. 32-bit Pi OS (`armv7l`) is not a supported Electron target at all — the
   release workflow already builds `arm64` only, so this changes nothing.
 - Windows 7/8/8.1 support ended at Electron 22.
-- macOS minimum moved to 10.15+.
+- macOS minimum moved to 13 "Ventura"+ (Electron 44 ended macOS 12 support; 43 still runs on Monterey).
 
 **Window mode on the writerDeck: Ozone/X11 against Matchbox.** The documented
 writerDeck stack is Raspberry Pi OS **Lite + Xorg + matchbox-window-manager**,

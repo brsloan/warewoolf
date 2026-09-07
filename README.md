@@ -75,7 +75,7 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 
 2026-09-06: v2.4.0. Changes made:
 * Upgraded Electron from 18.2.3 to the latest stable (44.2.0) for security and performance enhancements.
-* NOTE: That upgrade raises the minimum OS requirements. This release needs Debian 11 "Bullseye" or newer (including Raspberry Pi OS Bullseye/Bookworm), Windows 10 or newer, and macOS 10.15 or newer. If you are on an older system, stay on v2.3.1.
+* NOTE: That upgrade raises the minimum OS requirements. This release needs Debian 11 "Bullseye" or newer (including Raspberry Pi OS Bullseye/Bookworm), 64-bit Windows 10 or newer, and macOS 13 "Ventura" or newer. Electron 44 no longer builds for 32-bit Windows or 32-bit (armv7l) Raspberry Pi OS. If you are on an older system, stay on v2.3.1.
 * Fixed bug where opening a damaged/corrupted .woolf file could leave you stuck with a frozen window that only Task Manager could close
 * Fixed bug where restoring a chapter from Trash didn't update which chapter was open in the editor, causing your next edits to save over the wrong file
 * Fixed bug where restoring a Reference document from Trash sent it back to Chapters instead of Reference
