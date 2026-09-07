@@ -281,8 +281,18 @@ function createNodeBacking(deps){
 
   //process.platform/process.arch are plain Node globals, present with or without nodeIntegration -
   //nothing to inject, apart from the `platform` test seam described above.
+  //`electron` is the Electron this build was packaged against, or null anywhere Electron is not the
+  //host (the test harness, plain node). updates.js needs it to tell the two macOS lineages apart:
+  //the legacy mac build ships a pinned older Electron and follows its own release asset. It cannot
+  //be read on the renderer side - process.versions is not there with nodeIntegration off - and it
+  //is deliberately the packaged Electron rather than the host's OS version, because a legacy build
+  //runs perfectly well on a new mac and has to keep updating along the legacy track when it does.
   function getPlatform(){
-    return { platform: currentPlatform(), arch: process.arch };
+    return {
+      platform: currentPlatform(),
+      arch: process.arch,
+      electron: process.versions.electron || null
+    };
   }
 
   function currentPlatform(){

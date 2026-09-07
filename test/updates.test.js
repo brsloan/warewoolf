@@ -67,7 +67,8 @@ function releaseJson(tag, overrides){
       { name: 'warewoolf_' + v + '_arm64.deb', browser_download_url: 'https://example.com/' + v + '/arm64.deb' },
       { name: 'warewoolf_' + v + '_Windows_x64.zip', browser_download_url: 'https://example.com/' + v + '/win.zip' },
       { name: 'warewoolf_' + v + '_MacOS_Intel.zip', browser_download_url: 'https://example.com/' + v + '/mac-intel.zip' },
-      { name: 'warewoolf_' + v + '_MacOS_AppleSilicon.zip', browser_download_url: 'https://example.com/' + v + '/mac-arm.zip' }
+      { name: 'warewoolf_' + v + '_MacOS_AppleSilicon.zip', browser_download_url: 'https://example.com/' + v + '/mac-arm.zip' },
+      { name: 'warewoolf_' + v + '_MacOS_Legacy.zip', browser_download_url: 'https://example.com/' + v + '/mac-legacy.zip' }
     ]
   }, overrides));
 }
@@ -370,29 +371,111 @@ test('getUpdates regression: destroys the request once it times out', async func
   assert.ok(capturedReq.destroyedWith instanceof Error);
 });
 
+//`electron` is what the build was packaged against, and on darwin it decides which of the two mac
+//lineages the build follows. Leaving it off a row is itself a case worth covering: that is this
+//suite's own situation, plain node with no process.versions.electron, and it has to read as
+//mainline rather than legacy.
+function asPlatform(t, c){
+  const orig = {
+    platform: Object.getOwnPropertyDescriptor(process, 'platform'),
+    arch: Object.getOwnPropertyDescriptor(process, 'arch'),
+    electron: Object.getOwnPropertyDescriptor(process.versions, 'electron')
+  };
+  Object.defineProperty(process, 'platform', { value: c.platform, configurable: true });
+  Object.defineProperty(process, 'arch', { value: c.arch, configurable: true });
+  if(c.electron)
+    Object.defineProperty(process.versions, 'electron', { value: c.electron, configurable: true });
+  else
+    delete process.versions.electron;
+
+  t.after(function(){
+    Object.defineProperty(process, 'platform', orig.platform);
+    Object.defineProperty(process, 'arch', orig.arch);
+    if(orig.electron)
+      Object.defineProperty(process.versions, 'electron', orig.electron);
+    else
+      delete process.versions.electron;
+  });
+}
+
 [
   { platform: 'linux', arch: 'x64', expected: 'amd64' },
   { platform: 'linux', arch: 'arm64', expected: 'arm64' },
   { platform: 'win32', arch: 'x64', expected: 'Windows_x64' },
   { platform: 'darwin', arch: 'x64', expected: 'MacOS_Intel' },
-  { platform: 'darwin', arch: 'arm64', expected: 'MacOS_AppleSilicon' }
+  { platform: 'darwin', arch: 'arm64', expected: 'MacOS_AppleSilicon' },
+  { platform: 'darwin', arch: 'x64', electron: '44.2.0', expected: 'MacOS_Intel' },
+  { platform: 'darwin', arch: 'arm64', electron: '44.2.0', expected: 'MacOS_AppleSilicon' },
+  { platform: 'darwin', arch: 'x64', electron: '32.3.3', expected: 'MacOS_Legacy' },
+  //The boundary from both sides. 32 is the last line that runs on Catalina; 33 raised the floor to
+  //Big Sur and is therefore mainline.
+  { platform: 'darwin', arch: 'x64', electron: '32.0.0', expected: 'MacOS_Legacy' },
+  { platform: 'darwin', arch: 'x64', electron: '33.0.0', expected: 'MacOS_Intel' },
+  //A legacy build on an Apple Silicon mac runs under Rosetta, where process.arch reports x64 just
+  //as it does on real Intel hardware. It has to stay on the legacy track anyway: its Electron
+  //predates every mainline asset on offer.
+  { platform: 'darwin', arch: 'x64', electron: '32.3.3', rosetta: true, expected: 'MacOS_Legacy' }
 ].forEach(function(c){
-  test('getUpdates selects the ' + c.expected + ' binary on ' + c.platform + '/' + c.arch, async function(t){
+  const label = c.platform + '/' + c.arch + (c.electron ? '/electron ' + c.electron : '/no electron')
+    + (c.rosetta ? ' (Rosetta)' : '');
+
+  test('getUpdates selects the ' + c.expected + ' binary on ' + label, async function(t){
     mockReleaseResponse(t, { body: releaseJson('v2.0.0') });
-    const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
-    const origArch = Object.getOwnPropertyDescriptor(process, 'arch');
-    Object.defineProperty(process, 'platform', { value: c.platform, configurable: true });
-    Object.defineProperty(process, 'arch', { value: c.arch, configurable: true });
-    t.after(function(){
-      Object.defineProperty(process, 'platform', origPlatform);
-      Object.defineProperty(process, 'arch', origArch);
-    });
+    asPlatform(t, c);
+    const { getUpdates } = freshUpdates();
+
+    //Whole-name equality rather than includes(): a substring assertion here is the same weakness
+    //that makes the production find() collide, and would pass on the wrong asset.
+    const ext = c.platform == 'linux' ? '.deb' : '.zip';
+    const latest = await new Promise(function(resolve){ getUpdates('1.0.0', resolve); });
+    assert.ok(latest.downloadInfo, 'expected a matching binary to be selected');
+    assert.strictEqual(latest.downloadInfo.name, 'warewoolf_2.0.0_' + c.expected + ext);
+  });
+});
+
+//Regression, and the reason the legacy asset is not named MacOS_Intel_Legacy.
+//extractUpdateDownloadInfo picks with find(), which takes the first name that merely *includes*
+//binType - so a legacy name carrying the mainline substring would be handed out on whichever
+//ordering the GitHub API happened to return that day. The names are checked here for the overlap
+//that would make ordering matter at all, and the two lineages are checked below against an
+//ordering deliberately chosen to break a name that had it.
+test('the legacy and mainline mac asset names cannot match each other by substring', function(){
+  assert.ok(!'warewoolf_2.0.0_MacOS_Legacy.zip'.includes('MacOS_Intel'));
+  assert.ok(!'warewoolf_2.0.0_MacOS_Intel.zip'.includes('MacOS_Legacy'));
+  assert.ok(!'warewoolf_2.0.0_MacOS_Legacy.zip'.includes('MacOS_AppleSilicon'));
+  assert.ok(!'warewoolf_2.0.0_MacOS_Legacy.zip'.includes('arm64'));
+});
+
+[
+  { electron: '32.3.3', expected: 'warewoolf_2.0.0_MacOS_Legacy.zip', other: 'the mainline build it cannot launch' },
+  { electron: '44.2.0', expected: 'warewoolf_2.0.0_MacOS_Intel.zip', other: 'a silent downgrade to the legacy build' }
+].forEach(function(c){
+  test('an Electron ' + c.electron + ' mac build is never offered ' + c.other + ', whatever order the assets are listed in', async function(t){
+    //Legacy listed first, the ordering that would break a substring-overlapping name.
+    mockReleaseResponse(t, { body: releaseJson('v2.0.0', { assets: [
+      { name: 'warewoolf_2.0.0_MacOS_Legacy.zip', browser_download_url: 'https://example.com/2.0.0/mac-legacy.zip' },
+      { name: 'warewoolf_2.0.0_MacOS_Intel.zip', browser_download_url: 'https://example.com/2.0.0/mac-intel.zip' }
+    ] }) });
+    asPlatform(t, { platform: 'darwin', arch: 'x64', electron: c.electron });
     const { getUpdates } = freshUpdates();
 
     const latest = await new Promise(function(resolve){ getUpdates('1.0.0', resolve); });
-    assert.ok(latest.downloadInfo, 'expected a matching binary to be selected');
-    assert.ok(latest.downloadInfo.name.includes(c.expected));
+    assert.strictEqual(latest.downloadInfo.name, c.expected);
   });
+});
+
+//A legacy build looking at a release that predates the legacy lineage - every release before this
+//one - finds nothing, rather than falling back to a mainline asset that cannot launch on its OS.
+test('a legacy mac build finds no binary in a release that has no legacy asset', async function(t){
+  mockReleaseResponse(t, { body: releaseJson('v2.0.0', { assets: [
+    { name: 'warewoolf_2.0.0_MacOS_Intel.zip', browser_download_url: 'https://example.com/2.0.0/mac-intel.zip' }
+  ] }) });
+  asPlatform(t, { platform: 'darwin', arch: 'x64', electron: '32.3.3' });
+  const { getUpdates } = freshUpdates();
+
+  const latest = await new Promise(function(resolve){ getUpdates('1.0.0', resolve); });
+  assert.ok(latest, 'an update is still announced');
+  assert.strictEqual(latest.downloadInfo, undefined);
 });
 
 test('getUpdates regression: leaves downloadInfo undefined instead of throwing on an unsupported platform/arch combo', async function(t){

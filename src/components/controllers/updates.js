@@ -61,6 +61,33 @@ function packageReleaseData(releaseData){
     return packagedData;
 }
 
+//The legacy mac build is a second, permanently-older lineage. Electron 44 needs macOS 13 Ventura,
+//so every mac between 10.15 Catalina and 12 Monterey gets its own asset, built from this same
+//source against a pinned Electron 32 (the last line that runs on Catalina). Both lineages ship
+//this same file, so a running build has to sort itself onto the right track.
+//
+//What identifies it is the Electron it was packaged against, not the host OS: the legacy build
+//runs fine on a new mac - under Rosetta on Apple Silicon, where process.arch reports x64 like any
+//other Intel build - and when it does it must keep following the legacy asset rather than jumping
+//to a mainline one its Electron predates.
+//
+//The legacy asset's name deliberately shares no substring with 'MacOS_Intel'. The find() below
+//takes the first name that merely *includes* binType, so calling it MacOS_Intel_Legacy would hand
+//it to modern Intel users - or hand them the mainline build on Catalina, where it cannot launch -
+//depending on nothing more than the order the GitHub API happens to list assets in. That is the
+//same collision release.yml already avoids by naming the Apple Silicon asset 'AppleSilicon'
+//rather than 'arm64'.
+var LEGACY_MACOS_ELECTRON_MAJOR = 32;
+
+function isLegacyMacBuild(electronVersion){
+    if(!electronVersion)
+        return false;
+
+    var major = parseInt(String(electronVersion).split('.')[0], 10);
+
+    return !isNaN(major) && major <= LEGACY_MACOS_ELECTRON_MAJOR;
+}
+
 function extractUpdateDownloadInfo(releaseData, platformInfo){
 
     var binType = 'unsupported';
@@ -76,8 +103,12 @@ function extractUpdateDownloadInfo(releaseData, platformInfo){
             binType = 'Windows_x64';
     }
     else if(platformInfo.platform == 'darwin'){
-        if(platformInfo.arch == 'x64')
-            binType = 'MacOS_Intel';
+        if(platformInfo.arch == 'x64'){
+            if(isLegacyMacBuild(platformInfo.electron))
+                binType = 'MacOS_Legacy';
+            else
+                binType = 'MacOS_Intel';
+        }
         else if(platformInfo.arch == 'arm64')
             binType = 'MacOS_AppleSilicon';
     }
