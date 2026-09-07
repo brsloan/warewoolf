@@ -2176,12 +2176,52 @@ that is enough to refuse a write. Removing the hardening call fails two tests on
 Windows, so this is not a set of assertions that only run on hardware nobody
 develops on.
 
-#### Still owed on hardware
+#### Verified on hardware — **closed**
 
-`installUpdate`'s `sudo` spawn has still never run. Every test of it, here and in
-9c, went through the injected `spawnProcess` seam against a fake child. What is
-unverified is everything past the refusal: that `apt` accepts `--`, that argv and
-stdin arrive intact, that a real `.deb` installs, and now that `dpkg` reads a
-`0400` file inside a `0500` directory without complaint — which it should, since
-root ignores both, but that is reasoning rather than evidence. It needs one real
-update run on the writerDeck, through the About dialog, against a real release.
+`installUpdate`'s `sudo` spawn had never run: every test of it, here and in 9c,
+went through the injected `spawnProcess` seam against a fake child. Everything
+past the refusal was reasoning rather than evidence — that `apt` accepts `--`,
+that argv and stdin arrive intact, that a real `.deb` installs, and that `dpkg`
+reads a `0400` file inside a `0500` directory without complaint.
+
+A real update run on the writerDeck, through the About dialog against a real
+release, confirmed all of it. **That was the last unverified path in the
+codebase.**
+
+---
+
+## Part 2 is complete
+
+Every phase is done and every deferred decision is settled. What the flip was for:
+
+| | Before Part 1 | Now |
+|---|---|---|
+| Electron | 18.3.15 (EOL, 2022) | 44.2.0 |
+| Renderer | `nodeIntegration: true`, `contextIsolation: false` | isolated, **sandboxed** |
+| Renderer → OS | any module could `require('fs')` | 65 declared commands behind a bridge |
+| Node builtins in the bundle | ~19 | **0** |
+| Tests | 780 | **1306** |
+
+The renderer no longer has `require`, `module`, `process`, `Buffer` or
+`__dirname`, reaches the main process only through `window.warewoolf`'s
+invoke/on/off, and runs inside the OS sandbox. Every command that crosses is
+named in `COMMANDS`, and an undeclared one is refused at the bridge rather than
+forwarded.
+
+**What this bought beyond the security posture**, and worth recording because
+none of it was the goal: nine real bugs, six of which were already shipped to
+users rather than introduced by the work. A save that failed with EACCES and said
+nothing. A `.deb` no Bullseye machine could unpack. An archive resolved on
+`finish` that could hand off a truncated `.epub`. A Wi-Fi list that showed every
+network as asterisks. A settings save that would have rejected the moment it
+crossed a process boundary. The bridge did not find these by being a bridge — it
+found them because putting a boundary through the middle of a program forces
+every assumption on both sides of it to be stated.
+
+**And what it cost**, recorded just as plainly: the suite went green while the
+artifact was broken **six** times — the zstd `.deb`, the untested bundle, the
+`close`/`finish` guard, `index.js` not parsing, `nodebuffer` in an isolated
+renderer, and the nmcli column. Every one was caught by a packaged build or a
+real Pi, never by 1306 passing tests. The lesson the project kept re-learning is
+in the driven checks and in `render-bundle.test.js`, which now evaluates the
+bundle the way `index.html` loads it rather than the way `require()` does.
