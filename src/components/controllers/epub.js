@@ -1,11 +1,11 @@
 const { logError } = require('./error-log');
 const { createPlatform } = require('./platform');
-const { createNodeBacking } = require('./platform-node');
+const { createIpcBacking } = require('./platform-ipc');
 
 //buildEpub takes no injected config - filepath is a full path and entries are pre-assembled text -
 //so this holds its own standing instance rather than needing setPlatform() wiring, the same reason
 //file-manager.js/corkboard.js do.
-var platform = createPlatform(createNodeBacking({}));
+var platform = createPlatform(createIpcBacking());
 
 //Every entry is already-generated text: mimetype, container.xml, content.opf, toc.ncx, toc.xhtml,
 //one chapter_N.xhtml per chapter, and the stylesheet. Only the zipping (archiver has no browser

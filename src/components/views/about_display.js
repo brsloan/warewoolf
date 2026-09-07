@@ -3,7 +3,7 @@ const { getUpdates, downloadUpdate } = require('../controllers/updates');
 const { logError } = require('../controllers/error-log');
 const showInstallUpdate = require('./install-update_display');
 const { createPlatform } = require('../controllers/platform');
-const { createNodeBacking } = require('../controllers/platform-node');
+const { createIpcBacking } = require('../controllers/platform-ipc');
 
 //platformInfo (platform.getPlatform()'s own shape, resolved once at boot - see render.js) replaces
 //the direct `process.platform` read the Download handler used to do below - the last of the two
@@ -108,7 +108,7 @@ function showAbout(sysDirectories, appVersion, platformInfo){
   //this keeps showAbout() itself synchronous, so the rest of the popup (version, links, Check For
   //Updates) still renders in one pass with nothing to await.
   displayLicBtn.onclick = async function(){
-    licenseText.innerText = await loadLicenseText(sysDirectories);
+    licenseText.innerText = await loadLicenseText();
     licensePanel.style.display = "block";
     licenseText.focus();
   }
@@ -123,9 +123,12 @@ function showAbout(sysDirectories, appVersion, platformInfo){
   close.focus();
 }
 
-async function loadLicenseText(sysDirectories){
+//readLicenses used to need paths.app wired in, which is why this took sysDirectories. The main
+//process owns that path now, so the argument is gone; showAbout() still takes sysDirectories
+//because downloadUpdate above genuinely uses it.
+async function loadLicenseText(){
   try {
-    var platform = createPlatform(createNodeBacking({ paths: sysDirectories }));
+    var platform = createPlatform(createIpcBacking());
     return await platform.readLicenses();
   }
   catch(err){

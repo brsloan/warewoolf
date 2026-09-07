@@ -11,12 +11,15 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
+const { createPlatform } = require('../src/components/controllers/platform');
+const { createNodeBacking } = require('../src/components/controllers/platform-node');
+const { createFakeBridge } = require('./fake-bridge');
+
 const renderPath = require.resolve('../src/render');
-const electronPath = require.resolve('electron');
-//keybindings.js destructures `ipcRenderer` from 'electron' at require-time, same as render.js
-//itself - but it is a separately cached module (render.js requires it, it does not live inside
-//render.js), so clearing render.js's own cache entry each freshRender() call is not enough to
-//make it see a new test's fake ipcRenderer. Needs clearing right alongside renderPath.
+//keybindings.js builds its own platform instance at require-time, same as render.js itself - but it
+//is a separately cached module (render.js requires it, it does not live inside render.js), so
+//clearing render.js's own cache entry each freshRender() call is not enough to make it see a new
+//test's bridge. Needs clearing right alongside renderPath.
 const keybindingsPath = require.resolve('../src/components/controllers/keybindings');
 
 //error-log.js routes through a node-backed platform instance pointed at this directory (see
@@ -55,41 +58,52 @@ var appDir = '/no-such-app-dir';
 //stubbing render.js's own internals.
 var bootFailure = null;
 
-function makeIpcRenderer(){
+//What preload.js publishes as window.warewoolf, with a real node backing behind it. Through Phase 8
+//this was a fake ipcRenderer answering group A's six commands with canned values and returning
+//undefined for everything else, because everything else was plain fs the renderer did itself. As of
+//Phase 9a all 65 cross, so the far side has to be real: the same createNodeBacking() the main
+//process builds, pointed at this file's temp directories, behind the same structured-clone boundary
+//and the same error envelope the app has.
+//
+//`invoked` records every command name so a test can assert one was called without caring what it
+//resolved with. `handlers` is what render.js subscribed to per event channel - one handler each,
+//since render.js subscribes exactly once per channel.
+function makeBridge(){
   var handlers = {};
-  var sent = [];
   var invoked = [];
+  var inner = createFakeBridge(createPlatform(createNodeBacking({
+    paths: {
+      app: appDir,
+      userData: userDataDir,
+      docs: docsDir,
+      home: '/no-such-home-dir',
+      temp: os.tmpdir(),
+      downloads: '/no-such-downloads'
+    },
+    //No OS keystore, so a saved password lands under the credential store's own key file - the
+    //case the old fake answered 'secure-storage-available' with false for.
+    secureStorage: null
+  })));
+
   return {
     handlers: handlers,
-    sent: sent,
     invoked: invoked,
-    sendSync: function(channel){
-      if(channel === 'secure-storage-available')
-        return false;
-      return undefined;
-    },
-    invoke: function(channel, args){
-      invoked.push(channel);
-      if(bootFailure && bootFailure.command === channel)
+    invoke: function(name, args){
+      invoked.push(name);
+      //Set by failBootAt() to make one command reject, so the boot-failure path is driven the way
+      //it actually breaks rather than by stubbing render.js's own internals.
+      if(bootFailure && bootFailure.command === name)
         return Promise.reject(bootFailure.error);
-      if(channel === 'getAppPaths')
-        return Promise.resolve({ app: appDir, userData: userDataDir, docs: docsDir, home: '/no-such-home-dir' });
-      if(channel === 'getFileRequestedOnOpen')
-        return Promise.resolve(null);
-      if(channel === 'getPlatform')
-        return Promise.resolve({ platform: process.platform, arch: process.arch });
-      //setTheme, showAppMenu, confirmExit, notifyRendererReady all return void.
-      return Promise.resolve(undefined);
+      return inner.invoke(name, args);
     },
-    send: function(channel){
-      sent.push(channel);
+    on: function(event, handler){
+      handlers[event] = handler;
+      inner.on(event, handler);
     },
-    on: function(channel, handler){
-      handlers[channel] = handler;
-    },
-    removeListener: function(channel, handler){
-      if(handlers[channel] === handler)
-        delete handlers[channel];
+    off: function(event, handler){
+      if(handlers[event] === handler)
+        delete handlers[event];
+      inner.off(event, handler);
     }
   };
 }
@@ -143,22 +157,7 @@ async function freshRender(){
 
   delete require.cache[renderPath];
   delete require.cache[keybindingsPath];
-  var ipc = makeIpcRenderer();
-  require.cache[electronPath] = {
-    id: electronPath,
-    filename: electronPath,
-    loaded: true,
-    exports: { ipcRenderer: ipc }
-  };
-  //Phase 9a: the platform commands cross through window.warewoolf (preload.js) rather than
-  //ipcRenderer. render.js still subscribes to the 36 menu channels on ipcRenderer directly, so both
-  //are installed here and both feed the same recorder - the bridge is a view onto the fake above,
-  //not a second one.
-  globalThis.warewoolf = {
-    invoke: ipc.invoke,
-    on: ipc.on,
-    off: ipc.removeListener
-  };
+  globalThis.warewoolf = makeBridge();
   var mod = require(renderPath);
   await mod.ready;
   previousKeybindingsTeardown = mod._unregisterKeybindings;
@@ -221,7 +220,6 @@ test.beforeEach(function(){
 test.afterEach(function(){
   delete require.cache[renderPath];
   delete require.cache[keybindingsPath];
-  delete require.cache[electronPath];
   delete globalThis.warewoolf;
   //Any test that flips a setting through a keyboard shortcut (font size, panel visibility,
   //typewriter mode, ...) calls userSettings.save(), which writes user-settings.json into the
@@ -793,11 +791,10 @@ var ALL_MENU_CHANNELS = [
   'indent-all-clicked', 'center-all-heads-clicked'
 ];
 
-//The fake ipcRenderer set up for the current freshRender() call - same object render.js registered
-//its handlers on, reached the same way render.js itself would: requiring 'electron' again returns
-//the cached mock.
-function currentIpc(){
-  return require('electron').ipcRenderer;
+//The bridge set up for the current freshRender() call - the same object render.js subscribed its
+//event handlers to and invoked its commands through.
+function currentBridge(){
+  return globalThis.warewoolf;
 }
 
 function focusEditor(){
@@ -808,7 +805,7 @@ function focusEditor(){
 test('every menu channel is registered exactly once, with none missing or unexpectedly added', async function(){
   await freshRender();
 
-  assert.deepStrictEqual(Object.keys(currentIpc().handlers).sort(), ALL_MENU_CHANNELS.slice().sort());
+  assert.deepStrictEqual(Object.keys(currentBridge().handlers).sort(), ALL_MENU_CHANNELS.slice().sort());
 });
 
 test('a focus-gated command does nothing while the editor lacks focus, and runs once it has it', async function(){
@@ -817,11 +814,11 @@ test('a focus-gated command does nothing while the editor lacks focus, and runs 
   r.project.activeChapterIndex = 0;
 
   document.getElementById('writing-field').classList.remove('visible');
-  currentIpc().handlers['add-chapter-clicked']();
+  currentBridge().handlers['add-chapter-clicked']();
   assert.strictEqual(r.project.chapters.length, 1, 'add-chapter-clicked should not have run without focus');
 
   focusEditor();
-  currentIpc().handlers['add-chapter-clicked']();
+  currentBridge().handlers['add-chapter-clicked']();
   assert.strictEqual(r.project.chapters.length, 2, 'add-chapter-clicked should run once the editor has focus');
 });
 
@@ -836,17 +833,20 @@ test('a command with no focus guard runs regardless of where focus is', async fu
   document.getElementById('writing-field').classList.remove('visible');
 
   assert.doesNotThrow(function(){
-    currentIpc().handlers['outliner-clicked']();
+    currentBridge().handlers['outliner-clicked']();
   });
   assert.ok(document.querySelector('.popup-outliner'), 'outliner-clicked has no focus guard and should have run');
 });
 
 //jsdom's innerText does not create real text nodes, so document.textContent cannot see text set
 //through it - these check the specific elements the two views set it on instead.
+//
+//Phase 9a: a handler is called with the payload alone. preload.js drops the IpcRendererEvent that
+//used to arrive first, so these no longer pass a null in its place.
 test('about-clicked forwards the app version it is sent to the About popup', async function(){
   await freshRender();
 
-  currentIpc().handlers['about-clicked'](null, '9.9.9');
+  currentBridge().handlers['about-clicked']('9.9.9');
 
   assert.strictEqual(document.querySelector('.about-version').innerText, '9.9.9');
 });
@@ -854,12 +854,12 @@ test('about-clicked forwards the app version it is sent to the About popup', asy
 test('shortcuts-clicked forwards isMac to render Mac- or Ctrl-style shortcut labels', async function(){
   await freshRender();
 
-  currentIpc().handlers['shortcuts-clicked'](null, true);
+  currentBridge().handlers['shortcuts-clicked'](true);
   var macLabels = Array.from(document.querySelectorAll('.shortcuts-table td'));
   assert.ok(macLabels.some(function(td){ return td.innerText.includes('Cmd'); }));
   removeAllPopups();
 
-  currentIpc().handlers['shortcuts-clicked'](null, false);
+  currentBridge().handlers['shortcuts-clicked'](false);
   var ctrlLabels = Array.from(document.querySelectorAll('.shortcuts-table td'));
   assert.ok(ctrlLabels.some(function(td){ return td.innerText.includes('Ctrl'); }));
 });
@@ -876,7 +876,7 @@ test('open-clicked opens the file dialog directly when there are no unsaved chan
   var r = await freshRender();
   r.project.hasUnsavedChanges = false;
 
-  currentIpc().handlers['open-clicked']();
+  currentBridge().handlers['open-clicked']();
   //showFileDialog() is async now (its initial directory listing goes through the platform facade),
   //so the dialog is only appended to the DOM a tick later.
   await flushMicrotasks();
@@ -888,7 +888,7 @@ test('open-clicked asks to save first when there are unsaved changes, and does n
   var r = await freshRender();
   r.project.hasUnsavedChanges = true;
 
-  currentIpc().handlers['open-clicked']();
+  currentBridge().handlers['open-clicked']();
 
   assert.strictEqual(document.querySelector('.popup-dialog'), null, 'the open dialog should wait behind the confirmation');
   assert.ok(findButton('Continue Without Saving'), 'the unsaved-changes prompt should be showing instead');
@@ -903,10 +903,10 @@ test('exit-app-clicked quits directly when there are no unsaved changes', async 
   r.project.hasUnsavedChanges = false;
   r.project.filename = ''; //no autoBackup path to route through
 
-  currentIpc().handlers['exit-app-clicked']();
+  currentBridge().handlers['exit-app-clicked']();
   await flushMicrotasks();
 
-  assert.ok(currentIpc().invoked.includes('confirmExit'));
+  assert.ok(currentBridge().invoked.includes('confirmExit'));
 });
 
 test('exit-app-clicked refreshes the sidebar and asks to save first when there are unsaved changes', async function(){
@@ -914,16 +914,16 @@ test('exit-app-clicked refreshes the sidebar and asks to save first when there a
   r.project.chapters = [makeChap('Unsaved', { hasUnsavedChanges: true })];
   r.project.hasUnsavedChanges = true;
 
-  currentIpc().handlers['exit-app-clicked']();
+  currentBridge().handlers['exit-app-clicked']();
 
   //The sidebar's unsaved-change marker reflects the current state before the prompt is shown.
   assert.strictEqual(document.querySelector('#chapter-list li').textContent, 'Unsaved*');
   assert.ok(findButton('Continue Without Saving'));
-  assert.ok(!currentIpc().invoked.includes('confirmExit'), 'should not quit before the prompt is answered');
+  assert.ok(!currentBridge().invoked.includes('confirmExit'), 'should not quit before the prompt is answered');
 
   findButton('Continue Without Saving').onclick();
   await flushMicrotasks();
-  assert.ok(currentIpc().invoked.includes('confirmExit'));
+  assert.ok(currentBridge().invoked.includes('confirmExit'));
 });
 
 //---------------------------------------------------------------------------
@@ -1020,7 +1020,7 @@ test('Ctrl/Cmd+M asks the main process to show the menu', async function(){
   dispatchAndCaptureJsdomErrors(document, ctrlKeydown('m'));
   await flushMicrotasks();
 
-  assert.ok(currentIpc().invoked.includes('showAppMenu'));
+  assert.ok(currentBridge().invoked.includes('showAppMenu'));
 });
 
 test('F1 toggles the chapter list pane, F2 (unmodified) toggles the editor pane', async function(){
@@ -1310,14 +1310,8 @@ async function renderWithLastProject(lastProject){
 
   delete require.cache[renderPath];
   delete require.cache[keybindingsPath];
-  var ipc = makeIpcRenderer();
-  require.cache[electronPath] = {
-    id: electronPath,
-    filename: electronPath,
-    loaded: true,
-    exports: { ipcRenderer: ipc }
-  };
-  globalThis.warewoolf = { invoke: ipc.invoke, on: ipc.on, off: ipc.removeListener };
+  var bridge = makeBridge();
+  globalThis.warewoolf = bridge;
 
   var thrown = null;
   var mod = null;
@@ -1331,7 +1325,7 @@ async function renderWithLastProject(lastProject){
   if(mod)
     previousKeybindingsTeardown = mod._unregisterKeybindings;
 
-  return { module: mod, ipc: ipc, thrown: thrown };
+  return { module: mod, bridge: bridge, thrown: thrown };
 }
 
 function writeDamagedProject(name){
@@ -1354,9 +1348,9 @@ test('a damaged lastProject does not stop render.js from loading', async functio
 test('a damaged lastProject still leaves the exit handler registered, so the window can close', async function(){
   var loaded = await renderWithLastProject(writeDamagedProject('damaged.woolf'));
 
-  assert.ok(loaded.ipc.handlers['exit-app-clicked'],
+  assert.ok(loaded.bridge.handlers['exit-app-clicked'],
     'without this handler index.js never lets the window close');
-  assert.ok(loaded.ipc.handlers['open-clicked'], 'the rest of the menu works too');
+  assert.ok(loaded.bridge.handlers['open-clicked'], 'the rest of the menu works too');
 });
 
 //index.js's close guard only hands a window close to the renderer once this has arrived; without
@@ -1364,8 +1358,8 @@ test('a damaged lastProject still leaves the exit handler registered, so the win
 test('the renderer reports itself ready once its handlers are registered', async function(){
   var loaded = await renderWithLastProject(writeDamagedProject('damaged.woolf'));
 
-  assert.ok(loaded.ipc.invoked.indexOf('notifyRendererReady') > -1,
-    'invoked: ' + JSON.stringify(loaded.ipc.invoked));
+  assert.ok(loaded.bridge.invoked.indexOf('notifyRendererReady') > -1,
+    'invoked: ' + JSON.stringify(loaded.bridge.invoked));
 });
 
 test('a damaged lastProject tells the reader which file failed', async function(){
@@ -1440,7 +1434,7 @@ test('the Help doc opens from the install directory rather than being copied to 
 
   //Awaited: opening a project reads it through the platform facade now, so the menu handler returns
   //before the project is loaded.
-  await currentIpc().handlers['help-doc-clicked']();
+  await currentBridge().handlers['help-doc-clicked']();
 
   assert.strictEqual(r.project.title, 'WareWoolf Help');
   assert.strictEqual(fs.existsSync(path.join(userDataDir, 'Projects', 'HelpDoc')), false,
@@ -1453,7 +1447,7 @@ test('a Help doc opened from the read-only install directory is marked read-only
 
   //Awaited: opening a project reads it through the platform facade now, so the menu handler returns
   //before the project is loaded.
-  await currentIpc().handlers['help-doc-clicked']();
+  await currentBridge().handlers['help-doc-clicked']();
 
   assert.strictEqual(r.project.isReadOnly, true);
   assert.ok(/\(read-only\)/.test(document.title),
@@ -1468,10 +1462,10 @@ test('saving an open Help doc offers Save As instead of writing to the install d
   var r = await freshRender();
   //Awaited: opening a project reads it through the platform facade now, so the menu handler returns
   //before the project is loaded.
-  await currentIpc().handlers['help-doc-clicked']();
+  await currentBridge().handlers['help-doc-clicked']();
   Array.from(document.querySelectorAll('.popup, .popup-dialog')).forEach(function(p){ p.remove(); });
 
-  await currentIpc().handlers['save-clicked']();
+  await currentBridge().handlers['save-clicked']();
   //saveProjectAs() doesn't await showFileDialog() (deliberately - see its own comment), and
   //showFileDialog() is itself async now, so the dialog is appended to the DOM a tick after
   //save-clicked's own handler resolves.
@@ -1490,7 +1484,7 @@ test('opening an ordinary project after the Help doc clears the read-only flag',
   var r = await freshRender();
   //Awaited: opening a project reads it through the platform facade now, so the menu handler returns
   //before the project is loaded.
-  await currentIpc().handlers['help-doc-clicked']();
+  await currentBridge().handlers['help-doc-clicked']();
   assert.strictEqual(r.project.isReadOnly, true);
 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warewoolf-ordinary-')) + path.sep;
@@ -1527,14 +1521,7 @@ function bootRender(){
 
   delete require.cache[renderPath];
   delete require.cache[keybindingsPath];
-  var ipc = makeIpcRenderer();
-  require.cache[electronPath] = {
-    id: electronPath,
-    filename: electronPath,
-    loaded: true,
-    exports: { ipcRenderer: ipc }
-  };
-  globalThis.warewoolf = { invoke: ipc.invoke, on: ipc.on, off: ipc.removeListener };
+  globalThis.warewoolf = makeBridge();
   return require(renderPath);
 }
 
@@ -1672,7 +1659,7 @@ test('saving the read-only example fallback offers Save As instead of writing to
   await freshRender();
   Array.from(document.querySelectorAll('.popup, .popup-dialog')).forEach(function(p){ p.remove(); });
 
-  await currentIpc().handlers['save-clicked']();
+  await currentBridge().handlers['save-clicked']();
   //saveProjectAs() doesn't await showFileDialog() (deliberately - see its own comment), and
   //showFileDialog() is itself async now, so the dialog is appended to the DOM a tick after
   //save-clicked's own handler resolves.
@@ -1896,7 +1883,7 @@ async function platformHandedToEmailMenuCommand(channel, displayPath, platformIn
   capturingDisplay(displayPath, platformIndex, capture);
 
   var r = await freshRender();
-  currentIpc().handlers[channel]();
+  currentBridge().handlers[channel]();
 
   return { render: r, platform: capture.platform };
 }

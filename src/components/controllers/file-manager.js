@@ -1,12 +1,12 @@
 const { logError } = require('./error-log');
 const { createPlatform } = require('./platform');
-const { createNodeBacking } = require('./platform-node');
+const { createIpcBacking } = require('./platform-ipc');
 
 //Group E's commands take no injected config at all - every one of them operates purely on the
 //path(s) it is given, unlike groups A/D/I which need paths.app/userData wired in. So this module
 //holds its own standing instance rather than needing setPlatform() wiring from render.js, the same
 //reason corkboard.js does.
-var platform = createPlatform(createNodeBacking({}));
+var platform = createPlatform(createIpcBacking());
 
 //Every path this module is handed is normalized to forward slashes before any string-splitting is
 //done on it, the same reason platform-node.js's own normalizePath() does this for group B/C paths -

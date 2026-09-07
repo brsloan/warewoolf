@@ -23,7 +23,8 @@
 //This file is deliberately not named *.test.js: `npm test` globs test/*.test.js, so it is a helper
 //and not a suite.
 const { createCommandHost } = require('../src/components/controllers/platform-host');
-const { EVENTS } = require('../src/components/controllers/platform');
+const { createPlatform, EVENTS } = require('../src/components/controllers/platform');
+const { createNodeBacking } = require('../src/components/controllers/platform-node');
 
 //Where Electron would serialize. A value that cannot cross throws a DOMException here exactly as it
 //would there, and the failure names the command rather than surfacing as an opaque DataCloneError
@@ -94,4 +95,26 @@ function createFakeBridge(platform){
   };
 }
 
-module.exports = { createFakeBridge: createFakeBridge };
+//What a module that holds its own standing createPlatform(createIpcBacking()) instance needs from a
+//test: something at globalThis.warewoolf for that backing to find. `deps` go to the node backing on
+//the far side, so a test injects paths/spawnProcess/httpsGet exactly as it did when it built the
+//backing itself.
+//
+//Order matters for the tests that mock child_process/https on the real module object rather than
+//injecting: createNodeBacking() resolves .spawn/.request/.get once, at construction, so install the
+//bridge *after* the mock and *before* re-requiring the module under test. The existing freshXxx()
+//helpers in updates/wifi-manager/battery-monitor already sequence it that way for the same reason.
+function installBridge(deps){
+  globalThis.warewoolf = createFakeBridge(createPlatform(createNodeBacking(deps || {})));
+  return globalThis.warewoolf;
+}
+
+function uninstallBridge(){
+  delete globalThis.warewoolf;
+}
+
+module.exports = {
+  createFakeBridge: createFakeBridge,
+  installBridge: installBridge,
+  uninstallBridge: uninstallBridge
+};

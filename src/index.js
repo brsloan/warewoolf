@@ -514,12 +514,12 @@ function host(){
   if(commandHost == null)
     commandHost = createCommandHost(createPlatform(createNodeBacking({
       paths: {
-        userData: app.getPath('userData').replaceAll('\', '/'),
-        home: app.getPath('home').replaceAll('\', '/'),
-        temp: app.getPath('temp').replaceAll('\', '/'),
-        docs: app.getPath('documents').replaceAll('\', '/'),
-        app: __dirname.replaceAll('\', '/'),
-        downloads: app.getPath('downloads').replaceAll('\', '/')
+        userData: app.getPath('userData').replaceAll('\\', '/'),
+        home: app.getPath('home').replaceAll('\\', '/'),
+        temp: app.getPath('temp').replaceAll('\\', '/'),
+        docs: app.getPath('documents').replaceAll('\\', '/'),
+        app: __dirname.replaceAll('\\', '/'),
+        downloads: app.getPath('downloads').replaceAll('\\', '/')
       },
       secureStorage: mainSecureStorage(),
       //A function, not the value: the renderer asks once at startup, but macOS can set this from
@@ -585,9 +585,9 @@ function isSecureStorageAvailable(){
 }
 
 //The shape createNodeBacking() (and, through it, credential-store.js) wants from a keystore. Group
-//J used to reach this from the renderer over the three sendSync channels below; with the backing in
-//this process it is a direct call, and those channels are only still here because render.js keeps
-//its own backing until the renderer conversion lands.
+//J used to reach this from the renderer over three sendSync channels ('secure-storage-available',
+//'-encrypt', '-decrypt') driven by a secure-storage.js that no longer exists: with the backing in
+//this process it is a direct call, and the credential store the renderer used to hold is gone.
 function mainSecureStorage(){
   return {
     isAvailable: isSecureStorageAvailable,
@@ -610,25 +610,3 @@ function mainSecureStorage(){
     }
   };
 }
-
-ipcMain.on('secure-storage-available', function(e){
-  e.returnValue = isSecureStorageAvailable();
-});
-
-ipcMain.on('secure-storage-encrypt', function(e, text){
-  try{
-    e.returnValue = isSecureStorageAvailable() ? safeStorage.encryptString(text).toString('base64') : null;
-  }
-  catch(err){
-    e.returnValue = null;
-  }
-});
-
-ipcMain.on('secure-storage-decrypt', function(e, content){
-  try{
-    e.returnValue = isSecureStorageAvailable() ? safeStorage.decryptString(Buffer.from(content, 'base64')) : null;
-  }
-  catch(err){
-    e.returnValue = null;
-  }
-});

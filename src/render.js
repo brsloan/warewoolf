@@ -1,11 +1,8 @@
-const { ipcRenderer } = require('electron');
 const fs = require('fs');
 const Quill = require('quill');
 const { createPlatform } = require('./components/controllers/platform');
 const { createIpcBacking } = require('./components/controllers/platform-ipc');
-const { createNodeBacking } = require('./components/controllers/platform-node');
 const getUserSettings = require('./components/models/user-settings');
-const getSecureStorage = require('./components/controllers/secure-storage');
 const newChapter = require('./components/models/chapter');
 const newProject = require('./components/models/project');
 const autosaver = require('./components/controllers/autosave');
@@ -24,6 +21,12 @@ const { renderChapterList, renameChapterInList } = require('./components/views/c
 //getFileRequestedOnOpen used to be sendSync calls made here at module load; both are now regular
 //commands, which means both are promises, which is why loadPlatformState() below exists at all -
 //nothing that depends on sysDirectories or userSettings can run until it resolves.
+//
+//As of Phase 9a this is the *only* platform instance this file has. Through Phase 8 there were two:
+//this one for group A, and a second node-backed one for everything that was plain fs and therefore
+//reachable from the renderer directly. The node backing now runs in the main process, so both
+//halves are this object, and the 36 menu channels come through it as well - render.js no longer
+//requires 'electron' at all.
 var platform = createPlatform(createIpcBacking());
 
 var editorQuill = new Quill('#editor-container', {
@@ -51,7 +54,7 @@ var project = newProject();
 //Populated by loadPlatformState() below, once getAppPaths()/getFileRequestedOnOpen() resolve.
 //Nothing above this line needs them; everything below runs from inside functions and reads these by
 //closure, not at define-time, so it does not matter that they start out undefined.
-var sysDirectories, fileRequestedOnOpen, userSettings, platformInfo, nodePlatform;
+var sysDirectories, fileRequestedOnOpen, userSettings, platformInfo;
 
 //Exposed for testing only - nothing in the app itself reads this module's exports, since it's
 //loaded as a plain <script> tag rather than required. `ready` is how a caller (render.test.js's
@@ -114,36 +117,16 @@ function reportStartupFailure(err){
 
 async function loadPlatformState(){
   sysDirectories = await platform.getAppPaths();
-  //Group D (error log) is plain fs, like groups C and J - reachable directly through nodeIntegration,
-  //so it gets its own node-backed platform instance here rather than crossing through the ipc
-  //backing `platform` above. That second instance is what has to be swapped for platform-ipc.js at
-  //Phase 9, alongside C and J, once nodeIntegration goes away and fs stops being reachable at all.
-  //secureStorage is what group J's commands protect a saved password with when the machine has an
-  //OS keystore. It goes to the backing now instead of to a credential store the renderer held
-  //itself; nothing in the renderer derives a key, seals a secret or writes credentials.json any
-  //more.
-  //
-  //Phase 8 dropped the separate `nodeBacking` variable this used to be built through. Before
-  //sendEmail existed as a real command, email-doc.js needed the raw backing's resolveSecret()
-  //handed over explicitly (openEmailController(), below the old version of this comment) because
-  //resolveSecret is deliberately not a declared command and so unreachable through `nodePlatform`.
-  //sendEmail resolves SAVED_SECRET on the far side of the boundary itself now, through the exact
-  //same resolveSecret - reached from inside the same backing instance, since email-doc_display.js
-  //and error-log_display.js already receive `nodePlatform` directly (they need it for
-  //describeCredential/unlockCredential/storeCredential too, for the session-scoped-store reason
-  //noted below) - so nothing needs the raw backing any more.
-  nodePlatform = createPlatform(createNodeBacking({
-    paths: sysDirectories,
-    secureStorage: getSecureStorage()
-  }));
-  require('./components/controllers/error-log').setPlatform(nodePlatform);
-  //Groups B and C (projects and chapters) are plain fs too, so they take the same node-backed
-  //instance and get swapped for the ipc backing alongside D at Phase 9.
-  newProject.setPlatform(nodePlatform);
-  newChapter.setPlatform(nodePlatform);
-  //loadUserSettings()/saveUserSettings() are the rest of group D - same node-backed instance, same
-  //reason.
-  getUserSettings.setPlatform(nodePlatform);
+  //The four modules that are handed a platform rather than holding one. They used to be handed a
+  //second, node-backed instance built here out of sysDirectories and an OS keystore reached over
+  //three sendSync channels; groups B/C/D were plain fs, so the renderer could just do the work. It
+  //cannot any more, and does not need to: the same commands arrive at the same node backing, one
+  //process over. Nothing in the renderer derives a key, seals a secret, or writes credentials.json,
+  //and now nothing in it opens a file either.
+  require('./components/controllers/error-log').setPlatform(platform);
+  newProject.setPlatform(platform);
+  newChapter.setPlatform(platform);
+  getUserSettings.setPlatform(platform);
   fileRequestedOnOpen = await platform.getFileRequestedOnOpen();
   platformInfo = await platform.getPlatform();
 
@@ -183,8 +166,8 @@ async function loadPlatformState(){
     }
   });
 
-  //The keybindings above are now registered, and so is everything else this file wires up on
-  //ipcRenderer directly (the per-menu-channel listeners and the file-opened-from-outside handler,
+  //The keybindings above are now registered, and so is everything else this file subscribes to
+  //through platform.on() (the per-menu-channel listeners and the file-opened-from-outside handler,
   //both further down this file but run in the first synchronous pass through it - well before this
   //async function ever got here). index.js's close guard only hands a window close to this renderer
   //once this fires, so nothing above may still be pending when it does.
@@ -234,7 +217,7 @@ async function loadPlatformState(){
 //only copy of the password - which is what the old code did when the re-save failed.
 async function migrateLegacyCredential(){
   try{
-    var result = await nodePlatform.migrateLegacyCredential({
+    var result = await platform.migrateLegacyCredential({
       service: 'email',
       legacyBlob: userSettings.senderPass
     });
@@ -279,7 +262,7 @@ async function loadInitialProject(){
     //package install), which a normal user account can't write back to - editing it and letting
     //autosave or a manual save run against it in place always fails with EACCES. Copy it out to
     //userData once on first launch and open that copy instead, so the example is actually editable.
-    var materialized = await nodePlatform.materializeBundledProject({
+    var materialized = await platform.materializeBundledProject({
       bundledDir: bundledExampleDir,
       writableDir: writableExampleDir,
       filename: exampleFilename
@@ -1212,7 +1195,7 @@ const menuCommands = {
     const { getBeginningOfCurrentWord } = require('./components/controllers/spellcheck');
     var currentIndex = editorQuill.getSelection(true).index;
     var beginningOfWord = getBeginningOfCurrentWord(editorQuill.getText(), currentIndex);
-    return showSpellcheck(editorQuill, project, sysDirectories, detached(displayChapterByIndex), beginningOfWord);
+    return showSpellcheck(editorQuill, project, detached(displayChapterByIndex), beginningOfWord);
   } },
   'convert-first-lines-clicked': { requiresFocus: true, run: function(){
     const showConvertFirstLines = require('./components/views/convert-first-lines_display');
@@ -1264,11 +1247,11 @@ const menuCommands = {
   } },
   'send-via-email-clicked': { run: function(){
     const showEmailOptions = require('./components/views/email-doc_display');
-    return showEmailOptions(project, userSettings, nodePlatform, editorQuill);
+    return showEmailOptions(project, userSettings, platform, editorQuill);
   } },
   'view-error-log-clicked': { run: function(){
     const showErrorLog = require('./components/views/error-log_display');
-    return showErrorLog(userSettings, nodePlatform);
+    return showErrorLog(userSettings, platform);
   } },
   'file-manager-clicked': { run: function(){
     const showFileManager = require('./components/views/file-manager_display');
@@ -1304,22 +1287,34 @@ const menuCommands = {
   } }
 };
 
+//Phase 9a: these go through platform.on() rather than the raw ipc channel. Two things change with
+//them, both worth knowing before reading the handlers below.
+//
+//A handler is called with the payload arguments only - preload.js drops the event object that used
+//to arrive first, because forwarding it would hand the page `sender` and with it the whole ipc
+//surface the bridge exists to withhold. So `function(e)` and `slice(arguments, 1)` are gone: the
+//first argument is now the payload, where there is one.
+//
+//And the event name is validated against platform.js's EVENTS at subscribe time. A channel name
+//that drifts from what index.js sends used to be silent - a menu item that simply did nothing, with
+//nothing anywhere saying why. It now throws here, at startup, out of the first pass through this
+//file.
 Object.keys(menuCommands).forEach(function(channel){
   var command = menuCommands[channel];
-  ipcRenderer.on(channel, function(e){
+  platform.on(channel, function(){
     if(command.requiresFocus && !editorHasFocus())
       return;
     //Wrapped because several of these are async now and nothing reads what a menu channel returns
-    //- see detached(). The promise is handed back anyway: ipcRenderer ignores it, but a test can
+    //- see detached(). The promise is handed back anyway: the bridge ignores it, but a test can
     //await the handler instead of guessing how many ticks the command needs.
-    return detached(command.run)(...Array.prototype.slice.call(arguments, 1));
+    return detached(command.run)(...arguments);
   });
 });
 
 //Takes its own argument (the opened file's path) and has a distinct multi-branch shape - handling
 //a chapter missing from disk mirrors openAProject()'s own file-dialog callback - so it is kept as
 //an ordinary handler rather than forced into the single-argument shape above.
-ipcRenderer.on('file-opened-from-outside-warewoolf', detached(async function(event, fPath){
+platform.on('file-opened-from-outside-warewoolf', detached(async function(fPath){
   if (fPath) {
     var missingChaps = await project.loadFile(fPath);
     if(await projectFailedToLoad(fPath))

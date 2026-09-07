@@ -1,8 +1,8 @@
 const { logError } = require('../controllers/error-log');
 
-//Set once by render.js's loadPlatformState(), the same node-backed instance error-log.js uses -
-//loadUserSettings()/saveUserSettings() are plain fs, reachable directly through nodeIntegration
-//like groups B, C and D's error-log slice, so there is nothing to swap here until Phase 9.
+//Set once by render.js's loadPlatformState(), the same instance error-log.js uses. As of Phase 9a
+//that is the ipc-backed one: loadUserSettings()/saveUserSettings() were plain fs reachable straight
+//through nodeIntegration, and are now a round trip to the main process like everything else.
 let platform = null;
 
 function setPlatform(p){
@@ -83,9 +83,28 @@ function getUserSettings(userSettingsFilepath){
     if(platform == null)
       return Promise.resolve();
 
-    return platform.saveUserSettings({ settings: settings }).catch(function(err){
+    return platform.saveUserSettings({ settings: persistableSettings() }).catch(function(err){
       logError(err);
     });
+  }
+
+  //The live object carries save/load/getSettingsFilepath alongside the settings themselves, and a
+  //function does not survive being sent anywhere: structured clone throws on one outright, so
+  //passing `settings` whole rejects every save the moment the write is on the far side of a bridge.
+  //It went unnoticed while the write was a JSON.stringify in this same process - stringify drops
+  //functions silently, so the file on disk was always right.
+  //
+  //The schema is already the list of what may be persisted (see the note on it above: a key not
+  //named there can never be copied back onto the live object on load), so this sends exactly that
+  //and nothing else - which is also what makes the payload data rather than a live model object.
+  function persistableSettings(){
+    var persistable = {};
+
+    Object.keys(SETTINGS_SCHEMA).forEach(function(key){
+      persistable[key] = settings[key];
+    });
+
+    return persistable;
   }
 
   //Catches internally and always resolves to `settings` - a corrupt or missing file falls back to

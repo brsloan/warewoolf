@@ -6,6 +6,7 @@ const { JSDOM } = require('jsdom');
 const aboutDisplayPath = require.resolve('../src/components/views/about_display');
 const updatesControllerPath = require.resolve('../src/components/controllers/updates');
 const installUpdateDisplayPath = require.resolve('../src/components/views/install-update_display');
+const { installBridge, uninstallBridge } = require('./fake-bridge');
 
 //about_display.js destructures getUpdates/downloadUpdate from the updates controller and requires
 //install-update_display directly, both at require-time, so these mocks only take effect if the
@@ -59,9 +60,15 @@ test.beforeEach(function(){
   const dom = new JSDOM('<!doctype html><html><body>' + bodyShell() + '</body></html>');
   global.window = dom.window;
   global.document = dom.window.document;
+  //readLicenses used to be reached through a node backing about_display.js built out of the
+  //sysDirectories it was handed; the main process owns paths.app now, so the app directory the
+  //View License test mocks fs against goes to the backing behind the bridge instead. fs is still
+  //resolved per call on the shared module object, so t.mock.method inside a test is seen from here.
+  installBridge({ paths: { app: '/app' } });
 });
 
 test.afterEach(function(){
+  uninstallBridge();
   delete require.cache[aboutDisplayPath];
   delete require.cache[updatesControllerPath];
   delete require.cache[installUpdateDisplayPath];

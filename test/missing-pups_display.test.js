@@ -5,6 +5,7 @@ const { JSDOM } = require('jsdom');
 
 const missingPupsDisplayPath = require.resolve('../src/components/views/missing-pups_display');
 const fileManagerControllerPath = require.resolve('../src/components/controllers/file-manager');
+const { installBridge, uninstallBridge } = require('./fake-bridge');
 
 //missing-pups_display.js destructures getFileList from the file-manager controller at require-time,
 //so mocking it only takes effect if the cache is primed before missing-pups_display.js is
@@ -84,9 +85,14 @@ test.beforeEach(function(){
   const dom = new JSDOM('<!doctype html><html><body>' + bodyShell() + '</body></html>');
   global.window = dom.window;
   global.document = dom.window.document;
+  //missing-pups_display.js holds its own createPlatform(createIpcBacking()) instance now, so the
+  //verifyProjectFiles/pathExists/listDirectory calls below need a bridge to reach. fs is resolved
+  //per call on the shared module object behind it, so t.mock.method inside a test is still seen.
+  installBridge();
 });
 
 test.afterEach(function(){
+  uninstallBridge();
   delete require.cache[missingPupsDisplayPath];
   delete require.cache[fileManagerControllerPath];
   delete global.window;

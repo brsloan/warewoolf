@@ -1,27 +1,23 @@
 var nspell = require('nspell');
 const { logError } = require('./error-log');
 const { createPlatform } = require('./platform');
-const { createNodeBacking } = require('./platform-node');
+const { createIpcBacking } = require('./platform-ipc');
 
-//loadDictionary()/loadPersonalDictionary()/savePersonalDictionary() take no injected config beyond
-//the app/userData paths, and every call site here already receives sysDirectories directly (the
-//same way keybindings.js builds its own ipc-backed instance in Phase 2) - so this module holds no
-//shared platform state of its own and just builds one from whatever sysDirectories it's handed.
-function platformFor(sysDirectories){
-  return createPlatform(createNodeBacking({ paths: sysDirectories }));
-}
+//Group I used to need the app/userData paths wired in, so this module took sysDirectories from
+//every caller and built a node backing out of it. Phase 9a moved the backing into the main process,
+//which already knows where the dictionaries live - so the paths stop crossing at all and this
+//becomes a standing instance like every other module's.
+var platform = createPlatform(createIpcBacking());
 
-async function runSpellcheck(editorQuill, sysDirectories, startingIndex = 0, wordsToIgnore){
-    var spellchecker = await loadDictionaries(sysDirectories);
+async function runSpellcheck(editorQuill, startingIndex = 0, wordsToIgnore){
+    var spellchecker = await loadDictionaries();
     if(!spellchecker)
       return null;
     return findInvalidWord(editorQuill, spellchecker, startingIndex, wordsToIgnore)
 }
 
-async function loadDictionaries(sysDirectories){
+async function loadDictionaries(){
   try{
-    var platform = platformFor(sysDirectories);
-
     var dict = await platform.loadDictionary();
     var personal = await platform.loadPersonalDictionary();
 
@@ -74,9 +70,8 @@ function findInvalidWord(editorQuill, spellchecker, startingIndex = 0, wordsToIg
     return invalidWord;
 }
 
-async function addWordToPersonalDictFile(word, sysDirectories){
+async function addWordToPersonalDictFile(word){
   try{
-    var platform = platformFor(sysDirectories);
     var personal = await platform.loadPersonalDictionary();
     if(personal.indexOf(word) == -1){
         personal.push(word);

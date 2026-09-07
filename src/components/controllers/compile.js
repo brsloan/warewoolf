@@ -8,11 +8,11 @@ const { htmlChaptersToEpub } = require('./epub');
 const { convertToPlainText } = require('./quill-utils');
 const { getTotalWordCount } = require('./wordcount');
 const { createPlatform } = require('./platform');
-const { createNodeBacking } = require('./platform-node');
+const { createIpcBacking } = require('./platform-ipc');
 
 //writeTextFile takes no injected config - every path here is already a full path - so this holds
 //its own standing instance, the same reason export.js/file-manager.js do.
-var platform = createPlatform(createNodeBacking({}));
+var platform = createPlatform(createIpcBacking());
 
 //Async because assembling the chapters reads any that are not already in memory off disk, which now
 //goes through the platform facade. The callback is left exactly as it was: .epub finishes writing

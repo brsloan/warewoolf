@@ -12,6 +12,16 @@ const errorLog = require('../src/components/controllers/error-log');
 const exportPath = require.resolve('../src/components/controllers/export');
 const { exportProject } = require(exportPath);
 
+//The modules under test hold their own createPlatform(createIpcBacking()) instance and reach the
+//machine through window.warewoolf, exactly as they do in the app. This puts a bridge there, with a
+//real node backing (and a real structured-clone boundary) behind it - so these tests still assert
+//against real files in real temp directories, and now also prove the arguments and results survive
+//being sent somewhere.
+const { installBridge, uninstallBridge } = require('./fake-bridge');
+
+test.before(function(){ installBridge(); });
+test.after(uninstallBridge);
+
 //Epub is written via a zip archive stream, so the file can exist on disk before the archive's
 //central directory is fully flushed - same helper as compile.test.js's waitForEpub. Retry opening
 //it as a zip until that succeeds.

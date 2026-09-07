@@ -1,11 +1,11 @@
 const path = require('path');
 const { logError } = require('./error-log');
 const { createPlatform } = require('./platform');
-const { createNodeBacking } = require('./platform-node');
+const { createIpcBacking } = require('./platform-ipc');
 
 //Every command this module calls takes a full path and no injected config, so this holds its own
 //standing instance, the same reason file-manager.js/corkboard.js do.
-var platform = createPlatform(createNodeBacking({}));
+var platform = createPlatform(createIpcBacking());
 
 //The message backupProject() sends once it is done. Callers watch for it to know the run has
 //finished, so it is named here rather than string-matched at each of them.

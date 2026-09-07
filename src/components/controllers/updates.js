@@ -1,15 +1,18 @@
 const { logError } = require('./error-log');
 const { createPlatform } = require('./platform');
-const { createNodeBacking } = require('./platform-node');
+const { createIpcBacking } = require('./platform-ipc');
 
 //checkForUpdate/downloadUpdate/installUpdate take no injected config - every argument is already a
 //full path/URL, or nothing at all - so this holds its own standing instance, the same reason
-//file-manager.js/corkboard.js/epub.js/backup-project.js do. It has to be *one* instance shared
-//across every call this file makes: installUpdate only accepts a path this same backing vouched
-//for via a prior downloadUpdate call, and about_display.js's Download button and
-//install-update_display.js's Install button are two different files calling through this module's
-//two different exports - the vouching only works if both go through the same platform instance.
-var platform = createPlatform(createNodeBacking({}));
+//file-manager.js/corkboard.js/epub.js/backup-project.js do.
+//
+//installUpdate only accepts a path a prior downloadUpdate call vouched for, and before Phase 9a
+//that made this file's single shared instance load-bearing: about_display.js's Download button and
+//install-update_display.js's Install button call two different exports here, and a fresh backing
+//per call would have thrown the vouch away between them. The vouching now lives in the one node
+//backing the main process holds, so it is the process boundary keeping the set rather than this
+//variable - stronger, since no renderer instance can hold a set at all.
+var platform = createPlatform(createIpcBacking());
 
 function getUpdates(thisAppVersion, callback){
     platform.checkForUpdate().then(function(releaseData){

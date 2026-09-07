@@ -1,12 +1,12 @@
 const { logError } = require('./error-log');
 const { createPlatform } = require('./platform');
-const { createNodeBacking } = require('./platform-node');
+const { createIpcBacking } = require('./platform-ipc');
 
 //getBatteryCapacity (group K) takes no injected config, so this holds its own standing instance,
 //the same reason file-manager.js/corkboard.js/epub.js do. It folds what used to be this file's own
 //getBatteryName()/queryKernel() two-step into one native call - see platform-node.js's own note on
 //why "no battery" is UNAVAILABLE rather than a resolved null.
-var platform = createPlatform(createNodeBacking({}));
+var platform = createPlatform(createIpcBacking());
 
 var batteryCheckInterval;
 

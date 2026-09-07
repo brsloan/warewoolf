@@ -1,11 +1,11 @@
 const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
 const { getFileList } = require('../controllers/file-manager');
 const { createPlatform } = require('../controllers/platform');
-const { createNodeBacking } = require('../controllers/platform-node');
+const { createIpcBacking } = require('../controllers/platform-ipc');
 
 //pathExists()/listDirectory() take no injected config, so this holds its own standing instance -
 //same reason file-manager.js and corkboard.js do.
-var platform = createPlatform(createNodeBacking({}));
+var platform = createPlatform(createIpcBacking());
 
 //Each document's notes are saved beside it under this prefix (chapter.js owns the convention), and
 //the corkboard has its own fixed name (corkboard.js). Both live in the chapters directory, so the

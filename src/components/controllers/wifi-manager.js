@@ -1,11 +1,11 @@
 const { logError } = require('./error-log');
 const { createPlatform } = require('./platform');
-const { createNodeBacking } = require('./platform-node');
+const { createIpcBacking } = require('./platform-ipc');
 
 //All seven functions here take no injected config, so this holds its own standing instance, the
 //same reason file-manager.js/corkboard.js/epub.js do. As of the gap Phase 8 recorded being closed,
 //every one of them routes through a contract command - none of them spawns nmcli directly any more.
-var platform = createPlatform(createNodeBacking({}));
+var platform = createPlatform(createIpcBacking());
 
 //Logging is skipped for UNAVAILABLE specifically - nmcli/hostname simply not being installed is
 //the ordinary case on every machine that isn't a writerDeck, and this dialog gets opened by anyone

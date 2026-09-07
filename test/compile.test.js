@@ -10,6 +10,16 @@ const unzipper = require('unzipper');
 const { makeChapter, makeProject } = require('./helpers');
 const { compileProject, compileChapterDeltas } = require('../src/components/controllers/compile');
 
+//The modules under test hold their own createPlatform(createIpcBacking()) instance and reach the
+//machine through window.warewoolf, exactly as they do in the app. This puts a bridge there, with a
+//real node backing (and a real structured-clone boundary) behind it - so these tests still assert
+//against real files in real temp directories, and now also prove the arguments and results survive
+//being sent somewhere.
+const { installBridge, uninstallBridge } = require('./fake-bridge');
+
+test.before(function(){ installBridge(); });
+test.after(uninstallBridge);
+
 function textDelta(text){
   return { ops: [ { insert: text }, { insert: '\n' } ] };
 }

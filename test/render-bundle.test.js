@@ -169,3 +169,48 @@ test('the renderer bundle leaves only Node builtins and electron external', func
   assert.deepStrictEqual(unexpected, [],
     'these were left to resolve from node_modules at runtime: ' + unexpected.join(', '));
 });
+
+
+//Phase 9a: what is left. The assertion above allows any Node builtin, which was the right rule
+//while the renderer did its own filesystem work; it is now much weaker than the truth, and the
+//whole point of 9b is that the answer becomes "nothing". Pinning the exact list here means a
+//builtin creeping back into the renderer fails now, in a test that names it, rather than at the
+//flip as an esbuild resolution error several modules deep.
+//
+//  fs   - render.js's four existsSync checks in loadInitialProject()
+//  path - backup-project.js (basename/dirname/join) and import.js (basename/extname), both pure
+//         string work on paths the caller already has, neither of them I/O
+//
+//electron is gone from this list, which is the 9a deliverable in one line: the renderer no longer
+//reaches ipcRenderer at all. It talks to window.warewoolf, and preload.js is the only thing on the
+//other side of that name.
+test('the renderer bundle has exactly fs and path left to remove at Phase 9b', function(){
+  const bundle = fs.readFileSync(bundlePath, 'utf8');
+
+  const externals = new Set();
+  const pattern = /require\(["']([^"')]+)["']\)/g;
+  var match;
+  while((match = pattern.exec(bundle)) !== null)
+    externals.add(match[1].replace(/^node:/, ''));
+
+  assert.deepStrictEqual(Array.from(externals).sort(), ['fs', 'path']);
+});
+
+//The preload bundle is the other half, and it has to be clean already: it is the file that keeps
+//working when `sandbox` stops being false, and a sandboxed preload gets no Node builtins at all.
+//Only 'electron' may remain, which the sandbox does still provide.
+test('the preload bundle leaves nothing but electron external', function(){
+  const preloadBundlePath = path.join(__dirname, '..', 'src', 'preload.bundle.js');
+  assert.ok(fs.existsSync(preloadBundlePath),
+    'src/preload.bundle.js is missing - run `npm run build` (pretest should have)');
+
+  const bundle = fs.readFileSync(preloadBundlePath, 'utf8');
+
+  const externals = new Set();
+  const pattern = /require\(["']([^"')]+)["']\)/g;
+  var match;
+  while((match = pattern.exec(bundle)) !== null)
+    externals.add(match[1].replace(/^node:/, ''));
+
+  assert.deepStrictEqual(Array.from(externals).sort(), ['electron']);
+});

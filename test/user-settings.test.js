@@ -8,6 +8,8 @@ const errorLog = require('../src/components/controllers/error-log');
 const { createPlatform } = require('../src/components/controllers/platform');
 const { createNodeBacking } = require('../src/components/controllers/platform-node');
 const getUserSettings = require('../src/components/models/user-settings');
+const { createFakeBridge } = require('./fake-bridge');
+const { createIpcBacking } = require('../src/components/controllers/platform-ipc');
 
 //loadUserSettings()/saveUserSettings() are parameterless on the contract - the backing decides
 //where the file lives, from paths.userData - so each test configures a node-backed platform
@@ -186,4 +188,57 @@ test('getSettingsFilepath returns the path the settings were constructed with', 
   const settings = getUserSettings(settingsPath(dir));
 
   assert.strictEqual(settings.getSettingsFilepath(), settingsPath(dir));
+});
+
+
+//---------------------------------------------------------------------------
+// crossing the bridge
+//---------------------------------------------------------------------------
+
+//The live settings object carries save/load/getSettingsFilepath alongside the settings themselves.
+//That was harmless while the write was a JSON.stringify in this same process - stringify drops
+//functions without complaint - and it stopped being harmless the moment the write moved to the main
+//process: structured clone throws on a function outright, so every save rejected. Nothing in the
+//suite could see it, because nothing ran a save across a boundary. This is that test.
+function bridgedPlatform(t){
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'user-settings-bridge-'));
+  t.after(function(){
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  const platform = createPlatform(createIpcBacking({
+    bridge: createFakeBridge(createPlatform(createNodeBacking({ paths: { userData: dir } })))
+  }));
+  getUserSettings.setPlatform(platform);
+  errorLog.setPlatform(platform);
+
+  return dir;
+}
+
+test('save works across a serialization boundary, not only in-process', async function(t){
+  const dir = bridgedPlatform(t);
+  const settings = getUserSettings(settingsPath(dir));
+
+  settings.fontSize = 19;
+  settings.lastProject = '/somewhere/book.woolf';
+  await settings.save();
+
+  const written = JSON.parse(fs.readFileSync(settingsPath(dir), 'utf8'));
+  assert.strictEqual(written.fontSize, 19);
+  assert.strictEqual(written.lastProject, '/somewhere/book.woolf');
+});
+
+//What actually crosses is data, not a live model object - so the three functions hanging off it
+//stay on this side, and so would anything else bolted onto it that the schema does not name.
+test('only the schema fields cross, never the object own methods', async function(t){
+  const dir = bridgedPlatform(t);
+  const settings = getUserSettings(settingsPath(dir));
+
+  await settings.save();
+
+  const written = JSON.parse(fs.readFileSync(settingsPath(dir), 'utf8'));
+  assert.strictEqual(written.save, undefined);
+  assert.strictEqual(written.load, undefined);
+  assert.strictEqual(written.getSettingsFilepath, undefined);
+  assert.strictEqual(Object.keys(written).length, Object.keys(settings).length - 3);
 });

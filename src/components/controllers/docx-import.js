@@ -1,13 +1,13 @@
 const { logError } = require('./error-log');
 const { createPlatform } = require('./platform');
-const { createNodeBacking } = require('./platform-node');
+const { createIpcBacking } = require('./platform-ipc');
 
 //importDocx takes no injected config - path is a full path - so this holds its own standing
 //instance, the same reason file-manager.js/import.js do. The native command owns unzipping the
 //docx to a temp directory and reading document.xml/footnotes.xml out of it, and returns their text
 //- never a path, so the unzip destination cannot leak across this boundary. Everything below is
 //pure string/DOM work with no OS dependency and stays exactly where it was.
-var platform = createPlatform(createNodeBacking({}));
+var platform = createPlatform(createIpcBacking());
 
 function importDocx(filepath, split, cback){
   platform.importDocx({ path: filepath }).then(function(result){

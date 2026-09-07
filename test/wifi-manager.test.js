@@ -5,13 +5,21 @@ const { EventEmitter } = require('events');
 
 const errorLog = require('../src/components/controllers/error-log');
 const wifiManagerPath = require.resolve('../src/components/controllers/wifi-manager');
+const { installBridge, uninstallBridge } = require('./fake-bridge');
 
-//wifi-manager.js holds a standing `createPlatform(createNodeBacking({}))` instance built at
-//require-time, and that instance captures child_process.spawn once, when createNodeBacking() is
-//called - so any test that mocks child_process.spawn must re-require this module afterward for a
-//fresh backing to pick up the mock, same reasoning as battery-monitor.test.js and updates.test.js.
+test.after(uninstallBridge);
+
+//wifi-manager.js holds a standing `createPlatform(createIpcBacking())` instance built at
+//require-time. The node backing behind the bridge captures child_process.spawn once, when
+//createNodeBacking() is called - so any test that mocks child_process.spawn must install a fresh
+//bridge and re-require this module afterward for that mock to be picked up, same reasoning as
+//battery-monitor.test.js and updates.test.js.
 function freshWifiManager(){
   delete require.cache[wifiManagerPath];
+  //Phase 9a: the standing instance is ipc-backed now, so the node backing that resolves
+  //child_process.spawn sits behind the bridge rather than inside this module. Same ordering, same
+  //place: constructed here, after the mock and before the re-require.
+  installBridge();
   return require(wifiManagerPath);
 }
 

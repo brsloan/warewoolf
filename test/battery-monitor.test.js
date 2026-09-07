@@ -6,16 +6,20 @@ const { EventEmitter } = require('events');
 
 const errorLog = require('../src/components/controllers/error-log');
 const batteryMonitorPath = require.resolve('../src/components/controllers/battery-monitor');
+const { installBridge, uninstallBridge } = require('./fake-bridge');
+
+test.after(uninstallBridge);
 
 //battery-monitor.js keeps its running interval id in module-level state (like autosave.js), so
 //each test needs a fresh module instance to avoid one test's timer id leaking into the next.
-//Phase 8: getBatteryCapacity (group K) also holds its own standing platform instance, built once
-//when the module is first required - createNodeBacking() resolves child_process.spawn/
-//fs.readdirSync off the real modules at *that* construction moment, not fresh on every call. So a
-//test that mocks either has to do it *before* this re-require, same reasoning as
-//updates.test.js's/wifi-manager.test.js's own freshXxx() helpers.
+//Phase 8: getBatteryCapacity (group K) also holds its own standing platform instance. As of Phase
+//9a that instance is ipc-backed, and the node backing behind the bridge is what resolves
+//child_process.spawn/fs.readdirSync off the real modules - once, at construction, not fresh on
+//every call. So a test that mocks either has to do it *before* the bridge is installed here, same
+//reasoning as updates.test.js's/wifi-manager.test.js's own freshXxx() helpers.
 function freshBatteryMonitor(){
   delete require.cache[batteryMonitorPath];
+  installBridge();
   return require(batteryMonitorPath);
 }
 

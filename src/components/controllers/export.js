@@ -9,13 +9,13 @@ const { getCorkboardForExport } = require('./corkboard');
 const { convertToPlainText } = require('./quill-utils');
 const { getTotalWordCount } = require('./wordcount');
 const { createPlatform } = require('./platform');
-const { createNodeBacking } = require('./platform-node');
+const { createIpcBacking } = require('./platform-ipc');
 const notesNamePrepend = '-notes_';
 
 //Every command this module calls (ensureDirectory, writeTextFile) takes a full path and no
 //injected config, so this holds its own standing instance, the same reason file-manager.js/
 //epub.js/delta-to-docx.js do.
-var platform = createPlatform(createNodeBacking({}));
+var platform = createPlatform(createIpcBacking());
 
 //Unlike compile.js (which merges everything into a single output file), export.js is meant to
 //write one output file per chapter/notes/corkboard item - that's the whole point of this module,

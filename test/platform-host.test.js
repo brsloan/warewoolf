@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
 
 const { createPlatform, COMMANDS, CODES, PlatformError } = require('../src/components/controllers/platform');
 const { createCommandHost, errorEnvelope, isErrorEnvelope } = require('../src/components/controllers/platform-host');
@@ -139,4 +140,27 @@ test('the window loads the built preload bundle', function(){
   const main = fs.readFileSync(path.join(__dirname, '..', 'src', 'index.js'), 'utf8');
 
   assert.match(main, /preload:\s*path\.join\(__dirname,\s*'preload\.bundle\.js'\)/);
+});
+
+
+//index.js requires 'electron' at its first line, so nothing in this suite can load it - which means
+//nothing in this suite notices if it does not parse. Every other file in src/ is either required by
+//a test or pulled into the renderer bundle, where esbuild would fail the build; index.js is the one
+//file with neither guard, and a syntax error in it is not a failing test, it is a native "A
+//JavaScript error occurred in the main process" dialog and an app that never opens a window.
+//
+//Compiling it is as far as this can go without Electron - it does not run a line of it - but that
+//is exactly the failure that has no other net. Phase 9a shipped a broken escape into this file and
+//found it only by packaging the app and reading the crash dialog.
+function compiles(relativePath){
+  const source = fs.readFileSync(path.join(__dirname, '..', relativePath), 'utf8');
+  new vm.Script(source, { filename: relativePath });
+}
+
+test('index.js parses', function(){
+  assert.doesNotThrow(function(){ compiles('src/index.js'); });
+});
+
+test('preload.js parses', function(){
+  assert.doesNotThrow(function(){ compiles('src/preload.js'); });
 });

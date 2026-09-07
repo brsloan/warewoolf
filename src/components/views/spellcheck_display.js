@@ -3,10 +3,10 @@ const { runSpellcheck, addWordToPersonalDictFile } = require('../controllers/spe
 const { replace, replaceAllInAllChapters } = require('../controllers/findreplace');
 
 //Async now that loading the dictionaries goes through the platform facade.
-async function showSpellcheck(editorQuill, project, sysDirectories, displayChapterByIndex, startingIndex = 0, wordsToIgnore = []){
+async function showSpellcheck(editorQuill, project, displayChapterByIndex, startingIndex = 0, wordsToIgnore = []){
     enableSearchView();
 
-    var invalidWord = await runSpellcheck(editorQuill, sysDirectories, startingIndex, wordsToIgnore);
+    var invalidWord = await runSpellcheck(editorQuill, startingIndex, wordsToIgnore);
     if(invalidWord)
       editorQuill.setSelection(invalidWord.index, invalidWord.word.length);
 
@@ -75,7 +75,7 @@ async function showSpellcheck(editorQuill, project, sysDirectories, displayChapt
     var ignoreBtn = createButton("Ignore");
     ignoreBtn.onclick = function(){
       var nextIndex = invalidWord ? invalidWord.index + invalidWord.word.length : 0;
-      return showSpellcheck(editorQuill, project, sysDirectories, displayChapterByIndex, nextIndex, wordsToIgnore);
+      return showSpellcheck(editorQuill, project, displayChapterByIndex, nextIndex, wordsToIgnore);
     }
     popup.appendChild(ignoreBtn);
 
@@ -129,7 +129,7 @@ async function showSpellcheck(editorQuill, project, sysDirectories, displayChapt
     var addToDic = createButton("<span class='access-key'>A</span>dd To Dictionary");
     addToDic.onclick = async function(){
       if(invalidWord){
-        await addWordToPersonalDictFile(invalidWord.word, sysDirectories);
+        await addWordToPersonalDictFile(invalidWord.word);
         return ignoreBtn.onclick();
       }
     }

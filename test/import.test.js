@@ -31,6 +31,15 @@ test.before(function(){
   errorLog.setPlatform(createPlatform(createNodeBacking({ paths: { userData: tempDir() } })));
 });
 
+//The module under test holds its own createPlatform(createIpcBacking()) instance and reaches the
+//machine through window.warewoolf, exactly as it does in the app. A real node backing sits behind
+//the bridge, so these tests still assert against real files in real temp directories - across a
+//real structured-clone boundary now.
+const { installBridge, uninstallBridge } = require('./fake-bridge');
+
+test.before(function(){ installBridge(); });
+test.after(uninstallBridge);
+
 function plainTextOptions(overrides){
   return Object.assign({
     chapLabels: 'firstLine',

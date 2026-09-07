@@ -1,12 +1,13 @@
 const { logError } = require('../controllers/error-log');
 const { createPlatform } = require('./platform');
-const { createNodeBacking } = require('./platform-node');
+const { createIpcBacking } = require('./platform-ipc');
 
 //loadCorkboard()/saveCorkboard() take the chapters directory directly (like loadChapter/
 //saveChapter in group C) rather than any injected app/userData path, so this module needs no
-//boot-time wiring - it holds its own node-backed instance, the same way file-manager.js holds its
-//own for group E below.
-var platform = createPlatform(createNodeBacking({}));
+//boot-time wiring - it holds its own instance, the same way file-manager.js holds its own for
+//group E below. Phase 9a swapped the backing under every one of these from node to ipc: the
+//filesystem work moved to the main process, and this side now names a command and waits.
+var platform = createPlatform(createIpcBacking());
 
 function getCorkboardForExport(chaptersPath, options){
     return getCorkboardAsMd(chaptersPath).then(function(returnText){

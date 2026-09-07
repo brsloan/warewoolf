@@ -12,6 +12,7 @@ const errorLog = require('../src/components/controllers/error-log');
 const { createPlatform } = require('../src/components/controllers/platform');
 const { createNodeBacking } = require('../src/components/controllers/platform-node');
 const updatesPath = require.resolve('../src/components/controllers/updates');
+const { installBridge, uninstallBridge } = require('./fake-bridge');
 
 //updates.js (Phase 8) holds its own standing platform instance, built once when the module is
 //first required - createNodeBacking() resolves https.request/https.get/child_process.spawn off
@@ -21,6 +22,13 @@ const updatesPath = require.resolve('../src/components/controllers/updates');
 //the same pattern applied to every test in this file now, not just the ones that used to need it.
 function freshUpdates(){
   delete require.cache[updatesPath];
+  //Phase 9a: the standing instance is ipc-backed now, so the node backing that resolves
+  //https.request/https.get/child_process.spawn lives behind the bridge instead of inside this
+  //module. The ordering constraint is unchanged and this is still where it is satisfied - the
+  //backing is constructed here, after the mock and before the re-require. It also has to be *one*
+  //backing per test run: installUpdate only accepts a path a prior downloadUpdate vouched for, and
+  //re-installing the bridge mid-test would throw that set away.
+  installBridge();
   return require(updatesPath);
 }
 
@@ -41,6 +49,8 @@ function freshTempDir(t){
 test.before(function(){
   errorLog.setPlatform(createPlatform(createNodeBacking({ paths: { userData: tempDir() } })));
 });
+
+test.after(uninstallBridge);
 
 function releaseJson(tag, overrides){
   const v = tag.replace('v', '');

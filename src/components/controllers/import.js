@@ -9,11 +9,11 @@ const { convertMarkedItalics } = require('./convert-italics');
 const { convertMarkedTabs } = require('./convert-tabs');
 const { parseMDF } = require('./markdownFic');
 const { createPlatform } = require('./platform');
-const { createNodeBacking } = require('./platform-node');
+const { createIpcBacking } = require('./platform-ipc');
 
 //readTextFile takes no injected config - path is a full path - so this holds its own standing
 //instance, the same reason file-manager.js/docx-import.js do.
-var platform = createPlatform(createNodeBacking({}));
+var platform = createPlatform(createIpcBacking());
 
 function initiateImport(sysDirectories, options, addImportedChapter, cback){
 
