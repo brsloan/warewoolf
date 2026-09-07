@@ -1337,12 +1337,44 @@ function createNodeBacking(deps){
   //reads it later, from a separate click. Everywhere else the download *is* the deliverable - the
   //About panel tells the writer it is in their downloads folder and they go run it themselves - so
   //that is where it goes.
+  //`private` says whether this backing made the directory and is therefore free to lock it down
+  //afterwards. The downloads branch is the writer's own folder with their own files in it - taking
+  //write permission away from it would be a rude thing to do to a directory this command does not
+  //own, and there is no installUpdate off linux for the hardening to protect anyway.
   function updateDestinationDir(){
     if(currentPlatform() !== 'linux' && paths.downloads != null)
-      return normalizePath(paths.downloads, 'downloads').replace(/\/+$/, '');
+      return { dir: normalizePath(paths.downloads, 'downloads').replace(/\/+$/, ''), private: false };
 
-    return normalizePath(fs.mkdtempSync(path.join(os.tmpdir(), UPDATE_DIR_PREFIX)), 'updateDirectory')
-      .replace(/\/+$/, '');
+    return {
+      dir: normalizePath(fs.mkdtempSync(path.join(os.tmpdir(), UPDATE_DIR_PREFIX)), 'updateDirectory')
+        .replace(/\/+$/, ''),
+      private: true
+    };
+  }
+
+  //Narrows the window between installUpdate's hash check and dpkg's own read of the file. The hash
+  //is the guard that matters; this closes the routes a compromised renderer could use to swap the
+  //bytes inside that window, using nothing but commands it already has:
+  //
+  //  0400 on the file      - writeBinaryFile can no longer overwrite it; it gets EACCES instead.
+  //  0500 on the directory - deleteEntry can no longer unlink it and write a replacement, since
+  //                          removing an entry needs write permission on the directory, not the file.
+  //
+  //Not a complete defence - the owner can chmod back, and anything running as the user outside this
+  //app's command surface can do as it likes. It closes what this app itself exposes, which is the
+  //part that became reachable when the renderer went behind a bridge.
+  //
+  //Logged rather than fatal on failure: a filesystem that will not take the mode (a FAT-formatted
+  //SD card, say) should not turn a good download into a failed one. The hash check still stands on
+  //its own, so what is lost is defence in depth, not the guarantee.
+  function hardenDownloadedUpdate(destPath, dir){
+    try{
+      fs.chmodSync(destPath, 0o400);
+      fs.chmodSync(dir, 0o500);
+    }
+    catch(chmodErr){
+      log(chmodErr);
+    }
   }
 
   //Resolves only once the write stream's 'close' fires. The original updates.js resolved on
@@ -1370,7 +1402,8 @@ function createNodeBacking(deps){
       //Filename first: it is the half that can refuse, and updateDestinationDir() has a side effect
       //(fs.mkdtempSync) that would otherwise leave an empty directory behind for every rejected URL.
       var filename = updateAssetFilename(url);
-      var destPath = updateDestinationDir() + '/' + filename;
+      var destination = updateDestinationDir();
+      var destPath = destination.dir + '/' + filename;
 
       if(vouchedUpdates.has(destPath)){
         resolve({ path: destPath });
@@ -1394,6 +1427,11 @@ function createNodeBacking(deps){
           settle(reject, fromNodeError(downloadErr, { command: 'downloadUpdate' }));
           return;
         }
+
+        //Hardened before the vouch, not after: installUpdate will only ever act on a path that is
+        //in this map, so the permissions are in place before the path becomes usable at all.
+        if(destination.private)
+          hardenDownloadedUpdate(destPath, destination.dir);
 
         vouchedUpdates.set(destPath, digest.digest('hex'));
         settle(resolve, { path: destPath });

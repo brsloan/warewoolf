@@ -67,12 +67,17 @@ const createWindow = () => {
       //Explicit, and not the same decision as the two lines above it. Electron's default has been
       //`sandbox: true` since v20; it was only ever off here because `nodeIntegration: true`
       //disables it automatically. Removing nodeIntegration would therefore have turned the OS-level
-      //sandbox on as a *side effect* of the context-isolation flip - two irreversible-feeling
-      //changes in one commit, which is exactly what splitting 9a from 9b was meant to avoid, and
-      //what Part 1 kept the forge and Electron steps apart for. Pinned to the value it already had
-      //so the flip stays one variable. preload.bundle.js is bundled specifically so that turning
-      //this on later costs nothing; that evaluation is its own step, on its own evidence.
-      sandbox: false,
+      //sandbox on as a *side effect* of the context-isolation flip, so 9b pinned it to `false` to
+      //keep that flip one variable, and left turning it on as its own step on its own evidence.
+      //
+      //This is that step. contextIsolation stops renderer code reaching Node; this stops it reaching
+      //the OS underneath - so a Chromium-level exploit behind a crafted .docx or .epub still cannot
+      //make arbitrary syscalls. The reason it waited for hardware: on Linux the sandbox needs either
+      //unprivileged user namespaces or the setuid chrome-sandbox helper, and without one Chromium
+      //refuses to start - a black screen on a kiosk: true device with nothing else to switch to.
+      //Verified starting on a real writerDeck (Pi OS Lite, Xorg, Matchbox) before this was set.
+      //preload.bundle.js is bundled precisely so it keeps working here, with no require() of its own.
+      sandbox: true,
 
       preload: path.join(__dirname, 'preload.bundle.js'),
       spellcheck: false,

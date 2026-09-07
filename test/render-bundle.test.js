@@ -185,9 +185,10 @@ test('the renderer bundle leaves nothing external at all', function(){
 //`sandbox` is asserted explicitly because leaving it out would NOT have left it alone. Electron's
 //default has been `sandbox: true` since v20, disabled automatically only while
 //`nodeIntegration: true` is set - so removing nodeIntegration turns the OS-level sandbox on as a
-//side effect. Phase 9b is one variable, so it is pinned to false here and evaluated on its own
-//evidence separately. If that evaluation later turns it on, this test is where that decision
-//becomes visible rather than something inherited from a default.
+//side effect. Phase 9b kept the flip to one variable by pinning it false and evaluating it
+//separately; that evaluation has since run on a real writerDeck (Pi OS Lite, Xorg, Matchbox) and
+//turned it on. Asserted as `true` rather than "set to either" now the decision exists: this is
+//where turning it back off has to argue with a test instead of passing unnoticed.
 //Comments are stripped first, and not as tidiness: index.js explains at length *why* nodeIntegration
 //is gone, and the words "nodeIntegration: true" appear in that explanation. Matching raw source
 //would fail on the comment that documents the fix.
@@ -204,9 +205,10 @@ test('index.js configures the renderer as context-isolated with no node integrat
     'contextIsolation must be true - the whole of Part 2 is in service of this line');
   assert.doesNotMatch(indexSource, /nodeIntegration:\s*true/,
     'nodeIntegration must not be re-enabled');
-  assert.match(indexSource, /sandbox:\s*(true|false)/,
-    'sandbox must be set explicitly, not inherited from an Electron default that changes with '
-      + 'nodeIntegration');
+  assert.match(indexSource, /sandbox:\s*true/,
+    'sandbox must be on, and set explicitly rather than inherited from an Electron default that '
+      + 'changes with nodeIntegration - it was verified starting on a real writerDeck before this '
+      + 'was turned on, and turning it back off is a decision that needs its own evidence');
   assert.match(indexSource, /preload:/,
     'the renderer reaches the main process only through the preload bridge');
 });

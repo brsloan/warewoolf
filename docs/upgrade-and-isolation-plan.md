@@ -1977,6 +1977,11 @@ a written file as trustworthy. That is what the digest does.
 
 #### What is still open, named rather than closed
 
+> **Closed in Phase 9d.** Both items below — the `chmod` hardening and the sandbox
+> flag — were held for the Pi pass and settled there. See "Phase 9d" at the end of
+> this document. The reasoning below is kept as it stood, because it is why they
+> waited.
+
 **There is a window between the spawn and `dpkg` opening the file.** The digest
 check and the spawn cannot be interleaved (single-threaded main process), but once
 `sudo` is running, a renderer that calls `writeBinaryFile` on the vouched path
@@ -2099,3 +2104,84 @@ line is unusually clear here.
 
 Between phases, `/code-review` on each batch is worth more than model choice —
 the mechanical work fails in mechanical ways, and review catches those cheaply.
+
+---
+
+### Phase 9d — The two decisions the Pi pass owed — **done**
+
+Both were deferred to hardware for the same reason: neither could be evaluated
+from a Windows box, and both fail in ways a suite cannot see. The Pi pass ran, and
+both are now settled rather than pending.
+
+#### `sandbox: true`
+
+Turned on at `src/index.js`. Electron has defaulted to it since v20; it was off
+here only because `nodeIntegration: true` disables it automatically, so Phase 9b
+pinned it `false` to keep the context-isolation flip to one variable and left the
+evaluation as its own step.
+
+`contextIsolation` stops renderer code reaching Node. This stops it reaching the
+OS underneath, so a Chromium-level exploit behind a crafted `.docx` or `.epub`
+still cannot make arbitrary syscalls. The reason it needed hardware: on Linux the
+sandbox wants either unprivileged user namespaces or the setuid `chrome-sandbox`
+helper, and with neither, Chromium refuses to start — a black screen on a
+`kiosk: true` device with nothing else to switch to. Verified starting on a real
+writerDeck (Pi OS Lite, Xorg, Matchbox) before the flag was set.
+
+`render-bundle.test.js` now asserts `sandbox: true` rather than "set to either".
+The old assertion existed to stop the value being *inherited*; now that a decision
+exists, the test pins the decision, so turning it back off has to argue with a
+test instead of passing unnoticed.
+
+#### `chmod 0400` / `0500`
+
+Applied in `downloadUpdate`, in `hardenDownloadedUpdate()`. It narrows the window
+between `installUpdate`'s hash check and `dpkg`'s own read of the file, by closing
+the routes a compromised renderer could use to swap the bytes with commands it
+already has:
+
+- **`0400` on the file** — `writeBinaryFile` gets EACCES instead of overwriting it.
+- **`0500` on the directory** — `deleteEntry` cannot unlink it and write a
+  replacement, since removing an entry needs write permission on the directory,
+  not the file. This is the half a file mode alone would have missed.
+
+Three things about the shape of it:
+
+- **Only on the private branch.** `updateDestinationDir()` now returns whether the
+  backing made the directory. The non-Linux branch writes into the writer's own
+  downloads folder, and taking write permission away from a directory this command
+  does not own would be a rude thing to do to it — with no `installUpdate` off
+  Linux for the hardening to protect anyway. A test asserts that folder still takes
+  a new file afterwards.
+- **Non-fatal.** A filesystem that will not take the mode (a FAT-formatted SD card)
+  should not turn a good download into a failed one. The failure is logged. What is
+  lost then is defence in depth, not the guarantee — the digest still stands alone.
+- **Not a complete defence, and not claimed as one.** The owner can `chmod` back,
+  and anything running as the user outside this app's command surface can do as it
+  likes. It closes what *this app* exposes, which is the part that became reachable
+  when the renderer went behind a bridge.
+
+The existing regression test — "overwriting the file `downloadUpdate` did produce
+does not inherit its vouch" — now restores the mode before its overwrite. That is
+deliberate. The digest and the permissions are separate layers, and the digest is
+the one that has to hold on its own; letting the chmod refuse the setup would have
+quietly turned a hash-guard test into a second permissions test.
+
+#### Tests
+
+**1306, from 1300.** Two of the new assertions are POSIX-only and skip on Windows,
+because mode bits are not a Windows notion — but the file-overwrite half is
+asserted unconditionally, since Windows `chmod` does set a read-only attribute and
+that is enough to refuse a write. Removing the hardening call fails two tests on
+Windows, so this is not a set of assertions that only run on hardware nobody
+develops on.
+
+#### Still owed on hardware
+
+`installUpdate`'s `sudo` spawn has still never run. Every test of it, here and in
+9c, went through the injected `spawnProcess` seam against a fake child. What is
+unverified is everything past the refusal: that `apt` accepts `--`, that argv and
+stdin arrive intact, that a real `.deb` installs, and now that `dpkg` reads a
+`0400` file inside a `0500` directory without complaint — which it should, since
+root ignores both, but that is reasoning rather than evidence. It needs one real
+update run on the writerDeck, through the About dialog, against a real release.

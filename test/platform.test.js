@@ -2101,6 +2101,18 @@ function updatePlatform(t, deps){
   //up front the way tempDir() does - it learns the path only from the result.
   t.after(function(){
     dirs.forEach(function(dir){
+      //downloadUpdate locks its own temp directory to 0500 and the asset to 0400, so on a real
+      //POSIX filesystem neither can be unlinked until the modes go back. Restoring them here is
+      //part of the cleanup, not a workaround: a test that could still delete them would be saying
+      //the hardening had not happened.
+      try{
+        fs.chmodSync(dir, 0o700);
+        fs.readdirSync(dir).forEach(function(entry){
+          try{ fs.chmodSync(path.join(dir, entry), 0o600); } catch(entryErr){}
+        });
+      }
+      catch(chmodErr){}
+
       fs.rmSync(dir, { recursive: true, force: true });
     });
   });
@@ -2143,9 +2155,81 @@ test('downloadUpdate allocates its own destination and writes the asset there', 
   assert.strictEqual(fs.readFileSync(result.path, 'utf8'), 'binary-content-stand-in');
 });
 
+//The hardening that narrows the window between installUpdate's hash check and dpkg's own read of
+//the file. Mode bits are a POSIX notion - Node's chmod on Windows only toggles a read-only flag and
+//does nothing at all to a directory - so the modes themselves are asserted only where the OS
+//actually has them. The Pi pass is what confirms this for real; what runs everywhere is that the
+//call happens on the right branch and not the wrong one.
+test('downloadUpdate locks down the asset and the directory it made for it', async function(t){
+  const fixture = updatePlatform(t, {
+    platform: 'linux',
+    httpsGet: fakeHttpsGet([{ statusCode: 200, body: 'binary-content-stand-in' }])
+  });
+
+  const result = await fixture.platform.downloadUpdate({ url: assetUrl('warewoolf_2.0.0_amd64.deb') });
+  fixture.cleanUp(result.path);
+
+  if(process.platform === 'win32'){
+    t.skip('chmod modes are not meaningful on Windows - the Pi pass covers this');
+    return;
+  }
+
+  assert.strictEqual(fs.statSync(result.path).mode & 0o777, 0o400,
+    'the downloaded asset should be read-only, so writeBinaryFile cannot overwrite it');
+  assert.strictEqual(fs.statSync(path.dirname(result.path)).mode & 0o777, 0o500,
+    'its directory should not be writable, so deleteEntry cannot unlink it and write a replacement');
+});
+
+//The reason the hardening exists, expressed as the attack rather than as the mode bits: a renderer
+//that has already got a legitimate download vouched tries to swap the bytes underneath it before
+//dpkg reads them, using only commands it already has.
+test('a renderer cannot swap a vouched update out from under installUpdate', async function(t){
+  const fixture = updatePlatform(t, {
+    platform: 'linux',
+    httpsGet: fakeHttpsGet([{ statusCode: 200, body: 'the real release asset' }])
+  });
+
+  const result = await fixture.platform.downloadUpdate({ url: assetUrl('warewoolf_2.0.0_amd64.deb') });
+  fixture.cleanUp(result.path);
+
+  //The overwrite half holds on Windows too: chmod there sets the read-only attribute, which is
+  //enough to refuse a write. Asserted unconditionally so this does not become a test that only
+  //ever runs on hardware nobody develops on.
+  await assert.rejects(fixture.platform.writeBinaryFile({
+    path: result.path, bytes: Buffer.from('swapped payload')
+  }), 'overwriting the vouched asset should be refused by the filesystem');
+
+  //Deleting and recreating is the other route, and refusing it depends on the directory's mode -
+  //which Windows does not have. POSIX only, and the Pi pass is what confirms it in the place it
+  //actually matters, since installUpdate is linux-only anyway.
+  if(process.platform !== 'win32')
+    await assert.rejects(fixture.platform.deleteEntry({ path: result.path }),
+      'unlinking it to write a replacement should be refused too');
+
+  assert.strictEqual(fs.readFileSync(result.path, 'utf8'), 'the real release asset',
+    'the bytes installUpdate hashed must still be the bytes on disk');
+});
+
 //The other branch, and the reason the destination is not simply "always a temp directory this
 //command owns": off linux there is no installUpdate, the download is the whole deliverable, and the
-//About panel tells the writer to go find it in their downloads folder.
+//About panel tells the writer to go find it in their downloads folder. It is also the writer's own
+//folder with their own files in it, so the hardening above must not touch it.
+test('downloadUpdate does not lock down the writer\'s downloads folder', async function(t){
+  const dir = tempDir(t);
+  const fixture = updatePlatform(t, {
+    platform: 'win32',
+    paths: { downloads: dir },
+    httpsGet: fakeHttpsGet([{ statusCode: 200, body: 'windows-binary' }])
+  });
+
+  await fixture.platform.downloadUpdate({ url: assetUrl('warewoolf_2.0.0_Windows_x64.zip') });
+
+  //Asserted by behaviour rather than by mode bits, so it means something on every platform: a
+  //directory this command does not own must still take a new file afterwards.
+  fs.writeFileSync(path.join(dir, 'writer-put-this-here.txt'), 'still mine', 'utf8');
+  assert.ok(fs.existsSync(path.join(dir, 'writer-put-this-here.txt')));
+});
+
 test('downloadUpdate writes into the downloads directory on platforms that cannot install', async function(t){
   const dir = tempDir(t);
   const fixture = updatePlatform(t, {
@@ -2391,12 +2475,22 @@ test('regression: writeBinaryFile then downloadUpdate cannot vouch an attacker-s
 //secret - it comes back to the renderer, which needs it for installUpdate - and writeBinaryFile can
 //still write to it. So the vouch cannot be about the path: it records the sha256 of the bytes this
 //backing downloaded, and installUpdate re-reads and re-hashes immediately before spawning.
+//The hash guard on its own, with the permission guard deliberately stood down. downloadUpdate now
+//locks the asset to 0400, so the swap this test performs is refused by the filesystem before it can
+//even be attempted through writeBinaryFile - which is what the hardening is for, and what its own
+//test above asserts. But the two are separate layers and the hash is the one that has to hold: file
+//modes protect against this app's own command surface and nothing else, so anything running as the
+//user outside it can still put different bytes there. Restoring the mode first is how this test
+//keeps asking the question it was written to ask - if the bytes change by any means at all, does
+//installUpdate still refuse? - rather than quietly becoming a second test of the chmod.
 test('regression: overwriting the file downloadUpdate did produce does not inherit its vouch', async function(t){
   const spawnFake = fakeSpawn([{ code: 0 }]);
   const fixture = installFixture(t, [{ statusCode: 200, body: 'the real asset' }], spawnFake);
   const platform = fixture.platform;
 
   const installerPath = await vouchedInstaller(fixture, 'pkg.deb');
+  fs.chmodSync(path.dirname(installerPath), 0o700);
+  fs.chmodSync(installerPath, 0o600);
   await platform.writeBinaryFile({ path: installerPath, bytes: Buffer.from('hostile postinst') });
 
   const err = await rejection(platform.installUpdate({ path: installerPath, password: 'whatever' }));
