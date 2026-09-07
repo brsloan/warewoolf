@@ -6,7 +6,7 @@
   "main": "src/index.js",
   "scripts": {
     "build": "npm run build:renderer && npm run build:preload",
-    "build:renderer": "esbuild src/render.js --bundle --platform=node --external:electron --sourcemap --outfile=src/render.bundle.js",
+    "build:renderer": "esbuild src/render.js --bundle --platform=browser --format=iife --global-name=warewoolfRenderer --sourcemap --outfile=src/render.bundle.js",
     "build:preload": "esbuild src/preload.js --bundle --platform=node --format=cjs --external:electron --sourcemap --outfile=src/preload.bundle.js",
     "prestart": "npm run build",
     "prepackage": "npm run build",

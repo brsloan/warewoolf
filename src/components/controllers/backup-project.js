@@ -1,4 +1,4 @@
-const path = require('path');
+const { basename, splitPath, join } = require('./path-utils');
 const { logError } = require('./error-log');
 const { createPlatform } = require('./platform');
 const { createIpcBacking } = require('./platform-ipc');
@@ -60,8 +60,8 @@ function ensureBackupDirectory(userSettings, docsDir, updatesFunction){
 
     updatesFunction('Creating backup directory...');
     return platform.createDirectory({
-      parent: path.dirname(userSettings.backupDirectory),
-      name: path.basename(userSettings.backupDirectory)
+      parent: splitPath(userSettings.backupDirectory).dir,
+      name: basename(userSettings.backupDirectory)
     });
   });
 }
@@ -81,19 +81,26 @@ async function deleteOldBackups(project, userSettings){
       var backupsToDel = backups.slice(0, userSettings.backupsToKeep * -1);
 
       await platform.pruneBackups({
-        paths: backupsToDel.map(function(fn){ return path.join(userSettings.backupDirectory, fn); })
+        paths: backupsToDel.map(function(fn){ return join(userSettings.backupDirectory, fn); })
       });
     }
   }
 }
 
-//createDirectory (group E) normalizes its returned path to forward slashes, which would not match
-//a caller comparing against path.join(docsDir, 'backups') on Windows even though both name the same
-//directory - the create is used only for its side effect, and the path handed back is built the
-//same way the original createBackupsDirectory built it.
+//The create is used only for its side effect; the path handed back is built here rather than taken
+//from the command's own return value, so this function's answer does not depend on what group E
+//chooses to normalize.
+//
+//(Phase 9b) This is the one place the separator visibly changed. It used to be path.join(), which
+//on Windows rewrote docsDir - already forward-slashed by index.js:517-522 - into backslashes, and
+//that backslash form is what got persisted into userSettings.backupDirectory and shown in the
+//settings field. join() here composes with '/' like the rest of the renderer, so a newly created
+//backup directory now matches the convention every other path in the app already follows. Existing
+//settings keep whatever they hold: splitPath/basename above normalize on the way in, so a stored
+//backslash path is read exactly as it was before.
 function createBackupsDirectory(docsDir){
   return platform.createDirectory({ parent: docsDir, name: 'backups' }).then(function(){
-    return path.join(docsDir, 'backups');
+    return join(docsDir, 'backups');
   });
 }
 

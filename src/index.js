@@ -55,12 +55,25 @@ const createWindow = () => {
   const mainWindow = new BrowserWindow({
     autoHideMenuBar: true,
     webPreferences: {
-      //Phase 9a builds the bridge and leaves both flags where they were, deliberately: a failure
-      //with the bridge and the flags landing together is ambiguous between "the bridge is wrong"
-      //and "the flag broke something", which is the worst place in this project to be debugging two
-      //things at once. 9b is the flag change on its own, against a bridge already known to work.
-      nodeIntegration: true,
-      contextIsolation: false,
+      //Phase 9b, and the line the whole of Part 2 was in service of. The renderer runs in its own
+      //isolated world now: the page's `window` is not the preload's `window`, `require` does not
+      //exist in it, and the only thing reaching main is `window.warewoolf` - three functions
+      //(invoke/on/off), each of which checks its name against the COMMANDS/EVENTS tables in
+      //platform.js before anything crosses. `nodeIntegration` is not set to false, it is gone:
+      //false is already the default, and a named `false` invites someone to try `true` to fix a
+      //bug rather than adding a command.
+      contextIsolation: true,
+
+      //Explicit, and not the same decision as the two lines above it. Electron's default has been
+      //`sandbox: true` since v20; it was only ever off here because `nodeIntegration: true`
+      //disables it automatically. Removing nodeIntegration would therefore have turned the OS-level
+      //sandbox on as a *side effect* of the context-isolation flip - two irreversible-feeling
+      //changes in one commit, which is exactly what splitting 9a from 9b was meant to avoid, and
+      //what Part 1 kept the forge and Electron steps apart for. Pinned to the value it already had
+      //so the flip stays one variable. preload.bundle.js is bundled specifically so that turning
+      //this on later costs nothing; that evaluation is its own step, on its own evidence.
+      sandbox: false,
+
       preload: path.join(__dirname, 'preload.bundle.js'),
       spellcheck: false,
       devTools: !app.isPackaged
@@ -108,11 +121,12 @@ const createWindow = () => {
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
 
   //Nothing in the renderer opens a new window or navigates away today - the one <a> tag in the
-  //About popup does not even set an href - but nodeIntegration is on for this window, so a
-  //navigation or new-window request succeeding here would run with full Node access rather than
-  //being sandboxed the way a browser tab would be. Deny both outright rather than leaving that
-  //open for whatever a future feature (or a bug in a dependency parsing an imported .docx/.epub)
-  //might one day attempt.
+  //About popup does not even set an href. This mattered more before Phase 9b, when a navigation
+  //succeeding here would have run with full Node access; it still matters now, because a new window
+  //inherits this one's webPreferences (preload included) and so would arrive holding
+  //window.warewoolf - the bridge, handed to whatever page a navigation had just loaded. Denied
+  //outright rather than left open for whatever a future feature (or a bug in a dependency parsing
+  //an imported .docx/.epub) might one day attempt.
   mainWindow.webContents.setWindowOpenHandler(() => {
     return { action: 'deny' };
   });
@@ -491,10 +505,10 @@ app.on('window-all-closed', () => {
 //call per command, so a command cannot be added to the contract and forgotten here.
 //
 //Phase 9a moved the node backing out of the renderer and into this process. Through Phase 8 the
-//renderer held its own createNodeBacking() for groups B/C/D/E/F/G/H/I/J and reached fs directly
-//through nodeIntegration; only group A (app.getPath, nativeTheme, the menu, app.quit - none of them
-//renderer-reachable under any flag) crossed by IPC. Now everything does, which is what makes 9b a
-//flag change rather than a rewiring.
+//renderer held its own createNodeBacking() for groups B/C/D/E/F/G/H/I/J and reached fs directly,
+//node integration being on at the time; only group A (app.getPath, nativeTheme, the menu, app.quit
+//- none of them renderer-reachable under any flag) crossed by IPC. Now everything does, which is
+//what made 9b a flag change rather than a rewiring.
 //
 //Group A is still special, but the other way round: it is the only group whose implementation is
 //*here* rather than in the backing. platform-node.js takes those five as injected hooks, which

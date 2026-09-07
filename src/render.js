@@ -1,4 +1,3 @@
-const fs = require('fs');
 const Quill = require('quill');
 const { createPlatform } = require('./components/controllers/platform');
 const { createIpcBacking } = require('./components/controllers/platform-ipc');
@@ -247,17 +246,24 @@ async function loadInitialProject(){
   const writableExampleDir = sysDirectories.userData + "/Projects/Frankenstein";
   const writableExample = writableExampleDir + "/" + exampleFilename;
 
-  if(fileRequestedOnOpen != null && fs.existsSync(fileRequestedOnOpen)){
+  //(Phase 9b) These four were the renderer's last `fs` calls, and the last thing in it that opened
+  //the filesystem at all. pathExists (group E) already existed; awaiting it here is the whole
+  //change. The chain stays an if/else-if - the checks are ordered by preference, not merely
+  //grouped, and each one must not run when an earlier branch already matched: an eager
+  //Promise.all() of all four would stat the example projects on every launch, and worse, would ask
+  //the main process about paths built from a userSettings that a failed earlier branch may have
+  //left stale. Sequential `await` in the conditions preserves exactly the old short-circuit.
+  if(fileRequestedOnOpen != null && await platform.pathExists({ path: fileRequestedOnOpen })){
     await setProject(fileRequestedOnOpen);
     userSettings.lastProject = fileRequestedOnOpen;
   }
-  else if(userSettings.lastProject != null && fs.existsSync(userSettings.lastProject))
+  else if(userSettings.lastProject != null && await platform.pathExists({ path: userSettings.lastProject }))
     await setProject(userSettings.lastProject);
-  else if(fs.existsSync(writableExample)){
+  else if(await platform.pathExists({ path: writableExample })){
     await setProject(writableExample);
     userSettings.lastProject = writableExample;
   }
-  else if(fs.existsSync(bundledExample)){
+  else if(await platform.pathExists({ path: bundledExample })){
     //The bundled copy lives inside the installed app directory (e.g. /usr/lib/... on a Linux
     //package install), which a normal user account can't write back to - editing it and letting
     //autosave or a manual save run against it in place always fails with EACCES. Copy it out to

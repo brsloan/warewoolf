@@ -1,42 +1,13 @@
 const { logError } = require('./error-log');
 const { createPlatform } = require('./platform');
 const { createIpcBacking } = require('./platform-ipc');
+const { normalizeSlashes, splitPath, basename, extAndStem } = require('./path-utils');
 
 //Group E's commands take no injected config at all - every one of them operates purely on the
 //path(s) it is given, unlike groups A/D/I which need paths.app/userData wired in. So this module
 //holds its own standing instance rather than needing setPlatform() wiring from render.js, the same
 //reason corkboard.js does.
 var platform = createPlatform(createIpcBacking());
-
-//Every path this module is handed is normalized to forward slashes before any string-splitting is
-//done on it, the same reason platform-node.js's own normalizePath() does this for group B/C paths -
-//it means every helper below can split on '/' alone and still work with a Windows backslash path
-//coming from an Electron dialog or a user-typed field.
-function normalizeSlashes(p){
-  return String(p).replaceAll('\\', '/');
-}
-
-function splitPath(fullPath){
-  var normalized = normalizeSlashes(fullPath);
-  var parts = normalized.split('/');
-  var base = parts.pop();
-  return { dir: parts.join('/'), base: base };
-}
-
-function basename(fullPath){
-  return splitPath(fullPath).base;
-}
-
-//Splits only the base name's LAST extension - mirroring path.basename/path.extname rather than
-//path's whole-path splitting, which is what corrupted a path with a dot in a parent directory's
-//name (see the copyFiles regression tests). A name with no dot, or a dotfile with nothing before
-//the dot, has no extension.
-function extAndStem(base){
-  var dot = base.lastIndexOf('.');
-  if(dot <= 0)
-    return { stem: base, ext: '' };
-  return { stem: base.slice(0, dot), ext: base.slice(dot) };
-}
 
 //Renderer-side policy built out of the generic pathExists/statEntry primitives, exactly as the
 //design note on moveEntry in platform.js describes - the uniqueness scheme itself (append "_copy"

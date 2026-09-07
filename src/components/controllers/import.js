@@ -1,4 +1,4 @@
-const path = require('path');
+const { stemOfPath } = require('./path-utils');
 const showFileDialog = require('../views/file-dialog_display');
 const { logError } = require('./error-log');
 const { showWorking, hideWorking } = require('../views/working_display');
@@ -162,13 +162,13 @@ function importMDF(filepath, options, callback){
   });
 }
 
-//Splits off only the final extension (via path.basename/extname), not every "." in the filename -
-//splitting on the first "." lost everything after it for a multi-dot name (e.g. "chapter 1.5.txt"
-//became "chapter 1", "my.novel.draft.txt" became "my"). Same fix as file-manager.js applies for
-//the same reason.
+//Splits off only the final extension, not every "." in the filename - splitting on the first "."
+//lost everything after it for a multi-dot name (e.g. "chapter 1.5.txt" became "chapter 1",
+//"my.novel.draft.txt" became "my"). stemOfPath is the shared helper file-manager.js applies for
+//the same reason, and it does the backslash normalization this used to do inline before handing
+//the name back.
 function getFilenameFromFilepath(filepath){
-  var normalized = filepath.replaceAll('\\', '/');
-  return path.basename(normalized, path.extname(normalized));
+  return stemOfPath(filepath);
 }
 
 module.exports = {
