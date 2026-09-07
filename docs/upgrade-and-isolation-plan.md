@@ -1353,6 +1353,82 @@ were not clicked through the UI. What crosses the boundary underneath them
 exercised directly instead, both under the test suite and against real
 external state as described above.
 
+**The wifi gap Phase 8 recorded is closed. Not Phase 9, and not part of Phase
+8 either — a step in between, so Phase 9 is a flag flip rather than an
+interface design exercise.** Phase 8's own write-up flagged four of
+`wifi-manager.js`'s seven functions (`getConnectionState`, `getWifiStatus`,
+`enableWifi`, `disableWifi`) as spawning `nmcli` directly with no group K
+command behind them, unowned by any phase, and certain to break outright once
+`nodeIntegration` goes away. `wifiGetConnectionState`, `wifiGetStatus`,
+`wifiEnable` and `wifiDisable` are now in `COMMANDS` (group K is 12 commands,
+not 8) and implemented in `platform-node.js`, alongside the three added in
+Phase 8. `enableWifi`/`disableWifi` map to `wifiEnable`/`wifiDisable`, both
+declared with an explicit empty `params: []` — they toggle the radio as a
+whole, not a specific device, unlike `wifiConnect`'s ssid/psk.
+
+**Ending the duplication was the point, not just adding the missing
+commands.** `platform-node.js` had carried its own copy of `nmcli`'s terse-output
+field-splitting (`splitNmcliFields`) specifically because three of
+`wifi-manager.js`'s seven functions had a command and four didn't, so
+`wifi-manager.js` kept a second copy for the other four. With all seven behind
+a command, `wifi-manager.js` no longer parses `nmcli` output at all — the
+whole parse lives in `platform-node.js`, once. `wifi-manager.js` itself lost
+`child_process` entirely and now wraps all seven platform calls in the same
+`reportUnlessUnavailable` pattern the first three already used (log a real
+failure, stay quiet for `UNAVAILABLE` — nmcli missing is the ordinary case off
+a writerDeck, not a failure worth logging every time this dialog opens).
+
+**Converting the remaining four functions to promises made
+`wifi-manager_display.js` async throughout, which is where the actual design
+work was.** `updateStateUntilConnected()` polls `getConnectionState` every
+250ms until the radio reports `connected`, recursing via `setTimeout` — a
+shape the file already had a cancellation guard for
+(`wifiManagerGeneration`/`isCurrent()`, bumped on close or reopen), because the
+old callback-based poll had exactly the same "must not outlive a closed
+dialog" requirement. Converting to a promise-based `pollUntilConnected()`
+async loop reopened the question from a different angle: nothing external can
+cancel a promise the way `clearTimeout` cancels a timer, so the existing guard
+had to move from "checked once at the top of the recursive call" to "checked
+at the top of every loop iteration, and again after every `await`" — every
+point where the loop would otherwise touch the DOM or schedule more work.
+
+This is the same class of hazard Phase 5 hit in `missing-pups_display.test.js`
+— async work that outlives the DOM it was scheduled against, which surfaced
+there as an unhandled-rejection crash rather than a clean test failure,
+because a handler kept running past its first `await` after the test's own
+teardown had already deleted `global.document`. It doesn't reproduce in
+exactly that shape here, because every one of `wifi-manager.js`'s functions is
+designed to never reject — each catches its own platform-level error and
+resolves a fallback value, the same discipline `getWifiNetworks`/
+`connectToNewWifi`/`getIpAddress` already followed before this change. But the
+underlying risk (a poll that keeps running, and keeps trying to update a
+dialog nobody can see, after Close) is the same shape regardless of whether it
+would crash, and it is what the guard exists to stop.
+
+Mutation-checked directly: removing the loop's own `isCurrent()` check (so it
+becomes an unconditional `while(true)`) fails exactly the two tests that count
+`getConnectionState` calls across a Close and a reopen, and nothing else — the
+inner `if(!isCurrent()) return` right after the `await` still catches the call
+already in flight before it touches the DOM, which is itself
+independently mutation-tested: a dedicated test leaves a `getConnectionState()`
+call pending, clicks Close, then resolves it with `state: 'connected'` and
+asserts the (now-stale) state label was never written to. Removing that
+specific `if` fails exactly that test and no other. A third test reproduces
+the Phase 5 failure shape directly — Close, then delete `global.window`/
+`global.document`, then let the pending poll step actually run — and asserts
+no unhandled rejection surfaces.
+
+Verified: **1062 tests pass** (from 1047). Fifteen net new: twelve in
+`platform.test.js` (contract coverage for all four commands, including
+`UNAVAILABLE` off a missing `nmcli` as the ordinary case, matching every other
+wifi/battery command in this group), a net one in `wifi-manager.test.js` (new
+UNAVAILABLE-vs-genuine-failure coverage added for the four newly-converted
+functions, netted against two now-obsolete "calls back exactly once"
+regression tests removed - that failure mode belonged to the old hand-rolled
+callback plumbing and cannot recur once every call returns a real promise),
+and a net two in `wifi-manager_display.test.js` (the existing poll-cancellation
+tests converted to the async API, plus the two new tests described above).
+
 ## Phase 9 — Flip the flag
 
 Set `contextIsolation: true`, remove `nodeIntegration`, mark Node builtins as

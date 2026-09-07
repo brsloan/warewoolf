@@ -376,6 +376,21 @@ var COMMANDS = {
   //shell metacharacters cannot inject anything (there is no shell here either).
   wifiConnect: { group: 'K', params: ['ssid'], optional: ['psk'], returns: 'void' },
   wifiGetAddress: { group: 'K', params: [], returns: 'string (empty when the device has no address yet)' },
+  //Added after Phase 8, closing the gap that phase's own write-up recorded rather than converted:
+  //wifi-manager.js has seven functions and only three had a command. These four never appeared in
+  //this table before now, and still spawned nmcli directly from wifi-manager.js until this change -
+  //see the inventory's group K section for the history. Same UNAVAILABLE-on-missing-nmcli
+  //discipline as wifiListNetworks/wifiConnect/wifiGetAddress: the ordinary case off a writerDeck,
+  //not a failure worth logging every time this dialog opens.
+  wifiGetConnectionState: { group: 'K', params: [], returns: '{ state, connection }',
+    note: '`state`/`connection` are whatever nmcli reports for the wifi device - "unknown"/null when no wifi device is present at all, which is a resolved value, not UNAVAILABLE (a device search that comes back empty is not "nmcli is missing").' },
+  wifiGetStatus: { group: 'K', params: [], returns: "'enabled' | 'disabled', the radio's on/off state" },
+  //Toggles the wifi radio as a whole, not a specific device or connection - unlike wifiConnect,
+  //which takes the ssid/psk the writer just typed, these take nothing at all. Declared with an
+  //explicit empty params array rather than left to be inferred, since these are the last two
+  //commands added to this table and Phase 9 puts every one of them behind a bridge.
+  wifiEnable: { group: 'K', params: [], returns: 'void' },
+  wifiDisable: { group: 'K', params: [], returns: 'void' },
   //Phase 8 correction: rejects UNAVAILABLE rather than resolving null when no battery is present -
   //CODES.UNAVAILABLE's own doc comment already names "no battery" as its third example, and this is
   //the everyday result on every machine that is not a writerDeck. A battery that exists but cannot

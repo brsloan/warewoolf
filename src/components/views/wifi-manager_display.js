@@ -1,10 +1,18 @@
 const { closePopups, createButton, removeElementsByClass, generateRow, removeOptions } = require('../controllers/utils');
 const { enableWifi, disableWifi, getWifiStatus, getWifiNetworks, getConnectionState, connectToNewWifi, getIpAddress } = require('../controllers/wifi-manager');
 
-//Bumped on every showWifiManager() call and again when the popup is closed, so the
-//recursive updateStateUntilConnected() poll below can tell a stale instance apart from the
-//current one and stop rescheduling itself instead of polling nmcli forever in the background.
+//Bumped on every showWifiManager() call and again when the popup is closed. wifi-manager.js's own
+//seven functions are all promise-returning now, so every continuation below - the initial loads,
+//the enable/disable handlers, and above all pollUntilConnected's recursive poll - checks this
+//before touching the DOM or scheduling more work, instead of running forever in the background
+//after the dialog that started it is gone. A promise chain cannot be cancelled from the outside the
+//way a timer can be cleared; this is the only lever there is, so every `.then` that follows an
+//await/`.then` boundary checks it before doing anything observable.
 var wifiManagerGeneration = 0;
+
+function delay(ms){
+  return new Promise(function(resolve){ setTimeout(resolve, ms); });
+}
 
 function showWifiManager(){
 
@@ -38,10 +46,21 @@ function showWifiManager(){
   enableWifiCheck.onclick = function(){
     setNewConnectionEnabled(enableWifiCheck.checked);
     if(enableWifiCheck.checked){
-      enableWifi(alertWifiEnabled);
+      enableWifi().then(function(){
+        return delay(500);
+      }).then(function(){
+        if(!isCurrent()) return;
+        return pollUntilConnected();
+      });
     }
     else {
-      disableWifi(alertWifiDisabled);
+      disableWifi().then(function(){
+        if(!isCurrent()) return;
+        return getConnectionState();
+      }).then(function(stateData){
+        if(!isCurrent() || stateData == null) return;
+        updateConnectionState(stateData);
+      });
     }
   }
 
@@ -113,7 +132,15 @@ function showWifiManager(){
     }
     connectBtn.disabled = true;
     connectingStatus.innerText = "Connecting...";
-    connectToNewWifi(networksSelect.value, networkPassInput.value, alertNewConnection);
+    connectToNewWifi(networksSelect.value, networkPassInput.value).then(function(connectData){
+      if(!isCurrent()) return;
+      connectBtn.disabled = false;
+      connectingStatus.innerText = connectData;
+      return getConnectionState().then(function(stateData){
+        if(!isCurrent()) return;
+        updateConnectionState(stateData);
+      });
+    });
   }
   newConnectionSet.appendChild(connectBtn);
 
@@ -136,14 +163,27 @@ function showWifiManager(){
 
   closeBtn.focus();
 
-  //Kicked off only once every element a callback might touch has been created - each of these
-  //controller calls can resolve synchronously in principle, and used to run interleaved with the
-  //DOM setup above, so a same-tick callback could reference a var (e.g. connectedNetworkText)
-  //that hadn't been assigned yet.
-  getWifiStatus(updateWifiStatus);
-  getIpAddress(updateIpDisplay);
-  getConnectionState(updateConnectionState);
-  getWifiNetworks(updateNetworksList);
+  //Kicked off only once every element a callback might touch has been created. Each of these
+  //resolves on a microtask at the earliest now that wifi-manager.js's functions are all async, so
+  //there is no risk of one firing before the DOM above exists - but every one still guards on
+  //isCurrent(), since the dialog can close (or reopen, bumping the generation) before any of them
+  //resolve.
+  getWifiStatus().then(function(statData){
+    if(!isCurrent()) return;
+    updateWifiStatus(statData);
+  });
+  getIpAddress().then(function(addr){
+    if(!isCurrent()) return;
+    updateIpDisplay(addr);
+  });
+  getConnectionState().then(function(stateData){
+    if(!isCurrent()) return;
+    updateConnectionState(stateData);
+  });
+  getWifiNetworks().then(function(listData){
+    if(!isCurrent()) return;
+    updateNetworksList(listData);
+  });
 
   function updateWifiStatus(statData){
     if(statData == 'enabled')
@@ -175,39 +215,28 @@ function showWifiManager(){
     connectedNetworkText.innerText = stateData.connection;
   }
 
-  function updateStateUntilConnected(stateData){
-    if(!isCurrent()) return;
-    if(stateData.state == 'connected'){
-      connectionStateText.innerText = stateData.state;
-      connectedNetworkText.innerText = stateData.connection;
-    }
-    else {
-      setTimeout(function(){
-        if(!isCurrent()) return;
-        getConnectionState(updateStateUntilConnected);
-      }, 250);
-    }
-  }
-
-  function alertWifiEnabled(msg){
-    setTimeout(function(){
-      if(!isCurrent()) return;
-      getConnectionState(updateStateUntilConnected);
-    }, 500);
-  }
-
-  function alertWifiDisabled(msg){
-    getConnectionState(updateConnectionState);
-  }
-
-  function alertNewConnection(connectData){
-    connectBtn.disabled = false;
-    connectingStatus.innerText = connectData;
-    getConnectionState(updateConnectionState);
-  }
-
   function updateIpDisplay(addr){
     ipDisplay.innerText = addr;
+  }
+
+  //Replaces the old setTimeout-recursion updateStateUntilConnected(). isCurrent() is checked at the
+  //top of every iteration, which stops the loop from issuing another getConnectionState() call
+  //once the dialog is gone, and again right after the await, which stops a call already in flight
+  //when Close was clicked from writing its result into a dialog nobody can see any more - both are
+  //independently mutation-tested (see wifi-manager_display.test.js), since dropping either one
+  //alone leaves the other still passing.
+  async function pollUntilConnected(){
+    while(isCurrent()){
+      var stateData = await getConnectionState();
+      if(!isCurrent()) return;
+
+      if(stateData.state == 'connected'){
+        updateConnectionState(stateData);
+        return;
+      }
+
+      await delay(250);
+    }
   }
 }
 

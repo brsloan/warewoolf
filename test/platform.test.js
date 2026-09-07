@@ -2502,6 +2502,119 @@ test('wifiGetAddress rejects UNAVAILABLE when hostname is not installed', async 
   assert.strictEqual(err.code, CODES.UNAVAILABLE);
 });
 
+//wifiGetConnectionState/wifiGetStatus/wifiEnable/wifiDisable close the gap Phase 8 recorded rather
+//than converted: wifi-manager.js had seven functions and only three had a command. These four
+//never appeared in COMMANDS before now and used to spawn nmcli directly from wifi-manager.js -
+//see the inventory's group K section. UNAVAILABLE off a missing nmcli is asserted as the ordinary
+//case throughout, matching every other wifi/battery command in this group.
+
+test('wifiGetConnectionState reports the wifi device\'s state and connection name', async function(t){
+  const platform = createPlatform(createNodeBacking({
+    spawnProcess: fakeSpawn([{ chunks: ['eth0:ethernet:connected:Wired\nwlan0:wifi:connected:HomeNet\n'] }])
+  }));
+
+  const result = await platform.wifiGetConnectionState();
+
+  assert.deepStrictEqual(result, { state: 'connected', connection: 'HomeNet' });
+});
+
+test('wifiGetConnectionState resolves unknown/null instead of throwing when no wifi device is present', async function(t){
+  const platform = createPlatform(createNodeBacking({
+    spawnProcess: fakeSpawn([{ chunks: ['eth0:ethernet:connected:Wired\n'] }])
+  }));
+
+  const result = await platform.wifiGetConnectionState();
+
+  assert.deepStrictEqual(result, { state: 'unknown', connection: null });
+});
+
+test('wifiGetConnectionState unescapes a connection name containing a literal colon', async function(t){
+  const platform = createPlatform(createNodeBacking({
+    spawnProcess: fakeSpawn([{ chunks: ['wlan0:wifi:connected:My\\:Home\n'] }])
+  }));
+
+  const result = await platform.wifiGetConnectionState();
+
+  assert.deepStrictEqual(result, { state: 'connected', connection: 'My:Home' });
+});
+
+test('wifiGetConnectionState rejects UNAVAILABLE when nmcli is not installed', async function(t){
+  const platform = createPlatform(createNodeBacking({ spawnProcess: fakeSpawn([{ error: enoent('nmcli') }]) }));
+
+  const err = await rejection(platform.wifiGetConnectionState());
+  assert.strictEqual(err.code, CODES.UNAVAILABLE);
+});
+
+test('wifiGetStatus resolves the trimmed radio state', async function(t){
+  const spawnFake = fakeSpawn([{ chunks: ['enabled\n'] }]);
+  const platform = createPlatform(createNodeBacking({ spawnProcess: spawnFake }));
+
+  assert.strictEqual(await platform.wifiGetStatus(), 'enabled');
+  assert.deepStrictEqual(spawnFake.calls[0].args, ['radio', 'wifi']);
+});
+
+test('wifiGetStatus rejects UNAVAILABLE when nmcli is not installed', async function(t){
+  const platform = createPlatform(createNodeBacking({ spawnProcess: fakeSpawn([{ error: enoent('nmcli') }]) }));
+
+  const err = await rejection(platform.wifiGetStatus());
+  assert.strictEqual(err.code, CODES.UNAVAILABLE);
+});
+
+test('wifiEnable spawns "nmcli radio wifi on" and resolves on success', async function(t){
+  const spawnFake = fakeSpawn([{ code: 0 }]);
+  const platform = createPlatform(createNodeBacking({ spawnProcess: spawnFake }));
+
+  await platform.wifiEnable();
+
+  assert.strictEqual(spawnFake.calls[0].command, 'nmcli');
+  assert.deepStrictEqual(spawnFake.calls[0].args, ['radio', 'wifi', 'on']);
+});
+
+test('wifiDisable spawns "nmcli radio wifi off" and resolves on success', async function(t){
+  const spawnFake = fakeSpawn([{ code: 0 }]);
+  const platform = createPlatform(createNodeBacking({ spawnProcess: spawnFake }));
+
+  await platform.wifiDisable();
+
+  assert.deepStrictEqual(spawnFake.calls[0].args, ['radio', 'wifi', 'off']);
+});
+
+test('wifiEnable rejects IO_ERROR with nmcli\'s own output when the radio command fails', async function(t){
+  const platform = createPlatform(createNodeBacking({
+    spawnProcess: fakeSpawn([{ stderrChunks: ['nmcli: radio control unavailable'], code: 1 }])
+  }));
+
+  const err = await rejection(platform.wifiEnable());
+
+  assert.strictEqual(err.code, CODES.IO_ERROR);
+  assert.match(err.message, /radio control unavailable/);
+});
+
+test('wifiDisable rejects IO_ERROR with nmcli\'s own output when the radio command fails', async function(t){
+  const platform = createPlatform(createNodeBacking({
+    spawnProcess: fakeSpawn([{ stderrChunks: ['nmcli: radio control unavailable'], code: 1 }])
+  }));
+
+  const err = await rejection(platform.wifiDisable());
+
+  assert.strictEqual(err.code, CODES.IO_ERROR);
+  assert.match(err.message, /radio control unavailable/);
+});
+
+test('wifiEnable rejects UNAVAILABLE when nmcli is not installed', async function(t){
+  const platform = createPlatform(createNodeBacking({ spawnProcess: fakeSpawn([{ error: enoent('nmcli') }]) }));
+
+  const err = await rejection(platform.wifiEnable());
+  assert.strictEqual(err.code, CODES.UNAVAILABLE);
+});
+
+test('wifiDisable rejects UNAVAILABLE when nmcli is not installed', async function(t){
+  const platform = createPlatform(createNodeBacking({ spawnProcess: fakeSpawn([{ error: enoent('nmcli') }]) }));
+
+  const err = await rejection(platform.wifiDisable());
+  assert.strictEqual(err.code, CODES.UNAVAILABLE);
+});
+
 test('getBatteryCapacity resolves the capacity reported by the kernel for a real battery', async function(t){
   patchPowerSupplyDir(t, ['AC', 'BAT0']);
   const platform = createPlatform(createNodeBacking({ spawnProcess: fakeSpawn([{ chunks: ['87\n'] }]) }));

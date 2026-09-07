@@ -542,6 +542,7 @@ phase's own work, the first time that was true since Phase 1 itself.
 | `installUpdate(path, password)` | `spawn('sudo', ['-S','apt','install'])` (`updates.js:259`) | same |
 | `sendEmail({service, sender, secret, receiver, attachments})` | `nodemailer` (`email-doc.js:190`) | `lettre` |
 | `wifiListNetworks()` / `wifiConnect(ssid, psk)` / `wifiGetAddress()` | `nmcli` and `hostname -I` spawns (`wifi-manager.js:13,62,91`) | `Command` or D-Bus |
+| `wifiGetConnectionState()` / `wifiGetStatus()` / `wifiEnable()` / `wifiDisable()` | `nmcli` spawns kept in `wifi-manager.js` itself until now (`getConnectionState`/`getWifiStatus`/`disableWifi`/`enableWifi`) — added after Phase 8, closing the gap that phase recorded rather than converted | `Command` or D-Bus, same as the three above |
 | `getBatteryCapacity()` | `/sys/class/power_supply` reads + `cat` spawn (`battery-monitor.js:56,73`) | sysfs read, or the `battery` crate |
 
 **Four corrections came out of actually building these, the same shape as every
@@ -633,21 +634,56 @@ the module-level resolver they set are gone from `email-doc.js` entirely, and
 `platform` it already used everywhere else) — see the Phase 8 write-up in
 `upgrade-and-isolation-plan.md`.
 
-**Two of `wifi-manager.js`'s seven functions stay unconverted, deliberately
-out of this phase's scope.** `getWifiNetworks`, `connectToNewWifi` and
-`getIpAddress` route through `wifiListNetworks`/`wifiConnect`/`wifiGetAddress`;
-`getConnectionState`, `getWifiStatus`, `enableWifi` and `disableWifi` have no
-group K command behind them — they were never declared in `platform.js`'s
-`COMMANDS` table, and extending the contract to cover Wi-Fi radio
-enable/disable and device connection-state polling was not part of this
-phase's mandate. They still spawn `nmcli` directly, unchanged. This is the
-same "owned by no phase" situation Phase 2 recorded for three stray
-`process.platform` reads (closed in Phase 3) — recorded here rather than
-quietly left for Phase 9's audit to discover, since these four calls will
-break outright once `nodeIntegration` goes away: `child_process` stops being
-reachable from the renderer at all, and nothing currently owns converting
-them. Whoever picks up Phase 9 should either extend group K's wifi commands
-first or budget time to do it as part of the flip.
+**Closed after Phase 8, before Phase 9.** Two of `wifi-manager.js`'s seven
+functions stayed unconverted when Phase 8 shipped, deliberately out of that
+phase's scope: `getWifiNetworks`, `connectToNewWifi` and `getIpAddress` routed
+through `wifiListNetworks`/`wifiConnect`/`wifiGetAddress`, but
+`getConnectionState`, `getWifiStatus`, `enableWifi` and `disableWifi` had no
+group K command behind them — never declared in `platform.js`'s `COMMANDS`
+table, and extending the contract to cover Wi-Fi radio enable/disable and
+device connection-state polling was not part of that phase's mandate. They
+kept spawning `nmcli` directly. This was the same "owned by no phase"
+situation Phase 2 recorded for three stray `process.platform` reads (closed in
+Phase 3) — recorded there rather than quietly left for Phase 9's audit to
+discover, since these four calls would have broken outright once
+`nodeIntegration` goes away: `child_process` stops being reachable from the
+renderer at all.
+
+Rather than let Phase 9 either extend group K first or budget time to do it as
+part of the flip, it was closed as its own step in between: `wifiGetConnectionState`,
+`wifiGetStatus`, `wifiEnable` and `wifiDisable` were added to `COMMANDS` (group
+K is 12 commands now, not 8) and implemented in `platform-node.js`, reusing the
+same `splitNmcliFields`/`unavailableOrIoError` helpers the first three wifi
+commands already had — `wifi-manager.js` no longer keeps its own copy of
+either, ending the duplication `platform-node.js`'s own comment used to flag.
+`wifi-manager.js`'s remaining four functions now route through the platform
+the same way the first three already did, which makes the whole module (and,
+downstream, `wifi-manager_display.js`) async throughout rather than
+callback-style in parts. `enableWifi`/`wifiEnable` and `disableWifi`/
+`wifiDisable` take no arguments at all — declared with an explicit empty
+`params: []` rather than left implicit, since these were the last two commands
+added to the table.
+
+The one design question this raised that group K's first three commands
+didn't: `wifi-manager_display.js`'s `updateStateUntilConnected()` polls
+`getConnectionState` every 250ms until the radio reports `connected`, recursing
+via `setTimeout`. Converting `getConnectionState` to a promise turned that
+recursion into an async loop, which reopened a question a timer-based
+implementation doesn't have to answer — nothing external can cancel a promise
+the way `clearTimeout` cancels a timer. The existing `wifiManagerGeneration`/
+`isCurrent()` guard (already in place to stop the old timer chain once the
+dialog closed) still does the job, but now every continuation — not just the
+recursive call site — has to check it before touching the DOM. Phase 5 hit the
+general shape of this exact hazard in `missing-pups_display.test.js`: async
+work that outlives the DOM it was scheduled against surfaces as an
+unhandled-rejection crash rather than a clean test failure. `wifi-manager.js`'s
+functions are designed so none of them ever reject (each catches internally
+and resolves a fallback value, matching the pre-existing
+`reportUnlessUnavailable` convention), which forecloses that specific crash
+shape here; the cancellation itself is mutation-tested in
+`test/wifi-manager_display.test.js` — removing either the loop's own
+`isCurrent()` check or the one right after its `await` fails a test written
+for exactly that line, and nothing else.
 
 `getBatteryCapacity()` folds `battery-monitor.js`'s old two-step
 `getBatteryName()` + `queryKernel()` into one native call, and both functions
@@ -660,19 +696,22 @@ writerDeck, not a failure worth writing to the error log once a minute for as
 long as the app runs. A battery that exists but cannot be read (a spawn
 failure, non-numeric sysfs output) is `IO_ERROR` instead, so a caller can
 still tell "nothing to report" apart from "something is actually wrong" —
-`wifi-manager.js`'s equivalent `wifiListNetworks`/`wifiConnect`/
-`wifiGetAddress` wrappers apply the same distinction, logging a real failure
+`wifi-manager.js`'s seven wrappers all apply the same distinction, logging a real failure
 but not the ordinary absence of `nmcli`/a battery off a Pi.
 
 ---
 
 ## Summary
 
-**61 commands and 36 events**, as declared in `platform.js`. This document
+**65 commands and 36 events**, as declared in `platform.js`. This document
 originally estimated "~47" from its own tables; the real count came out of writing
 the contract down, mostly from group J growing and from load/save pairs listed on
 one row being two commands each. Per group: A 7, B 5, C 6, D 8, E 7, F 3, G 4,
-H 3, I 3, J 7, K 8.
+H 3, I 3, J 7, K 12. K grew from 8 to 12 after Phase 8 shipped, closing the
+`wifi-manager.js` gap that phase's own write-up recorded rather than converted
+(`wifiGetConnectionState`, `wifiGetStatus`, `wifiEnable`, `wifiDisable`) —
+recorded in group K above, not folded into the Phase 8 write-up itself since it
+was done as a separate step ahead of Phase 9.
 
 By disposition:
 
@@ -713,10 +752,11 @@ until the last one.
    call sites to ones already written. Four corrections came out of it, all
    marked above. Two of `wifi-manager.js`'s seven functions
    (`getConnectionState`/`getWifiStatus`/`enableWifi`/`disableWifi` — radio
-   toggle and connection-state polling) stay unconverted, deliberately out of
-   scope: they have no group K command behind them and were never part of the
-   declared contract. Recorded above as an open item for whoever picks up
-   Phase 9, since they will break outright once `nodeIntegration` goes away.
+   toggle and connection-state polling) stayed unconverted at the time,
+   deliberately out of scope: they had no group K command behind them and were
+   never part of the declared contract. *Closed afterward, before Phase 9*: see
+   the note above the Summary. The remaining gap Phase 9 inherits is the flag
+   flip itself, not any interface design work on top of it.
 8. Flip `contextIsolation: true` and drop `nodeIntegration` once nothing
    `require`s `fs`. `src/index.js:54-59` (the `webPreferences` block — this
    pointed at `:45-47` until Phase 1 re-verified it).

@@ -222,6 +222,10 @@ function createNodeBacking(deps){
     wifiListNetworks: wifiListNetworks,
     wifiConnect: wifiConnect,
     wifiGetAddress: wifiGetAddress,
+    wifiGetConnectionState: wifiGetConnectionState,
+    wifiGetStatus: wifiGetStatus,
+    wifiEnable: wifiEnable,
+    wifiDisable: wifiDisable,
     getBatteryCapacity: getBatteryCapacity,
 
     on: on,
@@ -1559,10 +1563,9 @@ function createNodeBacking(deps){
   // ------------------------------------------------------------------------------------------
 
   //nmcli's -t (terse) output escapes a literal ':' or '\' inside a field as '\:'/'\\', so a plain
-  //split(':') misaligns fields whenever a value (an SSID, say) contains a colon. Moved here from
-  //wifi-manager.js's own copy for the three commands that are now native; wifi-manager.js keeps
-  //its own copy for getConnectionState/getWifiStatus/enableWifi/disableWifi, which have no
-  //contract command of their own yet - see the note on that file.
+  //split(':') misaligns fields whenever a value (an SSID, say) contains a colon. Used by every
+  //nmcli-backed command below; wifi-manager.js no longer keeps its own copy for
+  //getConnectionState/getWifiStatus - the whole parse now lives here, once.
   function splitNmcliFields(line){
     return line.split(/(?<!\\):/).map(function(field){
       return field.replace(/\\(.)/g, '$1');
@@ -1689,6 +1692,127 @@ function createNodeBacking(deps){
         resolve(text || '');
       });
     });
+  }
+
+  //Same query shape as wifiListNetworks/wifiGetAddress above: resolve on 'close' from accumulated
+  //stdout, not on the exit code - nmcli reports "no wifi device" through its *output*, not a
+  //non-zero exit, so checking the code here would treat an ordinary empty result as a failure.
+  function wifiGetConnectionState(){
+    return new Promise(function(resolve, reject){
+      var nmcli;
+      try{
+        nmcli = spawnProcess('nmcli', ['-t', 'device', 'status']);
+      }
+      catch(spawnErr){
+        reject(unavailableOrIoError(spawnErr, 'wifiGetConnectionState'));
+        return;
+      }
+
+      var chunks = [];
+      var spawnFailed = false;
+
+      nmcli.stdout.on('data', function(data){ chunks.push(data); });
+      nmcli.stderr.on('data', function(data){ log(new Error(data.toString().trim())); });
+
+      nmcli.on('error', function(err){
+        spawnFailed = true;
+        reject(unavailableOrIoError(err, 'wifiGetConnectionState'));
+      });
+
+      nmcli.on('close', function(){
+        if(spawnFailed) return;
+
+        var lines = Buffer.concat(chunks).toString().split('\n');
+        var wifiLine = lines.find(function(line){
+          return splitNmcliFields(line)[1] === 'wifi';
+        });
+
+        if(wifiLine == null){
+          resolve({ state: 'unknown', connection: null });
+          return;
+        }
+
+        var fields = splitNmcliFields(wifiLine);
+        resolve({ state: fields[2], connection: fields[3] });
+      });
+    });
+  }
+
+  function wifiGetStatus(){
+    return new Promise(function(resolve, reject){
+      var nmcli;
+      try{
+        nmcli = spawnProcess('nmcli', ['radio', 'wifi']);
+      }
+      catch(spawnErr){
+        reject(unavailableOrIoError(spawnErr, 'wifiGetStatus'));
+        return;
+      }
+
+      var chunks = [];
+      var spawnFailed = false;
+
+      nmcli.stdout.on('data', function(data){ chunks.push(data); });
+      nmcli.stderr.on('data', function(data){ log(new Error(data.toString().trim())); });
+
+      nmcli.on('error', function(err){
+        spawnFailed = true;
+        reject(unavailableOrIoError(err, 'wifiGetStatus'));
+      });
+
+      nmcli.on('close', function(){
+        if(spawnFailed) return;
+        resolve(Buffer.concat(chunks).toString().trim());
+      });
+    });
+  }
+
+  //Shared by wifiEnable/wifiDisable below - a mutation, like wifiConnect, so (unlike the two query
+  //functions above) it checks the exit code and rejects IO_ERROR with nmcli's own output on
+  //failure rather than resolving regardless.
+  function setWifiRadio(enabled, commandName){
+    return new Promise(function(resolve, reject){
+      var nmcli;
+      try{
+        nmcli = spawnProcess('nmcli', ['radio', 'wifi', enabled ? 'on' : 'off']);
+      }
+      catch(spawnErr){
+        reject(unavailableOrIoError(spawnErr, commandName));
+        return;
+      }
+
+      var chunks = [];
+      var spawnFailed = false;
+
+      nmcli.stdout.on('data', function(data){ chunks.push(data); });
+      nmcli.stderr.on('data', function(data){ chunks.push(data); });
+
+      nmcli.on('error', function(err){
+        spawnFailed = true;
+        reject(unavailableOrIoError(err, commandName));
+      });
+
+      nmcli.on('close', function(exitCode){
+        if(spawnFailed) return;
+
+        if(exitCode === 0){
+          resolve(undefined);
+          return;
+        }
+
+        var output = Buffer.concat(chunks).toString().trim();
+        reject(PlatformError(CODES.IO_ERROR,
+          output || (commandName + ' exited with code ' + exitCode), { command: commandName }));
+      });
+    });
+  }
+
+  function wifiEnable(){
+    return setWifiRadio(true, 'wifiEnable');
+  }
+
+  function wifiDisable(){
+    return setWifiRadio(false, 'wifiDisable');
   }
 
   //Folds getBatteryName() + queryKernel() (battery-monitor.js, before this phase) into one call.
