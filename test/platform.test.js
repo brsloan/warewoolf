@@ -6,6 +6,7 @@ const path = require('node:path');
 const nodeCrypto = require('node:crypto');
 const archiver = require('archiver');
 const unzipper = require('unzipper');
+const { Writable } = require('node:stream');
 
 const {
   createPlatform, COMMANDS, EVENTS, CODES, PlatformError, SAVED_SECRET
@@ -50,6 +51,26 @@ function backingIn(t, options){
 function platformIn(t, options){
   const built = backingIn(t, options);
   return { dir: built.dir, backing: built.backing, platform: createPlatform(built.backing) };
+}
+
+//A write stream whose 'finish' and 'close' are decoupled, for proving buildEpub/archiveProject
+//resolve on 'close' and not on 'finish'. 'finish' fires for real, off real data flowing through it
+//(archiver still writes real chunks and calls .end() when done) - only 'close' is held back, until
+//the test calls triggerClose() itself. autoDestroy: false is what decouples them: a plain Writable
+//otherwise calls destroy() right after 'finish', which emits 'close' a tick later on its own.
+//
+//This exists because the property it tests is not observable through a real fs.createWriteStream
+//on this codebase's fixtures - 'finish' and 'close' land close enough together on a fast local
+//filesystem that no same-process read-back detects the gap (see the Phase 6 write-up in
+//upgrade-and-isolation-plan.md: swapping 'close' for 'finish' in the implementation left every
+//existing test, including the ones reading the result back as a valid zip, green).
+function controllableWriteStream(){
+  const stream = new Writable({
+    autoDestroy: false,
+    write: function(chunk, enc, cb){ cb(); }
+  });
+  stream.triggerClose = function(){ stream.emit('close'); };
+  return stream;
 }
 
 //Restores whatever it replaced when the test ends, so a patched fs cannot leak into the next one.
@@ -1450,6 +1471,35 @@ test('buildEpub\'s promise resolves only once the file is immediately readable a
   assert.strictEqual(dir.files.length, 1);
 });
 
+//Direct proof of the property the two tests above can only observe indirectly: buildEpub resolves
+//on the write stream's 'close', not archiver's 'finish'. A controllableWriteStream lets 'finish'
+//fire for real - archiver still writes real chunks and calls .end() when it's done - while holding
+//'close' back until the test says so, so the promise's state can be checked in the gap between them.
+test('buildEpub resolves on the write stream\'s "close", not on archiver\'s "finish"', async function(t){
+  const output = controllableWriteStream();
+  const platform = createPlatform(createNodeBacking({ createWriteStream: function(){ return output; } }));
+
+  let settled = false;
+  const finished = new Promise(function(resolve){ output.once('finish', resolve); });
+
+  const promise = platform.buildEpub({
+    filepath: 'unused.epub',
+    entries: [{ name: 'mimetype', content: 'application/epub+zip' }]
+  });
+  promise.then(function(){ settled = true; }, function(){ settled = true; });
+
+  await finished;
+  //'finish' has fired for real at this point. If buildEpub resolved on it, `settled` would already
+  //be true (or about to become true on the very next microtask) - give it a full turn of the event
+  //loop, past the microtask queue, before asserting it is still false.
+  await new Promise(function(resolve){ setImmediate(resolve); });
+  assert.strictEqual(settled, false, 'buildEpub resolved before the write stream emitted "close"');
+
+  output.triggerClose();
+  await promise;
+  assert.strictEqual(settled, true);
+});
+
 test('buildEpub rejects instead of crashing when the parent directory does not exist', async function(t){
   const built = platformIn(t);
   const err = await rejection(built.platform.buildEpub({
@@ -1507,6 +1557,34 @@ test('archiveProject\'s promise resolves only once the archive is immediately re
 
   const dir = await unzipper.Open.file(result.path);
   assert.ok(dir.files.length > 0);
+});
+
+//Direct proof of the property the test above can only observe indirectly, mirroring buildEpub's own
+//direct test above it: archiveProject resolves on the write stream's 'close', not archiver's
+//'finish'. This is the exact bug Phase 6 found and fixed in the original backup-project.js, which
+//listened on 'finish'.
+test('archiveProject resolves on the write stream\'s "close", not on archiver\'s "finish"', async function(t){
+  const dir = tempDir(t);
+  const fixture = makeBackupProjectFixture(dir);
+
+  const output = controllableWriteStream();
+  const platform = createPlatform(createNodeBacking({ createWriteStream: function(){ return output; } }));
+
+  let settled = false;
+  const finished = new Promise(function(resolve){ output.once('finish', resolve); });
+
+  const promise = platform.archiveProject({
+    projectDir: dir, chapsDir: fixture.chapsDir, filename: fixture.filename, destDir: dir
+  });
+  promise.then(function(){ settled = true; }, function(){ settled = true; });
+
+  await finished;
+  await new Promise(function(resolve){ setImmediate(resolve); });
+  assert.strictEqual(settled, false, 'archiveProject resolved before the write stream emitted "close"');
+
+  output.triggerClose();
+  await promise;
+  assert.strictEqual(settled, true);
 });
 
 test('archiveProject rejects rather than hanging when the destination directory does not exist', async function(t){

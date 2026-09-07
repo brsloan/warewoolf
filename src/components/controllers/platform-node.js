@@ -72,6 +72,13 @@ function createNodeBacking(deps){
   var secureStorage = options.secureStorage || null;
   var log = options.logError || function(){};
   var services = options.services || (paths.userData == null ? {} : { email: paths.userData });
+  //buildEpub and archiveProject both depend on resolving only when the destination write stream's
+  //'close' fires, not archiver's 'finish' - see the comments on those two functions. That property
+  //is not observable through the real fs.createWriteStream on this codebase's test fixtures (finish
+  //and close land too close together on a fast local filesystem for a same-process read-back to
+  //tell them apart), so it needs an injectable seam the same way secureStorage/onSetTheme/etc. are
+  //injectable, rather than being asserted only by comment.
+  var createWriteStream = options.createWriteStream || fs.createWriteStream;
 
   //Group A is the exception to this file's own rule. C and J are direct fs/crypto - exactly what
   //nodeIntegration already gives the renderer, so this backing can run inside it unchanged. None of
@@ -825,7 +832,7 @@ function createNodeBacking(deps){
       var filepath = normalizePath(args == null ? undefined : args.filepath, 'filepath');
       var entries = args.entries == null ? [] : args.entries;
 
-      var output = fs.createWriteStream(filepath);
+      var output = createWriteStream(filepath);
       var archive = archiver('zip', { zlib: { level: 9 } });
       var settled = false;
 
@@ -890,7 +897,7 @@ function createNodeBacking(deps){
       var archiveName = args.filename.replace(PROJECT_EXT, '') + archiveTimestamp() + ARCHIVE_EXTENSION;
       var destPath = path.join(args.destDir, archiveName);
 
-      var output = fs.createWriteStream(destPath);
+      var output = createWriteStream(destPath);
       var archive = archiver('zip', { zlib: { level: 9 } });
       var settled = false;
 
