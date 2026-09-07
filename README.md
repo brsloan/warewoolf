@@ -51,6 +51,9 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 
 Binaries of the current release for Windows, MacOS, Debian AMD64, and Debian ARM64 (Raspberry Pi) are available in the [releases page](https://github.com/brsloan/warewoolf/releases).
 
+> [!NOTE]
+> **On an older Mac?** The main MacOS builds are packaged against Electron 44, which needs macOS 13 "Ventura" or newer. If you are on macOS 10.15 "Catalina" through 12 "Monterey" — as many of the older laptops people turn into writerdecks are — download `warewoolf_<version>_MacOS_Legacy.dmg` instead. It is the same WareWoolf, built from the same source, packaged against Electron 32: the last release line that runs on those systems. It is an Intel build, so on Apple Silicon it runs under Rosetta. Electron 32 no longer receives Chromium security updates, so take a mainline build instead if your Mac can run one.
+
 > [!WARNING]
 > The Wi-Fi Manager uses nmcli/Network Manager, which Raspberry Pi OS does not have installed/enabled by default. You will have to install network-manager and enable it in raspi-config for this function to work. You may need to update raspi-config to be able to enable Network-Manager.
 
@@ -61,6 +64,7 @@ This app was built using Electron Forge. To run it from source...
 * You must first have [Node.js](https://nodejs.dev/en/learn/how-to-install-nodejs/) installed.
 * Run "npm install" in the WareWoolf source code directory to install the dependencies using the Node Package Manager.
 * Then you can simply use command "npm start" to run the program.
+* **Building on an older Mac.** Two pins in package.json exist for this and are deliberate. `esbuild` is held at 0.23.x because 0.24.0 is built with Go 1.23, which dropped macOS 10.15 — anything newer fails to install on Catalina with a `dyld: Symbol not found` error. Node 20 is the newest release line that runs on Catalina at all, and it is also what Electron 32 bundles, so tests there run on roughly the runtime the app ships with. To run or package the legacy Mac build locally, use "npm run use:legacy-electron" after "npm install"; it swaps in Electron 32 without touching package.json or the lockfile, and "npm ci" puts the mainline Electron back. You do not need any of this to *release* the legacy build — CI produces that asset on every tagged release, on an ordinary macOS runner, since electron-forge only downloads a prebuilt Electron for the target and copies the app into it.
 * To make a binary, "npm run make". See the [Electron Forge documentation](https://www.electronforge.io/) for instructions on how to alter the package.json file for making binaries for different systems, but basically in the "makers" property of the "forge" object in the package.json file, there is an array of different makers for producing different binaries. The "@electron-forge/maker-squirrel" is for producing a Windows binary, the maker-deb for Linux, and the maker-dmg for MacOS. To produce them, run "npm run make" and it should use the appropriate one for your system. You will find the binary in the "out" folder.  
 
 ## Documentation

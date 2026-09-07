@@ -8,6 +8,7 @@ name: Release
 #   warewoolf_<version>_arm64.deb
 #   warewoolf_<version>_MacOS_Intel.dmg
 #   warewoolf_<version>_MacOS_AppleSilicon.dmg
+#   warewoolf_<version>_MacOS_Legacy.dmg
 #   warewoolf_<version>_Windows_x64.zip
 #
 # The amd64/arm64/Windows_x64 substrings are load-bearing: the in-app updater
@@ -16,6 +17,17 @@ name: Release
 # build is deliberately named "AppleSilicon" rather than "arm64" so it can't
 # collide with that arm64 substring match (which today is Linux-only, but
 # isn't guarded by platform) and get offered to Linux ARM users or vice versa.
+#
+# MacOS_Legacy is the same source packaged against a pinned Electron 32, the
+# last line that runs on macOS 10.15 Catalina. Mainline Electron 44 needs
+# macOS 13 Ventura, so this asset is what every mac between Catalina and 12
+# Monterey updates along. Its name shares no substring with MacOS_Intel for
+# exactly the reason AppleSilicon avoids arm64: the updater's match is a
+# find() over includes(), so an overlapping name would be handed out on
+# whatever order the GitHub API returned the assets in. Nothing here needs to
+# run on an old mac - electron-forge only downloads a prebuilt Electron for
+# the target and copies the app in, and this project has no native modules -
+# so the minimum-OS floor comes from the pinned Electron, not the runner.
 
 on:
   push:
@@ -105,6 +117,9 @@ jobs:
             label: MacOS_Intel
           - arch: arm64
             label: MacOS_AppleSilicon
+          - arch: x64
+            label: MacOS_Legacy
+            electron: ^32.3.3
     steps:
       - uses: actions/checkout@v4
         with:
@@ -113,8 +128,33 @@ jobs:
         with:
           node-version: 20
       - run: npm ci
+      # Swapped in after npm ci rather than pinned in package.json, so the legacy
+      # build stays byte-for-byte the same source as the mainline one and there is
+      # no second branch or lockfile to keep in step. --no-save leaves both files
+      # untouched. Safe to do without a rebuild step because the project has no
+      # native modules to relink against a different ABI.
+      - name: Pin Electron for the legacy macOS build
+        if: matrix.electron
+        run: npm install --no-save "electron@${{ matrix.electron }}"
       - run: npm run build
       - run: npx electron-forge package --platform=darwin --arch=${{ matrix.arch }}
+      # Checks the built artifact rather than trusting the pin above, the same way
+      # the Linux job checks the deb's compression instead of trusting package.json.
+      # Electron 32 stamps 10.15; every line from 33 on stamps 11 or higher, so a
+      # silently un-pinned build fails here instead of shipping as a legacy asset
+      # that will not launch on any of the machines it is named for.
+      - name: Verify the legacy build still targets macOS 10.x
+        if: matrix.electron
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_PATH=$(find out -maxdepth 2 -name "*.app" -print -quit)
+          MIN=$(/usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" "$APP_PATH/Contents/Info.plist")
+          echo "$APP_PATH targets macOS $MIN"
+          case "$MIN" in
+            10.*) ;;
+            *) echo "::error::Legacy build targets macOS $MIN, not 10.x - the Electron pin did not take"; exit 1 ;;
+          esac
       - name: Build dmg with hdiutil
         shell: bash
         # @electron-forge/maker-dmg pulls in the unmaintained `appdmg` package
@@ -136,7 +176,7 @@ jobs:
             "out/make/warewoolf_${{ needs.check-version.outputs.version }}_${{ matrix.label }}.dmg"
       - uses: actions/upload-artifact@v4
         with:
-          name: release-asset-macos-${{ matrix.arch }}
+          name: release-asset-macos-${{ matrix.label }}
           path: out/make/warewoolf_*_${{ matrix.label }}.dmg
           if-no-files-found: error
 

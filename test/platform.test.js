@@ -470,7 +470,23 @@ test('getAppPaths returns exactly the six documented fields, field by field', as
 test('getPlatform reports this process\'s own platform and arch', async function(){
   const platform = wrap(createNodeBacking({}));
 
-  assert.deepStrictEqual(await platform.getPlatform(), { platform: process.platform, arch: process.arch });
+  assert.deepStrictEqual(await platform.getPlatform(), {
+    platform: process.platform,
+    arch: process.arch,
+    electron: process.versions.electron || null
+  });
+});
+
+//The suite runs on plain node, where there is no process.versions.electron at all. That has to
+//arrive as null rather than a missing key: updates.js reads it across the ipc backing, and a key
+//whose value is undefined is not guaranteed to survive that trip, so the shape the renderer sees
+//would quietly differ from the shape this backing returns in-process.
+test('getPlatform reports a null electron version off Electron rather than omitting the field', async function(){
+  const platform = wrap(createNodeBacking({}));
+  const info = await platform.getPlatform();
+
+  assert.ok('electron' in info, 'electron must always be present as a key');
+  assert.strictEqual(info.electron, process.versions.electron || null);
 });
 
 test('getFileRequestedOnOpen returns whatever the backing was constructed with, or null', async function(){

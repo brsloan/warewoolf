@@ -17,7 +17,8 @@
     "make": "electron-forge make",
     "publish": "electron-forge publish",
     "test": "node --test \"test/*.test.js\"",
-    "lint": "echo \"No linting configured\""
+    "lint": "echo \"No linting configured\"",
+    "use:legacy-electron": "npm install --no-save electron@^32.3.3"
   },
   "keywords": [
     "writing",
@@ -87,7 +88,7 @@
     "@electron-forge/maker-squirrel": "^7.11.2",
     "@electron-forge/maker-zip": "^7.11.2",
     "electron": "^44.2.0",
-    "esbuild": "^0.28.2",
+    "esbuild": "^0.23.1",
     "jsdom": "^29.1.1"
   }
 }

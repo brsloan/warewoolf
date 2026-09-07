@@ -154,7 +154,7 @@ var COMMANDS = {
   getAppPaths: { group: 'A', params: [],
     returns: '{ userData, home, temp, docs, app, downloads }',
     note: 'Convert first (Phase 2). It is sendSync at module load in render.js:4, so nothing else goes async cleanly while it stays that way.' },
-  getPlatform: { group: 'A', params: [], returns: '{ platform, arch }' },
+  getPlatform: { group: 'A', params: [], returns: '{ platform, arch, electron }' },
   getFileRequestedOnOpen: { group: 'A', params: [], returns: 'string | null' },
   setTheme: { group: 'A', params: ['mode'], returns: 'void' },
   showAppMenu: { group: 'A', params: [], returns: 'void' },
