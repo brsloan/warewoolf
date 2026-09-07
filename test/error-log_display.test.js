@@ -63,7 +63,7 @@ test('clicking Send persists the sender/receiver email back to userSettings', as
   var platform = makePlatform();
 
   var emailFileCalls = [];
-  var emailFile = function(sender, pass, receiver, attachments, callback){
+  var emailFile = function(platform, sender, pass, receiver, attachments, callback){
     emailFileCalls.push({ sender, pass, receiver, attachments });
   };
 
@@ -130,7 +130,7 @@ test('a readable saved password puts the sentinel in the field, never the passwo
   var showErrorLog = freshErrorLogDisplay({
     loadErrorLog: function(){ return Promise.resolve('boom'); },
     clearErrorLog: function(){ return Promise.resolve(); },
-    emailFile: function(sender, pass, receiver, attachments, callback){
+    emailFile: function(platform, sender, pass, receiver, attachments, callback){
       emailFileCalls.push({ sender, pass, receiver });
     }
   });

@@ -418,7 +418,7 @@ async function showEmailOptions(project, userSettings, platform, editorQuill){
       showWorkingAndThen('Sending...', function(){
         //Promise.resolve so a backing that hands back nothing at all is as safe as one that returns a
         //promise.
-        Promise.resolve(prepareAndEmail(project, userSettings, editorQuill, senderEmailInput.value,
+        Promise.resolve(prepareAndEmail(project, userSettings, editorQuill, platform, senderEmailInput.value,
           senderPassInput.value,
           receiverEmailInput.value,
           projectRadio.checked ? '.zip' : typeSelect.value,

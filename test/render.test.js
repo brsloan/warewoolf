@@ -1845,91 +1845,88 @@ test('a migration that fails leaves the legacy blob in place and still boots', a
 });
 
 //---------------------------------------------------------------------------
-// Wiring the saved-secret resolver into email-doc.js
+// The menu commands hand email-doc.js a working platform instance
 //---------------------------------------------------------------------------
 
-//Phase 7's one temporary seam, and the way it silently breaks. Both email dialogs put SAVED_SECRET
-//in the password field; emailFile() turns it back into the password through a resolver render.js
-//hands it. Forget to hand it over and nothing fails at boot, nothing fails when the dialog opens,
-//and nothing fails until the writer clicks Send - at which point the send is refused for a saved
-//password that is sitting right there and perfectly readable.
-//
-//It is wired from the menu commands rather than from loadPlatformState() because requiring
-//email-doc.js pulls in nodemailer, archiver and the docx/epub writers, which boot should not pay
-//for. That trade is only safe if every route to emailFile() goes through one of these two.
+//Through Phase 7, both email dialogs put SAVED_SECRET in the password field, and emailFile() had
+//to be handed a *separate* resolver (setSecretResolver) to turn it back into the password, because
+//resolveSecret is deliberately not a declared command. Phase 8 turned emailFile() into a thin
+//wrapper around platform.sendEmail(), which resolves the sentinel itself, on the far side of the
+//boundary - so the only thing that still has to be right is that the menu commands hand the email
+//dialogs the *same* node-backed platform instance render.js uses everywhere else (the one whose
+//credential store has any unlocked session key), exactly as they already did for
+//describeCredential/storeCredential in Phase 7. There is no separate wiring step left to forget.
 const emailDocPath = require.resolve('../src/components/controllers/email-doc');
+const emailDocDisplayPath = require.resolve('../src/components/views/email-doc_display');
+const errorLogDisplayPath = require.resolve('../src/components/views/error-log_display');
 
-async function openedEmailMenuCommand(channel){
-  //Cleared so the module is (re-)required by the menu command itself, exactly as it is on a cold
-  //launch - otherwise a previous test's require could be what makes this one pass.
-  delete require.cache[emailDocPath];
-  var r = await freshRender();
-  currentIpc().handlers[channel]();
-  await flushMicrotasks();
-  return r;
+//Captures the `platform` argument the menu command's view call receives, instead of rendering the
+//real dialog - render.js's own wiring is what this is testing, not the dialog's DOM. `platformIndex`
+//is the position of the `platform` parameter in the real view function's own signature -
+//showEmailOptions(project, userSettings, platform, editorQuill) is 2, showErrorLog(userSettings,
+//platform) is 1.
+function capturingDisplay(path, platformIndex, capture){
+  require.cache[path] = {
+    id: path,
+    filename: path,
+    loaded: true,
+    exports: function(){
+      capture.platform = arguments[platformIndex];
+    }
+  };
 }
 
-test('opening Send Via Email gives email-doc.js a resolver for the saved password', async function(t){
-  clearCredentialFiles(t);
-  await openedEmailMenuCommand('send-via-email-clicked');
+async function platformHandedToEmailMenuCommand(channel, displayPath, platformIndex){
+  delete require.cache[emailDocPath];
+  var capture = {};
+  capturingDisplay(displayPath, platformIndex, capture);
 
-  const emailDoc = require(emailDocPath);
-  const { SAVED_SECRET } = require('../src/components/controllers/platform');
+  var r = await freshRender();
+  currentIpc().handlers[channel]();
 
-  //Nothing is stored, so the resolver is reached and reports that rather than sending the sentinel
-  //as a password - which is the observable difference between "wired" and "not wired".
-  const resp = await new Promise(function(resolve){
-    emailDoc.emailFile('me@example.com', SAVED_SECRET, 'you@example.com', [], resolve);
-  });
+  return { render: r, platform: capture.platform };
+}
 
-  assert.match(resp, /could not be read/);
-  assert.doesNotMatch(resp, /No saved password is available/,
-    'that message means no resolver was ever handed over');
-});
-
-test('opening the Error Log wires the resolver too, since it can send as well', async function(t){
-  clearCredentialFiles(t);
-  await openedEmailMenuCommand('view-error-log-clicked');
-
-  const emailDoc = require(emailDocPath);
-  const { SAVED_SECRET } = require('../src/components/controllers/platform');
-
-  const resp = await new Promise(function(resolve){
-    emailDoc.emailFile('me@example.com', SAVED_SECRET, 'you@example.com', [], resolve);
-  });
-
-  assert.doesNotMatch(resp, /No saved password is available/);
-});
-
-//And end to end: a password saved through the platform, then resolved through the wired seam and
-//handed to the transport as the real thing.
-test('a saved password is resolved for the mailer and never crosses as the sentinel', async function(t){
+test('Send Via Email hands the dialog a platform that can resolve a saved password', async function(t){
   clearCredentialFiles(t);
   writeSettings({ senderEmail: 'writer@gmail.com', senderPass: null });
+  t.after(function(){ delete require.cache[emailDocDisplayPath]; });
 
-  var r = await openedEmailMenuCommand('send-via-email-clicked');
-
-  const emailDoc = require(emailDocPath);
-  const { SAVED_SECRET, createPlatform } = require('../src/components/controllers/platform');
-  const { createNodeBacking } = require('../src/components/controllers/platform-node');
-  const nodemailer = require('nodemailer');
-
-  await createPlatform(createNodeBacking({ paths: { userData: userDataDir } }))
-    .storeCredential({ service: 'email', secret: 'the-real-password' });
-
+  //nodePlatform's mail transport is resolved once, when render.js builds it inside
+  //loadPlatformState() (createNodeBacking() reads nodemailer.createTransport at construction, the
+  //same "mock before you construct" requirement platform-node.js's own https/spawn seams have) -
+  //so the mock has to be in place before freshRender() runs, not after the dialog opens.
   let sentAuth = null;
-  const realCreateTransport = nodemailer.createTransport;
-  nodemailer.createTransport = function(config){
+  const nodemailer = require('nodemailer');
+  t.mock.method(nodemailer, 'createTransport', function(config){
     sentAuth = config.auth;
     return { sendMail: function(mailOptions, cb){ cb(null, { response: '250 OK' }); } };
-  };
-  t.after(function(){ nodemailer.createTransport = realCreateTransport; });
+  });
+
+  var opened = await platformHandedToEmailMenuCommand('send-via-email-clicked', emailDocDisplayPath, 2);
+  assert.ok(opened.platform, 'the menu command must pass a platform instance to the dialog');
+
+  await opened.platform.storeCredential({ service: 'email', secret: 'the-real-password' });
+
+  const emailDoc = require(emailDocPath);
+  const { SAVED_SECRET } = require('../src/components/controllers/platform');
 
   await new Promise(function(resolve){
-    emailDoc.emailFile('me@example.com', SAVED_SECRET, 'you@example.com', [], resolve);
+    emailDoc.emailFile(opened.platform, 'me@example.com', SAVED_SECRET, 'you@example.com', [], resolve);
   });
 
   assert.strictEqual(sentAuth.pass, 'the-real-password');
   assert.notStrictEqual(sentAuth.pass, SAVED_SECRET);
-  assert.ok(r.project, 'the app booted normally alongside all of that');
+  assert.ok(opened.render.project, 'the app booted normally alongside all of that');
+});
+
+test('the Error Log dialog gets the same working platform, since it can send as well', async function(t){
+  clearCredentialFiles(t);
+  t.after(function(){ delete require.cache[errorLogDisplayPath]; });
+
+  var opened = await platformHandedToEmailMenuCommand('view-error-log-clicked', errorLogDisplayPath, 1);
+  assert.ok(opened.platform, 'the menu command must pass a platform instance to the dialog');
+
+  const described = await opened.platform.describeCredential({ service: 'email' });
+  assert.strictEqual(described.hasPassword, false, 'nothing stored yet, from a clean credential store');
 });

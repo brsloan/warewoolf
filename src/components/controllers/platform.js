@@ -312,18 +312,76 @@ var COMMANDS = {
     note: 'Decrypt-and-reseal happens entirely natively (crypto.js:80-93). The renderer hands over the blob it found in user-settings.json and learns only what it needs to decide two things. (corrected in Phase 7: `{ migrated }` alone collapsed two outcomes the caller has to tell apart. `recognized` means the blob was in the pre-2.2.2 format and the settings field is now dead - clear it. `migrated` means a password was actually recovered and re-sealed. A legacy blob that decrypts to nothing is recognized but not migrated, and the old migrateLegacyPassword cleared the settings field in exactly that case too; a single flag would have left it there to be retried on every launch forever.)' },
 
   // --- K. Network and hardware --------------------------------------------------------------
-  checkForUpdate: { group: 'K', params: [], returns: '{ version, url } | null' },
+  //Phase 8 correction: returns the raw parsed GitHub release JSON, not a packaged `{version, url}`.
+  //Matching a release tag against the version this build is running, and picking the right asset
+  //for this platform/arch, is pure data work with no OS dependency - the same reason group D keeps
+  //corkboard's marker-escaping and group G keeps epub's XML generation out of platform-node.js.
+  //Only the network round-trip crosses; updates.js keeps packageReleaseData/isUpdateAvailable/
+  //extractUpdateDownloadInfo unchanged, now reading platform.getPlatform() (group A) instead of
+  //process.platform/process.arch directly, which also closes the two Group A reads this file's
+  //own note left deferred to this phase (updates.js:117-130,179 and about_display.js's own read).
+  checkForUpdate: { group: 'K', params: [], returns: 'the parsed GitHub release JSON (releases/latest)' },
+  //destPath is the full target path, computed by the caller from getAppPaths()'s temp/downloads and
+  //the asset name it matched - this command's job is only the download: skip it when the file is
+  //already there (and still report the path, so a caller that always calls this can stay simple),
+  //follow one redirect, and resolve only once the destination write stream's 'close' fires, not the
+  //response's completion - the identical truncated-file risk buildEpub/archiveProject (Phase 6)
+  //exist to avoid, corrected the same way here rather than carried over from the original
+  //updates.js, which resolved on 'finish'.
   downloadUpdate: { group: 'K', params: ['url', 'destPath'], returns: '{ path }' },
+  //The one command in the whole contract that escalates privilege, and the one whose `path` cannot
+  //be trusted just because it looks like a path. Phase 8 correction: `path` must be one this same
+  //backing instance itself produced via a prior downloadUpdate call - rejected with
+  //INVALID_ARGUMENT otherwise, before sudo is ever spawned. A directory allowlist or filename
+  //pattern was considered and rejected: destPath is caller-composed (see downloadUpdate above), so
+  //either check is a property a renderer-composed path could still satisfy by construction: only
+  //"this backing watched the bytes land here" is not renderer-forgeable. The password crosses once,
+  //outbound, exactly as before - the writer typed it into the DOM - written to the child's stdin
+  //rather than argv so it never appears in `ps`, with `path` as a separate argv element from the
+  //sudo/apt/install tokens so a hostile asset filename cannot inject additional shell commands
+  //(there is no shell: this is spawn(), not exec()).
   installUpdate: { group: 'K', params: ['path', 'password'], returns: 'void' },
+  //Takes SAVED_SECRET or a literal the writer just typed. This command is why getCredential does
+  //not exist: the password never needed to reach the renderer, because the thing that consumes it
+  //is also native.
+  //
+  //Phase 8 correction: `attachments` is not `{filename, content, encoding}[]` for every case, and
+  //cannot be - that shape was written before this command had to absorb backup-project.js's zip and
+  //epub.js's epub, both of which are built by zipping, not by generating a string. Each entry is
+  //exactly one of:
+  //  { filename, content, encoding? }        literal bytes/text the caller already generated
+  //                                           (docx base64, .md/.html/.mdfc/.txt strings)
+  //  { filename?, projectArchive: { projectDir, chapsDir?, sourceFilename } }
+  //                                           "zip this project" - built via the same archiveProject
+  //                                           (group H) this command already has, into a temp file
+  //                                           this call owns and deletes; filename defaults to
+  //                                           whatever archiveProject allocates
+  //  { filename, epubEntries: entries }      pre-assembled epub.js entries (the same {name,content}[]
+  //                                           buildEpub (group G) already takes), zipped the same way
+  //None of the three ever names a path the renderer composed - the two that need zipping are built
+  //into a temp file this command creates with fs.mkdtempSync, reads back as a Buffer, and deletes
+  //before resolving or rejecting, the same "own the temp directory, clean it up regardless of
+  //outcome" shape importDocx (group F) already established. This is the absorption the inventory
+  //flagged: the renderer hands over content (or, for a project/epub, the identities needed to build
+  //it) and never learns a temp path - shipping a `path` field here would have been the
+  //arbitrary-file-read primitive Phase 7 declined to pull forward.
   sendEmail: { group: 'K',
     params: ['service', 'sender', 'secret', 'receiver', 'attachments'],
     optional: ['subject', 'body'],
-    returns: 'void',
-    note: 'Takes SAVED_SECRET or a literal the writer just typed. This command is why getCredential does not exist: the password never needed to reach the renderer, because the thing that consumes it is also native. Also absorbs the temp-file dance around os.tmpdir() at email-doc.js:119-135,147,180 - the renderer hands over content and never learns a temp path.' },
-  wifiListNetworks: { group: 'K', params: [], returns: 'network[]' },
+    returns: 'void' },
+  wifiListNetworks: { group: 'K', params: [], returns: '{ ssid, isConnected }[]',
+    note: 'Rejects UNAVAILABLE when nmcli is not installed (spawn ENOENT) - the ordinary case off a writerDeck, not a failure worth logging every time the Wi-Fi Manager opens on a laptop. See the note on this file\'s own wifi-manager.js gap below.' },
+  //ssid/psk cross as separate argv elements to nmcli, never concatenated into a command string -
+  //the same discipline installUpdate's argv/stdin split follows, so a passphrase or SSID containing
+  //shell metacharacters cannot inject anything (there is no shell here either).
   wifiConnect: { group: 'K', params: ['ssid'], optional: ['psk'], returns: 'void' },
-  wifiGetAddress: { group: 'K', params: [], returns: 'string' },
-  getBatteryCapacity: { group: 'K', params: [], returns: 'number | null' }
+  wifiGetAddress: { group: 'K', params: [], returns: 'string (empty when the device has no address yet)' },
+  //Phase 8 correction: rejects UNAVAILABLE rather than resolving null when no battery is present -
+  //CODES.UNAVAILABLE's own doc comment already names "no battery" as its third example, and this is
+  //the everyday result on every machine that is not a writerDeck. A battery that exists but cannot
+  //be read (a spawn failure, non-numeric sysfs output) is IO_ERROR instead, so a caller can still
+  //tell "there is nothing to report" apart from "something is actually wrong."
+  getBatteryCapacity: { group: 'K', params: [], returns: 'number' }
 };
 
 //Wraps a backing in the contract: one async method per COMMANDS entry, every rejection a

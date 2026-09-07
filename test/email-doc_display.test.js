@@ -101,7 +101,7 @@ test('clicking Send shows a working indicator and defers prepareAndEmail until i
 
   var prepareCalls = [];
   var capturedSendCallback = null;
-  var prepareAndEmail = function(project, userSettings, editorQuill, sender, pass, receiver, filetype, compileOptions, cback){
+  var prepareAndEmail = function(project, userSettings, editorQuill, platform, sender, pass, receiver, filetype, compileOptions, cback){
     prepareCalls.push({ project, sender, receiver, filetype, compileOptions });
     capturedSendCallback = cback;
   };
@@ -281,8 +281,8 @@ test('sending with the field untouched hands the sentinel to the mailer, not a p
   await sendButton().onclick();
 
   assert.strictEqual(prepareCalls.length, 1);
-  //prepareAndEmail(project, userSettings, editorQuill, sender, pass, ...)
-  assert.strictEqual(prepareCalls[0][4], SAVED_SECRET);
+  //prepareAndEmail(project, userSettings, editorQuill, platform, sender, pass, ...)
+  assert.strictEqual(prepareCalls[0][5], SAVED_SECRET);
 });
 
 //Nothing changed, so nothing should be rewritten - the same guard that already existed, now
@@ -349,7 +349,8 @@ test('unticking Remember Password sends first and forgets afterwards', async fun
 
   var capturedSendCallback = null;
   var showEmailOptions = freshEmailDisplay(quietMocks(function(){
-    capturedSendCallback = arguments[8];
+    //prepareAndEmail(project, userSettings, editorQuill, platform, sender, pass, receiver, filetype, compileOptions, cback)
+    capturedSendCallback = arguments[9];
   }));
 
   await showEmailOptions({ title: 'My Novel' }, makeUserSettings(), built.platform, {});

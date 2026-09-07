@@ -5,7 +5,11 @@ const showInstallUpdate = require('./install-update_display');
 const { createPlatform } = require('../controllers/platform');
 const { createNodeBacking } = require('../controllers/platform-node');
 
-function showAbout(sysDirectories, appVersion){
+//platformInfo (platform.getPlatform()'s own shape, resolved once at boot - see render.js) replaces
+//the direct `process.platform` read the Download handler used to do below - the last of the two
+//Group A reads this file's own note in native-command-inventory.md left deferred to Phase 8 (the
+//other, updates.js's own asset-matching, closed the same way in updates.js itself).
+function showAbout(sysDirectories, appVersion, platformInfo){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup");
@@ -73,7 +77,7 @@ function showAbout(sysDirectories, appVersion){
         downloadBtn.onclick = function(){
           downloadBtn.innerText = 'Downloading...';
           downloadBtn.disabled = true;
-          if(process.platform == 'linux')
+          if(platformInfo.platform == 'linux')
             downloadUpdate(sysDirectories, latest.downloadInfo, showInstallUpdate);
           else {
             downloadUpdate(sysDirectories, latest.downloadInfo, function(fpath){

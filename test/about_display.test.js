@@ -40,15 +40,11 @@ function bodyShell(){
     '<div id="chapter-list-sidebar"></div><div id="project-notes"></div><div id="writing-field"></div>';
 }
 
-//process.platform is read at click-time by about_display.js (not captured at require time), so
-//overriding the real property for the duration of a test is enough - no fresh require needed,
-//same pattern as updates.test.js's withPlatform().
-function withPlatform(t, platform){
-  const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
-  Object.defineProperty(process, 'platform', { value: platform, configurable: true });
-  t.after(function(){
-    Object.defineProperty(process, 'platform', origPlatform);
-  });
+//Phase 8: about_display.js reads platformInfo.platform (render.js's own platform.getPlatform()
+//result, threaded in as a third argument) instead of process.platform directly - this just builds
+//the shape showAbout expects rather than patching a global.
+function platformInfo(platform){
+  return { platform: platform, arch: 'x64' };
 }
 
 function findButton(text){
@@ -77,7 +73,7 @@ test('renders the app version, WareWoolf.org link, and description, and focuses 
   t.mock.method(fs, 'existsSync', function(){ return false; });
   var showAbout = freshAboutDisplay({});
 
-  showAbout(sysDirs(), '2.3.1');
+  showAbout(sysDirs(), '2.3.1', platformInfo('win32'));
 
   assert.strictEqual(document.querySelector('.about-version').innerText, '2.3.1');
   assert.strictEqual(document.querySelector('.about-url').innerText, 'WareWoolf.org');
@@ -89,7 +85,7 @@ test('Close removes the popup', function(t){
   t.mock.method(fs, 'existsSync', function(){ return false; });
   var showAbout = freshAboutDisplay({});
 
-  showAbout(sysDirs(), '2.3.1');
+  showAbout(sysDirs(), '2.3.1', platformInfo('win32'));
   findButton('Close').onclick();
 
   assert.strictEqual(document.getElementsByClassName('popup').length, 0);
@@ -102,7 +98,7 @@ test('Check For Updates disables the button and calls getUpdates with the curren
     getUpdates: function(version, cb){ getUpdatesCalls.push(version); }
   });
 
-  showAbout(sysDirs(), '2.3.1');
+  showAbout(sysDirs(), '2.3.1', platformInfo('win32'));
   var checkBtn = findButton('Check For Updates');
   checkBtn.onclick();
 
@@ -117,7 +113,7 @@ test('a failed update check re-enables the button and shows a failure message', 
     getUpdates: function(version, cb){ cb(null, new Error('network down')); }
   });
 
-  showAbout(sysDirs(), '2.3.1');
+  showAbout(sysDirs(), '2.3.1', platformInfo('win32'));
   var checkBtn = findButton('Check For Updates');
   checkBtn.onclick();
 
@@ -131,7 +127,7 @@ test('no update available re-enables the button and reports no updates', functio
     getUpdates: function(version, cb){ cb(null); }
   });
 
-  showAbout(sysDirs(), '2.3.1');
+  showAbout(sysDirs(), '2.3.1', platformInfo('win32'));
   var checkBtn = findButton('Check For Updates');
   checkBtn.onclick();
 
@@ -151,7 +147,7 @@ test('an available update shows the updates panel with the tag/date/description 
     getUpdates: function(version, cb){ cb(latest); }
   });
 
-  showAbout(sysDirs(), '2.3.1');
+  showAbout(sysDirs(), '2.3.1', platformInfo('win32'));
   var checkBtn = findButton('Check For Updates');
   checkBtn.onclick();
 
@@ -163,7 +159,6 @@ test('an available update shows the updates panel with the tag/date/description 
 });
 
 test('on non-Linux, clicking Download passes a callback that reports the file was saved to the downloads folder', function(t){
-  withPlatform(t, 'win32');
   t.mock.method(fs, 'existsSync', function(){ return false; });
   var downloadCalls = [];
   var latest = {
@@ -175,7 +170,7 @@ test('on non-Linux, clicking Download passes a callback that reports the file wa
     downloadUpdate: function(sysDirectories, downloadInfo, cb){ downloadCalls.push({ sysDirectories, downloadInfo, cb }); }
   });
 
-  showAbout(sysDirs(), '2.3.1');
+  showAbout(sysDirs(), '2.3.1', platformInfo('win32'));
   findButton('Check For Updates').onclick();
   var downloadBtn = findButton('Download');
   downloadBtn.onclick();
@@ -193,7 +188,6 @@ test('on non-Linux, clicking Download passes a callback that reports the file wa
 //Regression coverage: on Linux the flow hands off to showInstallUpdate instead of just reporting
 //the file landed in Downloads, since installing there requires running the packaged installer.
 test('on Linux, clicking Download hands off to showInstallUpdate instead of the downloads-folder callback', function(t){
-  withPlatform(t, 'linux');
   t.mock.method(fs, 'existsSync', function(){ return false; });
   var downloadCalls = [];
   var showInstallUpdateCalls = [];
@@ -207,7 +201,7 @@ test('on Linux, clicking Download hands off to showInstallUpdate instead of the 
     showInstallUpdate: function(fpath){ showInstallUpdateCalls.push(fpath); }
   });
 
-  showAbout(sysDirs(), '2.3.1');
+  showAbout(sysDirs(), '2.3.1', platformInfo('linux'));
   findButton('Check For Updates').onclick();
   findButton('Download').onclick();
 
@@ -230,7 +224,7 @@ test('View License loads and displays the license text from sysDirectories.app a
   });
   var showAbout = freshAboutDisplay({});
 
-  showAbout(sysDirs(), '2.3.1');
+  showAbout(sysDirs(), '2.3.1', platformInfo('win32'));
   //Loaded on demand now, through the platform facade - awaited so the assertions below see the
   //text rather than racing the microtask that fetches it.
   await findButton('View License').onclick();
@@ -245,7 +239,7 @@ test('View License shows empty text when the licenses file does not exist', asyn
   t.mock.method(fs, 'existsSync', function(){ return false; });
   var showAbout = freshAboutDisplay({});
 
-  showAbout(sysDirs(), '2.3.1');
+  showAbout(sysDirs(), '2.3.1', platformInfo('win32'));
   await findButton('View License').onclick();
 
   assert.strictEqual(document.querySelector('pre').innerText, '');

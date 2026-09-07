@@ -263,7 +263,10 @@ test('getWifiStatus calls back exactly once even when stdout emits multiple chun
 // connectToNewWifi
 //---------------------------------------------------------------------------
 
-test('connectToNewWifi passes the ssid and password as separate argv elements and relays the result', async function(t){
+//Phase 8: connectToNewWifi routes through platform.wifiConnect(), which reports success as a
+//resolved void rather than nmcli's own stdout text (see platform-node.js) - the callback now
+//gets a fixed confirmation message on success rather than whatever nmcli happened to print.
+test('connectToNewWifi passes the ssid and password as separate argv elements and reports success', async function(t){
   const calls = mockSpawnSequence(t, [{ chunks: ['Device \'wlan0\' successfully activated\n'] }]);
   const { connectToNewWifi } = freshWifiManager();
 
@@ -273,5 +276,18 @@ test('connectToNewWifi passes the ssid and password as separate argv elements an
 
   assert.strictEqual(calls[0].command, 'nmcli');
   assert.deepStrictEqual(calls[0].args, ['device', 'wifi', 'connect', 'Office:5G', 'password', 'p"a$s\'w`ord; rm -rf /']);
-  assert.ok(result.includes('successfully activated'));
+  assert.strictEqual(result, 'Connected.');
+});
+
+//Regression coverage for the new native path: a non-zero nmcli exit code (wrong password, no
+//such network) must be reported to the caller with nmcli's own output, not silently as success.
+test('connectToNewWifi reports nmcli\'s own output when the connection attempt fails', async function(t){
+  mockSpawnSequence(t, [{ chunks: [], stderrChunks: ['Error: No network with SSID \'Office:5G\' found.\n'], code: 1 }]);
+  const { connectToNewWifi } = freshWifiManager();
+
+  const result = await new Promise(function(resolve){
+    connectToNewWifi('Office:5G', 'wrong-password', resolve);
+  });
+
+  assert.match(result, /No network with SSID/);
 });

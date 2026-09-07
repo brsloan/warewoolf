@@ -19,6 +19,16 @@ const os = require('os');
 //importDocx, buildEpub and archiveProject are native by necessity rather than by convenience.
 const unzipper = require('unzipper');
 const archiver = require('archiver');
+//Group K's own out-of-process dependencies. Required here, at module scope, rather than
+//destructured - createNodeBacking() below resolves `.request`/`.get`/`.spawn`/`.createTransport`
+//off these same module objects fresh on every call (options.X || httpsModule.X, not a captured
+//copy), so a test that mocks e.g. https.request via node:test's t.mock.method is seen by any
+//backing constructed afterward, and platform.test.js's own injected fakes (httpsRequest,
+//httpsGet, spawnProcess, createMailTransport) can override the same seam without either backing
+//behaving differently depending on which came first.
+const httpsModule = require('https');
+const childProcessModule = require('child_process');
+const nodemailer = require('nodemailer');
 const { CODES, PlatformError, fromNodeError, SAVED_SECRET } = require('./platform');
 const { sanitizeFilename } = require('./utils');
 //Only the legacy-format pair is needed here. Everything else about key handling - derivation,
@@ -62,6 +72,14 @@ const PERSONAL_DICT_SEED = 'WareWoolf\n';
 //taking one.
 const ARCHIVE_EXTENSION = '.zip';
 
+//Group K: the GitHub Releases endpoint updates.js used to hit directly.
+const RELEASE_API_HOSTNAME = 'api.github.com';
+const RELEASE_API_PATH = '/repos/brsloan/warewoolf/releases/latest';
+const RELEASE_CHECK_TIMEOUT_MS = 10000;
+//Linux-only sysfs path for battery state - absent by construction on Windows/macOS, which is what
+//makes getBatteryCapacity's UNAVAILABLE path exercisable in this test suite without a real Pi.
+const POWER_SUPPLY_PATH = '/sys/class/power_supply';
+
 //`services` maps a credential service name to the directory its store lives in. Only 'email' exists
 //today, in userData, which is exactly where credential-store.js already keeps credentials.json and
 //.warewoolf-key - so nothing on disk moves. Tauri's keyring is service-keyed, which is why the name
@@ -79,6 +97,23 @@ function createNodeBacking(deps){
   //tell them apart), so it needs an injectable seam the same way secureStorage/onSetTheme/etc. are
   //injectable, rather than being asserted only by comment.
   var createWriteStream = options.createWriteStream || fs.createWriteStream;
+  //Group K's own injectable transports - the network/process boundary this phase's own write-up
+  //warns has to be replaced *inside* the bundle (mark the module external, or inject it) rather
+  //than blocked from outside at the socket/DNS layer, which Phase 7 tried once and could not make
+  //work: Node's `net` layer does not go through whatever a page-level script replaces. Resolved
+  //fresh off the shared module objects on every createNodeBacking() call (not destructured at this
+  //file's top) so a test's t.mock.method on the real module is picked up by a backing constructed
+  //after the mock is installed, the same trick that already lets platform.test.js mock https.request
+  //without a require-cache dance.
+  var httpsRequest = options.httpsRequest || httpsModule.request;
+  var httpsGet = options.httpsGet || httpsModule.get;
+  var spawnProcess = options.spawnProcess || childProcessModule.spawn;
+  var createMailTransport = options.createMailTransport || nodemailer.createTransport;
+  //installUpdate's one guard: sudo apt install must never run against a path the renderer merely
+  //asserts is an installer. This backing only trusts a path it produced itself, via a downloadUpdate
+  //call against this same instance (session-scoped - the state disappears once the app or a test
+  //discards this backing, same lifetime as the credential stores' cached session key above).
+  var vouchedUpdatePaths = new Set();
 
   //Group A is the exception to this file's own rule. C and J are direct fs/crypto - exactly what
   //nodeIntegration already gives the renderer, so this backing can run inside it unchanged. None of
@@ -178,6 +213,16 @@ function createNodeBacking(deps){
     //so sendEmail (group K, Phase 8) can turn a SAVED_SECRET into the password on this side of the
     //boundary. Anything that needs a stored secret has to live in here with it.
     resolveSecret: resolveSecret,
+
+    // --- K. Network and hardware -------------------------------------------------------------
+    checkForUpdate: checkForUpdate,
+    downloadUpdate: downloadUpdate,
+    installUpdate: installUpdate,
+    sendEmail: sendEmail,
+    wifiListNetworks: wifiListNetworks,
+    wifiConnect: wifiConnect,
+    wifiGetAddress: wifiGetAddress,
+    getBatteryCapacity: getBatteryCapacity,
 
     on: on,
     off: off
@@ -886,12 +931,21 @@ function createNodeBacking(deps){
   //terminated directory - projectDir/destDir here are not guaranteed to end in one (email-doc.js
   //passes os.tmpdir() as destDir, which does not), and unlike saveProjectAs's returned directory,
   //nothing downstream depends on this command's paths being forward-slash-normalized.
+  //Phase 8 fix: an empty `filename` used to be caught only by backup-project.js's own wrapper
+  //("Cannot back up a project with no filename"), one level up from here - requireText accepts an
+  //empty string, since it only checks typeof. That guard did not cover this command itself, so
+  //sendEmail's projectArchive attachment kind (which calls this function directly, bypassing
+  //backup-project.js entirely) had no guard at all: archive.file(path.join(projectDir, ''), ...)
+  //would have handed archiver a directory where it expects a file. Moved here so every caller of
+  //the native command gets it, not only the one that happened to add it first.
   function archiveProject(args){
     return new Promise(function(resolve, reject){
       var projectDir = args == null ? undefined : args.projectDir;
       requireText(projectDir, 'projectDir');
       requireText(args.destDir, 'destDir');
       requireText(args.filename, 'filename');
+      if(args.filename === '')
+        throw PlatformError(CODES.INVALID_ARGUMENT, 'Cannot back up a project with no filename.', { command: 'archiveProject' });
       var chapsDir = args.chapsDir == null ? '' : args.chapsDir;
 
       var archiveName = args.filename.replace(PROJECT_EXT, '') + archiveTimestamp() + ARCHIVE_EXTENSION;
@@ -1135,6 +1189,560 @@ function createNodeBacking(deps){
         { service: args.service });
 
     return store.getPassword();
+  }
+
+  // ------------------------------------------------------------------------------------------
+  // Group K (updates)
+  // ------------------------------------------------------------------------------------------
+
+  //Only the network round-trip crosses. Shaping the response into what the About panel wants
+  //(matching a release tag against the running version, picking the right asset for this
+  //platform/arch) is pure data work with no OS dependency and stays in updates.js, the same
+  //reason group D keeps corkboard's marker-escaping out of this file - this resolves with
+  //whatever JSON GitHub's API actually returned, parsed and nothing more.
+  function checkForUpdate(){
+    return new Promise(function(resolve, reject){
+      var requestOptions = {
+        hostname: RELEASE_API_HOSTNAME,
+        path: RELEASE_API_PATH,
+        method: 'GET',
+        headers: { 'User-Agent': 'warewoolf' },
+        timeout: RELEASE_CHECK_TIMEOUT_MS
+      };
+
+      var req = httpsRequest(requestOptions, function(res){
+        var chunks = [];
+
+        res.on('data', function(chunk){ chunks.push(chunk); });
+        res.on('end', function(){
+          var body = Buffer.concat(chunks).toString();
+
+          if(res.statusCode !== 200){
+            reject(PlatformError(CODES.IO_ERROR,
+              'GitHub release check failed with status ' + res.statusCode + ': ' + body,
+              { command: 'checkForUpdate' }));
+            return;
+          }
+
+          try{
+            resolve(JSON.parse(body));
+          }
+          catch(parseErr){
+            reject(fromNodeError(parseErr, { command: 'checkForUpdate' }));
+          }
+        });
+      });
+
+      req.on('timeout', function(){
+        req.destroy(new Error('Update check timed out'));
+      });
+
+      req.on('error', function(err){
+        reject(fromNodeError(err, { command: 'checkForUpdate' }));
+      });
+
+      req.end();
+    });
+  }
+
+  //destPath is fully resolved by the caller (updates.js builds it from getAppPaths()'s own
+  //temp/downloads and the asset name checkForUpdate's caller matched) - this command's own
+  //contribution is the download itself: skip it if the file is already there, follow one GitHub
+  //redirect, and resolve only once the write stream's 'close' fires. The original updates.js
+  //resolved on 'finish' here, the identical truncated-file risk Phase 6 fixed in buildEpub and
+  //archiveProject - corrected the same way rather than carried over.
+  //
+  //A path this resolves to is remembered as "produced by this backing" so a later installUpdate
+  //call against the *same path* is allowed to proceed - see installUpdate below. Vouching on the
+  //already-downloaded shortcut too, not only a fresh download, is deliberate: a file this backing
+  //can see sitting at the exact path it would itself have written the release asset to is exactly
+  //as trustworthy as one it just wrote.
+  function downloadUpdate(args){
+    return new Promise(function(resolve, reject){
+      var url = args == null ? undefined : args.url;
+      var destPath = args == null ? undefined : args.destPath;
+      requireText(url, 'url');
+      requireText(destPath, 'destPath');
+
+      if(fs.existsSync(destPath)){
+        vouchedUpdatePaths.add(destPath);
+        resolve({ path: destPath });
+        return;
+      }
+
+      var file = createWriteStream(destPath);
+      var settled = false;
+      var downloadErr = null;
+
+      function settle(action, value){
+        if(settled) return;
+        settled = true;
+        action(value);
+      }
+
+      file.on('close', function(){
+        if(downloadErr != null){
+          try{ fs.unlinkSync(destPath); } catch(unlinkErr){}
+          settle(reject, fromNodeError(downloadErr, { command: 'downloadUpdate' }));
+          return;
+        }
+
+        vouchedUpdatePaths.add(destPath);
+        settle(resolve, { path: destPath });
+      });
+
+      file.on('error', function(err){ downloadErr = err; });
+
+      function requestUrl(currentUrl){
+        var req = httpsGet(currentUrl, function(response){
+          if(response.statusCode == 302){
+            response.resume();
+            requestUrl(response.headers.location);
+            return;
+          }
+
+          if(response.statusCode !== 200){
+            response.resume();
+            downloadErr = new Error('Download failed: ' + response.statusCode);
+            file.destroy();
+            return;
+          }
+
+          response.pipe(file);
+        });
+
+        req.on('error', function(err){
+          downloadErr = err;
+          file.destroy();
+        });
+
+        req.end();
+      }
+
+      requestUrl(url);
+    });
+  }
+
+  //The one command in the whole contract that escalates privilege - sudo apt install, run behind
+  //a bridge, on a path a renderer could otherwise name however it likes. The guard: `path` must be
+  //one this same backing instance vouched for via a prior downloadUpdate call (see above), or this
+  //rejects before ever spawning sudo. That is a session-scoped allowlist of exactly one kind of
+  //entry - "a release asset this process itself downloaded" - not a filename pattern or directory
+  //check, which a renderer-composed path could still satisfy by construction.
+  //
+  //The password crosses once, outbound, exactly as it did before this conversion - the writer
+  //typed it into the DOM, same as sendEmail's literal-password case - and is written to the
+  //child's stdin rather than argv, so it never appears in `ps`. `path` is a separate argv element
+  //from the sudo/apt/install tokens, so shell metacharacters in it (which a malicious release
+  //asset filename could contain) cannot inject additional commands.
+  function installUpdate(args){
+    return new Promise(function(resolve, reject){
+      var targetPath = args == null ? undefined : args.path;
+      requireText(targetPath, 'path');
+      requireText(args.password, 'password');
+
+      if(!vouchedUpdatePaths.has(targetPath)){
+        reject(PlatformError(CODES.INVALID_ARGUMENT,
+          'Refusing to install "' + targetPath + '": it was not produced by this session\'s downloadUpdate.',
+          { command: 'installUpdate' }));
+        return;
+      }
+
+      var updater;
+      try{
+        updater = spawnProcess('sudo', ['-S', 'apt', 'install', targetPath], { stdio: 'pipe' });
+      }
+      catch(spawnErr){
+        reject(fromNodeError(spawnErr, { command: 'installUpdate' }));
+        return;
+      }
+
+      updater.stdin.write(args.password + '\n');
+      updater.stdin.end();
+
+      var output = '';
+      updater.stdout.on('data', function(data){ output += data; });
+      updater.stderr.on('data', function(data){ output += data; });
+
+      updater.on('error', function(err){
+        reject(fromNodeError(err, { command: 'installUpdate' }));
+      });
+
+      updater.on('close', function(exitCode){
+        if(exitCode === 0){
+          resolve(undefined);
+          return;
+        }
+
+        reject(PlatformError(CODES.IO_ERROR,
+          'Installation failed (exit code ' + exitCode + ').' + (output.trim() ? ' ' + output.trim() : ''),
+          { command: 'installUpdate', exitCode: exitCode }));
+      });
+    });
+  }
+
+  // ------------------------------------------------------------------------------------------
+  // Group K (email)
+  // ------------------------------------------------------------------------------------------
+
+  //sendEmail is why getCredential does not exist (see platform.js) and it closes Phase 7's one
+  //standing rule-6 exception: `secret` may be SAVED_SECRET, resolved here via the same
+  //resolveSecret() storeCredential already uses, so the plaintext never crosses the boundary for a
+  //saved password - only a literal the writer just typed does, exactly once, outbound.
+  //
+  //`attachments` never carries a path the renderer composed. Every entry is one of:
+  //  - { filename, content, encoding? }        literal bytes/text the caller already generated
+  //  - { filename?, projectArchive: {...} }     "zip this project" - see buildProjectArchiveAttachment
+  //  - { filename, epubEntries: [...] }         pre-assembled epub.js entries - see buildEpubAttachment
+  //The latter two are native-generated content: this command builds them into its own temp file,
+  //reads the bytes back, and deletes the temp file before resolving or rejecting - the renderer
+  //hands over content (or, for a project/epub, the identities needed to build it) and never learns
+  //a temp path, which is the absorption email-doc.js's old os.tmpdir() dance needed.
+  function sendEmail(args){
+    return new Promise(function(resolve, reject){
+      requireText(args == null ? undefined : args.sender, 'sender');
+      requireText(args.receiver, 'receiver');
+
+      var secret;
+      try{
+        secret = args.secret === SAVED_SECRET ? resolveSecret({ service: args.service }) : args.secret;
+      }
+      catch(err){
+        reject(err);
+        return;
+      }
+
+      if(secret == null){
+        reject(PlatformError(CODES.INVALID_ARGUMENT, 'No saved password is available.', { command: 'sendEmail' }));
+        return;
+      }
+      requireText(secret, 'secret');
+
+      resolveAttachments(args.attachments == null ? [] : args.attachments)
+        .then(function(resolved){
+          var transporter = createMailTransport({
+            service: 'gmail',
+            auth: { user: args.sender, pass: secret }
+          });
+
+          transporter.sendMail({
+            from: args.sender,
+            to: args.receiver,
+            subject: args.subject == null ? 'WareWoolf backup' : args.subject,
+            text: args.body == null ? 'Document will be attached.' : args.body,
+            attachments: resolved.attachments
+          }, function(mailErr){
+            resolved.cleanup();
+
+            if(mailErr != null){
+              reject(fromNodeError(mailErr, { command: 'sendEmail' }));
+              return;
+            }
+
+            resolve(undefined);
+          });
+        })
+        .catch(function(err){
+          reject(fromNodeError(err, { command: 'sendEmail' }));
+        });
+    });
+  }
+
+  //Resolves every attachment descriptor to { filename, content, encoding? } plus a cleanup() for
+  //any temp file it created, in parallel. Promise.allSettled rather than Promise.all: a project
+  //archive and an epub each own a temp directory, and if one attachment fails while another has
+  //already succeeded, the successful one's temp directory must still be removed rather than
+  //orphaned - Promise.all's short-circuit on the first rejection would otherwise leave it behind.
+  function resolveAttachments(list){
+    return Promise.allSettled(list.map(buildAttachment)).then(function(results){
+      var rejected = results.find(function(r){ return r.status === 'rejected'; });
+
+      if(rejected != null){
+        results.forEach(function(r){
+          if(r.status === 'fulfilled')
+            try{ r.value.cleanup(); } catch(cleanupErr){ log(cleanupErr); }
+        });
+        throw rejected.reason;
+      }
+
+      return {
+        attachments: results.map(function(r){ return r.value.attachment; }),
+        cleanup: function(){
+          results.forEach(function(r){
+            try{ r.value.cleanup(); } catch(cleanupErr){ log(cleanupErr); }
+          });
+        }
+      };
+    });
+  }
+
+  function buildAttachment(item){
+    if(item == null)
+      return Promise.reject(PlatformError(CODES.INVALID_ARGUMENT, 'Every attachment needs a filename.'));
+
+    if(item.content != null){
+      requireText(item.filename, 'attachment filename');
+      return Promise.resolve({
+        attachment: { filename: item.filename, content: item.content, encoding: item.encoding },
+        cleanup: function(){}
+      });
+    }
+
+    if(item.projectArchive != null)
+      return buildProjectArchiveAttachment(item);
+
+    if(item.epubEntries != null){
+      requireText(item.filename, 'attachment filename');
+      return buildEpubAttachment(item);
+    }
+
+    return Promise.reject(PlatformError(CODES.INVALID_ARGUMENT,
+      'Attachment "' + (item.filename || '?') + '" has no content, projectArchive, or epubEntries.'));
+  }
+
+  //Reuses archiveProject (group H) unchanged, pointed at a temp directory this call owns start to
+  //finish - the same "own an fs.mkdtempSync() directory, clean it up in a finally-equivalent"
+  //shape importDocx (group F) already established. The archive's real name is whatever
+  //archiveProject allocated (project title + timestamp) unless the caller supplied one; either
+  //way the renderer never sees the temp path, only the finished bytes.
+  function buildProjectArchiveAttachment(item){
+    var pa = item.projectArchive;
+    var projectDir = pa == null ? undefined : pa.projectDir;
+
+    try{
+      requireText(projectDir, 'projectArchive.projectDir');
+      requireText(pa.sourceFilename, 'projectArchive.sourceFilename');
+    }
+    catch(validationErr){
+      return Promise.reject(validationErr);
+    }
+
+    var tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'warewoolf-email-'));
+
+    return archiveProject({
+      projectDir: projectDir,
+      chapsDir: pa.chapsDir == null ? '' : pa.chapsDir,
+      filename: pa.sourceFilename,
+      destDir: tempDir
+    }).then(function(result){
+      return {
+        attachment: { filename: item.filename || result.filename, content: fs.readFileSync(result.path) },
+        cleanup: function(){ fs.rmSync(tempDir, { recursive: true, force: true }); }
+      };
+    }).catch(function(err){
+      fs.rmSync(tempDir, { recursive: true, force: true });
+      throw err;
+    });
+  }
+
+  //Same shape, reusing buildEpub (group G) unchanged - epub.js assembles the entries (pure string
+  //work, unchanged from the export path) and hands them over; this zips them into its own temp
+  //file, reads the bytes back, and deletes the temp file, all before sendEmail ever calls
+  //transporter.sendMail.
+  function buildEpubAttachment(item){
+    var tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'warewoolf-email-'));
+    var tempPath = path.join(tempDir, 'attachment.epub');
+
+    return buildEpub({ filepath: tempPath, entries: item.epubEntries }).then(function(){
+      return {
+        attachment: { filename: item.filename, content: fs.readFileSync(tempPath) },
+        cleanup: function(){ fs.rmSync(tempDir, { recursive: true, force: true }); }
+      };
+    }).catch(function(err){
+      fs.rmSync(tempDir, { recursive: true, force: true });
+      throw err;
+    });
+  }
+
+  // ------------------------------------------------------------------------------------------
+  // Group K (wifi and battery)
+  // ------------------------------------------------------------------------------------------
+
+  //nmcli's -t (terse) output escapes a literal ':' or '\' inside a field as '\:'/'\\', so a plain
+  //split(':') misaligns fields whenever a value (an SSID, say) contains a colon. Moved here from
+  //wifi-manager.js's own copy for the three commands that are now native; wifi-manager.js keeps
+  //its own copy for getConnectionState/getWifiStatus/enableWifi/disableWifi, which have no
+  //contract command of their own yet - see the note on that file.
+  function splitNmcliFields(line){
+    return line.split(/(?<!\\):/).map(function(field){
+      return field.replace(/\\(.)/g, '$1');
+    });
+  }
+
+  function unavailableOrIoError(err, command){
+    return err != null && err.code === 'ENOENT'
+      ? PlatformError(CODES.UNAVAILABLE, command + ' needs nmcli, which is not installed on this machine.', { command: command })
+      : fromNodeError(err, { command: command });
+  }
+
+  function wifiListNetworks(){
+    return new Promise(function(resolve, reject){
+      var nmcli;
+      try{
+        nmcli = spawnProcess('nmcli', ['-t', 'device', 'wifi', 'list', '--rescan', 'yes']);
+      }
+      catch(spawnErr){
+        reject(unavailableOrIoError(spawnErr, 'wifiListNetworks'));
+        return;
+      }
+
+      var chunks = [];
+      var spawnFailed = false;
+
+      nmcli.stdout.on('data', function(data){ chunks.push(data); });
+      nmcli.stderr.on('data', function(data){ log(new Error(data.toString().trim())); });
+
+      nmcli.on('error', function(err){
+        spawnFailed = true;
+        reject(unavailableOrIoError(err, 'wifiListNetworks'));
+      });
+
+      nmcli.on('close', function(){
+        if(spawnFailed) return;
+
+        var networks = Buffer.concat(chunks).toString().split('\n').map(function(line){
+          var fields = splitNmcliFields(line);
+          return { ssid: fields[7], isConnected: fields[0] === '*' };
+        }).filter(function(net){
+          return net.ssid != null && net.ssid !== '';
+        });
+
+        resolve(networks);
+      });
+    });
+  }
+
+  //ssid/psk are passed as separate argv elements, never interpolated into a command string - the
+  //same discipline installUpdate's password-via-stdin follows, applied here because nmcli takes
+  //the password as an ordinary argument rather than reading stdin.
+  function wifiConnect(args){
+    return new Promise(function(resolve, reject){
+      var ssid = args == null ? undefined : args.ssid;
+      requireText(ssid, 'ssid');
+      var psk = args.psk == null ? null : args.psk;
+
+      var connectArgs = psk == null
+        ? ['device', 'wifi', 'connect', ssid]
+        : ['device', 'wifi', 'connect', ssid, 'password', psk];
+
+      var nmcli;
+      try{
+        nmcli = spawnProcess('nmcli', connectArgs);
+      }
+      catch(spawnErr){
+        reject(unavailableOrIoError(spawnErr, 'wifiConnect'));
+        return;
+      }
+
+      var chunks = [];
+      var spawnFailed = false;
+
+      nmcli.stdout.on('data', function(data){ chunks.push(data); });
+      nmcli.stderr.on('data', function(data){ chunks.push(data); });
+
+      nmcli.on('error', function(err){
+        spawnFailed = true;
+        reject(unavailableOrIoError(err, 'wifiConnect'));
+      });
+
+      nmcli.on('close', function(exitCode){
+        if(spawnFailed) return;
+
+        if(exitCode === 0){
+          resolve(undefined);
+          return;
+        }
+
+        var output = Buffer.concat(chunks).toString().trim();
+        reject(PlatformError(CODES.IO_ERROR,
+          output || ('nmcli exited with code ' + exitCode), { command: 'wifiConnect' }));
+      });
+    });
+  }
+
+  function wifiGetAddress(){
+    return new Promise(function(resolve, reject){
+      var hostnameCmd;
+      try{
+        hostnameCmd = spawnProcess('hostname', ['-I']);
+      }
+      catch(spawnErr){
+        reject(unavailableOrIoError(spawnErr, 'wifiGetAddress'));
+        return;
+      }
+
+      var chunks = [];
+      var spawnFailed = false;
+
+      hostnameCmd.stdout.on('data', function(data){ chunks.push(data); });
+      hostnameCmd.stderr.on('data', function(data){ log(new Error(data.toString().trim())); });
+
+      hostnameCmd.on('error', function(err){
+        spawnFailed = true;
+        reject(unavailableOrIoError(err, 'wifiGetAddress'));
+      });
+
+      hostnameCmd.stdout.on('close', function(){
+        if(spawnFailed) return;
+
+        var text = Buffer.concat(chunks).toString().trim().split(' ')[0];
+        resolve(text || '');
+      });
+    });
+  }
+
+  //Folds getBatteryName() + queryKernel() (battery-monitor.js, before this phase) into one call.
+  //No battery present is UNAVAILABLE, not a resolved null - CODES.UNAVAILABLE's own doc comment
+  //already names "no battery" as the example this code is for, and it is the everyday outcome on
+  //every machine that isn't a writerDeck, not an edge case a caller should have to distinguish
+  //from a real read failure (IO_ERROR, below).
+  function getBatteryCapacity(){
+    return new Promise(function(resolve, reject){
+      var entries;
+      try{
+        entries = fs.readdirSync(POWER_SUPPLY_PATH);
+      }
+      catch(readErr){
+        reject(PlatformError(CODES.UNAVAILABLE, 'No battery is present on this machine.', { command: 'getBatteryCapacity' }));
+        return;
+      }
+
+      var batteryName = entries.filter(function(name){ return name.startsWith('BAT'); })[0];
+      if(batteryName == null){
+        reject(PlatformError(CODES.UNAVAILABLE, 'No battery is present on this machine.', { command: 'getBatteryCapacity' }));
+        return;
+      }
+
+      var cat;
+      try{
+        cat = spawnProcess('cat', [path.join(POWER_SUPPLY_PATH, batteryName, 'capacity')]);
+      }
+      catch(spawnErr){
+        reject(fromNodeError(spawnErr, { command: 'getBatteryCapacity' }));
+        return;
+      }
+
+      var output = '';
+      var spawnFailed = false;
+
+      cat.stdout.on('data', function(data){ output += data.toString(); });
+      cat.stderr.on('data', function(data){ log(new Error(data.toString().trim())); });
+
+      cat.on('error', function(err){
+        spawnFailed = true;
+        reject(fromNodeError(err, { command: 'getBatteryCapacity' }));
+      });
+
+      cat.stdout.on('close', function(){
+        if(spawnFailed) return;
+
+        var parsed = parseInt(output.trim(), 10);
+        if(output.trim() === '' || isNaN(parsed))
+          reject(PlatformError(CODES.IO_ERROR, 'Could not read battery capacity.', { command: 'getBatteryCapacity' }));
+        else
+          resolve(parsed);
+      });
+    });
   }
 
   // ------------------------------------------------------------------------------------------

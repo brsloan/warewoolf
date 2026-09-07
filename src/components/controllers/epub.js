@@ -11,7 +11,12 @@ var platform = createPlatform(createNodeBacking({}));
 //one chapter_N.xhtml per chapter, and the stylesheet. Only the zipping (archiver has no browser
 //build) and the actual disk write cross to platform.buildEpub now - every bit of XML/XHTML
 //generation and escaping below stays exactly where it was.
-function htmlChaptersToEpub(title, author, htmlChapters, filepath, insertTitlePage, callback){
+//
+//Split out from htmlChaptersToEpub in Phase 8 so email-doc.js's sendEmail path can build the same
+//entries and hand them to platform.sendEmail directly, without ever writing an epub to a path the
+//renderer would have to learn and clean up - the same "assembled content crosses, not a path"
+//shape buildEpub itself established in Phase 6.
+function assembleEpubEntries(title, author, htmlChapters, insertTitlePage){
     //htmlChapters should be an array of objects with a title property and an html property.
     //Build a new array rather than unshift()-ing in place: callers construct this array fresh
     //today, but mutating an argument the caller still holds a reference to is a footgun waiting
@@ -39,6 +44,12 @@ function htmlChaptersToEpub(title, author, htmlChapters, filepath, insertTitlePa
     });
 
     entries.push({ name: contentDir + 'CSS/template.css', content: getCss() });
+
+    return entries;
+}
+
+function htmlChaptersToEpub(title, author, htmlChapters, filepath, insertTitlePage, callback){
+    const entries = assembleEpubEntries(title, author, htmlChapters, insertTitlePage);
 
     platform.buildEpub({ filepath: filepath, entries: entries }).then(function(){
         callback(filepath);
@@ -261,5 +272,6 @@ function getCss(){
 }
 
 module.exports = {
-    htmlChaptersToEpub
+    htmlChaptersToEpub,
+    assembleEpubEntries
 }

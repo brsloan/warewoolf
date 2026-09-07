@@ -6,7 +6,8 @@ const path = require('node:path');
 const nodeCrypto = require('node:crypto');
 const archiver = require('archiver');
 const unzipper = require('unzipper');
-const { Writable } = require('node:stream');
+const { Writable, Readable } = require('node:stream');
+const { EventEmitter } = require('node:events');
 
 const {
   createPlatform, COMMANDS, EVENTS, CODES, PlatformError, SAVED_SECRET
@@ -83,6 +84,113 @@ function patch(t, object, key, replacement){
   return original;
 }
 
+//---------------------------------------------------------------------------------------------
+// Group K fakes - checkForUpdate/downloadUpdate use https.request/https.get shaped functions,
+// installUpdate/wifi*/getBatteryCapacity use spawn-shaped ones, and sendEmail uses a
+// createTransport-shaped one. All four are injected straight into createNodeBacking() (the same
+// seam createWriteStream already is), so - unlike updates.js's/wifi-manager.js's own standing
+// instances, which resolve these once at module load - every test here builds its own instance
+// with the fake baked in from construction, with no "mock before you construct" ordering to get
+// right.
+//---------------------------------------------------------------------------------------------
+
+function fakeHttpsRequest(spec){
+  return function(options, callback){
+    const req = new EventEmitter();
+    req.destroy = function(err){ req.emit('error', err); };
+    req.end = function(){
+      if(spec.triggerError){
+        setImmediate(function(){ req.emit('error', spec.triggerError); });
+        return;
+      }
+      setImmediate(function(){
+        const res = new EventEmitter();
+        res.statusCode = spec.statusCode || 200;
+        callback(res);
+        setImmediate(function(){
+          res.emit('data', Buffer.from(spec.body));
+          res.emit('end');
+        });
+      });
+    };
+    return req;
+  };
+}
+
+//Sequential https.get responses, for following one redirect - each call consumes the next entry.
+function fakeHttpsGet(responses){
+  const calls = [];
+  const fn = function(url, callback){
+    calls.push(url);
+    const spec = responses[calls.length - 1];
+    const req = new EventEmitter();
+    req.end = function(){};
+
+    if(spec.triggerError){
+      setImmediate(function(){ req.emit('error', spec.triggerError); });
+      return req;
+    }
+
+    setImmediate(function(){
+      const res = spec.body != null
+        ? Readable.from([Buffer.from(spec.body)])
+        : new Readable({ read: function(){ this.push(null); } });
+      res.statusCode = spec.statusCode;
+      res.headers = spec.headers || {};
+      callback(res);
+    });
+
+    return req;
+  };
+  fn.calls = calls;
+  return fn;
+}
+
+function fakeChildProcess(){
+  const child = new EventEmitter();
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+  child.stdinChunks = [];
+  child.stdin = {
+    write: function(chunk){ child.stdinChunks.push(chunk); },
+    end: function(){}
+  };
+  return child;
+}
+
+//Sequential spawn calls, in order - each response can supply stdout/stderr chunks, a close code,
+//or a spawn-level error. 'close' fires on both the child and child.stdout so it works regardless
+//of which one the code under test listens on, matching wifi-manager.test.js's/
+//battery-monitor.test.js's own helper.
+function fakeSpawn(responses){
+  const calls = [];
+  const fn = function(command, args, options){
+    calls.push({ command: command, args: args, options: options });
+    const child = fakeChildProcess();
+    const spec = responses[calls.length - 1] || {};
+    setImmediate(function(){
+      if(spec.error){
+        child.emit('error', spec.error);
+        return;
+      }
+      (spec.stderrChunks || []).forEach(function(chunk){ child.stderr.emit('data', Buffer.from(chunk)); });
+      (spec.chunks || []).forEach(function(chunk){ child.stdout.emit('data', Buffer.from(chunk)); });
+      const code = spec.code != null ? spec.code : 0;
+      child.emit('close', code);
+      child.stdout.emit('close', code);
+    });
+    return child;
+  };
+  fn.calls = calls;
+  return fn;
+}
+
+function fakeMailTransport(sendMailImpl){
+  return function(config){
+    return { config: config, sendMail: sendMailImpl };
+  };
+}
+
 async function rejection(promise){
   try{
     await promise;
@@ -129,15 +237,17 @@ test('a live platform cannot be extended with an undeclared command', function(t
   assert.strictEqual(platform.readAnyFile, undefined);
 });
 
+//Every group is implemented in the node backing as of Phase 8, so this can no longer point at a
+//real gap in createNodeBacking the way it did through Phase 7 (checkForUpdate, back when group K
+//was still outstanding). A bare-bones fake backing missing one method proves the same createPlatform-
+//level property - NOT_IMPLEMENTED, not a bare "not a function" TypeError, for anything COMMANDS
+//declares but a backing does not supply - independent of which group happens to be finished.
 test('a declared command the backing does not implement rejects with NOT_IMPLEMENTED', async function(t){
-  const platform = platformIn(t).platform;
+  const platform = createPlatform({ on: function(){}, off: function(){} });
   const err = await rejection(platform.checkForUpdate({}));
 
   assert.strictEqual(err.code, CODES.NOT_IMPLEMENTED);
   assert.strictEqual(err.command, 'checkForUpdate');
-  //Names the group so an unconverted call site says which phase still owes it. Group K is the last
-  //one still outstanding after Phase 6 (F, G, H) - see the note on this test in earlier phases for
-  //why it has moved: A-J are implemented once F/G/H land, so this is the only group left to pick.
   assert.match(err.message, /group K/);
 });
 
@@ -1842,6 +1952,609 @@ test('personal dictionary commands reject UNAVAILABLE without a userData directo
 
   assert.strictEqual((await rejection(platform.loadPersonalDictionary())).code, CODES.UNAVAILABLE);
   assert.strictEqual((await rejection(platform.savePersonalDictionary({ words: [] }))).code, CODES.UNAVAILABLE);
+});
+
+// ---------------------------------------------------------------------------------------------
+// Group K - updates
+// ---------------------------------------------------------------------------------------------
+
+function releaseJson(overrides){
+  return JSON.stringify(Object.assign({
+    tag_name: 'v2.0.0',
+    prerelease: false,
+    body: 'Release notes',
+    published_at: '2026-01-01T00:00:00Z',
+    assets: [{ name: 'warewoolf_2.0.0_amd64.deb', browser_download_url: 'https://example.com/amd64.deb' }]
+  }, overrides));
+}
+
+test('checkForUpdate resolves the parsed release JSON on a 200 response', async function(t){
+  const platform = createPlatform(createNodeBacking({
+    httpsRequest: fakeHttpsRequest({ statusCode: 200, body: releaseJson() })
+  }));
+
+  const data = await platform.checkForUpdate();
+  assert.strictEqual(data.tag_name, 'v2.0.0');
+  assert.strictEqual(data.assets[0].name, 'warewoolf_2.0.0_amd64.deb');
+});
+
+test('checkForUpdate rejects IO_ERROR, with GitHub\'s own status and body, on a non-200 response', async function(t){
+  const platform = createPlatform(createNodeBacking({
+    httpsRequest: fakeHttpsRequest({ statusCode: 403, body: JSON.stringify({ message: 'API rate limit exceeded' }) })
+  }));
+
+  const err = await rejection(platform.checkForUpdate());
+  assert.strictEqual(err.code, CODES.IO_ERROR);
+  assert.match(err.message, /403/);
+  assert.match(err.message, /API rate limit exceeded/);
+});
+
+test('checkForUpdate rejects instead of throwing when the response body is not valid JSON', async function(t){
+  const platform = createPlatform(createNodeBacking({
+    httpsRequest: fakeHttpsRequest({ statusCode: 200, body: '<html>not json</html>' })
+  }));
+
+  const err = await rejection(platform.checkForUpdate());
+  assert.ok(err.isPlatformError);
+});
+
+test('checkForUpdate rejects when the request itself errors', async function(t){
+  const platform = createPlatform(createNodeBacking({
+    httpsRequest: fakeHttpsRequest({ triggerError: new Error('ENOTFOUND api.github.com') })
+  }));
+
+  const err = await rejection(platform.checkForUpdate());
+  assert.match(err.message, /ENOTFOUND/);
+});
+
+test('checkForUpdate sets a request timeout and destroys the request once it fires', async function(t){
+  let capturedOptions, capturedReq;
+  const platform = createPlatform(createNodeBacking({
+    httpsRequest: function(options){
+      capturedOptions = options;
+      const req = new EventEmitter();
+      req.end = function(){};
+      //A real ClientRequest.destroy(err) emits 'error' with that err - reproduced here so
+      //checkForUpdate's own promise actually settles instead of hanging forever.
+      req.destroy = function(err){ req.destroyedWith = err; req.emit('error', err); };
+      capturedReq = req;
+      return req;
+    }
+  }));
+
+  const pending = rejection(platform.checkForUpdate());
+  await new Promise(function(resolve){ setImmediate(resolve); });
+
+  assert.ok(capturedOptions.timeout > 0);
+  capturedReq.emit('timeout');
+  assert.ok(capturedReq.destroyedWith instanceof Error);
+  await pending;
+});
+
+function updateFixture(t){
+  return { dir: tempDir(t) };
+}
+
+test('downloadUpdate downloads a fresh asset, writes it to disk, and vouches the path', async function(t){
+  const dir = updateFixture(t).dir;
+  const destPath = dir + 'warewoolf_2.0.0_amd64.deb';
+  const platform = createPlatform(createNodeBacking({
+    httpsGet: fakeHttpsGet([{ statusCode: 200, body: 'binary-content-stand-in' }])
+  }));
+
+  const result = await platform.downloadUpdate({ url: 'https://example.com/amd64.deb', destPath: destPath });
+
+  assert.strictEqual(result.path, destPath);
+  assert.strictEqual(fs.readFileSync(destPath, 'utf8'), 'binary-content-stand-in');
+});
+
+test('downloadUpdate resolves immediately, without a network call, when the file already exists', async function(t){
+  const dir = updateFixture(t).dir;
+  const destPath = dir + 'already-here.deb';
+  fs.writeFileSync(destPath, 'already here');
+  const getFake = fakeHttpsGet([]);
+  const platform = createPlatform(createNodeBacking({ httpsGet: getFake }));
+
+  const result = await platform.downloadUpdate({ url: 'https://example.com/x', destPath: destPath });
+
+  assert.strictEqual(result.path, destPath);
+  assert.strictEqual(getFake.calls.length, 0);
+});
+
+test('downloadUpdate follows one redirect to the real asset location', async function(t){
+  const dir = updateFixture(t).dir;
+  const destPath = dir + 'redirected.deb';
+  const getFake = fakeHttpsGet([
+    { statusCode: 302, headers: { location: 'https://cdn.example.com/real-asset.deb' } },
+    { statusCode: 200, body: 'redirected-content' }
+  ]);
+  const platform = createPlatform(createNodeBacking({ httpsGet: getFake }));
+
+  const result = await platform.downloadUpdate({ url: 'https://github.com/release/amd64.deb', destPath: destPath });
+
+  assert.deepStrictEqual(getFake.calls, ['https://github.com/release/amd64.deb', 'https://cdn.example.com/real-asset.deb']);
+  assert.strictEqual(fs.readFileSync(result.path, 'utf8'), 'redirected-content');
+});
+
+test('downloadUpdate rejects and removes the partial file when the server responds with an error status', async function(t){
+  const dir = updateFixture(t).dir;
+  const destPath = dir + 'missing.deb';
+  const platform = createPlatform(createNodeBacking({
+    httpsGet: fakeHttpsGet([{ statusCode: 404 }])
+  }));
+
+  const err = await rejection(platform.downloadUpdate({ url: 'https://example.com/missing.deb', destPath: destPath }));
+  assert.strictEqual(err.code, CODES.IO_ERROR);
+  assert.strictEqual(fs.existsSync(destPath), false);
+});
+
+test('downloadUpdate rejects and removes the partial file when the request itself errors', async function(t){
+  const dir = updateFixture(t).dir;
+  const destPath = dir + 'flaky.deb';
+  const platform = createPlatform(createNodeBacking({
+    httpsGet: fakeHttpsGet([{ triggerError: new Error('socket hang up') }])
+  }));
+
+  const err = await rejection(platform.downloadUpdate({ url: 'https://example.com/flaky.deb', destPath: destPath }));
+  assert.ok(err.isPlatformError);
+  assert.strictEqual(fs.existsSync(destPath), false);
+});
+
+//Direct proof, mirroring buildEpub/archiveProject's own tests: downloadUpdate resolves on the
+//destination write stream's 'close', not on the http response finishing. The original updates.js
+//resolved as soon as the response piped through, the same truncated-file risk Phase 6 fixed
+//elsewhere - corrected here rather than carried over. See platform.js's note on this command.
+test('downloadUpdate resolves on the write stream\'s "close", not when the response finishes piping', async function(t){
+  const dir = updateFixture(t).dir;
+  const destPath = dir + 'slow-close.deb';
+  const output = controllableWriteStream();
+  const platform = createPlatform(createNodeBacking({
+    createWriteStream: function(){ return output; },
+    httpsGet: fakeHttpsGet([{ statusCode: 200, body: 'content' }])
+  }));
+
+  let settled = false;
+  const finished = new Promise(function(resolve){ output.once('finish', resolve); });
+
+  const promise = platform.downloadUpdate({ url: 'https://example.com/x', destPath: destPath });
+  promise.then(function(){ settled = true; }, function(){ settled = true; });
+
+  await finished;
+  await new Promise(function(resolve){ setImmediate(resolve); });
+  assert.strictEqual(settled, false, 'downloadUpdate resolved before the write stream emitted "close"');
+
+  output.triggerClose();
+  await promise;
+  assert.strictEqual(settled, true);
+});
+
+//installUpdate is the one command in the whole contract that escalates privilege - see the note on
+//it in platform.js. Every test below shares one backing so a path downloadUpdate vouches for is
+//visible to installUpdate against the exact same instance, the way updates.js's own single standing
+//instance keeps them together in the real app.
+function updatePlatform(deps){
+  return createPlatform(createNodeBacking(deps || {}));
+}
+
+async function vouchedInstallerPath(platform, dir, name){
+  const destPath = dir + name;
+  fs.writeFileSync(destPath, 'stand-in-installer');
+  const result = await platform.downloadUpdate({ url: 'https://example.com/' + name, destPath: destPath });
+  return result.path;
+}
+
+test('installUpdate refuses a path this backing never downloaded, without spawning anything', async function(t){
+  const spawnFake = fakeSpawn([]);
+  const platform = updatePlatform({ spawnProcess: spawnFake });
+
+  const err = await rejection(platform.installUpdate({ path: '/tmp/some-other-pkg.deb', password: 'secret' }));
+
+  assert.strictEqual(err.code, CODES.INVALID_ARGUMENT);
+  assert.strictEqual(spawnFake.calls.length, 0);
+});
+
+test('installUpdate runs sudo/apt via spawn with the vouched path as a separate argv element, no shell', async function(t){
+  const dir = updateFixture(t).dir;
+  const spawnFake = fakeSpawn([{ code: 0 }]);
+  const platform = updatePlatform({ spawnProcess: spawnFake });
+  const installerPath = await vouchedInstallerPath(platform, dir, 'pkg.deb');
+
+  await platform.installUpdate({ path: installerPath, password: 'secret' });
+
+  assert.strictEqual(spawnFake.calls[0].command, 'sudo');
+  assert.deepStrictEqual(spawnFake.calls[0].args, ['-S', 'apt', 'install', installerPath]);
+  assert.ok(!spawnFake.calls[0].options || !spawnFake.calls[0].options.shell);
+});
+
+test('installUpdate writes the password to the child\'s stdin, never into argv', async function(t){
+  const dir = updateFixture(t).dir;
+  let capturedChild;
+  const platform = updatePlatform({
+    spawnProcess: function(command, args){
+      capturedChild = fakeChildProcess();
+      setImmediate(function(){ capturedChild.emit('close', 0); });
+      return capturedChild;
+    }
+  });
+  const installerPath = await vouchedInstallerPath(platform, dir, 'pkg.deb');
+  const dangerousPass = 'p"a$s\'w`ord; rm -rf /; #';
+
+  await platform.installUpdate({ path: installerPath, password: dangerousPass });
+
+  assert.strictEqual(capturedChild.stdinChunks.join(''), dangerousPass + '\n');
+});
+
+test('installUpdate rejects IO_ERROR with the process output when apt exits non-zero', async function(t){
+  const dir = updateFixture(t).dir;
+  const spawnFake = fakeSpawn([{ stderrChunks: ['Sorry, try again.'], code: 1 }]);
+  const platform = updatePlatform({ spawnProcess: spawnFake });
+  const installerPath = await vouchedInstallerPath(platform, dir, 'pkg.deb');
+
+  const err = await rejection(platform.installUpdate({ path: installerPath, password: 'wrong' }));
+
+  assert.strictEqual(err.code, CODES.IO_ERROR);
+  assert.strictEqual(err.exitCode, 1);
+  assert.match(err.message, /Sorry, try again\./);
+});
+
+test('installUpdate resolves once apt closes with exit code 0', async function(t){
+  const dir = updateFixture(t).dir;
+  const platform = updatePlatform({ spawnProcess: fakeSpawn([{ code: 0 }]) });
+  const installerPath = await vouchedInstallerPath(platform, dir, 'pkg.deb');
+
+  await assert.doesNotReject(platform.installUpdate({ path: installerPath, password: 'secret' }));
+});
+
+// ---------------------------------------------------------------------------------------------
+// Group K - email
+// ---------------------------------------------------------------------------------------------
+
+function credentialFixture(t, deps){
+  const dir = tempDir(t);
+  return createPlatform(createNodeBacking(Object.assign({ paths: { userData: dir } }, deps)));
+}
+
+test('sendEmail sends a literal attachment as-is', async function(t){
+  let capturedMail;
+  const platform = credentialFixture(t, {
+    createMailTransport: fakeMailTransport(function(mailOptions, cb){
+      capturedMail = mailOptions;
+      cb(null, { response: '250 OK' });
+    })
+  });
+
+  await platform.sendEmail({
+    service: 'email', sender: 'me@example.com', secret: 'typed-by-hand', receiver: 'you@example.com',
+    attachments: [{ filename: 'a.txt', content: 'hello' }]
+  });
+
+  assert.strictEqual(capturedMail.from, 'me@example.com');
+  assert.strictEqual(capturedMail.to, 'you@example.com');
+  assert.deepStrictEqual(capturedMail.attachments, [{ filename: 'a.txt', content: 'hello', encoding: undefined }]);
+});
+
+test('sendEmail resolves SAVED_SECRET against the stored credential and never passes the sentinel to the transport', async function(t){
+  let capturedAuth;
+  const platform = credentialFixture(t, {
+    createMailTransport: function(config){
+      capturedAuth = config.auth;
+      return { sendMail: function(mailOptions, cb){ cb(null, { response: '250 OK' }); } };
+    }
+  });
+  await platform.storeCredential({ service: 'email', secret: 'the-real-password' });
+
+  await platform.sendEmail({
+    service: 'email', sender: 'me@example.com', secret: SAVED_SECRET, receiver: 'you@example.com', attachments: []
+  });
+
+  assert.strictEqual(capturedAuth.pass, 'the-real-password');
+});
+
+test('sendEmail rejects INVALID_ARGUMENT for SAVED_SECRET when nothing is stored, and never builds a transport', async function(t){
+  let transportCalls = 0;
+  const platform = credentialFixture(t, {
+    createMailTransport: function(){ transportCalls++; return { sendMail: function(){} }; }
+  });
+
+  const err = await rejection(platform.sendEmail({
+    service: 'email', sender: 'me@example.com', secret: SAVED_SECRET, receiver: 'you@example.com', attachments: []
+  }));
+
+  assert.strictEqual(err.code, CODES.INVALID_ARGUMENT);
+  assert.strictEqual(transportCalls, 0);
+});
+
+test('sendEmail rejects LOCKED for SAVED_SECRET against a passphrase-protected credential nobody unlocked', async function(t){
+  const dir = tempDir(t);
+  const seeded = createPlatform(createNodeBacking({ paths: { userData: dir } }));
+  await seeded.storeCredential({ service: 'email', secret: 'the-real-password', passphrase: 'hunter2' });
+
+  let transportCalls = 0;
+  //A fresh backing over the same directory: the passphrase-derived session key lives in the first
+  //backing's own closure and never reached this one, so the credential is locked here.
+  const platform = createPlatform(createNodeBacking({
+    paths: { userData: dir },
+    createMailTransport: function(){ transportCalls++; return { sendMail: function(){} }; }
+  }));
+
+  const err = await rejection(platform.sendEmail({
+    service: 'email', sender: 'me@example.com', secret: SAVED_SECRET, receiver: 'you@example.com', attachments: []
+  }));
+
+  assert.strictEqual(err.code, CODES.LOCKED);
+  assert.strictEqual(transportCalls, 0);
+});
+
+test('sendEmail\'s projectArchive attachment builds via archiveProject and cleans up its temp directory', async function(t){
+  const dir = tempDir(t);
+  const fixture = makeBackupProjectFixture(dir);
+
+  let capturedMail;
+  const platform = credentialFixture(t, {
+    createMailTransport: fakeMailTransport(function(mailOptions, cb){
+      capturedMail = mailOptions;
+      cb(null, { response: '250 OK' });
+    })
+  });
+
+  //Tracked only from here - credentialFixture()/tempDir() above make their own mkdtempSync calls
+  //for the credential store's userData directory, unrelated to sendEmail's own temp directory.
+  const createdDirs = [];
+  const realMkdtemp = fs.mkdtempSync;
+  patch(t, fs, 'mkdtempSync', function(prefix, options){
+    const made = realMkdtemp(prefix, options);
+    createdDirs.push(made);
+    return made;
+  });
+
+  await platform.sendEmail({
+    service: 'email', sender: 'me@example.com', secret: 'pw', receiver: 'you@example.com',
+    attachments: [{ projectArchive: { projectDir: dir, chapsDir: fixture.chapsDir, sourceFilename: fixture.filename } }]
+  });
+
+  assert.match(capturedMail.attachments[0].filename, /^notes\.final\d{14}\.zip$/);
+  assert.ok(Buffer.isBuffer(capturedMail.attachments[0].content));
+  assert.strictEqual(createdDirs.length, 1);
+  assert.strictEqual(fs.existsSync(createdDirs[0]), false);
+});
+
+test('sendEmail\'s epubEntries attachment builds via buildEpub and cleans up its temp directory', async function(t){
+  let capturedMail;
+  const platform = credentialFixture(t, {
+    createMailTransport: fakeMailTransport(function(mailOptions, cb){
+      capturedMail = mailOptions;
+      cb(null, { response: '250 OK' });
+    })
+  });
+
+  const createdDirs = [];
+  const realMkdtemp = fs.mkdtempSync;
+  patch(t, fs, 'mkdtempSync', function(prefix, options){
+    const made = realMkdtemp(prefix, options);
+    createdDirs.push(made);
+    return made;
+  });
+
+  await platform.sendEmail({
+    service: 'email', sender: 'me@example.com', secret: 'pw', receiver: 'you@example.com',
+    attachments: [{ filename: 'Chapter One.epub', epubEntries: [{ name: 'mimetype', content: 'application/epub+zip' }] }]
+  });
+
+  assert.strictEqual(capturedMail.attachments[0].filename, 'Chapter One.epub');
+  assert.ok(Buffer.isBuffer(capturedMail.attachments[0].content));
+  assert.strictEqual(createdDirs.length, 1);
+  assert.strictEqual(fs.existsSync(createdDirs[0]), false);
+});
+
+test('sendEmail rejects INVALID_ARGUMENT for an attachment with no content, projectArchive, or epubEntries', async function(t){
+  let transportCalls = 0;
+  const platform = credentialFixture(t, {
+    createMailTransport: function(){ transportCalls++; return { sendMail: function(){} }; }
+  });
+
+  const err = await rejection(platform.sendEmail({
+    service: 'email', sender: 'me@example.com', secret: 'pw', receiver: 'you@example.com',
+    attachments: [{ filename: 'mystery.bin' }]
+  }));
+
+  assert.strictEqual(err.code, CODES.INVALID_ARGUMENT);
+  assert.strictEqual(transportCalls, 0);
+});
+
+test('sendEmail rejects when the transport reports a send failure', async function(t){
+  const platform = credentialFixture(t, {
+    createMailTransport: fakeMailTransport(function(mailOptions, cb){
+      cb(new Error('Invalid login: 535-5.7.8 Username and Password not accepted'), null);
+    })
+  });
+
+  const err = await rejection(platform.sendEmail({
+    service: 'email', sender: 'me@example.com', secret: 'pw', receiver: 'you@example.com', attachments: []
+  }));
+
+  assert.match(err.message, /Invalid login/);
+});
+
+test('sendEmail refuses arguments it cannot act on', async function(t){
+  const platform = credentialFixture(t, { createMailTransport: fakeMailTransport(function(){}) });
+
+  assert.strictEqual((await rejection(platform.sendEmail({ receiver: 'you@example.com', attachments: [] }))).code,
+    CODES.INVALID_ARGUMENT);
+  assert.strictEqual((await rejection(platform.sendEmail({ sender: 'me@example.com', attachments: [] }))).code,
+    CODES.INVALID_ARGUMENT);
+});
+
+// ---------------------------------------------------------------------------------------------
+// Group K - wifi and battery
+// ---------------------------------------------------------------------------------------------
+
+function enoent(command){
+  const err = new Error('spawn ' + command + ' ENOENT');
+  err.code = 'ENOENT';
+  return err;
+}
+
+//Stubs only the one path getBatteryCapacity reads (/sys/class/power_supply, absent by
+//construction on this suite's own Windows/macOS/CI machines), falling through to the *real*
+//fs.readdirSync for anything else - captured before patching, since fs.readdirSync has already
+//been reassigned to this replacement by the time it runs, so referencing fs.readdirSync from
+//inside it would recurse into itself rather than the original.
+function patchPowerSupplyDir(t, entriesOrThrow){
+  const realReaddirSync = fs.readdirSync;
+  patch(t, fs, 'readdirSync', function(p, options){
+    if(p !== '/sys/class/power_supply')
+      return realReaddirSync(p, options);
+    if(typeof entriesOrThrow === 'function')
+      entriesOrThrow();
+    return entriesOrThrow;
+  });
+}
+
+test('wifiListNetworks parses nmcli\'s terse output into ssid/isConnected pairs', async function(t){
+  const platform = createPlatform(createNodeBacking({
+    spawnProcess: fakeSpawn([{ chunks: [':aa:bb:cc:dd:ee:ff:Office\n*:aa:bb:cc:dd:ee:ff:HomeNet\n'] }])
+  }));
+
+  const result = await platform.wifiListNetworks();
+
+  assert.deepStrictEqual(result, [
+    { ssid: 'Office', isConnected: false },
+    { ssid: 'HomeNet', isConnected: true }
+  ]);
+});
+
+test('wifiListNetworks unescapes an SSID containing a literal colon and drops blank-ssid lines', async function(t){
+  const platform = createPlatform(createNodeBacking({
+    spawnProcess: fakeSpawn([{ chunks: ['*:aa:bb:cc:dd:ee:ff:Office\\:5G\n:aa:bb:cc:dd:ee:ff:\n\n'] }])
+  }));
+
+  const result = await platform.wifiListNetworks();
+
+  assert.deepStrictEqual(result, [{ ssid: 'Office:5G', isConnected: true }]);
+});
+
+test('wifiListNetworks rejects UNAVAILABLE when nmcli is not installed', async function(t){
+  const platform = createPlatform(createNodeBacking({
+    spawnProcess: fakeSpawn([{ error: enoent('nmcli') }])
+  }));
+
+  const err = await rejection(platform.wifiListNetworks());
+  assert.strictEqual(err.code, CODES.UNAVAILABLE);
+});
+
+test('wifiConnect spawns nmcli with ssid/psk as separate argv elements and resolves on success', async function(t){
+  const spawnFake = fakeSpawn([{ code: 0 }]);
+  const platform = createPlatform(createNodeBacking({ spawnProcess: spawnFake }));
+
+  await platform.wifiConnect({ ssid: 'Office:5G', psk: 'p"a$s\'w`ord; rm -rf /' });
+
+  assert.strictEqual(spawnFake.calls[0].command, 'nmcli');
+  assert.deepStrictEqual(spawnFake.calls[0].args,
+    ['device', 'wifi', 'connect', 'Office:5G', 'password', 'p"a$s\'w`ord; rm -rf /']);
+  assert.ok(!spawnFake.calls[0].options || !spawnFake.calls[0].options.shell);
+});
+
+test('wifiConnect omits the password argument entirely when none is given', async function(t){
+  const spawnFake = fakeSpawn([{ code: 0 }]);
+  const platform = createPlatform(createNodeBacking({ spawnProcess: spawnFake }));
+
+  await platform.wifiConnect({ ssid: 'OpenNetwork' });
+
+  assert.deepStrictEqual(spawnFake.calls[0].args, ['device', 'wifi', 'connect', 'OpenNetwork']);
+});
+
+test('wifiConnect rejects IO_ERROR with nmcli\'s own output when the connection attempt fails', async function(t){
+  const platform = createPlatform(createNodeBacking({
+    spawnProcess: fakeSpawn([{ stderrChunks: ['Error: No network with SSID \'Office\' found.'], code: 1 }])
+  }));
+
+  const err = await rejection(platform.wifiConnect({ ssid: 'Office', psk: 'wrong' }));
+
+  assert.strictEqual(err.code, CODES.IO_ERROR);
+  assert.match(err.message, /No network with SSID/);
+});
+
+test('wifiConnect rejects UNAVAILABLE when nmcli is not installed', async function(t){
+  const platform = createPlatform(createNodeBacking({ spawnProcess: fakeSpawn([{ error: enoent('nmcli') }]) }));
+
+  const err = await rejection(platform.wifiConnect({ ssid: 'Office' }));
+  assert.strictEqual(err.code, CODES.UNAVAILABLE);
+});
+
+test('wifiGetAddress resolves the first address reported by hostname -I', async function(t){
+  const platform = createPlatform(createNodeBacking({
+    spawnProcess: fakeSpawn([{ chunks: ['192.168.1.42 fe80::1\n'] }])
+  }));
+
+  assert.strictEqual(await platform.wifiGetAddress(), '192.168.1.42');
+});
+
+test('wifiGetAddress resolves an empty string rather than a sentinel when there is no output', async function(t){
+  const platform = createPlatform(createNodeBacking({ spawnProcess: fakeSpawn([{ chunks: [] }]) }));
+
+  assert.strictEqual(await platform.wifiGetAddress(), '');
+});
+
+test('wifiGetAddress rejects UNAVAILABLE when hostname is not installed', async function(t){
+  const platform = createPlatform(createNodeBacking({ spawnProcess: fakeSpawn([{ error: enoent('hostname') }]) }));
+
+  const err = await rejection(platform.wifiGetAddress());
+  assert.strictEqual(err.code, CODES.UNAVAILABLE);
+});
+
+test('getBatteryCapacity resolves the capacity reported by the kernel for a real battery', async function(t){
+  patchPowerSupplyDir(t, ['AC', 'BAT0']);
+  const platform = createPlatform(createNodeBacking({ spawnProcess: fakeSpawn([{ chunks: ['87\n'] }]) }));
+
+  assert.strictEqual(await platform.getBatteryCapacity(), 87);
+});
+
+test('getBatteryCapacity rejects UNAVAILABLE, the everyday case, when there is no power_supply directory at all', async function(t){
+  patchPowerSupplyDir(t, function(){
+    const err = new Error('ENOENT: no such file or directory');
+    err.code = 'ENOENT';
+    throw err;
+  });
+  const platform = createPlatform(createNodeBacking({}));
+
+  const err = await rejection(platform.getBatteryCapacity());
+  assert.strictEqual(err.code, CODES.UNAVAILABLE);
+});
+
+test('getBatteryCapacity rejects UNAVAILABLE when the directory exists but nothing starts with BAT', async function(t){
+  patchPowerSupplyDir(t, ['AC']);
+  const platform = createPlatform(createNodeBacking({}));
+
+  const err = await rejection(platform.getBatteryCapacity());
+  assert.strictEqual(err.code, CODES.UNAVAILABLE);
+});
+
+//Distinct from "no battery" above: a battery is genuinely present here, so a read that fails is a
+//real problem (IO_ERROR), not the everyday result CODES.UNAVAILABLE exists for.
+test('getBatteryCapacity rejects IO_ERROR when a battery exists but the kernel read fails to spawn', async function(t){
+  patchPowerSupplyDir(t, ['BAT0']);
+  const platform = createPlatform(createNodeBacking({ spawnProcess: fakeSpawn([{ error: new Error('spawn cat ENOENT') }]) }));
+
+  const err = await rejection(platform.getBatteryCapacity());
+  assert.strictEqual(err.code, CODES.IO_ERROR);
+});
+
+test('getBatteryCapacity rejects IO_ERROR when the kernel read produces non-numeric output', async function(t){
+  patchPowerSupplyDir(t, ['BAT0']);
+  const platform = createPlatform(createNodeBacking({
+    spawnProcess: fakeSpawn([{ stderrChunks: ['cat: permission denied'], chunks: [] }])
+  }));
+
+  const err = await rejection(platform.getBatteryCapacity());
+  assert.strictEqual(err.code, CODES.IO_ERROR);
+});
+
+test('the network/hardware commands refuse arguments they cannot act on', async function(t){
+  const platform = createPlatform(createNodeBacking({ spawnProcess: fakeSpawn([]) }));
+
+  assert.strictEqual((await rejection(platform.installUpdate({}))).code, CODES.INVALID_ARGUMENT);
+  assert.strictEqual((await rejection(platform.installUpdate({ path: '/tmp/x' }))).code, CODES.INVALID_ARGUMENT);
+  assert.strictEqual((await rejection(platform.wifiConnect({}))).code, CODES.INVALID_ARGUMENT);
 });
 
 // ---------------------------------------------------------------------------------------------

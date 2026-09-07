@@ -1,41 +1,40 @@
 const { spawn } = require("child_process");
 const { logError } = require('./error-log');
+const { createPlatform } = require('./platform');
+const { createNodeBacking } = require('./platform-node');
+
+//wifiListNetworks/wifiConnect/wifiGetAddress (group K) take no injected config, so this holds its
+//own standing instance, the same reason file-manager.js/corkboard.js/epub.js do. Only three of this
+//file's seven functions have a contract command behind them - getConnectionState, getWifiStatus,
+//enableWifi and disableWifi have no group K equivalent (see the note above each, and the inventory
+//and plan docs' Phase 8 write-up) and still spawn nmcli directly below, unconverted.
+var platform = createPlatform(createNodeBacking({}));
 
 //nmcli's -t (terse) output escapes literal ':' and '\' inside a field as '\:' and '\\',
 //so a plain split(':') misaligns fields whenever a value (e.g. an SSID) contains a colon.
+//platform-node.js keeps its own copy of this for wifiListNetworks' own parsing - the two are
+//independent on purpose, so this file staying unconverted for four functions never puts a
+//dependency on internals the facade does not expose.
 function splitNmcliFields(line){
   return line.split(/(?<!\\):/).map(function(field){
     return field.replace(/\\(.)/g, '$1');
   });
 }
 
-function getIpAddress(cback){
-  const hostname = spawn('hostname', ['-I']);
-  var body = [];
-  var called = false;
-
-  function finish(result){
-    if(called) return;
-    called = true;
-    cback(result);
-  }
-
-  hostname.stdout.on('data', function(data){
-    body.push(data);
-  });
-
-  hostname.stderr.on('data', function(data){
-    logError(data.toString().trim());
-  })
-
-  hostname.on('error', function(err){
+//Logging is skipped for UNAVAILABLE specifically - nmcli/hostname simply not being installed is
+//the ordinary case on every machine that isn't a writerDeck, and this dialog gets opened by anyone
+//who clicks Wi-Fi Manager, not only on a Pi. A genuine failure (IO_ERROR and the rest) still logs.
+function reportUnlessUnavailable(err){
+  if(err == null || err.code !== 'UNAVAILABLE')
     logError(err);
-    finish('no data');
-  });
+}
 
-  hostname.stdout.on('close', function(code){
-    var text = Buffer.concat(body).toString().trim().split(' ')[0];
-    finish(text || 'no data');
+function getIpAddress(cback){
+  platform.wifiGetAddress().then(function(address){
+    cback(address || 'no data');
+  }).catch(function(err){
+    reportUnlessUnavailable(err);
+    cback('no data');
   });
 }
 
@@ -122,20 +121,9 @@ function getWifiStatus(cback){
 }
 
 function getWifiNetworks(cback){
-  nmcliMulti(["-t", "device", "wifi", "list", "--rescan", "yes"], function(body){
-    var dataLines = body.split('\n');
-
-    var connections = dataLines.map(function(line, index, arr){
-      var splitLine = splitNmcliFields(line);
-      return {
-        ssid: splitLine[7],
-        isConnected: splitLine[0] == '*'
-      }
-    }).filter(function(obj, index, arr){
-      return obj.ssid && obj.ssid != "";
-    });
-
-    cback(connections);
+  platform.wifiListNetworks().then(cback).catch(function(err){
+    reportUnlessUnavailable(err);
+    cback([]);
   });
 }
 
@@ -148,7 +136,12 @@ function enableWifi(cback){
 }
 
 function connectToNewWifi(ssidString, passString, cback){
-  nmcliSingle(['device','wifi','connect', ssidString, 'password', passString], cback);
+  platform.wifiConnect({ ssid: ssidString, psk: passString }).then(function(){
+    cback('Connected.');
+  }).catch(function(err){
+    reportUnlessUnavailable(err);
+    cback(err.message);
+  });
 }
 
 module.exports = {

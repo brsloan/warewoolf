@@ -51,7 +51,7 @@ var project = newProject();
 //Populated by loadPlatformState() below, once getAppPaths()/getFileRequestedOnOpen() resolve.
 //Nothing above this line needs them; everything below runs from inside functions and reads these by
 //closure, not at define-time, so it does not matter that they start out undefined.
-var sysDirectories, fileRequestedOnOpen, userSettings, platformInfo, nodePlatform, nodeBacking;
+var sysDirectories, fileRequestedOnOpen, userSettings, platformInfo, nodePlatform;
 
 //Exposed for testing only - nothing in the app itself reads this module's exports, since it's
 //loaded as a plain <script> tag rather than required. `ready` is how a caller (render.test.js's
@@ -118,21 +118,24 @@ async function loadPlatformState(){
   //so it gets its own node-backed platform instance here rather than crossing through the ipc
   //backing `platform` above. That second instance is what has to be swapped for platform-ipc.js at
   //Phase 9, alongside C and J, once nodeIntegration goes away and fs stops being reachable at all.
-  //The backing is kept, not just the platform built from it, for one deliberately temporary
-  //reason: email-doc.js needs its resolveSecret() until Phase 8 replaces emailFile() with
-  //platform.sendEmail(). resolveSecret is not a declared command, so it is unreachable through
-  //`nodePlatform` - handing it over has to be done explicitly, by the one file that builds the
-  //backing. See openEmailController() below, and the note on setSecretResolver in email-doc.js.
-  //
   //secureStorage is what group J's commands protect a saved password with when the machine has an
   //OS keystore. It goes to the backing now instead of to a credential store the renderer held
   //itself; nothing in the renderer derives a key, seals a secret or writes credentials.json any
   //more.
-  nodeBacking = createNodeBacking({
+  //
+  //Phase 8 dropped the separate `nodeBacking` variable this used to be built through. Before
+  //sendEmail existed as a real command, email-doc.js needed the raw backing's resolveSecret()
+  //handed over explicitly (openEmailController(), below the old version of this comment) because
+  //resolveSecret is deliberately not a declared command and so unreachable through `nodePlatform`.
+  //sendEmail resolves SAVED_SECRET on the far side of the boundary itself now, through the exact
+  //same resolveSecret - reached from inside the same backing instance, since email-doc_display.js
+  //and error-log_display.js already receive `nodePlatform` directly (they need it for
+  //describeCredential/unlockCredential/storeCredential too, for the session-scoped-store reason
+  //noted below) - so nothing needs the raw backing any more.
+  nodePlatform = createPlatform(createNodeBacking({
     paths: sysDirectories,
     secureStorage: getSecureStorage()
-  });
-  nodePlatform = createPlatform(nodeBacking);
+  }));
   require('./components/controllers/error-log').setPlatform(nodePlatform);
   //Groups B and C (projects and chapters) are plain fs too, so they take the same node-backed
   //instance and get swapped for the ipc backing alongside D at Phase 9.
@@ -245,19 +248,6 @@ async function migrateLegacyCredential(){
   catch(err){
     require('./components/controllers/error-log').logError(err);
   }
-}
-
-//Hands email-doc.js the resolver it needs to turn a SAVED_SECRET back into the saved password -
-//see the note on setSecretResolver there. Called from the two menu commands that open an email
-//dialog rather than from loadPlatformState(), because requiring email-doc.js pulls in nodemailer,
-//archiver and the docx/epub writers: ~300ms of module evaluation on this machine, and a good deal
-//more on a Pi. Boot should not pay that for a seam Phase 8 deletes, and neither dialog can open
-//without loading the module anyway. Idempotent, so calling it from both is fine.
-function openEmailController(){
-  const emailDoc = require('./components/controllers/email-doc');
-  emailDoc.setSecretResolver(nodeBacking.resolveSecret);
-
-  return emailDoc;
 }
 
 async function initialize(){
@@ -1260,7 +1250,7 @@ const menuCommands = {
   } },
   'about-clicked': { run: function(appVersion){
     const showAbout = require('./components/views/about_display');
-    return showAbout(sysDirectories, appVersion);
+    return showAbout(sysDirectories, appVersion, platformInfo);
   } },
   'exit-app-clicked': { run: function(){ proceedOrConfirmSave(exitApp, true); } },
   'save-copy-clicked': { run: function(){ saveProjectCopy(); } },
@@ -1273,12 +1263,10 @@ const menuCommands = {
     }));
   } },
   'send-via-email-clicked': { run: function(){
-    openEmailController();
     const showEmailOptions = require('./components/views/email-doc_display');
     return showEmailOptions(project, userSettings, nodePlatform, editorQuill);
   } },
   'view-error-log-clicked': { run: function(){
-    openEmailController();
     const showErrorLog = require('./components/views/error-log_display');
     return showErrorLog(userSettings, nodePlatform);
   } },

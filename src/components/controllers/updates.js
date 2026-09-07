@@ -1,91 +1,39 @@
-const https = require('https');
-const fs = require('node:fs');
 const { logError } = require('./error-log');
-const process = require('node:process');
-const { spawn } = require('node:child_process');
+const { createPlatform } = require('./platform');
+const { createNodeBacking } = require('./platform-node');
+
+//checkForUpdate/downloadUpdate/installUpdate take no injected config - every argument is already a
+//full path/URL, or nothing at all - so this holds its own standing instance, the same reason
+//file-manager.js/corkboard.js/epub.js/backup-project.js do. It has to be *one* instance shared
+//across every call this file makes: installUpdate only accepts a path this same backing vouched
+//for via a prior downloadUpdate call, and about_display.js's Download button and
+//install-update_display.js's Install button are two different files calling through this module's
+//two different exports - the vouching only works if both go through the same platform instance.
+var platform = createPlatform(createNodeBacking({}));
 
 function getUpdates(thisAppVersion, callback){
-    fetchLatestReleaseData(function(latest, err){
-        if(err){
-            callback(null, err);
+    platform.checkForUpdate().then(function(releaseData){
+        var packagedData = packageReleaseData(releaseData);
+
+        if(!packagedData){
+            var shapeErr = new Error('Unexpected release data shape from GitHub API');
+            logError(shapeErr);
+            callback(null, shapeErr);
             return;
         }
 
-        if(!latest){
-            callback(null);
-            return;
-        }
-
-        if(isUpdateAvailable(latest.tag, thisAppVersion)){
-            latest.downloadInfo = extractUpdateDownloadInfo(latest);
-            callback(latest);
+        if(isUpdateAvailable(packagedData.tag, thisAppVersion)){
+            platform.getPlatform().then(function(platformInfo){
+                packagedData.downloadInfo = extractUpdateDownloadInfo(packagedData, platformInfo);
+                callback(packagedData);
+            });
         }
         else
             callback(null);
-    });
-}
-
-function fetchLatestReleaseData(callback){
-
-    const options = {
-        hostname: 'api.github.com',
-        path: '/repos/brsloan/warewoolf/releases/latest',
-        method: 'GET',
-        headers: {
-            'User-Agent': 'warewoolf'
-        },
-        timeout: 10000
-    };
-
-    const req = https.request(options, function(res){
-        let data = '';
-
-        res.on('data', function(chunk){
-            data += chunk;
-        });
-
-        res.on('end', function(){
-            if(res.statusCode !== 200){
-                var statusErr = new Error('GitHub release check failed with status ' + res.statusCode + ': ' + data);
-                logError(statusErr);
-                callback(null, statusErr);
-                return;
-            }
-
-            var parsed;
-            try {
-                parsed = JSON.parse(data);
-            }
-            catch(err){
-                logError(err);
-                callback(null, err);
-                return;
-            }
-
-            var packagedData = packageReleaseData(parsed);
-
-            if(!packagedData){
-                var shapeErr = new Error('Unexpected release data shape from GitHub API');
-                logError(shapeErr);
-                callback(null, shapeErr);
-                return;
-            }
-
-            callback(packagedData, null);
-        });
-
-    });
-
-    req.on('timeout', function(){
-        req.destroy(new Error('Update check timed out'));
-    });
-
-    req.on('error', function(err){
+    }).catch(function(err){
         logError(err);
         callback(null, err);
     });
-
-    req.end();
 }
 
 function packageReleaseData(releaseData){
@@ -110,24 +58,24 @@ function packageReleaseData(releaseData){
     return packagedData;
 }
 
-function extractUpdateDownloadInfo(releaseData){
+function extractUpdateDownloadInfo(releaseData, platformInfo){
 
     var binType = 'unsupported';
 
-    if(process.platform == 'linux'){
-        if(process.arch == 'x64')
+    if(platformInfo.platform == 'linux'){
+        if(platformInfo.arch == 'x64')
             binType = 'amd64';
-        else if(process.arch == 'arm64')
+        else if(platformInfo.arch == 'arm64')
             binType = 'arm64';
     }
-    else if(process.platform == 'win32'){
-        if(process.arch == 'x64')
+    else if(platformInfo.platform == 'win32'){
+        if(platformInfo.arch == 'x64')
             binType = 'Windows_x64';
     }
-    else if(process.platform == 'darwin'){
-        if(process.arch == 'x64')
+    else if(platformInfo.platform == 'darwin'){
+        if(platformInfo.arch == 'x64')
             binType = 'MacOS_Intel';
-        else if(process.arch == 'arm64')
+        else if(platformInfo.arch == 'arm64')
             binType = 'MacOS_AppleSilicon';
     }
 
@@ -168,122 +116,51 @@ function isUpdateAvailable(latestTag, thisAppVersion = '1.0.0'){
     return avail;
 }
 
+//sysDirectories/downloadInfo/callback is unchanged from before this conversion - about_display.js
+//needs no changes at all. Only the platform/arch check moved off process.* (deferred to this phase
+//since Phase 2 - see native-command-inventory.md's group A note) and the download itself moved
+//native, behind platform.downloadUpdate.
 function downloadUpdate(sysDirectories, downloadInfo, callback){
     if(!downloadInfo){
         logError(new Error('No compatible update binary found for this platform/architecture.'));
         return;
     }
 
-    var filePath = '';
+    platform.getPlatform().then(function(platformInfo){
+        var destPath = platformInfo.platform == 'linux'
+            ? sysDirectories.temp + '/' + downloadInfo.name
+            : sysDirectories.downloads + '/' + downloadInfo.name;
 
-    if(process.platform == 'linux')
-      filePath = sysDirectories.temp + '/' + downloadInfo.name;
-    else {
-      filePath = sysDirectories.downloads + '/' + downloadInfo.name;
-    }
-
-    if(fs.existsSync(filePath)){
-      console.log('File already downloaded.');
-      callback(filePath);
-    }
-    else {
-
-      console.log('commence downloading at: ' + downloadInfo.url + ' to ' + filePath);
-
-      const file = fs.createWriteStream(filePath);
-      var downloadErr = null;
-
-      file.on('finish', function(){
-          console.log("finished download: " + filePath);
-          callback(filePath);
-      });
-
-      //fs.createWriteStream opens its fd asynchronously, so calling file.destroy() the moment an
-      //error occurs can race ahead of that open actually creating the file on disk - deleting
-      //too early leaves the file to reappear once the open finally completes. Waiting for 'close'
-      //(which destroy() guarantees fires only after any pending open has been resolved) before
-      //removing the file avoids that race.
-      file.on('close', function(){
-          if(downloadErr){
-            removePartialFile(filePath);
-            logError(downloadErr);
-          }
-      });
-
-      downloadRequest(file, filePath, downloadInfo.url, function(err){
-          downloadErr = err;
-      });
-    }
+        return platform.downloadUpdate({ url: downloadInfo.url, destPath: destPath });
+    }).then(function(result){
+        callback(result.path);
+    }).catch(function(err){
+        logError(err);
+    });
 }
 
-function downloadRequest(file, filePath, url, onError){
-    const request = https.get(url, response => {
-        if(response.statusCode == 302){
-            response.resume();
-            downloadRequest(file, filePath, response.headers.location, onError);
-            return;
-        }
-
-        if(response.statusCode !== 200){
-            response.resume();
-            onError(new Error('Download failed: ' + response.statusCode));
-            file.destroy();
-            return;
-        }
-
-        response.pipe(file);
-    });
-
-    request.on('error', function(err){
-        onError(err);
-        file.destroy();
-    });
-
-    file.on('error', function(err){
-        onError(err);
-    });
-
-
-    request.end();
-}
-
-function removePartialFile(filePath){
-    try{
-        fs.unlinkSync(filePath);
-    }
-    catch(unlinkErr){}
-}
-
+//pass/filePath/statusElement/onDone is unchanged from before this conversion -
+//install-update_display.js needs no changes at all. The live per-chunk stdout/stderr streaming the
+//original had is not preserved: piping process output live across the platform boundary would need
+//a genuine event (like the 36 in platform.js's own EVENTS list), and those are reserved for real
+//Electron main-process channels, cross-checked against index.js by test - grafting a node-backing-
+//only event onto that list for one Linux-only dialog was not worth the mismatch it would create.
+//statusElement gets a single "Installing..." while the native command runs, then the final result -
+//still whatever installUpdate's own stdout/stderr said on failure, via the rejection's message.
 function installUpdate(pass, filePath, statusElement, onDone){
+    statusElement.innerText = 'Installing...';
 
-  const updater = spawn('sudo', ['-S', 'apt', 'install', filePath], {
-    stdio: 'pipe'
-  });
-
-  updater.stdin.write(pass + '\n');
-  updater.stdin.end();
-
-  updater.stdout.on('data', function(data){
-    console.log('updater: ' + data);
-    statusElement.innerText = data;
-  });
-
-  updater.stderr.on('data', function(data){
-    console.log('updater error: ' + data);
-    statusElement.innerText = 'Error: ' + data;
-  });
-
-  updater.on('close', function(exitCode){
-    console.log('updater closed');
-    if(exitCode === 0)
-      statusElement.innerText += '\nInstallation Finished! Reboot to complete.';
-    else
-      statusElement.innerText += '\nInstallation failed (exit code ' + exitCode + ').';
-
-    if(typeof onDone === 'function')
-      onDone(exitCode);
-  })
-
+    platform.installUpdate({ path: filePath, password: pass }).then(function(){
+        statusElement.innerText += '\nInstallation Finished! Reboot to complete.';
+        if(typeof onDone === 'function')
+            onDone(0);
+    }).catch(function(err){
+        logError(err);
+        var exitCode = err.exitCode != null ? err.exitCode : 1;
+        statusElement.innerText += '\n' + err.message;
+        if(typeof onDone === 'function')
+            onDone(exitCode);
+    });
 }
 
 module.exports = {

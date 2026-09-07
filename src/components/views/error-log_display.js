@@ -103,7 +103,8 @@ async function showErrorLog(userSettings, platform){
       }
     ];
 
-    emailFile(senderEmailInput.value,
+    emailFile(platform,
+      senderEmailInput.value,
       senderPassInput.value,
       receiverEmailInput.value,
       attachments,
