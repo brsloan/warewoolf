@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const unzipper = require('unzipper');
 
 //The renderer composes paths with forward slashes (path-utils.js), and so does everything the
 //bridge hands it. Anything built here with path.join has to be converted before it crosses.
@@ -353,6 +354,75 @@ module.exports = async function({ page, main_, check, evaluate, userData }){
   })()`);
   check('archiveProject zipped the open project through the bridge',
     arch.ok && fs.existsSync(path.join(zipDir, arch.filename || 'nope')), JSON.stringify(arch));
+
+  // -------------------------------------------------------------------------------------------
+  // Phase 9c fix: .docx export through the real, contextIsolated renderer
+  // -------------------------------------------------------------------------------------------
+  //
+  // delta-to-docx.js's saveDocx called docx.Packer.toBuffer(), which is JSZip's
+  // generateAsync({type:'nodebuffer'}) under the hood and needs the Node Buffer global - absent in
+  // a contextIsolated, --platform=browser renderer, where it threw "nodebuffer is not supported by
+  // this platform" on every .docx export and compile. Every test/*.test.js file runs this module in
+  // plain Node, where Buffer exists, so toBuffer() passed there before the fix and keeps passing
+  // there after it - a unit test cannot tell these two states apart. This is the one layer that
+  // actually runs the export with Buffer absent, which is why it is the only thing that would have
+  // caught the regression.
+
+  const docxExportRoot = path.join(userData, 'phase9c-docx-export');
+  fs.mkdirSync(docxExportRoot, { recursive: true });
+
+  await menu(main_, 'export-clicked');
+  await settle(800);
+  await evaluate(page, `(function(){
+    var popup = document.querySelector('.popup');
+    popup.querySelector('#chap-radio').checked = true;
+    popup.querySelector('#filetype-select').value = '.docx';
+    popup.querySelector('form').onsubmit({ preventDefault: function(){} });
+    return true;
+  })()`);
+  await settle(1000);
+  await evaluate(page, `(function(){
+    var dlg = document.querySelector('.popup-dialog');
+    dlg.querySelector('p').innerText = ${JSON.stringify(fwd(docxExportRoot))};
+    var btn = Array.from(dlg.querySelectorAll('button')).find(function(b){
+      return (b.textContent || '').indexOf('Choose Displayed Directory') !== -1;
+    });
+    btn.click();
+    return true;
+  })()`);
+  await settle(2500);
+
+  function findDocxFiles(dir){
+    var found = [];
+    if(!fs.existsSync(dir)) return found;
+    for(const entry of fs.readdirSync(dir, { withFileTypes: true })){
+      const full = path.join(dir, entry.name);
+      if(entry.isDirectory()) found = found.concat(findDocxFiles(full));
+      else if(entry.name.toLowerCase().endsWith('.docx')) found.push(full);
+    }
+    return found;
+  }
+
+  //A chapter with notes exports two files (the chapter and "-notes_" + the chapter) - see
+  //export.js's exportProject - so this only asserts that at least one landed, not exactly one.
+  const docxFiles = findDocxFiles(docxExportRoot);
+  check('exporting the active chapter to .docx produced a file on disk',
+    docxFiles.length >= 1, 'found: ' + JSON.stringify(docxFiles));
+
+  let docxOpenOk = false, docxText = '', docxErr = '';
+  if(docxFiles.length){
+    try {
+      const dir = await unzipper.Open.file(docxFiles[0]);
+      const entry = dir.files.find(function(f){ return f.path === 'word/document.xml'; });
+      const xml = (await entry.buffer()).toString('utf8');
+      docxText = [...xml.matchAll(/<w:t[^>]*>([^<]*)<\/w:t>/g)].map(function(m){ return m[1]; }).join('');
+      docxOpenOk = true;
+    }
+    catch(e){ docxErr = String(e); }
+  }
+  check('the exported .docx opens as a real zip with real chapter text inside',
+    docxOpenOk && docxText.trim().length > 0,
+    'opened=' + docxOpenOk + ' err=' + docxErr + ' text=' + JSON.stringify(docxText.slice(0, 200)));
 
   // -------------------------------------------------------------------------------------------
   // Rule 5: a PlatformError code AND details survive real Electron IPC

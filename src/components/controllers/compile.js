@@ -146,20 +146,33 @@ async function compileChapterDeltas(project, options){
 //docx.Packer promise chain keeps running after this function returns), so compileDocx used to call
 //it bare - meaning compileProject's cback() could fire, and compile_display.js could report the
 //compile done, while the .docx was still mid-write. Waiting on saveDocx's own completion callback
-//closes that gap, the same property .epub already had via htmlChaptersToEpub's callback. saveDocx
-//already logs a failure itself (see delta-to-docx.js), so the result is just awaited, not re-thrown.
+//closes that gap, the same property .epub already had via htmlChaptersToEpub's callback.
+//
+//Regression: the awaited result used to be discarded outright. saveDocx already logs the underlying
+//failure itself (see delta-to-docx.js) and resolves with the string 'error' rather than rejecting -
+//so with nothing checking that result, compileProject reached its unconditional cback() exactly as
+//if the write had succeeded, and compile_display.js reported the compile done while the .docx did
+//not exist on disk. Thrown instead, below the try/catch above it so this doesn't log the same
+//failure a second time - it propagates through compileProject (uncaught there, same as any other
+//rejection from a compile* function) to compile_display.js's own .catch, which already logs and
+//still closes the "Working..." popup.
 async function compileDocx(filepath, delt, options, project, userSettings) {
+  var result;
   try{
     var totalWordCount = options && options.generateTitlePage ? await getTotalWordCount(project) : 0;
     var doc = convertDeltaToDocx(delt, options, project, userSettings.addressInfo, totalWordCount);
 
-    await new Promise(function(resolve){
+    result = await new Promise(function(resolve){
       saveDocx(filepath, doc, resolve);
     });
   }
   catch(err){
     logError(err);
+    return;
   }
+
+  if(result === 'error')
+    throw new Error('compileDocx: saveDocx failed to write ' + filepath);
 }
 
 module.exports = {

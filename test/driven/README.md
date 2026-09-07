@@ -50,7 +50,7 @@ and why the sandbox decision is gated on this answering correctly on the Pi.
 
 ## What `drive.js` covers
 
-29 checks, from a clean `userData` directory every run — which matters, because
+33 checks, from a clean `userData` directory every run — which matters, because
 `loadInitialProject()`'s materialize-the-bundled-example branch only runs on a first launch.
 
 - **The isolation itself.** No `require`/`module`/`process`/`Buffer`/`__dirname` in the page;
@@ -63,6 +63,12 @@ and why the sandbox decision is gated on this answering correctly on the Pi.
 - **Groups E/G/H/I/J.** File Manager over a real directory, the real 946KB dictionary across IPC,
   `writeTextFile`/`writeBinaryFile`/`buildEpub`/`archiveProject` landing on disk, and a credential
   sealed and described without the plaintext ever coming back.
+- **`.docx` export, through the real UI.** Exporting the active chapter to `.docx` produces a real
+  file on disk that opens as a zip with real chapter text inside — the check added for the Phase 9c
+  regression where `saveDocx`'s `docx.Packer.toBuffer()` needed the Node `Buffer` global that a
+  contextIsolated, `--platform=browser` renderer does not have. `test/*.test.js` runs this module in
+  plain Node, where `Buffer` exists, so no unit test can tell a working export from a broken one;
+  this is the only layer that runs it with `Buffer` actually absent.
 - **Rule 5.** A `PlatformError`'s `code` *and* `details` crossing real Electron IPC, and — end to
   end through the app's own facade — a deleted chapter file surfacing in the error log as a
   `PlatformError` rather than a flattened `Error`.

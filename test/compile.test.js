@@ -6,6 +6,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const unzipper = require('unzipper');
+const docx = require('docx');
 
 const { makeChapter, makeProject } = require('./helpers');
 const { compileProject, compileChapterDeltas } = require('../src/components/controllers/compile');
@@ -94,6 +95,30 @@ test('compileProject writes a .docx file instead of throwing when project/userSe
   var dir = await unzipper.Open.file(filepath);
   var documentXml = (await dir.files.find(f => f.path === 'word/document.xml').buffer()).toString();
   assert.ok(documentXml.includes('Some prose.'), 'compiled .docx is missing the chapter text');
+});
+
+//Regression: compileDocx awaited saveDocx's completion callback and discarded the result outright.
+//saveDocx never rejects - a packing failure resolves the string 'error' instead (see
+//delta-to-docx.js) - so with nothing checking that value, compileProject reached its unconditional
+//cback() exactly as if the write had succeeded, and compile_display.js reported the compile done
+//while the .docx did not exist on disk. That silently loses a manuscript export the writer believes
+//they have.
+test('compileProject rejects instead of silently reporting success when the .docx write fails', async function(t){
+  const packError = new Error('packing failed');
+  t.mock.method(docx.Packer, 'toBlob', function(){ return Promise.reject(packError); });
+
+  var chap = makeChapter(textDelta('Some prose.'));
+  var project = makeTestProject([chap]);
+  var userSettings = { addressInfo: null };
+  var options = { type: '.docx', insertStrng: '***', insertHead: false, generateTitlePage: false, styleHeadingAsChapter: true };
+  var filepath = tempFilePath(t, '.docx');
+
+  await assert.rejects(function(){
+    return compileProject(project, userSettings, options, filepath);
+  }, /saveDocx failed to write/);
+
+  assert.strictEqual(fs.existsSync(filepath), false,
+    'expected no .docx file on disk when the packing step failed');
 });
 
 //Regression: compileProject/compileEpub had no way to signal completion, so compile_display.js

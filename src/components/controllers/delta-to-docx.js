@@ -6,12 +6,20 @@ const { createIpcBacking } = require('./platform-ipc');
 
 //writeBinaryFile takes no injected config - filepath is a full path - so this holds its own
 //standing instance, the same reason file-manager.js/epub.js do. docx has a browser build
-//(Packer.toBuffer), so document generation stays in the webview; only the write crosses.
+//(Packer.toBlob), so document generation stays in the webview; only the write crosses.
 var platform = createPlatform(createIpcBacking());
 
+//Packer.toBuffer() reaches for the Node Buffer global (JSZip's generateAsync({type:'nodebuffer'})
+//under the hood), which does not exist in a contextIsolated, --platform=browser renderer - it threw
+//"nodebuffer is not supported by this platform" on every packaged build once Phase 9b flipped the
+//flag. Packer.toBlob() is the browser build; writeBinaryFile already carries a Uint8Array across the
+//boundary (see the comment on it in platform-node.js), so the blob's bytes are read back out via
+//arrayBuffer() rather than handed across as a Blob itself.
 function saveDocx(filepath, doc, cback = function(){}){
-  docx.Packer.toBuffer(doc).then((buffer) => {
-    platform.writeBinaryFile({ path: filepath, bytes: buffer }).then(function(){
+  docx.Packer.toBlob(doc).then((blob) => {
+    return blob.arrayBuffer();
+  }).then((arrayBuffer) => {
+    platform.writeBinaryFile({ path: filepath, bytes: new Uint8Array(arrayBuffer) }).then(function(){
       console.log("Document created successfully");
       cback(filepath);
     }).catch(function(err){
