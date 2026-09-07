@@ -162,8 +162,17 @@ test('getConnectionState reports unknown and logs on a genuine spawn failure', a
 // getWifiNetworks
 //---------------------------------------------------------------------------
 
+//This module routes through platform-node.js's wifiListNetworks, which used to read fields[7]
+//assuming nmcli's default terse column order (IN-USE:BSSID:SSID:...) - actually BARS, the
+//signal-strength column, once a BSSID's own colons are correctly kept in one field by
+//splitNmcliFields. This fixture (and platform.test.js's own copy of it) used to hand-type that
+//same wrong 9-field layout, so it agreed with the bug instead of catching it. Fixed by having the
+//command pin its columns with `-f IN-USE,SSID`; the two-column fixture below is built from real
+//`nmcli -t -f IN-USE,SSID device wifi list --rescan yes` output captured 2026-09-07 on a Raspberry
+//Pi - see platform.test.js's wifiListNetworks tests for the single-line real capture and the argv
+//assertion that the -f flag is actually sent.
 test('getWifiNetworks lists networks and flags the currently connected one', async function(t){
-  mockSpawnSequence(t, [{ chunks: [':aa:bb:cc:dd:ee:ff:Office\n*:aa:bb:cc:dd:ee:ff:HomeNet\n'] }]);
+  mockSpawnSequence(t, [{ chunks: [':Office\n*:HomeNet\n'] }]);
   const { getWifiNetworks } = freshWifiManager();
 
   assert.deepStrictEqual(await getWifiNetworks(), [
@@ -173,7 +182,7 @@ test('getWifiNetworks lists networks and flags the currently connected one', asy
 });
 
 test('getWifiNetworks unescapes an SSID containing a literal colon', async function(t){
-  mockSpawnSequence(t, [{ chunks: ['*:aa:bb:cc:dd:ee:ff:Office\\:5G\n'] }]);
+  mockSpawnSequence(t, [{ chunks: ['*:Office\\:5G\n'] }]);
   const { getWifiNetworks } = freshWifiManager();
 
   assert.deepStrictEqual(await getWifiNetworks(), [{ ssid: 'Office:5G', isConnected: true }]);

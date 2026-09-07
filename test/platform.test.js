@@ -2657,9 +2657,33 @@ function patchPowerSupplyDir(t, entriesOrThrow){
   });
 }
 
-test('wifiListNetworks parses nmcli\'s terse output into ssid/isConnected pairs', async function(t){
+//The two fixtures below (and the wifiGetConnectionState ones further down) are captured, not
+//hand-typed. Original bug: wifiListNetworks ran nmcli with no -f, relied on its default terse
+//column order (IN-USE:BSSID:SSID:MODE:CHAN:RATE:SIGNAL:BARS:SECURITY), and read fields[7] - which
+//is BARS (the signal-strength asterisks), not SSID, because splitNmcliFields correctly keeps a
+//BSSID's colons inside one field. The hand-written fixture that stood here before encoded the same
+//wrong field count the code assumed, so it agreed with the bug instead of catching it. The fix
+//pins the columns explicitly (`-f IN-USE,SSID`), and this fixture is real `nmcli -t -f
+//IN-USE,SSID device wifi list --rescan yes` output, captured 2026-09-07 from a Raspberry Pi on the
+//writerDeck's own network (one visible network, already connected).
+test('wifiListNetworks parses real nmcli output (captured on a Raspberry Pi, single connected network)',
+    async function(t){
+  const spawnFake = fakeSpawn([{ chunks: ['*:NETGEAR62\n'] }]);
+  const platform = wrap(createNodeBacking({ spawnProcess: spawnFake }));
+
+  const result = await platform.wifiListNetworks();
+
+  assert.deepStrictEqual(result, [{ ssid: 'NETGEAR62', isConnected: true }]);
+  assert.deepStrictEqual(spawnFake.calls[0].args,
+    ['-t', '-f', 'IN-USE,SSID', 'device', 'wifi', 'list', '--rescan', 'yes']);
+});
+
+//Multiple networks and colon-escaping aren't covered by the single-network capture above, so these
+//two lines are constructed - but from the two-column IN-USE:SSID shape the capture confirmed nmcli
+//actually emits with -f pinned, not from a guessed field count the way the old fixture was.
+test('wifiListNetworks parses multiple networks and marks only the connected one', async function(t){
   const platform = wrap(createNodeBacking({
-    spawnProcess: fakeSpawn([{ chunks: [':aa:bb:cc:dd:ee:ff:Office\n*:aa:bb:cc:dd:ee:ff:HomeNet\n'] }])
+    spawnProcess: fakeSpawn([{ chunks: [':Office\n*:HomeNet\n'] }])
   }));
 
   const result = await platform.wifiListNetworks();
@@ -2672,7 +2696,7 @@ test('wifiListNetworks parses nmcli\'s terse output into ssid/isConnected pairs'
 
 test('wifiListNetworks unescapes an SSID containing a literal colon and drops blank-ssid lines', async function(t){
   const platform = wrap(createNodeBacking({
-    spawnProcess: fakeSpawn([{ chunks: ['*:aa:bb:cc:dd:ee:ff:Office\\:5G\n:aa:bb:cc:dd:ee:ff:\n\n'] }])
+    spawnProcess: fakeSpawn([{ chunks: ['*:Office\\:5G\n:\n\n'] }])
   }));
 
   const result = await platform.wifiListNetworks();
@@ -2755,19 +2779,40 @@ test('wifiGetAddress rejects UNAVAILABLE when hostname is not installed', async 
 //see the inventory's group K section. UNAVAILABLE off a missing nmcli is asserted as the ordinary
 //case throughout, matching every other wifi/battery command in this group.
 
-test('wifiGetConnectionState reports the wifi device\'s state and connection name', async function(t){
-  const platform = wrap(createNodeBacking({
-    spawnProcess: fakeSpawn([{ chunks: ['eth0:ethernet:connected:Wired\nwlan0:wifi:connected:HomeNet\n'] }])
-  }));
+//Real `nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device status` output, captured 2026-09-07 from the
+//same Raspberry Pi as the wifiListNetworks fixture above, while connected to wifi. Unlike
+//wifiListNetworks, this command's default column order was already the one this code assumed
+//(DEVICE:TYPE:STATE:CONNECTION, no colon-bearing values), so there was no field-index bug to fix
+//here - but the fixture is captured anyway rather than hand-typed, on the same "don't trust an
+//unchecked belief about nmcli's output" reasoning, and -f is now pinned explicitly too. This
+//capture also exercises a real multi-device machine: it finds the `wifi`-typed line among a
+//`wifi-p2p`, an `ethernet` and a `loopback` device, and two of those lines have an empty
+//CONNECTION field (a trailing, un-escaped colon with nothing after it).
+test('wifiGetConnectionState reports real nmcli output (captured on a Raspberry Pi, connected)', async function(t){
+  const spawnFake = fakeSpawn([{ chunks: [
+    'wlan0:wifi:connected:NETGEAR62\n' +
+    'p2p-dev-wlan0:wifi-p2p:disconnected:\n' +
+    'eth0:ethernet:unavailable:\n' +
+    'lo:loopback:unmanaged:\n'
+  ] }]);
+  const platform = wrap(createNodeBacking({ spawnProcess: spawnFake }));
 
   const result = await platform.wifiGetConnectionState();
 
-  assert.deepStrictEqual(result, { state: 'connected', connection: 'HomeNet' });
+  assert.deepStrictEqual(result, { state: 'connected', connection: 'NETGEAR62' });
+  assert.deepStrictEqual(spawnFake.calls[0].args,
+    ['-t', '-f', 'DEVICE,TYPE,STATE,CONNECTION', 'device', 'status']);
 });
 
+//The no-wifi-device case is the captured fixture above with its wlan0 line removed, rather than an
+//invented device list - the other three lines are the real, unmodified capture.
 test('wifiGetConnectionState resolves unknown/null instead of throwing when no wifi device is present', async function(t){
   const platform = wrap(createNodeBacking({
-    spawnProcess: fakeSpawn([{ chunks: ['eth0:ethernet:connected:Wired\n'] }])
+    spawnProcess: fakeSpawn([{ chunks: [
+      'p2p-dev-wlan0:wifi-p2p:disconnected:\n' +
+      'eth0:ethernet:unavailable:\n' +
+      'lo:loopback:unmanaged:\n'
+    ] }])
   }));
 
   const result = await platform.wifiGetConnectionState();

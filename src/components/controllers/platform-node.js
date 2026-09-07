@@ -1725,7 +1725,11 @@ function createNodeBacking(deps){
     return new Promise(function(resolve, reject){
       var nmcli;
       try{
-        nmcli = spawnProcess('nmcli', ['-t', 'device', 'wifi', 'list', '--rescan', 'yes']);
+        //-f pins the column layout explicitly rather than relying on nmcli's default terse order
+        //(IN-USE:BSSID:SSID:MODE:CHAN:RATE:SIGNAL:BARS:SECURITY), which varies by nmcli version and
+        //locale and is not what this command needs anyway - see the Pi bug this fixed for what
+        //trusting the default order costs.
+        nmcli = spawnProcess('nmcli', ['-t', '-f', 'IN-USE,SSID', 'device', 'wifi', 'list', '--rescan', 'yes']);
       }
       catch(spawnErr){
         reject(unavailableOrIoError(spawnErr, 'wifiListNetworks'));
@@ -1748,7 +1752,7 @@ function createNodeBacking(deps){
 
         var networks = Buffer.concat(chunks).toString().split('\n').map(function(line){
           var fields = splitNmcliFields(line);
-          return { ssid: fields[7], isConnected: fields[0] === '*' };
+          return { ssid: fields[1], isConnected: fields[0] === '*' };
         }).filter(function(net){
           return net.ssid != null && net.ssid !== '';
         });
@@ -1844,7 +1848,11 @@ function createNodeBacking(deps){
     return new Promise(function(resolve, reject){
       var nmcli;
       try{
-        nmcli = spawnProcess('nmcli', ['-t', 'device', 'status']);
+        //nmcli's default terse layout for `device status` is already the stable, colon-free
+        //DEVICE:TYPE:STATE:CONNECTION - unlike wifiListNetworks above, nothing here depended on a
+        //miscounted field. -f is pinned anyway, at no cost, so a future nmcli default change can't
+        //reopen the same class of bug.
+        nmcli = spawnProcess('nmcli', ['-t', '-f', 'DEVICE,TYPE,STATE,CONNECTION', 'device', 'status']);
       }
       catch(spawnErr){
         reject(unavailableOrIoError(spawnErr, 'wifiGetConnectionState'));
