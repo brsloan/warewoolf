@@ -1,4 +1,3 @@
-const fs = require('fs');
 const { convertDeltaToMDF } = require('./markdownFic');
 const Quill = require('quill');
 const { convertDeltaToDocx, saveDocx } = require('./delta-to-docx');
@@ -8,6 +7,12 @@ const { convertMdfcToMd } = require('./mdfc-to-md');
 const { htmlChaptersToEpub } = require('./epub');
 const { convertToPlainText } = require('./quill-utils');
 const { getTotalWordCount } = require('./wordcount');
+const { createPlatform } = require('./platform');
+const { createNodeBacking } = require('./platform-node');
+
+//writeTextFile takes no injected config - every path here is already a full path - so this holds
+//its own standing instance, the same reason export.js/file-manager.js do.
+var platform = createPlatform(createNodeBacking({}));
 
 //Async because assembling the chapters reads any that are not already in memory off disk, which now
 //goes through the platform facade. The callback is left exactly as it was: .epub finishes writing
@@ -18,7 +23,7 @@ async function compileProject(project, userSettings, options, filepath, cback = 
 
     switch(options.type){
         case ".txt":
-            compilePlainText(filepath, allChaps);
+            await compilePlainText(filepath, allChaps);
             cback();
             break;
         case ".docx":
@@ -26,15 +31,15 @@ async function compileProject(project, userSettings, options, filepath, cback = 
             cback();
             break;
         case ".mdfc":
-            compileMDF(filepath, allChaps);
+            await compileMDF(filepath, allChaps);
             cback();
             break;
         case ".md":
-            compileMd(filepath, allChaps);
+            await compileMd(filepath, allChaps);
             cback();
             break;
         case ".html":
-            compileHtml(filepath, allChaps, project.title, project.author, options.generateTitlePage);
+            await compileHtml(filepath, allChaps, project.title, project.author, options.generateTitlePage);
             cback();
             break;
           case ".epub":
@@ -69,40 +74,40 @@ async function compileEpub(dir, chapters, title, author, insertTitle, insertHead
   }
 }
 
-function compileHtml(dir, allChaps, title, author, insertTitle){
+async function compileHtml(dir, allChaps, title, author, insertTitle){
   try{
     var allText = convertMdfcToHtmlPage(convertDeltaToMDF(allChaps), title, author, insertTitle);
-    fs.writeFileSync(dir, allText);
+    await platform.writeTextFile({ path: dir, contents: allText });
   }
   catch(err){
     logError(err);
   }
 }
 
-function compileMd(dir, allChaps){
+async function compileMd(dir, allChaps){
   try{
     var allText = convertMdfcToMd(convertDeltaToMDF(allChaps));
-    fs.writeFileSync(dir, allText);
+    await platform.writeTextFile({ path: dir, contents: allText });
   }
   catch(err){
     logError(err);
   }
 }
 
-function compileMDF(dir, allChaps){
+async function compileMDF(dir, allChaps){
   try{
     var allText = convertDeltaToMDF(allChaps);
-    fs.writeFileSync(dir, allText);
+    await platform.writeTextFile({ path: dir, contents: allText });
   }
   catch(err){
     logError(err);
   }
 }
 
-function compilePlainText(dir, allChaps){
+async function compilePlainText(dir, allChaps){
   try{
     var allText = convertToPlainText(allChaps);
-    fs.writeFileSync(dir, allText);
+    await platform.writeTextFile({ path: dir, contents: allText });
   }
   catch(err){
     logError(err);
@@ -136,11 +141,21 @@ async function compileChapterDeltas(project, options){
 //The manuscript title page carries a project-wide word count, which delta-to-docx no longer works
 //out for itself - reading the chapters it needs is asynchronous now, and it is a document generator
 //with no other I/O in it. Counted here, and only when a title page is actually being generated.
+//
+//Regression: saveDocx is fire-and-forget when called without a completion callback (its own
+//docx.Packer promise chain keeps running after this function returns), so compileDocx used to call
+//it bare - meaning compileProject's cback() could fire, and compile_display.js could report the
+//compile done, while the .docx was still mid-write. Waiting on saveDocx's own completion callback
+//closes that gap, the same property .epub already had via htmlChaptersToEpub's callback. saveDocx
+//already logs a failure itself (see delta-to-docx.js), so the result is just awaited, not re-thrown.
 async function compileDocx(filepath, delt, options, project, userSettings) {
   try{
     var totalWordCount = options && options.generateTitlePage ? await getTotalWordCount(project) : 0;
     var doc = convertDeltaToDocx(delt, options, project, userSettings.addressInfo, totalWordCount);
-    saveDocx(filepath, doc);
+
+    await new Promise(function(resolve){
+      saveDocx(filepath, doc, resolve);
+    });
   }
   catch(err){
     logError(err);

@@ -1,4 +1,3 @@
-const fs = require('fs');
 const { convertDeltaToMDF, parseMDF } = require('./markdownFic');
 const { logError } = require('./error-log');
 const { convertDeltaToDocx, saveDocx } = require('./delta-to-docx');
@@ -9,7 +8,14 @@ const { htmlChaptersToEpub } = require('./epub');
 const { getCorkboardForExport } = require('./corkboard');
 const { convertToPlainText } = require('./quill-utils');
 const { getTotalWordCount } = require('./wordcount');
+const { createPlatform } = require('./platform');
+const { createNodeBacking } = require('./platform-node');
 const notesNamePrepend = '-notes_';
+
+//Every command this module calls (ensureDirectory, writeTextFile) takes a full path and no
+//injected config, so this holds its own standing instance, the same reason file-manager.js/
+//epub.js/delta-to-docx.js do.
+var platform = createPlatform(createNodeBacking({}));
 
 //Unlike compile.js (which merges everything into a single output file), export.js is meant to
 //write one output file per chapter/notes/corkboard item - that's the whole point of this module,
@@ -44,8 +50,7 @@ async function exportProject(project, userSettings, options, filepath, cback = f
     var dirName = project.title.length > 0 ? sanitizeFilename(project.title) : 'exports';
     var dir = filepath.concat("/").concat(dirName).concat("/");
 
-    if(!fs.existsSync(dir))
-        fs.mkdirSync(dir);
+    await platform.ensureDirectory({ path: dir });
 
     //Counted once for the whole run, not once per chapter. The manuscript title page carries a
     //project-wide word count, which delta-to-docx no longer works out for itself - and it was being
@@ -68,12 +73,12 @@ async function exportProject(project, userSettings, options, filepath, cback = f
         else if(i > project.chapters.length - 1)
           outName = '-ref_' + outName;
 
-        exportChapter(project, chap.title, project.author, chapFile, dir + outName, userSettings, options, taskStarted, taskDone, totalWordCount);
+        await exportChapter(project, chap.title, project.author, chapFile, dir + outName, userSettings, options, taskStarted, taskDone, totalWordCount);
 
         var chapNotesDelta = await chap.getNotesContentOrFile();
 
         if(chapNotesDelta)
-          exportChapter(project, chap.title + ' Notes', project.author, chapNotesDelta, dir + notesNamePrepend + outName, userSettings, options, taskStarted, taskDone, totalWordCount);
+          await exportChapter(project, chap.title + ' Notes', project.author, chapNotesDelta, dir + notesNamePrepend + outName, userSettings, options, taskStarted, taskDone, totalWordCount);
       }
       catch(err){
         errorCount++;
@@ -85,7 +90,7 @@ async function exportProject(project, userSettings, options, filepath, cback = f
       try{
         var projectNotesDelta = await project.notesChap.getNotesContentOrFile();
         if(projectNotesDelta)
-          exportChapter(project, 'Project Notes', project.author, projectNotesDelta, dir + notesNamePrepend + 'project_', userSettings, options, taskStarted, taskDone, totalWordCount);
+          await exportChapter(project, 'Project Notes', project.author, projectNotesDelta, dir + notesNamePrepend + 'project_', userSettings, options, taskStarted, taskDone, totalWordCount);
       }
       catch(err){
         errorCount++;
@@ -97,7 +102,7 @@ async function exportProject(project, userSettings, options, filepath, cback = f
         if(corkboardMd){
           //Override heading styles for just this document since it is not a chapter
           options.styleHeadingAsChapter = false;
-          exportChapter(project, 'Project Corkboard', project.author, parseMDF(corkboardMd), dir + notesNamePrepend + 'corkboard', userSettings, options, taskStarted, taskDone, totalWordCount);
+          await exportChapter(project, 'Project Corkboard', project.author, parseMDF(corkboardMd), dir + notesNamePrepend + 'corkboard', userSettings, options, taskStarted, taskDone, totalWordCount);
         }
       }
       catch(err){
@@ -117,22 +122,26 @@ async function exportProject(project, userSettings, options, filepath, cback = f
     cback(errorCount);
 }
 
-function exportChapter(project, chapterTitle, author, chapDelta, filepathNameNoExt, userSettings, options, taskStarted, taskDone, totalWordCount){
+//.txt/.mdfc/.md/.html are awaited directly rather than routed through taskStarted/taskDone: their
+//writes are a single platform call each with no further async work of their own (unlike .docx and
+//.epub, which finish on their own callback well after this returns), so awaiting them here is what
+//keeps exportProject's loop - and therefore its own completion - from moving on before they land.
+async function exportChapter(project, chapterTitle, author, chapDelta, filepathNameNoExt, userSettings, options, taskStarted, taskDone, totalWordCount){
   switch(options.type){
         case ".txt":
-            exportChapAsText(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.generateTitlePage);
+            await exportChapAsText(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.generateTitlePage);
             break;
         case ".docx":
             exportChapAsDocx(project, userSettings.addressInfo, chapDelta, filepathNameNoExt, options, taskStarted, taskDone, totalWordCount);
             break;
         case ".mdfc":
-            exportChapAsMdf(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.generateTitlePage);
+            await exportChapAsMdf(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.generateTitlePage);
             break;
         case ".md":
-            exportChapAsMd(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.generateTitlePage);
+            await exportChapAsMd(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.generateTitlePage);
             break;
         case ".html":
-            exportChapAsHtml(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.generateTitlePage);
+            await exportChapAsHtml(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.generateTitlePage);
             break;
         case ".epub":
             exportChapAsEpub(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.generateTitlePage, taskStarted, taskDone);
@@ -142,8 +151,8 @@ function exportChapter(project, chapterTitle, author, chapDelta, filepathNameNoE
     }
 }
 
-function exportChapAsText(projectTitle, chapTitle, author, chapDelta, filepathNameNoExt, generateTitlePage){
-  fs.writeFileSync(filepathNameNoExt + ".txt", convertToPlainText(chapDelta));
+async function exportChapAsText(projectTitle, chapTitle, author, chapDelta, filepathNameNoExt, generateTitlePage){
+  await platform.writeTextFile({ path: filepathNameNoExt + ".txt", contents: convertToPlainText(chapDelta) });
 }
 
 function exportChapAsDocx(project, addressInfo, chapDelta, filepathNameNoExt, options, taskStarted, taskDone, totalWordCount){
@@ -163,16 +172,19 @@ function exportChapAsDocx(project, addressInfo, chapDelta, filepathNameNoExt, op
   }
 }
 
-function exportChapAsMdf(projectTitle, chapTitle, author, chapDelta, filepathNameNoExt, generateTitlePage){
-  fs.writeFileSync(filepathNameNoExt + '.mdfc', convertDeltaToMDF(chapDelta));
+async function exportChapAsMdf(projectTitle, chapTitle, author, chapDelta, filepathNameNoExt, generateTitlePage){
+  await platform.writeTextFile({ path: filepathNameNoExt + '.mdfc', contents: convertDeltaToMDF(chapDelta) });
 }
 
-function exportChapAsMd(projectTitle, chapTitle, author, chapDelta, filepathNameNoExt, generateTitlePage){
-  fs.writeFileSync(filepathNameNoExt + '.md', convertMdfcToMd(convertDeltaToMDF(chapDelta)));
+async function exportChapAsMd(projectTitle, chapTitle, author, chapDelta, filepathNameNoExt, generateTitlePage){
+  await platform.writeTextFile({ path: filepathNameNoExt + '.md', contents: convertMdfcToMd(convertDeltaToMDF(chapDelta)) });
 }
 
-function exportChapAsHtml(projectTitle, chapTitle, author, chapDelta, filepathNameNoExt, generateTitlePage){
-  fs.writeFileSync(filepathNameNoExt + '.html', convertMdfcToHtmlPage(convertDeltaToMDF(chapDelta), projectTitle + ": " + chapTitle, author, generateTitlePage));
+async function exportChapAsHtml(projectTitle, chapTitle, author, chapDelta, filepathNameNoExt, generateTitlePage){
+  await platform.writeTextFile({
+    path: filepathNameNoExt + '.html',
+    contents: convertMdfcToHtmlPage(convertDeltaToMDF(chapDelta), projectTitle + ": " + chapTitle, author, generateTitlePage)
+  });
 }
 
 function exportChapAsEpub(projectTitle, chapTitle, author, chapDelta, filepathNameNoExt, generateTitlePage, taskStarted, taskDone){

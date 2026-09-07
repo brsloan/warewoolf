@@ -52,14 +52,12 @@ async function buildDocxFixture(t, bodyXml, footnotesXml){
   archive.finalize();
   await written;
 
-  //A fresh temp dir per fixture (rather than a shared one) also stands in for the real
-  //sysDirectories.temp, so a passing test demonstrates that value is actually being used.
-  return { filepath: filepath, sysDirectories: { temp: dir } };
+  return filepath;
 }
 
-function runImport(importDocx, filepath, sysDirectories, split){
+function runImport(importDocx, filepath, split){
   return new Promise(function(resolve){
-    importDocx(filepath, sysDirectories, split || false, resolve);
+    importDocx(filepath, split || false, resolve);
   });
 }
 
@@ -69,11 +67,11 @@ function flatten(deltas){
 
 test('imports a simple paragraph with run formatting into a single delta', async function(t){
   const { importDocx } = freshDocxImport();
-  const { filepath, sysDirectories } = await buildDocxFixture(t,
+  const filepath = await buildDocxFixture(t,
     '<w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Hello</w:t></w:r></w:p>'
   );
 
-  const deltas = await runImport(importDocx, filepath, sysDirectories);
+  const deltas = await runImport(importDocx, filepath);
 
   assert.strictEqual(deltas.length, 1);
   assert.deepStrictEqual(deltas[0].ops, [
@@ -82,22 +80,21 @@ test('imports a simple paragraph with run formatting into a single delta', async
   ]);
 });
 
-//Regression: sysDirectories used to be an unreferenced bare identifier in this file rather than a
-//parameter, so it only worked by accident of Electron's non-isolated renderer sharing a global
-//script scope with require()'d modules - a plain Node process (like this test) has no such thing,
-//so this test can only pass at all because sysDirectories is now threaded through as an argument.
-test('uses the sysDirectories passed in as an argument to unzip the file', async function(t){
+//Regression: importDocx used to unzip into a fixed sysDirectories.temp + '/docxguts' directory and
+//never removed it, so residue from one import could bleed into the next and the directory grew
+//without bound over a session. The native command now unzips into its own fs.mkdtempSync()
+//directory and removes it again before resolving - the caller here never even learns the path,
+//which is the point: the unzip destination must not leak across the platform boundary.
+test('does not leave its temp extraction directory behind', async function(t){
   const { importDocx } = freshDocxImport();
-  const { filepath, sysDirectories } = await buildDocxFixture(t,
-    '<w:p><w:r><w:t>Hi</w:t></w:r></w:p>'
-  );
+  const filepath = await buildDocxFixture(t, '<w:p><w:r><w:t>Hi</w:t></w:r></w:p>');
 
-  await runImport(importDocx, filepath, sysDirectories);
+  const before = fs.readdirSync(os.tmpdir()).filter(function(name){ return name.startsWith('warewoolf-docx-'); });
 
-  assert.ok(
-    fs.existsSync(path.join(sysDirectories.temp, 'docxguts', 'word', 'document.xml')),
-    'expected the docx to be unzipped under the given sysDirectories.temp'
-  );
+  await runImport(importDocx, filepath);
+
+  const after = fs.readdirSync(os.tmpdir()).filter(function(name){ return name.startsWith('warewoolf-docx-'); });
+  assert.deepStrictEqual(after, before, 'importDocx left its temp extraction directory behind');
 });
 
 //Regression: getElementsByTagName('w:p') recursed into the whole document, including paragraphs
@@ -108,9 +105,9 @@ test('paragraphs nested inside a table are excluded', async function(t){
     '<w:p><w:r><w:t>Body</w:t></w:r></w:p>' +
     '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>Cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>' +
     '<w:p><w:r><w:t>After</w:t></w:r></w:p>';
-  const { filepath, sysDirectories } = await buildDocxFixture(t, bodyXml);
+  const filepath = await buildDocxFixture(t, bodyXml);
 
-  const deltas = await runImport(importDocx, filepath, sysDirectories);
+  const deltas = await runImport(importDocx, filepath);
 
   assert.strictEqual(flatten(deltas), 'Body\nAfter\n');
 });
@@ -120,11 +117,11 @@ test('paragraphs nested inside a table are excluded', async function(t){
 test('a footnote reference with no footnotes.xml part logs an error instead of crashing', async function(t){
   const logErrorMock = t.mock.method(errorLog, 'logError', function(){});
   const { importDocx } = freshDocxImport();
-  const { filepath, sysDirectories } = await buildDocxFixture(t,
+  const filepath = await buildDocxFixture(t,
     '<w:p><w:r><w:t>See note</w:t><w:footnoteReference w:id="1"/></w:r></w:p>'
   );
 
-  const deltas = await runImport(importDocx, filepath, sysDirectories);
+  const deltas = await runImport(importDocx, filepath);
 
   assert.strictEqual(flatten(deltas), 'See note[^1]\n');
   assert.strictEqual(logErrorMock.mock.calls.length, 1);
@@ -138,12 +135,12 @@ test('a footnote reference with no matching footnote body logs an error instead 
   const footnotesXml = '<?xml version="1.0"?><w:footnotes ' + W_NS + '>' +
     '<w:footnote w:id="-1" w:type="separator"/>' +
     '</w:footnotes>';
-  const { filepath, sysDirectories } = await buildDocxFixture(t,
+  const filepath = await buildDocxFixture(t,
     '<w:p><w:r><w:t>See note</w:t><w:footnoteReference w:id="1"/></w:r></w:p>',
     footnotesXml
   );
 
-  const deltas = await runImport(importDocx, filepath, sysDirectories);
+  const deltas = await runImport(importDocx, filepath);
 
   assert.strictEqual(flatten(deltas), 'See note[^1]\n');
   assert.strictEqual(logErrorMock.mock.calls.length, 1);
@@ -157,12 +154,12 @@ test('an empty w:t inside a footnote body does not crash the import', async func
   const footnotesXml = '<?xml version="1.0"?><w:footnotes ' + W_NS + '>' +
     '<w:footnote w:id="1"><w:p><w:r><w:t/><w:t>Real text</w:t></w:r></w:p></w:footnote>' +
     '</w:footnotes>';
-  const { filepath, sysDirectories } = await buildDocxFixture(t,
+  const filepath = await buildDocxFixture(t,
     '<w:p><w:r><w:t>See note</w:t><w:footnoteReference w:id="1"/></w:r></w:p>',
     footnotesXml
   );
 
-  const deltas = await runImport(importDocx, filepath, sysDirectories);
+  const deltas = await runImport(importDocx, filepath);
 
   assert.strictEqual(flatten(deltas), 'See note[^1]\n[^1]: Real text\n');
 });
@@ -177,12 +174,12 @@ test('a manual line break inside a footnote paragraph starts a new marker line',
     '<w:t>seg0</w:t><w:br/><w:t>seg1</w:t><w:br/><w:t>seg2</w:t><w:br/><w:t>seg3</w:t>' +
     '</w:r></w:p></w:footnote>' +
     '</w:footnotes>';
-  const { filepath, sysDirectories } = await buildDocxFixture(t,
+  const filepath = await buildDocxFixture(t,
     '<w:p><w:r><w:t>See note</w:t><w:footnoteReference w:id="1"/></w:r></w:p>',
     footnotesXml
   );
 
-  const deltas = await runImport(importDocx, filepath, sysDirectories);
+  const deltas = await runImport(importDocx, filepath);
 
   assert.strictEqual(
     flatten(deltas),
@@ -207,7 +204,7 @@ test('a missing/unreadable file logs an error instead of crashing', async functi
   const missingPath = path.join(tempDir, 'does-not-exist.docx');
 
   let cbackCalled = false;
-  importDocx(missingPath, { temp: tempDir }, false, function(){ cbackCalled = true; });
+  importDocx(missingPath, false, function(){ cbackCalled = true; });
 
   await errorLogged;
 

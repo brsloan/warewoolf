@@ -254,14 +254,30 @@ var COMMANDS = {
   ensureDirectory: { group: 'G', params: ['path'], returns: 'void' },
   writeTextFile: { group: 'G', params: ['path', 'contents'], returns: 'void' },
   writeBinaryFile: { group: 'G', params: ['path', 'bytes'], returns: 'void' },
-  buildEpub: { group: 'G', params: ['filepath', 'htmlChapters', 'meta'], returns: 'void',
-    note: 'archiver has no browser build, so the assembled HTML crosses and the zipping happens natively. docx does have one, so delta-to-docx keeps generating in the webview and only writeBinaryFile crosses.' },
+  //Phase 6 correction: this table originally declared buildEpub(filepath, htmlChapters, meta), on
+  //the theory that the OPF/NCX/TOC generation - epub.js's getContentOpf/getTocNcx/getTocXhtml/
+  //getChapterXhtmlPages/escapeXmlText/etc. - would move natively alongside the zipping. It cannot,
+  //for the same reason Phase 5 corrected loadCorkboard/saveCorkboard: that generation is pure
+  //string work with no OS dependency, and moving it into platform-node would duplicate ~250 lines
+  //of format logic into the backing for no reason archiver actually requires. "archiver has no
+  //browser build, so the assembled HTML crosses and the zipping happens natively" (the note this
+  //table shipped with) already says the right thing - it is the *assembled* content that crosses,
+  //not the raw chapters. So buildEpub takes the finished zip entries - {name, content}[], every one
+  //of them already-generated text - and does exactly one native thing: write them into a zip at
+  //filepath. epub.js keeps every generation/escaping function unchanged and calls this only after
+  //assembling entries itself, the same shape loadChapter/saveChapter already established for
+  //keeping format logic out of the backing.
+  buildEpub: { group: 'G', params: ['filepath', 'entries'], returns: 'void',
+    note: 'entries is { name, content }[], pre-assembled by epub.js - mimetype, container.xml, content.opf, toc.ncx, toc.xhtml, one chapter_N.xhtml per chapter, and the stylesheet. The entry literally named "mimetype" is stored uncompressed, per the epub spec; every other entry is deflated. Must resolve only once the write stream\'s \'close\' fires, not archiver\'s \'finish\' - see the comment on the node backing\'s implementation for why a truncated .epub is the failure this exists to prevent.' },
 
   // --- H. Backup ----------------------------------------------------------------------------
   archiveProject: { group: 'H', params: ['projectDir', 'chapsDir', 'filename', 'destDir'],
-    returns: '{ filename, path }' },
-  listBackups: { group: 'H', params: ['directory'], returns: '{ name, isDirectory }[]' },
-  pruneBackups: { group: 'H', params: ['paths'], returns: 'void' },
+    returns: '{ filename, path }',
+    note: 'Allocates the timestamped archive name itself and returns it, the same reason saveChapterAtomic allocates a filename rather than taking one. Must resolve on the write stream\'s \'close\', not archiver\'s \'finish\' - backup-project.js\'s original archiveProject listened on \'finish\', which this corrects rather than carries over; see the node backing.' },
+  listBackups: { group: 'H', params: ['directory'], returns: '{ name, isDirectory }[]',
+    note: 'The same shape as listDirectory (group E), but kept a separate command deliberately - Phase 5 already noted backup-project.js\'s own readdirSync is domain-level backup browsing, not the generic file browser E exists for.' },
+  pruneBackups: { group: 'H', params: ['paths'], returns: 'void',
+    note: 'Deletes each path unconditionally; one bad path is logged and does not stop the rest, matching deleteOldBackups\' original per-file try/catch.' },
 
   // --- I. Spellcheck ------------------------------------------------------------------------
   loadDictionary: { group: 'I', params: [], returns: '{ aff, dic }',

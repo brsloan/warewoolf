@@ -1,4 +1,3 @@
-const fs = require('fs');
 const { logError } = require('./error-log');
 const { createPlatform } = require('./platform');
 const { createNodeBacking } = require('./platform-node');
@@ -194,11 +193,10 @@ async function thisFileExists(filepath){
   }
 }
 
-//Group F (Phase 6), left untouched: extractZip is a documented exception to this phase's scope,
-//since unzipper is Node-stream-only and has no browser path (see the inventory). Kept on plain fs
-//rather than folded into the group E rewrite above.
-function unzipProject(zipPath, callback){
-  const unzipper = require('unzipper');
+//Group F: extractZip. unzipper is Node-stream-only and has no browser path (see the inventory), so
+//this stays a thin wrapper around the native command rather than folding into the group E rewrite
+//above - the same reason group E's own commands stay generic filesystem primitives.
+async function unzipProject(zipPath, callback){
   if(zipPath.toLowerCase().endsWith('.zip')){
     try{
       //Slicing off the trailing ".zip" instead of replace('.zip','') - replace() rewrites the
@@ -206,11 +204,8 @@ function unzipProject(zipPath, callback){
       //extracted to the wrong directory.
       var extractPath = zipPath.slice(0, -4);
 
-      fs.createReadStream(zipPath)
-      .on('error', logError)
-      .pipe(unzipper.Extract({ path: extractPath }))
-      .on('error', logError)
-      .on('close', callback);
+      await platform.extractZip({ zipPath: zipPath, destPath: extractPath });
+      callback();
     }
     catch(err){
       logError(err);

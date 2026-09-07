@@ -1,4 +1,3 @@
-const fs = require('fs');
 const path = require('path');
 const showFileDialog = require('../views/file-dialog_display');
 const { logError } = require('./error-log');
@@ -9,6 +8,12 @@ const { convertFirstLineToTitle } = require('./convert-first-lines')
 const { convertMarkedItalics } = require('./convert-italics');
 const { convertMarkedTabs } = require('./convert-tabs');
 const { parseMDF } = require('./markdownFic');
+const { createPlatform } = require('./platform');
+const { createNodeBacking } = require('./platform-node');
+
+//readTextFile takes no injected config - path is a full path - so this holds its own standing
+//instance, the same reason file-manager.js/docx-import.js do.
+var platform = createPlatform(createNodeBacking({}));
 
 function initiateImport(sysDirectories, options, addImportedChapter, cback){
 
@@ -41,7 +46,7 @@ function importFilesAsync(filepaths, options, addImportedChapter, cback, sysDire
 
   if(options.fileType.id == 'docxSelect'){
     var filename = getFilenameFromFilepath(filepath);
-    importDocx(filepath, sysDirectories, options.docxOptions.splitChapters, function(delts){
+    importDocx(filepath, options.docxOptions.splitChapters, function(delts){
         recurse(delts.map(function(delt, i, arr){
           //A single docx split into several chapters can't label every one of them with the same
           //bare filename - number them so they stay distinguishable.
@@ -90,60 +95,51 @@ function importFilesAsync(filepaths, options, addImportedChapter, cback, sysDire
 }
 
 function importPlainText(filepath, options, callback){
-  try{
-    fs.readFile(filepath, 'utf8', function(err, inText){
-      //fs.readFile's callback runs on its own tick, outside this try/catch, so an unchecked error
-      //here would leave inText undefined and throw uncaught the moment it's used below - logging
-      //and skipping the file (via an empty result) keeps the rest of a multi-file import going.
-      if(err){
-        logError(err);
-        callback([]);
-        return;
-      }
+  platform.readTextFile({ path: filepath }).then(function(inText){
+    var filename = getFilenameFromFilepath(filepath);
+    var packagedDeltas = [];
 
-      var filename = getFilenameFromFilepath(filepath);
-      var packagedDeltas = [];
-
-      if(options.splitChapters.split){
-        //The split marker is free text from the user (see import_display.js's "Chapter Split
-        //Marker" field), so it must be escaped before going into a RegExp - same as
-        //convert-italics.js does for its marker - otherwise a marker containing regex
-        //metacharacters (e.g. "(scene)") either throws or matches the wrong thing.
-        var escapedMarker = options.splitChapters.marker.replace(/[|\\{}()[\]^$+*?.]/g, '\\$&');
-        var chapTxts = inText.split(new RegExp(escapedMarker + '\r?\n'));
-        chapTxts.forEach(function(txt, i){
-          packagedDeltas.push({
-            title: options.chapLabels == 'filename' ? filename : generateTitleFromFirstLineText(txt),
-            delta: {
-              ops:[{ insert: txt }]
-            }
-          })
-        });
-      }
-      else {
+    if(options.splitChapters.split){
+      //The split marker is free text from the user (see import_display.js's "Chapter Split
+      //Marker" field), so it must be escaped before going into a RegExp - same as
+      //convert-italics.js does for its marker - otherwise a marker containing regex
+      //metacharacters (e.g. "(scene)") either throws or matches the wrong thing.
+      var escapedMarker = options.splitChapters.marker.replace(/[|\\{}()[\]^$+*?.]/g, '\\$&');
+      var chapTxts = inText.split(new RegExp(escapedMarker + '\r?\n'));
+      chapTxts.forEach(function(txt, i){
         packagedDeltas.push({
-          title: options.chapLabels == 'filename' ? filename : generateTitleFromFirstLineText(inText),
+          title: options.chapLabels == 'filename' ? filename : generateTitleFromFirstLineText(txt),
           delta: {
-            ops: [{ insert: inText }]
+            ops:[{ insert: txt }]
           }
-        });
-      }
-
-      packagedDeltas.forEach((deltPack, i) => {
-        if(options.convertFirstLines)
-          deltPack.delta = convertFirstLineToTitle(deltPack.delta).delta;
-        if(options.convertItalics.convert)
-          deltPack.delta = convertMarkedItalics(deltPack.delta, options.convertItalics.marker).delta;
-        if(options.convertTabs.convert)
-          deltPack.delta = convertMarkedTabs(deltPack.delta, options.convertTabs.marker).delta;
+        })
       });
+    }
+    else {
+      packagedDeltas.push({
+        title: options.chapLabels == 'filename' ? filename : generateTitleFromFirstLineText(inText),
+        delta: {
+          ops: [{ insert: inText }]
+        }
+      });
+    }
 
-      callback(packagedDeltas);
+    packagedDeltas.forEach((deltPack, i) => {
+      if(options.convertFirstLines)
+        deltPack.delta = convertFirstLineToTitle(deltPack.delta).delta;
+      if(options.convertItalics.convert)
+        deltPack.delta = convertMarkedItalics(deltPack.delta, options.convertItalics.marker).delta;
+      if(options.convertTabs.convert)
+        deltPack.delta = convertMarkedTabs(deltPack.delta, options.convertTabs.marker).delta;
     });
-  }
-  catch(err){
+
+    callback(packagedDeltas);
+  }).catch(function(err){
+    //A read failure (missing file, permission denied) is logged and skipped - via an empty
+    //result - rather than thrown, so the rest of a multi-file import keeps going.
     logError(err);
-  }
+    callback([]);
+  });
 }
 
 function generateTitleFromFirstLineText(str){
@@ -152,26 +148,18 @@ function generateTitleFromFirstLineText(str){
 }
 
 function importMDF(filepath, options, callback){
-  try{
-    fs.readFile(filepath, 'utf8', function(err, data){
-      if(err){
-        logError(err);
-        callback([]);
-        return;
-      }
+  platform.readTextFile({ path: filepath }).then(function(data){
+    var delta = parseMDF(data);
+    var filename = getFilenameFromFilepath(filepath);
 
-      var delta = parseMDF(data);
-      var filename = getFilenameFromFilepath(filepath);
-
-      callback([{
-        title: options.chapLabels == 'filename' ? filename : generateChapTitleFromFirstLine(delta), 
-        delta: delta
-      }]);
-    });
-  }
-  catch(err){
+    callback([{
+      title: options.chapLabels == 'filename' ? filename : generateChapTitleFromFirstLine(delta),
+      delta: delta
+    }]);
+  }).catch(function(err){
     logError(err);
-  }
+    callback([]);
+  });
 }
 
 //Splits off only the final extension (via path.basename/extname), not every "." in the filename -

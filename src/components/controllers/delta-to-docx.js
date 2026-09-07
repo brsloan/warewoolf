@@ -1,19 +1,23 @@
-const fs = require('fs');
 const docx = require('docx');
 const { logError } = require('./error-log');
 const { parseDelta, getOrderedListNumbers, getListLevel, getListMarker } = require('./quill-utils');
+const { createPlatform } = require('./platform');
+const { createNodeBacking } = require('./platform-node');
+
+//writeBinaryFile takes no injected config - filepath is a full path - so this holds its own
+//standing instance, the same reason file-manager.js/epub.js do. docx has a browser build
+//(Packer.toBuffer), so document generation stays in the webview; only the write crosses.
+var platform = createPlatform(createNodeBacking({}));
 
 function saveDocx(filepath, doc, cback = function(){}){
   docx.Packer.toBuffer(doc).then((buffer) => {
-    try{
-      fs.writeFileSync(filepath, buffer)
+    platform.writeBinaryFile({ path: filepath, bytes: buffer }).then(function(){
       console.log("Document created successfully");
       cback(filepath);
-    }
-    catch(err){
+    }).catch(function(err){
       logError(err);
       cback('error');
-    }
+    });
   }).catch((err) => {
     logError(err);
     cback('error');

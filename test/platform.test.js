@@ -4,6 +4,8 @@ const fs = require('fs');
 const os = require('node:os');
 const path = require('node:path');
 const nodeCrypto = require('node:crypto');
+const archiver = require('archiver');
+const unzipper = require('unzipper');
 
 const {
   createPlatform, COMMANDS, EVENTS, CODES, PlatformError, SAVED_SECRET
@@ -108,12 +110,14 @@ test('a live platform cannot be extended with an undeclared command', function(t
 
 test('a declared command the backing does not implement rejects with NOT_IMPLEMENTED', async function(t){
   const platform = platformIn(t).platform;
-  const err = await rejection(platform.buildEpub({ filepath: 'x', htmlChapters: [], meta: {} }));
+  const err = await rejection(platform.checkForUpdate({}));
 
   assert.strictEqual(err.code, CODES.NOT_IMPLEMENTED);
-  assert.strictEqual(err.command, 'buildEpub');
-  //Names the group so an unconverted call site says which phase still owes it.
-  assert.match(err.message, /group G/);
+  assert.strictEqual(err.command, 'checkForUpdate');
+  //Names the group so an unconverted call site says which phase still owes it. Group K is the last
+  //one still outstanding after Phase 6 (F, G, H) - see the note on this test in earlier phases for
+  //why it has moved: A-J are implemented once F/G/H land, so this is the only group left to pick.
+  assert.match(err.message, /group K/);
 });
 
 //A caller must never have to both try/catch and .catch() the same command, so a backing that fails
@@ -1214,6 +1218,376 @@ test('deleteEntry on a path that is already gone is a silent no-op', async funct
   const built = platformIn(t);
 
   await assert.doesNotReject(built.platform.deleteEntry({ path: built.dir + 'never-existed.txt' }));
+});
+
+// ---------------------------------------------------------------------------------------------
+// Group F - import
+// ---------------------------------------------------------------------------------------------
+// Phase 6. These are the commands that get a manuscript INTO the app; group G/H below are what get
+// one OUT. unzipper and the OOXML shape of a .docx have no browser build/parser worth trusting, so
+// extractZip/importDocx are native by necessity - see the group-level note in platform.js.
+
+const W_NS = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+
+function docxDocumentXml(bodyXml){
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<w:document ' + W_NS + '><w:body>' + bodyXml + '</w:body></w:document>';
+}
+
+//Builds a minimal .docx - a zip with word/document.xml and, if given, word/footnotes.xml - on disk.
+//importDocx only ever reads those two parts.
+function buildDocxZip(destPath, bodyXml, footnotesXml){
+  return new Promise(function(resolve, reject){
+    const output = fs.createWriteStream(destPath);
+    const archive = archiver('zip', { zlib: { level: 9 } });
+
+    output.on('close', function(){ resolve(destPath); });
+    archive.on('error', reject);
+
+    archive.pipe(output);
+    archive.append(docxDocumentXml(bodyXml), { name: 'word/document.xml' });
+    if(footnotesXml)
+      archive.append(footnotesXml, { name: 'word/footnotes.xml' });
+    archive.finalize();
+  });
+}
+
+function buildZip(destPath, entries){
+  return new Promise(function(resolve, reject){
+    const output = fs.createWriteStream(destPath);
+    const archive = archiver('zip', { zlib: { level: 9 } });
+
+    output.on('close', function(){ resolve(destPath); });
+    archive.on('error', reject);
+
+    archive.pipe(output);
+    entries.forEach(function(entry){
+      archive.append(entry.content, { name: entry.name });
+    });
+    archive.finalize();
+  });
+}
+
+test('readTextFile returns the file\'s text verbatim', async function(t){
+  const built = platformIn(t);
+  fs.writeFileSync(built.dir + 'chapter.mdfc', '# Title\n\nBody text.', 'utf8');
+
+  const text = await built.platform.readTextFile({ path: built.dir + 'chapter.mdfc' });
+
+  assert.strictEqual(text, '# Title\n\nBody text.');
+});
+
+test('readTextFile rejects NOT_FOUND for a file that is not there', async function(t){
+  const built = platformIn(t);
+  const err = await rejection(built.platform.readTextFile({ path: built.dir + 'missing.txt' }));
+
+  assert.strictEqual(err.code, CODES.NOT_FOUND);
+});
+
+test('extractZip extracts every entry under destPath', async function(t){
+  const built = platformIn(t);
+  const zipPath = built.dir + 'project.zip';
+  await buildZip(zipPath, [
+    { name: 'book.md', content: 'chapter one' },
+    { name: 'nested/notes.txt', content: 'some notes' }
+  ]);
+
+  const result = await built.platform.extractZip({ zipPath: zipPath, destPath: built.dir + 'out' });
+
+  //destPath crosses back normalized to forward slashes, same convention as every other group B/E
+  //path in this file (e.g. listDirectory, createDirectory).
+  assert.strictEqual(result.path, (built.dir + 'out').replaceAll('\\', '/'));
+  assert.strictEqual(fs.readFileSync(path.join(built.dir, 'out', 'book.md'), 'utf8'), 'chapter one');
+  assert.strictEqual(fs.readFileSync(path.join(built.dir, 'out', 'nested', 'notes.txt'), 'utf8'), 'some notes');
+});
+
+test('extractZip defaults destPath to zipPath with its trailing ".zip" stripped', async function(t){
+  const built = platformIn(t);
+  const zipPath = built.dir + 'archive.zip';
+  await buildZip(zipPath, [{ name: 'a.txt', content: 'x' }]);
+
+  const result = await built.platform.extractZip({ zipPath: zipPath });
+
+  assert.strictEqual(result.path, (built.dir + 'archive').replaceAll('\\', '/'));
+  assert.ok(fs.existsSync(path.join(built.dir, 'archive', 'a.txt')));
+});
+
+test('extractZip rejects instead of crashing when the zip does not exist', async function(t){
+  const built = platformIn(t);
+  const err = await rejection(built.platform.extractZip({ zipPath: built.dir + 'nope.zip' }));
+
+  assert.strictEqual(err.code, CODES.NOT_FOUND);
+});
+
+test('importDocx returns document.xml and footnotes.xml as text', async function(t){
+  const built = platformIn(t);
+  const zipPath = built.dir + 'test.docx';
+  const footnotesXml = '<?xml version="1.0"?><w:footnotes ' + W_NS + '><w:footnote w:id="1"/></w:footnotes>';
+  await buildDocxZip(zipPath, '<w:p><w:r><w:t>Hello</w:t></w:r></w:p>', footnotesXml);
+
+  const result = await built.platform.importDocx({ path: zipPath });
+
+  assert.match(result.documentXml, /<w:t>Hello<\/w:t>/);
+  assert.match(result.footnotesXml, /<w:footnote w:id="1"\/>/);
+  //Nothing but the two XML texts - a temp directory path is exactly what this command must never
+  //hand back, since docx-import.js's parsing is pure string work and the boundary is the point.
+  assert.deepStrictEqual(Object.keys(result).sort(), ['documentXml', 'footnotesXml']);
+});
+
+test('importDocx returns null footnotesXml when the docx has no footnotes part', async function(t){
+  const built = platformIn(t);
+  const zipPath = built.dir + 'no-footnotes.docx';
+  await buildDocxZip(zipPath, '<w:p><w:r><w:t>Hi</w:t></w:r></w:p>');
+
+  const result = await built.platform.importDocx({ path: zipPath });
+
+  assert.strictEqual(result.footnotesXml, null);
+});
+
+//The unzip destination is this command's own implementation detail - it must not leak out as a
+//stray directory either. Regression coverage for the same property from the caller's side lives in
+//docx-import.test.js.
+test('importDocx does not leave its temp extraction directory behind', async function(t){
+  const built = platformIn(t);
+  const zipPath = built.dir + 'cleanup.docx';
+  await buildDocxZip(zipPath, '<w:p><w:r><w:t>Hi</w:t></w:r></w:p>');
+
+  const before = fs.readdirSync(os.tmpdir()).filter(function(name){ return name.startsWith('warewoolf-docx-'); });
+  await built.platform.importDocx({ path: zipPath });
+  const after = fs.readdirSync(os.tmpdir()).filter(function(name){ return name.startsWith('warewoolf-docx-'); });
+
+  assert.deepStrictEqual(after, before);
+});
+
+test('importDocx rejects NOT_FOUND for a file that is not there', async function(t){
+  const built = platformIn(t);
+  const err = await rejection(built.platform.importDocx({ path: built.dir + 'missing.docx' }));
+
+  assert.strictEqual(err.code, CODES.NOT_FOUND);
+});
+
+// ---------------------------------------------------------------------------------------------
+// Group G - export and compile
+// ---------------------------------------------------------------------------------------------
+// The commands that get a manuscript OUT of the app. A silently truncated .epub or .docx is the
+// worst failure this project can have - the writer only finds out when they send it to an agent -
+// so buildEpub's resolve-on-'close'-not-'finish' behavior below is the single most load-bearing
+// property in this group. See the comment on the node backing's implementation for the reasoning.
+
+test('ensureDirectory creates a missing directory', async function(t){
+  const built = platformIn(t);
+
+  await built.platform.ensureDirectory({ path: built.dir + 'exports' });
+
+  assert.ok(fs.statSync(built.dir + 'exports').isDirectory());
+});
+
+test('ensureDirectory is idempotent: an existing directory is left alone, not rejected', async function(t){
+  const built = platformIn(t);
+  fs.mkdirSync(built.dir + 'exports');
+  fs.writeFileSync(built.dir + 'exports/keep.txt', 'x', 'utf8');
+
+  await assert.doesNotReject(built.platform.ensureDirectory({ path: built.dir + 'exports' }));
+
+  assert.ok(fs.existsSync(built.dir + 'exports/keep.txt'));
+});
+
+test('writeTextFile writes text, and overwrites what was there before', async function(t){
+  const built = platformIn(t);
+
+  await built.platform.writeTextFile({ path: built.dir + 'out.txt', contents: 'first' });
+  await built.platform.writeTextFile({ path: built.dir + 'out.txt', contents: 'second' });
+
+  assert.strictEqual(fs.readFileSync(built.dir + 'out.txt', 'utf8'), 'second');
+});
+
+test('writeBinaryFile writes raw bytes verbatim', async function(t){
+  const built = platformIn(t);
+  const bytes = Buffer.from([0, 1, 2, 255, 254, 3]);
+
+  await built.platform.writeBinaryFile({ path: built.dir + 'out.bin', bytes: bytes });
+
+  assert.deepStrictEqual(fs.readFileSync(built.dir + 'out.bin'), bytes);
+});
+
+test('buildEpub writes every entry into a real zip, with mimetype first and stored uncompressed', async function(t){
+  const built = platformIn(t);
+  const filepath = built.dir + 'book.epub';
+
+  await built.platform.buildEpub({
+    filepath: filepath,
+    entries: [
+      { name: 'mimetype', content: 'application/epub+zip' },
+      { name: 'META-INF/container.xml', content: '<container/>' },
+      { name: 'OEBPS/chapter_1.xhtml', content: '<html><body>Chapter text.</body></html>' }
+    ]
+  });
+
+  const dir = await unzipper.Open.file(filepath);
+
+  assert.strictEqual(dir.files[0].path, 'mimetype');
+  assert.strictEqual(dir.files[0].compressionMethod, 0, 'mimetype must be STORED, not deflated');
+  assert.notStrictEqual(dir.files[1].compressionMethod, 0, 'other entries should be deflated');
+
+  const chapterEntry = dir.files.find(function(f){ return f.path === 'OEBPS/chapter_1.xhtml'; });
+  assert.strictEqual((await chapterEntry.buffer()).toString('utf8'), '<html><body>Chapter text.</body></html>');
+});
+
+//Regression guard for the property the comment on buildEpub's node-backing implementation depends
+//on: resolving before the write stream's 'close' would mean handing off a file that is not
+//guaranteed to be readable yet. Reading it back as a valid zip immediately after the promise
+//resolves - with no wait, no retry loop - is the observable half of that guarantee.
+test('buildEpub\'s promise resolves only once the file is immediately readable as a valid zip', async function(t){
+  const built = platformIn(t);
+  const filepath = built.dir + 'immediate.epub';
+
+  await built.platform.buildEpub({
+    filepath: filepath,
+    entries: [{ name: 'mimetype', content: 'application/epub+zip' }]
+  });
+
+  const dir = await unzipper.Open.file(filepath);
+  assert.strictEqual(dir.files.length, 1);
+});
+
+test('buildEpub rejects instead of crashing when the parent directory does not exist', async function(t){
+  const built = platformIn(t);
+  const err = await rejection(built.platform.buildEpub({
+    filepath: built.dir + 'missing-dir/book.epub',
+    entries: [{ name: 'mimetype', content: 'x' }]
+  }));
+
+  assert.ok(err.isPlatformError);
+});
+
+// ---------------------------------------------------------------------------------------------
+// Group H - backup
+// ---------------------------------------------------------------------------------------------
+
+function makeBackupProjectFixture(dir){
+  const filename = 'notes.final.woolf';
+  fs.writeFileSync(dir + filename, '{"title":"test"}', 'utf8');
+  fs.mkdirSync(dir + 'chapters');
+  fs.writeFileSync(dir + 'chapters/chap1.txt', 'chapter one', 'utf8');
+
+  return { filename: filename, chapsDir: 'chapters' };
+}
+
+test('archiveProject zips the project file and chapters directory, and allocates the archive name', async function(t){
+  const built = platformIn(t);
+  const fixture = makeBackupProjectFixture(built.dir);
+  fs.mkdirSync(built.dir + 'backups');
+
+  const result = await built.platform.archiveProject({
+    projectDir: built.dir, chapsDir: fixture.chapsDir, filename: fixture.filename, destDir: built.dir + 'backups'
+  });
+
+  assert.match(result.filename, /^notes\.final\d{14}\.zip$/);
+  assert.strictEqual(result.path, path.join(built.dir + 'backups', result.filename));
+  assert.ok(fs.existsSync(result.path));
+
+  const dir = await unzipper.Open.file(result.path);
+  const entryPaths = dir.files.map(function(f){ return f.path; });
+  assert.ok(entryPaths.includes(fixture.filename));
+  assert.ok(entryPaths.includes(fixture.chapsDir + '/chap1.txt'));
+});
+
+//Same regression class as buildEpub above, and the same fix: the original backup-project.js
+//listened on archiver's 'finish' rather than the write stream's 'close', which risked handing back
+//an archive name before fs had actually flushed it to disk. Reading the result straight back as a
+//valid zip is the observable half of that guarantee.
+test('archiveProject\'s promise resolves only once the archive is immediately readable as a valid zip', async function(t){
+  const built = platformIn(t);
+  const fixture = makeBackupProjectFixture(built.dir);
+  fs.mkdirSync(built.dir + 'backups');
+
+  const result = await built.platform.archiveProject({
+    projectDir: built.dir, chapsDir: fixture.chapsDir, filename: fixture.filename, destDir: built.dir + 'backups'
+  });
+
+  const dir = await unzipper.Open.file(result.path);
+  assert.ok(dir.files.length > 0);
+});
+
+test('archiveProject rejects rather than hanging when the destination directory does not exist', async function(t){
+  const built = platformIn(t);
+  const fixture = makeBackupProjectFixture(built.dir);
+
+  const err = await rejection(built.platform.archiveProject({
+    projectDir: built.dir, chapsDir: fixture.chapsDir, filename: fixture.filename,
+    destDir: built.dir + 'no-such-directory'
+  }));
+
+  assert.ok(err.isPlatformError);
+});
+
+test('listBackups reports every entry with isDirectory as a plain boolean', async function(t){
+  const built = platformIn(t);
+  fs.writeFileSync(built.dir + 'a.zip', '', 'utf8');
+  fs.mkdirSync(built.dir + 'subdir');
+
+  const entries = await built.platform.listBackups({ directory: built.dir });
+  const byName = Object.fromEntries(entries.map(function(e){ return [e.name, e.isDirectory]; }));
+
+  assert.strictEqual(byName['a.zip'], false);
+  assert.strictEqual(byName['subdir'], true);
+});
+
+test('pruneBackups deletes every path given', async function(t){
+  const built = platformIn(t);
+  fs.writeFileSync(built.dir + 'old1.zip', '', 'utf8');
+  fs.writeFileSync(built.dir + 'old2.zip', '', 'utf8');
+  fs.writeFileSync(built.dir + 'keep.zip', '', 'utf8');
+
+  await built.platform.pruneBackups({ paths: [built.dir + 'old1.zip', built.dir + 'old2.zip'] });
+
+  assert.deepStrictEqual(fs.readdirSync(built.dir).sort(), ['keep.zip']);
+});
+
+//A path that is already gone is not a failure at all - fs.existsSync guards it before rmSync ever
+//runs, so it never reaches the per-path try/catch below.
+test('pruneBackups treats an already-missing path as a no-op rather than a failure', async function(t){
+  const built = platformIn(t);
+  fs.writeFileSync(built.dir + 'real.zip', '', 'utf8');
+
+  await assert.doesNotReject(built.platform.pruneBackups({
+    paths: [built.dir + 'never-existed.zip', built.dir + 'real.zip']
+  }));
+
+  assert.deepStrictEqual(fs.readdirSync(built.dir), []);
+});
+
+//A genuinely bad entry (not the "already gone" case above, which never throws at all) must not
+//stop the rest of the batch from being pruned - matching deleteOldBackups' original per-file
+//try/catch, mirrored on this command since pruneBackups is now what carries that behavior.
+test('pruneBackups keeps deleting after an entry that throws', async function(t){
+  const built = platformIn(t);
+  fs.writeFileSync(built.dir + 'real.zip', '', 'utf8');
+
+  await assert.doesNotReject(built.platform.pruneBackups({
+    //A non-string entry fails normalizePath's requireText check, the same way a permission error
+    //would fail rmSync - both land in the per-path try/catch.
+    paths: [null, built.dir + 'real.zip']
+  }));
+
+  assert.deepStrictEqual(fs.readdirSync(built.dir), []);
+});
+
+test('the import/export/backup commands refuse arguments they cannot act on', async function(t){
+  const built = platformIn(t);
+
+  assert.strictEqual((await rejection(built.platform.readTextFile({}))).code, CODES.INVALID_ARGUMENT);
+  assert.strictEqual((await rejection(built.platform.extractZip({}))).code, CODES.INVALID_ARGUMENT);
+  assert.strictEqual((await rejection(built.platform.importDocx({}))).code, CODES.INVALID_ARGUMENT);
+  assert.strictEqual((await rejection(built.platform.ensureDirectory({}))).code, CODES.INVALID_ARGUMENT);
+  assert.strictEqual((await rejection(built.platform.writeTextFile({ path: built.dir + 'x.txt' }))).code,
+    CODES.INVALID_ARGUMENT);
+  assert.strictEqual((await rejection(built.platform.writeBinaryFile({ path: built.dir + 'x.bin' }))).code,
+    CODES.INVALID_ARGUMENT);
+  assert.strictEqual((await rejection(built.platform.buildEpub({ entries: [] }))).code, CODES.INVALID_ARGUMENT);
+  assert.strictEqual((await rejection(built.platform.archiveProject({ projectDir: built.dir, destDir: built.dir }))).code,
+    CODES.INVALID_ARGUMENT);
+  assert.strictEqual((await rejection(built.platform.listBackups({}))).code, CODES.INVALID_ARGUMENT);
 });
 
 // ---------------------------------------------------------------------------------------------

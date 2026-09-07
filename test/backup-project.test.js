@@ -115,7 +115,7 @@ test('backupProject reports the error instead of silently finishing when archivi
   assert.ok(!messages.includes('Backup finished.'));
 });
 
-test('deleteOldBackups keeps only the most recent N backups, matching filenames that contain extra dots', function(t){
+test('deleteOldBackups keeps only the most recent N backups, matching filenames that contain extra dots', async function(t){
   const backupDir = makeTempDir(t, 'wwbackup-prune-');
   //Regression for the old `filename.split('.')[0]` parsing, which truncated at the first dot
   //and so never matched real backups for a project whose name contains a dot.
@@ -132,7 +132,7 @@ test('deleteOldBackups keeps only the most recent N backups, matching filenames 
     fs.writeFileSync(path.join(backupDir, 'other.project' + ts + '.zip'), '');
   });
 
-  deleteOldBackups(project, userSettings);
+  await deleteOldBackups(project, userSettings);
 
   const remaining = fs.readdirSync(backupDir).sort();
   assert.deepStrictEqual(remaining, [
@@ -143,14 +143,14 @@ test('deleteOldBackups keeps only the most recent N backups, matching filenames 
   ]);
 });
 
-test('deleteOldBackups does nothing when backupsToKeep is 0', function(t){
+test('deleteOldBackups does nothing when backupsToKeep is 0', async function(t){
   const backupDir = makeTempDir(t, 'wwbackup-prune-');
   const project = { filename: 'notes.final.woolf' };
   const userSettings = { backupDirectory: backupDir, backupsToKeep: 0 };
 
   fs.writeFileSync(path.join(backupDir, 'notes.final20250101000001.zip'), '');
 
-  deleteOldBackups(project, userSettings);
+  await deleteOldBackups(project, userSettings);
 
   assert.strictEqual(fs.readdirSync(backupDir).length, 1);
 });

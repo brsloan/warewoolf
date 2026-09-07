@@ -1,41 +1,23 @@
-var fs = require('fs');
-const unzipper = require('unzipper');
 const { logError } = require('./error-log');
+const { createPlatform } = require('./platform');
+const { createNodeBacking } = require('./platform-node');
 
-function importDocx(filepath, sysDirectories, split, cback){
-  tempUnzipDocx(filepath, sysDirectories, function(xmlDir){
+//importDocx takes no injected config - path is a full path - so this holds its own standing
+//instance, the same reason file-manager.js/import.js do. The native command owns unzipping the
+//docx to a temp directory and reading document.xml/footnotes.xml out of it, and returns their text
+//- never a path, so the unzip destination cannot leak across this boundary. Everything below is
+//pure string/DOM work with no OS dependency and stays exactly where it was.
+var platform = createPlatform(createNodeBacking({}));
 
-    var docInText = fs.readFileSync(xmlDir + '/document.xml', 'utf8');
-    var docDom = parseDocx(docInText);
-
-    var fnDom = getFootnotes(xmlDir);
+function importDocx(filepath, split, cback){
+  platform.importDocx({ path: filepath }).then(function(result){
+    var docDom = parseDocx(result.documentXml);
+    var fnDom = result.footnotesXml == null ? null : parseDocx(result.footnotesXml);
 
     var deltas = docxToDelta(docDom, fnDom, split);
 
     cback(deltas);
-  })
-}
-
-function getFootnotes(dir){
-  var fnDom = null;
-
-  if(fs.existsSync(dir + '/footnotes.xml')){
-    var fnInText = fs.readFileSync(dir + '/footnotes.xml', 'utf8');
-    var fnDom = parseDocx(fnInText);
-  }
-
-  return fnDom;
-}
-
-function tempUnzipDocx(filepath, sysDirectories, callback){
-  var unzipDestination = sysDirectories.temp + '/docxguts';
-  fs.createReadStream(filepath)
-  .on('error', logError)
-  .pipe(unzipper.Extract({ path: unzipDestination }))
-  .on('error', logError)
-  .on('close', function(){
-    callback(unzipDestination + '/word');
-  });
+  }).catch(logError);
 }
 
 function docxToDelta(docDom, fnDom, split = false){

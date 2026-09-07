@@ -14,6 +14,11 @@
 
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
+//Neither has a browser build (see the inventory's group F/G/H notes), which is why extractZip,
+//importDocx, buildEpub and archiveProject are native by necessity rather than by convenience.
+const unzipper = require('unzipper');
+const archiver = require('archiver');
 const { CODES, PlatformError, fromNodeError } = require('./platform');
 const { sanitizeFilename } = require('./utils');
 //Only the legacy-format pair is needed here. Everything else about key handling - derivation,
@@ -50,6 +55,12 @@ const DICTIONARIES_DIR = 'dictionaries';
 const SHARED_DICT_BASENAME = 'en_US-large';
 const PERSONAL_DICT_FILENAME = 'personal.dic';
 const PERSONAL_DICT_SEED = 'WareWoolf\n';
+
+//Group H: backup archives. Timestamp shape and extension moved here verbatim from
+//backup-project.js's own getTimeStamp()/ARCHIVE_EXTENSION - allocating the archive's name is now
+//this command's job, the same reason saveChapterAtomic allocates a chapter's filename instead of
+//taking one.
+const ARCHIVE_EXTENSION = '.zip';
 
 //`services` maps a credential service name to the directory its store lives in. Only 'email' exists
 //today, in userData, which is exactly where credential-store.js already keeps credentials.json and
@@ -125,6 +136,22 @@ function createNodeBacking(deps){
     moveEntry: moveEntry,
     copyEntry: copyEntry,
     deleteEntry: deleteEntry,
+
+    // --- F. Import -----------------------------------------------------------------------
+    readTextFile: readTextFile,
+    extractZip: extractZip,
+    importDocx: importDocx,
+
+    // --- G. Export and compile ----------------------------------------------------------
+    ensureDirectory: ensureDirectory,
+    writeTextFile: writeTextFile,
+    writeBinaryFile: writeBinaryFile,
+    buildEpub: buildEpub,
+
+    // --- H. Backup -----------------------------------------------------------------------
+    archiveProject: archiveProject,
+    listBackups: listBackups,
+    pruneBackups: pruneBackups,
 
     // --- I. Spellcheck -----------------------------------------------------------------------
     loadDictionary: loadDictionary,
@@ -684,6 +711,232 @@ function createNodeBacking(deps){
 
     if(fs.existsSync(p))
       fs.rmSync(p, { recursive: args.recursive === true, force: true });
+  }
+
+  // ------------------------------------------------------------------------------------------
+  // Group F (import)
+  // ------------------------------------------------------------------------------------------
+
+  function readTextFile(args){
+    var p = normalizePath(args == null ? undefined : args.path, 'path');
+    return fs.readFileSync(p, 'utf8');
+  }
+
+  //unzipper has no browser build, so extracting a zip stays native by necessity. destPath defaults
+  //to zipPath with its trailing ".zip" stripped, matching file-manager.js's own unzipProject -
+  //every caller today supplies destPath explicitly, so this only matters for a future one that
+  //doesn't.
+  function extractZip(args){
+    return new Promise(function(resolve, reject){
+      var zipPath = normalizePath(args == null ? undefined : args.zipPath, 'zipPath');
+      var destPath = args.destPath == null
+        ? zipPath.replace(/\.zip$/i, '')
+        : normalizePath(args.destPath, 'destPath');
+
+      fs.createReadStream(zipPath)
+        .on('error', function(err){ reject(fromNodeError(err, { command: 'extractZip' })); })
+        .pipe(unzipper.Extract({ path: destPath }))
+        .on('error', function(err){ reject(fromNodeError(err, { command: 'extractZip' })); })
+        .on('close', function(){ resolve({ path: destPath }); });
+    });
+  }
+
+  //Unzips the docx into a directory this command owns start to finish - fs.mkdtempSync rather than
+  //a fixed name under sysDirectories.temp, so two imports in flight (or one that crashed mid-import)
+  //can never collide - reads out document.xml/footnotes.xml, and removes the directory again before
+  //resolving. The caller (docx-import.js) gets XML text, never a path: the unzip destination is not
+  //allowed to leak across the boundary, which is also why this cleans up after itself rather than
+  //leaving guts behind the way the old tempUnzipDocx('.../docxguts') did.
+  function importDocx(args){
+    return new Promise(function(resolve, reject){
+      var filepath = normalizePath(args == null ? undefined : args.path, 'path');
+      var unzipDestination = fs.mkdtempSync(path.join(os.tmpdir(), 'warewoolf-docx-'));
+
+      function cleanup(){
+        try{
+          fs.rmSync(unzipDestination, { recursive: true, force: true });
+        }
+        catch(cleanupErr){
+          log(cleanupErr);
+        }
+      }
+
+      fs.createReadStream(filepath)
+        .on('error', function(err){ cleanup(); reject(fromNodeError(err, { command: 'importDocx' })); })
+        .pipe(unzipper.Extract({ path: unzipDestination }))
+        .on('error', function(err){ cleanup(); reject(fromNodeError(err, { command: 'importDocx' })); })
+        .on('close', function(){
+          try{
+            var wordDir = path.join(unzipDestination, 'word');
+            var documentXml = fs.readFileSync(path.join(wordDir, 'document.xml'), 'utf8');
+            var footnotesPath = path.join(wordDir, 'footnotes.xml');
+            var footnotesXml = fs.existsSync(footnotesPath) ? fs.readFileSync(footnotesPath, 'utf8') : null;
+
+            resolve({ documentXml: documentXml, footnotesXml: footnotesXml });
+          }
+          catch(readErr){
+            reject(fromNodeError(readErr, { command: 'importDocx' }));
+          }
+          finally{
+            cleanup();
+          }
+        });
+    });
+  }
+
+  // ------------------------------------------------------------------------------------------
+  // Group G (export and compile)
+  // ------------------------------------------------------------------------------------------
+
+  //Idempotent, same as createDirectory in group E - an existing target is left alone rather than
+  //rejected.
+  function ensureDirectory(args){
+    var p = normalizePath(args == null ? undefined : args.path, 'path');
+    if(!fs.existsSync(p))
+      fs.mkdirSync(p);
+  }
+
+  function writeTextFile(args){
+    var p = normalizePath(args == null ? undefined : args.path, 'path');
+    requireText(args.contents, 'contents');
+    fs.writeFileSync(p, args.contents, 'utf8');
+  }
+
+  //bytes crosses as whatever the caller's buffer already is (a Node Buffer today; a serialized
+  //byte array once this runs over IPC/Tauri) - Buffer.from accepts either.
+  function writeBinaryFile(args){
+    var p = normalizePath(args == null ? undefined : args.path, 'path');
+    if(args == null || args.bytes == null)
+      throw PlatformError(CODES.INVALID_ARGUMENT, 'Expected bytes to write.');
+
+    fs.writeFileSync(p, Buffer.isBuffer(args.bytes) ? args.bytes : Buffer.from(args.bytes));
+  }
+
+  //archiver has no browser build, so zipping stays native. entries are already-generated text -
+  //epub.js keeps every bit of OPF/NCX/TOC/escaping logic and hands over finished file contents, not
+  //chapters to assemble - see the correction note on this command in platform.js.
+  //
+  //Resolves on the *write stream's* 'close', not archiver's 'finish' - 'finish' only means archiver
+  //pushed its last bytes into the pipe, not that fs flushed them to disk. Resolving on 'finish' would
+  //risk handing off a truncated .epub that looks successful until a reader (or email-doc.js, which
+  //attaches the result) opens it. This is the single most load-bearing line in this function.
+  function buildEpub(args){
+    return new Promise(function(resolve, reject){
+      var filepath = normalizePath(args == null ? undefined : args.filepath, 'filepath');
+      var entries = args.entries == null ? [] : args.entries;
+
+      var output = fs.createWriteStream(filepath);
+      var archive = archiver('zip', { zlib: { level: 9 } });
+      var settled = false;
+
+      //An output-stream failure and archiver's own 'error' can both fire for the same underlying
+      //problem; guard against settling the promise twice.
+      function settle(action, value){
+        if(settled) return;
+        settled = true;
+        action(value);
+      }
+
+      archive.on('warning', function(err){ log(err); });
+      archive.on('error', function(err){ settle(reject, fromNodeError(err, { command: 'buildEpub' })); });
+      output.on('error', function(err){ settle(reject, fromNodeError(err, { command: 'buildEpub' })); });
+      output.on('close', function(){ settle(resolve, undefined); });
+
+      archive.pipe(output);
+
+      entries.forEach(function(entry){
+        //The epub spec requires the "mimetype" entry to be first and stored uncompressed - a zip
+        //container detail, not something epub.js's callers should have to know to ask for.
+        archive.append(entry.content, { name: entry.name, store: entry.name === 'mimetype' });
+      });
+
+      archive.finalize();
+    });
+  }
+
+  // ------------------------------------------------------------------------------------------
+  // Group H (backup)
+  // ------------------------------------------------------------------------------------------
+
+  function archiveTimestamp(){
+    var d = new Date();
+
+    function ldZero(num){
+      num = num.toString();
+      return num.length < 2 ? '0' + num : num;
+    }
+
+    return d.getFullYear().toString() + ldZero(d.getMonth() + 1) + ldZero(d.getDate())
+      + ldZero(d.getHours()) + ldZero(d.getMinutes()) + ldZero(d.getSeconds());
+  }
+
+  //Allocates the archive's filename itself (title + timestamp + extension) rather than taking one,
+  //the same reason saveChapterAtomic allocates a chapter's filename. Same 'close'-not-'finish'
+  //correctness requirement as buildEpub above - the original backup-project.js archiveProject
+  //listened on archiver's 'finish', which risked a truncated backup archive; corrected here rather
+  //than carried over.
+  //Uses path.join rather than the group B/C convention of concatenating onto a trailing-slash-
+  //terminated directory - projectDir/destDir here are not guaranteed to end in one (email-doc.js
+  //passes os.tmpdir() as destDir, which does not), and unlike saveProjectAs's returned directory,
+  //nothing downstream depends on this command's paths being forward-slash-normalized.
+  function archiveProject(args){
+    return new Promise(function(resolve, reject){
+      var projectDir = args == null ? undefined : args.projectDir;
+      requireText(projectDir, 'projectDir');
+      requireText(args.destDir, 'destDir');
+      requireText(args.filename, 'filename');
+      var chapsDir = args.chapsDir == null ? '' : args.chapsDir;
+
+      var archiveName = args.filename.replace(PROJECT_EXT, '') + archiveTimestamp() + ARCHIVE_EXTENSION;
+      var destPath = path.join(args.destDir, archiveName);
+
+      var output = fs.createWriteStream(destPath);
+      var archive = archiver('zip', { zlib: { level: 9 } });
+      var settled = false;
+
+      function settle(action, value){
+        if(settled) return;
+        settled = true;
+        action(value);
+      }
+
+      archive.on('warning', function(err){ log(err); });
+      archive.on('error', function(err){ settle(reject, fromNodeError(err, { command: 'archiveProject' })); });
+      output.on('error', function(err){ settle(reject, fromNodeError(err, { command: 'archiveProject' })); });
+      output.on('close', function(){ settle(resolve, { filename: archiveName, path: destPath }); });
+
+      archive.pipe(output);
+      archive.file(path.join(projectDir, args.filename), { name: args.filename });
+      archive.directory(path.join(projectDir, chapsDir), chapsDir === '' ? false : chapsDir);
+      archive.finalize();
+    });
+  }
+
+  //Same shape as listDirectory (group E), kept as its own command deliberately - see the note on it
+  //in platform.js.
+  function listBackups(args){
+    var dir = normalizePath(args == null ? undefined : args.directory, 'directory');
+
+    return fs.readdirSync(dir, { withFileTypes: true }).map(function(entry){
+      return { name: entry.name, isDirectory: entry.isDirectory() };
+    });
+  }
+
+  //One bad path is logged and does not stop the rest, matching deleteOldBackups' original
+  //per-file try/catch (backup-project.js's old deleteFile()).
+  function pruneBackups(args){
+    var paths = args == null || args.paths == null ? [] : args.paths;
+
+    paths.forEach(function(p){
+      try{
+        var normalized = normalizePath(p, 'paths[]');
+        if(fs.existsSync(normalized))
+          fs.rmSync(normalized, { recursive: true, force: true });
+      }
+      catch(err){
+        log(err);
+      }
+    });
   }
 
   // ------------------------------------------------------------------------------------------
