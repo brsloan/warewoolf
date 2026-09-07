@@ -574,10 +574,9 @@ untouched, exactly as planned — deferred to Phase 8.
 Verified: suite is now **876** (one new test, covering `logError` staying
 inert and non-throwing when nothing has configured a platform yet).
 
-**Part 2 is at Phase 4, complete. Suite is 920.** Groups A, B, C, D's error-log
-slice and J are implemented in `platform-node.js`; the rest of D, plus E, F, G,
-H, I and K, still reject with `NOT_IMPLEMENTED` naming their group. Phase 5 is
-clear to start.
+**Part 2 is at Phase 5, complete. Suite is 920.** Groups A, B, C, D, E, I and J
+are implemented in `platform-node.js`; F, G, H and K still reject with
+`NOT_IMPLEMENTED` naming their group. Phase 6 is clear to start.
 
 **Phase 4 — Groups B and C (projects, chapters) — done.** The core, and the
 best-tested. Line references were re-verified against the current tree before any
@@ -692,8 +691,125 @@ or from the open project could be the very thing that failed. It has no dismiss
 button: there is no working app behind it. The rejection is re-thrown after
 reporting so `ready` still rejects.
 
-**Phase 5 — Rest of D, then I and E.** Settings, corkboard, spellcheck
-dictionaries, file browser.
+**Phase 5 — Rest of D, then I and E — done.** Settings, corkboard, error-log
+licenses, spellcheck dictionaries, the in-app file browser. Line references were
+spot-checked against the current tree rather than re-derived wholesale, and held:
+`user-settings.js:73/:83-84`, `corkboard.js:46-47/:61`, `about_display.js:123-124`,
+`spellcheck.js:19-20/:22/:38-44/:93/:105`, and every `file-manager.js` reference.
+
+**One more contract correction, the same shape as Phase 4's two.**
+`loadCorkboard`/`saveCorkboard` were declared taking/returning parsed `card[]`,
+which would have moved `parseCardsString`/`generateCardsString` - the
+marker-escaping logic for card labels that collide with `# ` or `[x] `/`[<digit>]
+` - into `platform-node.js`. That is exactly the class of format-parsing logic
+groups B and C already keep out of the backing: `loadChapter`/`saveChapter` cross
+raw text, not a parsed chapter, for the same reason. Corrected to raw text, params
+renamed `chaptersDir`/`contents` (the corkboard file lives beside the chapters,
+not the `.woolf`, so `projectDir` was the wrong name too) - `corkboard.js` keeps
+parsing exactly as before, just behind an `await`. Recorded in `platform.js`.
+
+**Two designs, not one, for how a module reaches the node backing.** Group A's
+"second independent instance" pattern (keybindings.js, Phase 2) turned out to
+generalize into two distinct shapes, not a single new rule:
+
+- **A module with no natural per-call path argument** (many scattered call sites,
+  no local directory info) takes the shared `nodePlatform` instance via a
+  `setPlatform()` it exports, exactly like `error-log.js`. `user-settings.js` is
+  this shape - `loadUserSettings()`/`saveUserSettings()` are parameterless on the
+  contract (the backing owns the path), so a per-call instance would have nowhere
+  to get `paths.userData` from that render.js doesn't already have. Wired
+  alongside the other three `setPlatform()` calls in `loadPlatformState()`.
+- **A module whose commands take no injected config at all** - every argument is
+  already a full path or is irrelevant to the command (group E's browsing
+  primitives; corkboard's `chaptersDir`) - holds its own standing
+  `createPlatform(createNodeBacking({}))` at module scope and needs no wiring
+  from render.js whatsoever. `corkboard.js`, `file-manager.js` and
+  `missing-pups_display.js` are this shape.
+- **spellcheck.js is neither.** `loadDictionary()`/`loadPersonalDictionary()`/
+  `savePersonalDictionary()` need `paths.app`/`paths.userData`, but every call
+  site here already receives `sysDirectories` as an ordinary argument (unlike
+  error-log's ~98 call sites, which have no such thing to hand it). So it builds
+  a platform from that argument per call, the same instinct as the "second
+  independent instance" but keyed off data already in hand rather than off a
+  wiring point in `loadPlatformState()`. This also meant `spellcheck.test.js`
+  needed almost no restructuring - it already threaded a different
+  `sysDirectories` through every test.
+
+**Group E stayed generic, on purpose - and stripping it down to the primitives
+means the app-specific policy that used to live inside `fs` calls now lives in
+`file-manager.js` instead of disappearing.** Two collision policies used to be
+two different bare `fs.renameSync` call sites with two different behaviors -
+renaming refused an existing destination, cutting and pasting silently
+uniquified onto one. `moveEntry` implements only the stricter policy (refuse,
+reject `ALREADY_EXISTS`) because a generic command can only have one collision
+rule; `moveFiles`' cut-paste auto-uniquify is renderer-side logic built from
+`pathExists`/`statEntry`, the same way `copyFiles`' uniquifying always was. The
+refuse-on-existing-destination guard itself (`file-manager.js:54-56` before this
+phase) moved into `moveEntry` unchanged in behavior, verified by mutation:
+deleting the guard's `fs.existsSync` check passes every test except the one
+written for it (`renameFiles regression: refuses to overwrite...`), which fails
+exactly as expected.
+
+`listDirectory`'s `isDirectory` crosses as a plain boolean, not a dirent's
+`isDirectory()` method - a function cannot survive IPC/Tauri serialization. Every
+caller (`file-manager_display.js`, `file-dialog_display.js`,
+`missing-pups_display.js`, and their tests) changed from `.isDirectory()` to
+`.isDirectory` accordingly. The dotfile filter `getFileList()` used to apply
+stayed in `file-manager.js` rather than moving into the generic `listDirectory`
+command, for the same reason the collision policies did.
+
+**`getAllSubdirs()` in `missing-pups_display.js` was already dead code** - defined,
+recursive, and never called by anything (`getAvailableSubdirs()` only ever used
+its sibling `getFirstLevelDirs()` directly). Converting it to the async
+`listDirectory` call would have left a function whose recursive self-calls
+silently assigned a `Promise` where an array was expected - a landmine for
+whoever next touched this file, and Phase 9's audit would have had no build-time
+way to catch it either. Deleted rather than converted.
+
+**The two things flagged as boot/UI-order surprises going in, resolved:**
+
+- `user-settings.js` loads during `loadPlatformState()`, before `initialize()` -
+  already true since Phase 2's boot rewrite. Making `load()`/`save()` async meant
+  one line changed at the call site (`userSettings = await
+  getUserSettings(...).load();`); the boot ordering itself needed no rework.
+- `file-dialog_display.js`'s `populateFileList()` no longer lists its directory
+  in the same tick the dialog opens - `getFileList()` now always resolves on a
+  microtask, even against the node backing. `showFileDialog()` became `async`
+  and its callers (`saveProjectAs`/`saveProjectCopy`/`openAProject` in
+  `render.js`) don't await it (unchanged - the dialog reports through its
+  callback, not its return value), so it gained a `.catch(reportDetachedFailure)`
+  instead. `render.test.js`'s docsDir comment survives unchanged - the directory
+  still has to exist, just not synchronously within the triggering call - and four
+  tests needed a `flushMicrotasks()` added after opening a dialog, matching the
+  pattern already used elsewhere in that file for other async menu commands.
+
+**The async ripple was, again, mostly in test bodies.** Every synchronous
+assertion that followed a call into `corkboard_display.js`, `spellcheck_display.js`,
+`file-manager_display.js`, `file-dialog_display.js` or `missing-pups_display.js`
+had to either await the call directly or `flushMicrotasks()` afterward - the
+`getFileList`/`getCardsFromFile`/`runSpellcheck` mocks in these suites already
+returned plain values rather than promises, and `await` on a plain value still
+defers to the next microtask, so every one of these tests needed the same
+mechanical fix Phase 4 needed for chapter reads. One correctness bug surfaced by
+this, not by a test: `missing-pups_display.test.js`'s `deleteBtn.onclick()`
+handler runs `removeChapterFromProject()` synchronously before its first
+`await`, so state assertions right after a click kept passing even
+unmodified - but the *rest* of the handler (`fillMissingChapsList`/`fillFileList`,
+both async now) kept running after the test function returned, throwing
+`ReferenceError: document is not defined` into an unhandled rejection once
+`test.afterEach` tore down `global.document`. Fixed by awaiting those specific
+`onclick()` calls rather than firing-and-forgetting them.
+
+**Verified as a packaged build**, per the "green suite has twice failed to
+predict a working artifact" lesson: an `electron-forge package` build launched
+against a clean `--user-data-dir`, materialized the Frankenstein example
+correctly (confirming `loadPlatformState()`'s boot order still holds with
+`user-settings.js` in it), and two of this phase's own conversions were
+exercised live rather than only under the test suite - the File Manager
+(Ctrl+Shift+F) listed and navigated real directories on disk through the
+converted `listDirectory`, and Spell Check (Ctrl+7) loaded the real shipped
+dictionary through `loadDictionary()`/`loadPersonalDictionary()` and flagged a
+real misspelling with real suggestions. No error log was written by either.
 
 **Phase 6 — Groups F, G, H.** Import, export, backup.
 

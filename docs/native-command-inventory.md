@@ -248,13 +248,25 @@ error; until then this is what holds it.
 | Command | Replaces |
 |---|---|
 | `loadUserSettings()` / `saveUserSettings(obj)` | `user-settings.js:73`, `:83-84` |
-| `loadCorkboard(projectDir)` / `saveCorkboard(projectDir, cards)` | `corkboard.js:46-47`, `:61` |
+| `loadCorkboard(chaptersDir)` / `saveCorkboard(chaptersDir, contents)` | `corkboard.js:46-47`, `:61` |
 | `logError(text)` | append + size rotation, `error-log.js:43-46` |
 | `readErrorLog()` / `clearErrorLog()` | `error-log.js:61-62`, `:76-77` |
 | `readLicenses()` | `about_display.js:123-124` |
 
 `logError` is called from nearly every module. Making it async is the widest
 blast radius of any single item here — worth converting on its own commit.
+
+**(corrected in Phase 5)** `loadCorkboard`/`saveCorkboard` were published taking
+a project directory and parsed `card[]`. Both were wrong, for the same reason
+Phase 4 corrected `saveChapterAtomic` and `saveProjectAs`: the signature here was
+a hypothesis read off the call site, not a specification. The corkboard file
+lives beside the chapters, not the `.woolf`, so the argument is `chaptersDir`.
+And taking/returning `card[]` would have moved `parseCardsString`/
+`generateCardsString` — the marker-escaping logic for labels that collide with
+`# ` or `[x] `/`[<digit>] ` — into the backing, which is exactly the class of
+format-parsing work groups B and C keep out of it (`loadChapter`/`saveChapter`
+cross raw text, not a parsed chapter, for the same reason). Both commands cross
+raw text instead; `corkboard.js` parses it exactly as before, behind an `await`.
 
 ---
 
@@ -278,6 +290,32 @@ domain-level rule above.
 Under Tauri these need an explicit FS scope. Since the user picks arbitrary
 project locations, expect a runtime scope grant on directory selection rather
 than a static allowlist.
+
+**(Phase 5 note)** `backup-project.js`'s own `readdirSync`/`rmSync` calls
+(`:130`, `:120-121`) are *not* converted by this phase, despite appearing in the
+table above — they back group H's own `listBackups`/`pruneBackups` (Phase 6),
+which happen to do similar filesystem work but are domain-level backup commands,
+not the generic browser. Phase 5 converted `file-manager.js` (the keyboard-driven
+browser proper) and `missing-pups_display.js`'s own direct `fs` calls, which are
+the same generic browsing operation applied to the missing-chapters repair
+screen.
+
+**`isDirectory` crosses as a plain boolean**, not a dirent's `isDirectory()`
+method — a function cannot survive IPC/Tauri serialization. Every caller of
+`listDirectory` (via `file-manager.js`'s `getFileList()`) reads `.isDirectory`
+as a property now, not a call.
+
+**`moveEntry` implements only one collision policy: refuse.** The renderer used
+to have *two* — renaming refused an existing destination
+(`file-manager.js:54-56`), cutting and pasting silently uniquified onto one
+(`makeFilenameUniqueIfExists`). A single generic command can only carry one
+rule, so `moveEntry` keeps the stricter one and rejects `ALREADY_EXISTS`; the
+auto-uniquify policy `moveFiles` (cut/paste) wants is computed in
+`file-manager.js` from `pathExists`/`statEntry` before calling `moveEntry`, the
+same way `copyFiles` already built its own uniquified name. The refuse guard
+itself is verified by mutation: removing its `fs.existsSync` check in
+`platform-node.js` fails exactly the test written for it
+(`renameFiles regression: refuses to overwrite...`) and nothing else.
 
 ---
 
