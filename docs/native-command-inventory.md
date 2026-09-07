@@ -29,10 +29,22 @@ purposes at once:
 `src/components/controllers/platform-host.js` is the main-process half;
 `src/index.js` registers one `ipcMain.handle` per entry in `COMMANDS`, from the
 table itself. Every command in this document now crosses a process boundary in
-the running app, and the node backing runs in the main process. `contextIsolation`
-is still `false` and `nodeIntegration` still `true` — that is Phase 9b, shipped
-separately on purpose so a failure is attributable to the bridge or to the flag
-and not to both at once.
+the running app, and the node backing runs in the main process.
+
+**As of Phase 9b the flag is flipped.** `contextIsolation: true`,
+`nodeIntegration` gone, `--platform=browser`. `require`, `module`, `process`,
+`Buffer` and `__dirname` are all `undefined` in the page, verified on a packaged
+build, and `window.warewoolf` is the only thing that reaches the main process. The
+renderer is now untrusted in the sense the whole exercise was for — which also
+means every command below is an interface offered to untrusted code, and the two
+places that matters most are group E (generic by design, see its own note) and
+group K's `installUpdate` (which escalates privilege, and whose guard 9b's
+security review found forgeable — see the Phase 9b write-up in
+`upgrade-and-isolation-plan.md`).
+
+`sandbox` is still `false`, but it is an explicit line now rather than a
+consequence of `nodeIntegration: true`. Turning it on passes the same driven
+checks on Windows; it is gated on the Pi pass, for the reasons recorded there.
 
 The commands are written at **domain level**, not filesystem level, deliberately.
 A bridge that exposes `writeFile(path, data)` is a renaming of the current
@@ -61,22 +73,31 @@ node-free set.
 - Renderer-side Node dependencies: `fs`, `path`, `os`, `crypto`, `https`,
   `child_process`, `archiver`, `unzipper`, `nodemailer`.
 
-**Where it stands after Phase 9a**, read off the built `render.bundle.js` rather
+**Where it stands after Phase 9b**, read off the built `render.bundle.js` rather
 than off the source tree:
 
 - No `fs.*Sync` calls anywhere in the renderer. Zero `sendSync`. 65
   `ipcMain.handle` registrations, generated from `COMMANDS`.
-- Renderer-side Node dependencies are down to two, both on Phase 9b's list:
-  `fs` (`render.js`'s four `existsSync` checks in `loadInitialProject`) and `path`
-  (`backup-project.js`, `import.js` — pure string work on paths the caller
-  already holds, no I/O). `os`, `crypto`, `https`, `child_process`, `archiver`,
-  `unzipper` and `nodemailer` are gone, and so is `electron`: the renderer does
-  not reach `ipcRenderer` at all, only `window.warewoolf`.
-- `crypto.js`, `credential-store.js` and `platform-node.js` have left the bundle
-  entirely. `secure-storage.js` is deleted outright, along with the three
+- **Renderer-side Node dependencies: none.** Not "only builtins" — nothing is
+  external at all, not a builtin, not `electron`, not a `node_modules` package. A
+  test asserts the empty list, and `--platform=browser` makes a survivor a build
+  error rather than a silent external. 9a's last two went in 9b: `fs`
+  (`render.js`'s four `existsSync` checks) became `pathExists`, and `path` became
+  `path-utils.js` — local string helpers extracted from the ones
+  `file-manager.js` already had, composing with `/` on every host rather than with
+  the host separator.
+- `crypto.js`, `credential-store.js` and `platform-node.js` left the bundle in 9a.
+  `secure-storage.js` is deleted outright, along with the three
   `secure-storage-*` `sendSync` channels it drove — group J predicted that
   ("the existing `secure-storage-encrypt` / `-decrypt` IPC pair disappears into
   these"), and this is where it happened.
+- **`crypto.js` and `credential-store.js` are still live code, in the main
+  process.** 9a recorded them as "already gone", which is true of the renderer and
+  easy to misread as unused: `platform-node.js:37-38` requires both, and group J's
+  `storeCredential`/`describeCredential`/`unlockCredential` (`:1069`) and
+  `migrateLegacyCredential` (`:1169`) are built on them. Deleting them was
+  considered in 9b and rejected on that evidence. Leaving the renderer relocated
+  them; it did not make them dead.
 
 ---
 
@@ -636,6 +657,27 @@ the smaller version of the same question — an SSID/passphrase the writer
 typed, not a path — and the existing discipline (argv array, no shell) already
 answers it; nothing new was needed there.
 
+**(Phase 9b, open) That guard does not hold, and the flip is what makes it
+matter.** `/security-review` over the 9b diff found the vouch forgeable in one
+extra call. `downloadUpdate` is the only producer of vouches and it takes *both*
+`url` and `destPath` from the renderer unvalidated; worse, its
+already-downloaded shortcut (`platform-node.js:1276-1280`) vouches `destPath` on
+nothing but `fs.existsSync`, with no HTTP request at all. So a renderer that
+already holds group G's conceded arbitrary write can `writeBinaryFile` a `.deb`,
+call `downloadUpdate` on that path to have it vouched, and then `installUpdate`
+it as root. The paragraph above rejects a directory allowlist because "a
+renderer-composed path could satisfy [it] by construction" — the vouch turns out
+to be satisfiable by construction too, for the same reason: the backing does not
+choose the path, the renderer does. Before Phase 9b the renderer had
+`child_process` and could spawn `sudo` itself, so there was no boundary here to
+fail; after it, this is the only remaining renderer-to-root path. Secondary, same
+function: `targetPath` is a bare argv element, so a vouched path starting with
+`-` is read by `apt` as an option. Not fixed in 9b — the fix changes this
+command's contract (the backing allocates `destPath` itself, the `url` is
+validated, the `existsSync` vouch goes, `installUpdate` gets `'--'`) and belongs
+in its own commit. See the Phase 9b write-up in
+`upgrade-and-isolation-plan.md`.
+
 **`sendEmail`'s `attachments` shape needed the same kind of correction group
 G's `buildEpub` did, for the same reason.** The inventory's own row already
 named the temp-file absorption (below) but not what that implies for the
@@ -820,6 +862,16 @@ until the last one.
    third — `index.js` failing to parse — that only a packaged build could find.
 
 9. Flip `contextIsolation: true` and drop `nodeIntegration` once nothing
-   `require`s `fs`. `src/index.js:62-63` (inside the `webPreferences` block —
-   this pointed at `:45-47` until Phase 1 re-verified it to `:54-59`, and Phase 9a
-   shifted it again by adding the `preload` entry and a comment above it).
+   `require`s `fs`. *Done in Phase 9b.* The two inherited items were as small as
+   9a predicted — `pathExists` for `render.js`'s four `existsSync` calls, local
+   helpers for `path` — and the phase's real content was elsewhere: the bundle's
+   own output format, which under `--platform=node` left a bare top-level
+   `module.exports` that only worked because `nodeIntegration` put a `module` in
+   the page, and which `render-bundle.test.js` could not see because it loaded the
+   bundle with `require()` rather than the way `index.html` does. Removing
+   `nodeIntegration` would also have enabled the OS sandbox by itself, since
+   Electron's `sandbox` default is `true` and only `nodeIntegration: true` was
+   holding it off; `sandbox: false` is written out explicitly so the flip stayed
+   one variable. Verified on a packaged Windows build over CDP, 29 checks. The Pi
+   pass is still owed, and `/security-review` left one open finding against
+   `installUpdate` — both recorded in the Phase 9b write-up.

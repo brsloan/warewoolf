@@ -13,7 +13,9 @@ jumped 18.3.15 → **44.2.0** (`9a4bdbf`).
 
 Steps 4 and 5 are done: all 26 majors' breaking changes read against the actual
 API surface, with nothing requiring a code change — `sandbox` stays false because
-`nodeIntegration: true` disables it (verified from the live docs, not assumed),
+`nodeIntegration: true` disables it (verified from the live docs, not assumed;
+that reasoning expired at Phase 9b, where `sandbox: false` became an explicit
+line rather than an inherited one — see the write-up there),
 `new-window` and the `crashed` events were already on their replacements, and
 `getSelectedStorageBackend`'s `basic_text`/`unknown` sentinels are unchanged.
 Step 6 is done, including a real writerDeck on Pi OS Lite + Xorg + Matchbox; the
@@ -248,7 +250,10 @@ Linux, since `isSecureStorageAvailable()` (`index.js:517-539`) depends on
 renderers sandboxed by default, but `nodeIntegration: true` at `index.js:55`
 implies `sandbox: false`, so behavior should be unchanged. Verify rather than
 assume — if this silently changed, nothing in the renderer would load and the
-failure would look unrelated.
+failure would look unrelated. *(This is exactly the coupling Phase 9b had to
+handle on the way out: removing `nodeIntegration` un-disables the default, so the
+flip would have enabled the OS sandbox as a side effect had it not written
+`sandbox: false` out explicitly.)*
 
 **6. Smoke pass, per platform.** The features that exercise the parts an upgrade
 can break:
@@ -1570,50 +1575,254 @@ suite's second pass through the bridge, and 31 genuinely new: 10 in
 `user-settings.test.js` for the settings-object bug, and 2 in
 `render-bundle.test.js` pinning what is left to remove at 9b.
 
-### Phase 9b — Flip the flag — outstanding
+### Phase 9b — Flip the flag — **done, with one open finding and one gap**
 
-Set `contextIsolation: true`, remove `nodeIntegration`, mark Node builtins as
-genuinely unavailable in the esbuild config so any survivor fails loudly at build
-time rather than silently at runtime.
+`contextIsolation: true`, `nodeIntegration` gone, `--platform=browser`. The
+renderer runs isolated: `require`, `module`, `process`, `Buffer` and `__dirname`
+are all `undefined` in the page, and `window.warewoolf` — invoke/on/off — is the
+only thing that reaches the main process.
 
-**That net only catches import-shaped survivors.** `--platform=browser` fails a
-surviving `require('fs')`, but a bare global read — `process.platform`,
-`__dirname`, `process.cwd()` — is not an import and compiles through verbatim
-(verified in Phase 2; see the Group A note above). Those fail at runtime
-instead, and a module-scope one stops the app from starting at all. Do not treat
-a clean build as proof the renderer is Node-free.
+**The two inherited items were small, as 9a predicted, and one of them was not.**
 
-Then audit: grep for any remaining `require` of a Node builtin in renderer code,
-**and separately for `process.`, `__dirname` and `process.cwd()`**, which the
-build will not flag. Review the preload surface for anything that leaks an
-arbitrary-path primitive. Run `/security-review` over the diff.
+`path` became `src/components/controllers/path-utils.js`. Not written from
+scratch: `file-manager.js` already had `normalizeSlashes`/`splitPath`/`basename`/
+`extAndStem`, built in Phase 5 for the same reason and already covered by that
+module's regression tests, so the file is those helpers extracted rather than a
+third implementation of them. `backup-project.js` and `import.js` use them now,
+and `file-manager.js` requires what it used to define.
 
-Full cross-platform smoke pass again, including the Pi.
+The one real decision in it was the separator, and it is the thing 9a's note
+about "pure string manipulation" understated. These helpers compose with `/`,
+always, on every host — which is not what `path.join` does. **On Windows
+`path.join('C:/Users/x/Documents', 'backups')` answers `C:\Users\x\Documents\backups`**,
+rewriting a separator the rest of the renderer had already settled on:
+`index.js:517-522` forward-slashes every entry of `sysDirectories` on the way
+out, `platform-node.js:293` normalizes every path handed to a group B/C command,
+and `utils.js`'s `convertFilepath()` normalizes anything a user types into a
+settings field. `path.join` was the one thing fighting that convention, and
+`createBackupsDirectory` is where it showed: on Windows it persisted a backslash
+`backupDirectory` into `user-settings.json` even though `docsDir` had arrived
+forward-slashed. That is the one visible behavior change in this phase. Existing
+settings are unaffected — `splitPath`/`basename`/`join` all normalize on the way
+in, and a test pins that a backslash `backupDirectory` written by an older
+version still prunes correctly.
 
-**What 9a leaves for it, all known, none needing new commands:**
+`backup-project.test.js` had been asserting
+`userSettings.backupDirectory === path.join(docsDir, 'backups')`, which is
+exactly the trap: computed with the host's own `path`, it agreed with the code on
+both platforms while pinning two different answers. It states the one answer now.
 
-- `render.js`'s four `fs.existsSync` calls in `loadInitialProject()`. `pathExists`
-  (group E) already exists; this is the one place the renderer still opens the
-  filesystem, and making the checks `await`ed is the whole change.
-- `backup-project.js` (`path.basename`/`dirname`/`join`) and `import.js`
-  (`path.basename`/`extname`). Pure string manipulation on paths the caller
-  already has — local helpers, not new commands.
-- `crypto.js` and `credential-store.js` were on this list and are **already
-  gone**: they reached the bundle only through `platform-node.js`, which left the
-  renderer when the backing moved to the main process in 9a. Confirmed by reading
-  the built bundle, not assumed.
-- `--platform=node` becomes `--platform=browser` in `build:renderer`, and every
-  surviving builtin import then fails at build time. That is the point.
-- **`test/render-bundle.test.js`'s external assertion becomes wrong.** "the
-  renderer bundle leaves only Node builtins and electron external" would pass
-  while asserting the opposite of what 9b wants, and silently stop testing
-  anything. It has to become "nothing is external at all". 9a added a second test
-  beside it pinning the exact remaining pair (`fs`, `path`) so the delta is
-  explicit rather than inferred.
-- `sandbox` is still false, and the reasoning Part 1 recorded for that
-  (`nodeIntegration: true` disables it) stops applying. `preload.js` is already
-  bundled so it survives `sandbox: true`, but whether to turn it on is a decision
-  9b has to make rather than inherit.
+`fs` was the four `existsSync` calls in `render.js`'s `loadInitialProject()`, and
+that was the small one — `pathExists` already existed and `await` was the whole
+change. The chain stays an if/else-if rather than becoming an eager
+`Promise.all`: the checks are ordered by preference, not merely grouped, and
+short-circuiting is load-bearing. No reordering was needed in
+`loadPlatformState()`; `initialize()` was already awaited inside it, after
+`error-log.setPlatform(platform)`.
+
+**`crypto.js` and `credential-store.js` were NOT deleted, and should not be.**
+9a recorded them as "already gone", and that is true of the *renderer* — they left
+the bundle when the node backing moved to the main process, verified again here at
+zero externals. But leaving the renderer relocated them; it did not make them
+dead. `platform-node.js:37-38` requires both, and uses them: `getCredentialStore`
+backs group J's `storeCredential`/`describeCredential`/`unlockCredential` at
+`:1069`, and `decryptLegacy`/`isLegacyBlob` back `migrateLegacyCredential` at
+`:1169`/`:1173` — the 2.2.1 password migration that runs on every launch on real
+machines. Deleting them would have broken credential storage and the legacy
+migration in the main process, silently for anyone who never opens the email
+dialog. "Out of the renderer" and "unused" are not the same claim, and the
+inventory now says so where it used to imply otherwise.
+
+**Two things this phase turned up that no test in the suite could have.**
+
+**The bundle format would have shipped a dead app.** esbuild with
+`--platform=node` emits CJS, and the entry point's `module.exports.ready = ...`
+survived into the output as a bare top-level statement (`render.bundle.js:29376`
+before this phase). That worked only because `nodeIntegration: true` put a
+`module` in the page. An isolated page has none, so the very first statement of
+the renderer would have thrown `ReferenceError: module is not defined` — a black
+window, no error dialog, on an app whose suite was entirely green.
+
+`render-bundle.test.js` could not have caught it, and the reason is worth
+recording: it loaded the bundle with `require()`, which is the one way the app
+never loads it. `index.html:35` loads it with a plain `<script>` tag. Under
+`require()` a `module` object is always real, so the test was structurally
+incapable of seeing the failure. The bundle is now an IIFE published under
+`--global-name=warewoolfRenderer`, and the test evaluates it with
+`vm.runInThisContext` — top-level `var` landing on the global object, exports read
+off that global, nothing supplying `module`. That last part is the assertion.
+Verified by mutation: rebuilt with the old flags, three of the bundle tests fail
+with `module is not defined`, which is the exact error the packaged app would have
+shown.
+
+This is the fifth time in this project a green suite has failed to predict a
+working artifact — after the zstd `.deb`, the untested bundle, the close/finish
+guard, and `index.js` not parsing. It is the first of the five that a test change
+caught before packaging rather than after.
+
+**Removing `nodeIntegration` would have turned the OS sandbox on by itself.**
+Electron's `sandbox` has defaulted to `true` since v20 and is disabled
+automatically only while `nodeIntegration: true` is set (`electron.d.ts:19514`).
+So dropping `nodeIntegration` without saying anything about `sandbox` would have
+been two irreversible-feeling changes in one commit — precisely what splitting 9a
+from 9b, and what keeping Part 1's forge and Electron steps apart, existed to
+avoid. `sandbox: false` is written out explicitly in the flip commit so the flip
+stayed one variable, and a test now requires it to be set explicitly rather than
+inherited.
+
+**The sandbox decision: not yet, and gated on one specific thing.**
+
+Evaluated separately after the flip was committed, on its own evidence rather than
+on argument. With `sandbox: true`, a packaged Windows build passes the same 29
+driven checks, unchanged. The flag is genuinely load-bearing and not silently
+ignored: `app.getAppMetrics()` reports the renderer (`Tab`) as `sandboxed: true`
+with it on and `sandboxed: false` with it off. `preload.bundle.js` has only
+`electron` external, which a sandboxed preload still provides, and a test pins
+that.
+
+So on Windows the answer is yes, and the cost is zero. It is **not** committed,
+for one reason: turning it on newly puts the renderer process into the OS-level
+sandbox, and on Linux that depends on machinery this project has never exercised —
+unprivileged user namespaces, or a correctly SUID `chrome-sandbox` in the
+installed tree. A `.deb` that gets that wrong fails at startup, not gracefully,
+and the Linux target runs `kiosk: true`, so the symptom is a black screen on the
+writerDeck. This project has already shipped one `.deb` that only failed on the
+device (the zstd compression bug), and the whole premise of this phase is that a
+green Windows run does not predict the Linux artifact.
+
+**The decision, recorded: turn `sandbox: true` on as its own commit, immediately
+after the Pi pass below, and re-run the driven checks on the Pi with it both off
+and on.** Not "someday" — it is one line, it is already known to work on one
+platform, and the only thing between it and shipping is the pass that phase owes
+anyway.
+
+**Verified on a packaged Windows build from a clean userData directory**, driven
+over CDP — the renderer through `--remote-debugging-port`, the main process
+through `--inspect` so menu channels could be sent the way a menu click sends
+them. 29 checks, all passing:
+
+- The isolation itself: no `require`/`module`/`process`/`Buffer`/`__dirname` in
+  the page; `window.warewoolf` has exactly `invoke`/`on`/`off`; no `ipcRenderer`
+  or `electron`; and a `Function`-constructor escape into a foreign realm finds no
+  `require` either.
+- The bundled Frankenstein example opens with its 29 chapters, materialized into
+  the clean userData rather than opened read-only from the install directory, with
+  no startup-failure popup.
+- Text typed **through Chromium's own input pipeline** lands in `Quick Start.txt`
+  on disk after File > Save, and the project file is rewritten as valid JSON with
+  29 chapters. The input pipeline is not incidental: an `editorQuill.insertText()`
+  arrives as source `'api'`, which the app's change tracking deliberately ignores,
+  so a programmatic insert leaves `hasUnsavedChanges` false and File > Save writes
+  nothing. Driving it any other way tests nothing.
+- File Manager browses a real directory; `listDirectory` returns `isDirectory` as
+  a plain boolean.
+- Spell Check loads the real 946KB dictionary across IPC.
+- `storeCredential` seals against a real `safeStorage` keystore and
+  `describeCredential` reports `hasPassword` without ever returning the secret;
+  Send via Email shows the `SAVED_SECRET` sentinel (24 chars, NUL-delimited) in the
+  password field rather than the plaintext, and no command hands the plaintext
+  back.
+- `writeTextFile`, `writeBinaryFile` (a genuine `Uint8Array`), `buildEpub` and
+  `archiveProject` all land on disk.
+- A `PlatformError`'s `code` **and** `details` cross real Electron IPC intact
+  (`NOT_FOUND` with `{command}`, `INVALID_ARGUMENT` with `{service}`), and — the
+  other half, end to end through the app's own facade — a chapter file deleted out
+  from under the running app surfaces in the error log as a `PlatformError`, not a
+  flattened `Error`.
+- An undeclared command is refused at the bridge.
+- Both menu-channel shapes reach the renderer: a plain one (`word-count-clicked`)
+  and a payload-carrying one (`about-clicked`), with its argument.
+- The error log is empty throughout, and no uncaught exceptions in the renderer.
+
+Verified: **1279 tests pass** (from 1262). 17 net new — 15 in
+`path-utils.test.js`, one in `backup-project.test.js` pinning that a backslash
+`backupDirectory` from an older settings file still resolves, and one in
+`render-bundle.test.js` asserting `index.js`'s flags directly. Two tests were
+removed rather than patched, both deliberately: "leaves only Node builtins and
+electron external", which would have gone on passing while asserting the opposite
+of this phase, and 9a's `fs`/`path` countdown, which reached zero. Every new net
+is mutation-checked — a builtin import fails the build, `nodeIntegration: true`
+fails the flag test, an implicit `sandbox` fails it too, a `join` delegating to
+Node's `path.join` fails four path tests and one backup test, and the old bundle
+format fails three bundle tests.
+
+#### Open finding from `/security-review` — renderer to root, on Linux
+
+The review found nothing wrong with the bridge itself. `preload.js` validates
+against `COMMANDS`/`EVENTS` with `hasOwnProperty` (so `constructor`/`__proto__`
+cannot be smuggled as a command name), strips the `IpcRendererEvent`, and exposes
+three functions. No live handle, function or sender crosses. `on`/`off` both
+validate, and there is no `send`/`sendSync`/`sendTo`. Every `spawn` in the main
+process uses an argv array — no shell anywhere. Group E/F/G's arbitrary-path
+primitives are the documented concession and nothing exceeds them. `path-utils.js`
+strips leading separators from every argument but the first, so a later absolute
+argument cannot reset the root.
+
+**One thing does not hold, and it is the one command that escalates privilege.**
+
+`installUpdate` runs `sudo -S apt install <path>`, and its entire defence is that
+`path` must be in `vouchedUpdatePaths`. Both this document (line 1219) and the
+inventory (group K) reject a directory allowlist or filename pattern on the
+explicit grounds that "a renderer-composed path could satisfy [them] by
+construction", and assert that "this backing watched the bytes land here" is not
+renderer-forgeable.
+
+It is. `downloadUpdate` (`platform-node.js:1269`) is the only producer of vouches
+and it takes **both** `url` and `destPath` from the renderer, unvalidated —
+`updates.js:133-137` composes `destPath` renderer-side from `downloadInfo`, which
+is parsed renderer-side too. Worse, the already-downloaded shortcut at
+`platform-node.js:1276-1280` vouches `destPath` on nothing but `fs.existsSync`,
+with no HTTP request at all. So the guard reduces to "the renderer called
+`downloadUpdate` on this path first", which is one extra IPC call:
+
+1. `writeBinaryFile` a malicious `.deb` to `/tmp/x.deb` — group G, fully conceded.
+2. `downloadUpdate({ url: <anything>, destPath: '/tmp/x.deb' })` — `existsSync` is
+   true, so it resolves immediately and vouches the path. No network traffic.
+3. `installUpdate({ path: '/tmp/x.deb', password: <anything> })` — the guard
+   passes, `dpkg` runs the package's `postinst` as root.
+
+The comment at `:1266-1268` justifies the shortcut as "a file this backing can see
+sitting at the exact path it would itself have written the release asset to". The
+premise is false: the backing does not choose that path, the renderer does.
+
+The sudo password is the only remaining obstacle, and it is weak on exactly the
+target hardware — Raspberry Pi OS commonly ships the first user with `NOPASSWD`
+sudo. Where a password is required, the renderer draws the update dialog itself
+(`install-update_display.js`), so it can ask for one. And this is not only an
+untrusted-renderer concern: the *benign* flow is equally unprotected, since
+`downloadInfo.url` comes from JSON parsed in the renderer.
+
+Secondary, same function: `targetPath` is a bare argv element, so a vouched path
+beginning with `-` is read by `apt` as an option rather than a package file
+(`-oDPkg::Pre-Invoke::=...`). The design note at `platform.js:341-342` correctly
+rules out *shell* injection but not *argument* injection.
+
+**Why this is 9b's finding and not Phase 8's.** The vouching code is Phase 8's,
+but before this flip the renderer had `child_process` and could spawn `sudo`
+itself — there was no boundary for the guard to fail at. It exists precisely so
+that this phase's boundary would hold, and post-flip it is the only remaining path
+from renderer to root. The flip is what makes it matter.
+
+**Not fixed here, deliberately.** The fix changes `downloadUpdate`'s contract:
+the backing has to allocate `destPath` itself inside an `fs.mkdtempSync` directory
+and return it (the same "the command allocates the name" discipline
+`saveChapterAtomic` and `archiveProject` already follow), the `url` has to be
+validated against the hosts the release API actually returns, the `existsSync`
+shortcut's vouch has to go, and `installUpdate` needs `'--'` before `targetPath`
+plus an absolute-path/`.deb` check. That is a contract change to a group K
+command, and it belongs in its own commit for the same reason everything else in
+this phase did.
+
+#### Outstanding
+
+- **The Pi pass has not been run.** Pi OS Lite, Xorg, Matchbox, kiosk mode, and
+  typing latency in a long chapter — none of it. The Windows pass above is real
+  and the Linux one is simply not done, so nothing here should be read as
+  cross-platform verification. This is the same gap that produced the zstd `.deb`,
+  and it is the gate on the sandbox decision above.
+- **macOS is untested too**, including the `open-file` path that
+  `fileRequestedOnOpen`'s getter form exists for.
+- The `installUpdate` finding above.
 
 ---
 
