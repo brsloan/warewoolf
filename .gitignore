@@ -2,6 +2,8 @@ node_modules/
 out/
 src/render.bundle.js
 src/render.bundle.js.map
+src/preload.bundle.js
+src/preload.bundle.js.map
 user-settings.json
 dist/
 error_log.txt

@@ -122,7 +122,11 @@ function createNodeBacking(deps){
   //running this file inside the shipped app. render.js uses platform-ipc.js for it instead; what
   //follows here exists so platform.test.js can exercise the contract's shape against injected
   //fakes, the same way it already does for secureStorage above.
+  //A value for the tests, which know it up front; a function for index.js, which does not. On macOS
+  //the 'open-file' event can set this after the backing exists, and a value read at construction
+  //would be the one from before the reader double-clicked the file.
   var fileRequestedOnOpen = options.fileRequestedOnOpen == null ? null : options.fileRequestedOnOpen;
+  var readFileRequestedOnOpen = options.getFileRequestedOnOpen || function(){ return fileRequestedOnOpen; };
   var onSetTheme = options.onSetTheme || function(){};
   var onShowAppMenu = options.onShowAppMenu || function(){};
   var onConfirmExit = options.onConfirmExit || function(){};
@@ -257,7 +261,8 @@ function createNodeBacking(deps){
   }
 
   function getFileRequestedOnOpen(){
-    return fileRequestedOnOpen;
+    var requested = readFileRequestedOnOpen();
+    return requested == null ? null : requested;
   }
 
   function setTheme(args){

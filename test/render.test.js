@@ -143,11 +143,21 @@ async function freshRender(){
 
   delete require.cache[renderPath];
   delete require.cache[keybindingsPath];
+  var ipc = makeIpcRenderer();
   require.cache[electronPath] = {
     id: electronPath,
     filename: electronPath,
     loaded: true,
-    exports: { ipcRenderer: makeIpcRenderer() }
+    exports: { ipcRenderer: ipc }
+  };
+  //Phase 9a: the platform commands cross through window.warewoolf (preload.js) rather than
+  //ipcRenderer. render.js still subscribes to the 36 menu channels on ipcRenderer directly, so both
+  //are installed here and both feed the same recorder - the bridge is a view onto the fake above,
+  //not a second one.
+  globalThis.warewoolf = {
+    invoke: ipc.invoke,
+    on: ipc.on,
+    off: ipc.removeListener
   };
   var mod = require(renderPath);
   await mod.ready;
@@ -212,6 +222,7 @@ test.afterEach(function(){
   delete require.cache[renderPath];
   delete require.cache[keybindingsPath];
   delete require.cache[electronPath];
+  delete globalThis.warewoolf;
   //Any test that flips a setting through a keyboard shortcut (font size, panel visibility,
   //typewriter mode, ...) calls userSettings.save(), which writes user-settings.json into the
   //real, shared userDataDir above - left in place, that file would leak the previous test's
@@ -1306,6 +1317,7 @@ async function renderWithLastProject(lastProject){
     loaded: true,
     exports: { ipcRenderer: ipc }
   };
+  globalThis.warewoolf = { invoke: ipc.invoke, on: ipc.on, off: ipc.removeListener };
 
   var thrown = null;
   var mod = null;
@@ -1515,12 +1527,14 @@ function bootRender(){
 
   delete require.cache[renderPath];
   delete require.cache[keybindingsPath];
+  var ipc = makeIpcRenderer();
   require.cache[electronPath] = {
     id: electronPath,
     filename: electronPath,
     loaded: true,
-    exports: { ipcRenderer: makeIpcRenderer() }
+    exports: { ipcRenderer: ipc }
   };
+  globalThis.warewoolf = { invoke: ipc.invoke, on: ipc.on, off: ipc.removeListener };
   return require(renderPath);
 }
 

@@ -1,7 +1,9 @@
 const { app, BrowserWindow, Menu, nativeTheme, safeStorage } = require('electron');
 const path = require('path');
 const { ipcMain } = require('electron');
-const { CODES } = require('./components/controllers/platform');
+const { COMMANDS, createPlatform } = require('./components/controllers/platform');
+const { createNodeBacking } = require('./components/controllers/platform-node');
+const { createCommandHost } = require('./components/controllers/platform-host');
 const isLinux = process.platform === "linux";
 const isMac = process.platform === "darwin";
 var fileRequestedOnOpen = null;
@@ -53,8 +55,13 @@ const createWindow = () => {
   const mainWindow = new BrowserWindow({
     autoHideMenuBar: true,
     webPreferences: {
+      //Phase 9a builds the bridge and leaves both flags where they were, deliberately: a failure
+      //with the bridge and the flags landing together is ambiguous between "the bridge is wrong"
+      //and "the flag broke something", which is the worst place in this project to be debugging two
+      //things at once. 9b is the flag change on its own, against a bridge already known to work.
       nodeIntegration: true,
       contextIsolation: false,
+      preload: path.join(__dirname, 'preload.bundle.js'),
       spellcheck: false,
       devTools: !app.isPackaged
     },
@@ -479,74 +486,78 @@ app.on('window-all-closed', () => {
 // In this file you can include the rest of your app's specific main process
 // code. You can also put them in separate files and import them here.
 //
-//Group A of the platform contract (src/components/controllers/platform.js). ipcMain.handle, not
-//ipcMain.on/e.returnValue - the renderer's ipc backing (platform-ipc.js) calls these through
-//invoke(), which is always a promise. A handler that fails resolves with a
-//{ __platformError: true, code, message } envelope instead of rejecting, since Electron does not
-//forward a thrown error's custom properties (only .message) across this boundary - platform-ipc.js
-//is the one place that turns the envelope back into a real PlatformError, code intact.
-function handlePlatformCommand(name, fn){
-  ipcMain.handle(name, function(event, args){
-    try{
-      return fn(args == null ? {} : args);
-    }
-    catch(err){
-      return {
-        __platformError: true,
-        code: (err && err.code) || CODES.IO_ERROR,
-        message: (err && err.message) || 'Unknown platform failure.'
-      };
-    }
-  });
+//The platform contract (src/components/controllers/platform.js), main-process side. One
+//ipcMain.handle per declared command - all 65, registered from the table itself rather than one
+//call per command, so a command cannot be added to the contract and forgotten here.
+//
+//Phase 9a moved the node backing out of the renderer and into this process. Through Phase 8 the
+//renderer held its own createNodeBacking() for groups B/C/D/E/F/G/H/I/J and reached fs directly
+//through nodeIntegration; only group A (app.getPath, nativeTheme, the menu, app.quit - none of them
+//renderer-reachable under any flag) crossed by IPC. Now everything does, which is what makes 9b a
+//flag change rather than a rewiring.
+//
+//Group A is still special, but the other way round: it is the only group whose implementation is
+//*here* rather than in the backing. platform-node.js takes those five as injected hooks, which
+//existed until now so platform.test.js could exercise the contract's shape against fakes. This is
+//what they were built for.
+//
+//A handler that fails resolves with a { __platformError, code, message, details } envelope rather
+//than rejecting - Electron forwards only .message across this boundary, and every documented
+//failure path in the contract branches on `code`. platform-host.js builds the envelope,
+//platform-ipc.js unwraps it. See either file for why that is not optional.
+var commandHost = null;
+
+//Built on the first command rather than at module load. app.getPath() wants a ready app, and
+//`fileRequestedOnOpen` is still being written to by argv parsing and the macOS 'open-file' event at
+//that point - both settled by the time a renderer can ask for anything.
+function host(){
+  if(commandHost == null)
+    commandHost = createCommandHost(createPlatform(createNodeBacking({
+      paths: {
+        userData: app.getPath('userData').replaceAll('\', '/'),
+        home: app.getPath('home').replaceAll('\', '/'),
+        temp: app.getPath('temp').replaceAll('\', '/'),
+        docs: app.getPath('documents').replaceAll('\', '/'),
+        app: __dirname.replaceAll('\', '/'),
+        downloads: app.getPath('downloads').replaceAll('\', '/')
+      },
+      secureStorage: mainSecureStorage(),
+      //A function, not the value: the renderer asks once at startup, but macOS can set this from
+      //the 'open-file' event after this backing exists, and a value captured at construction would
+      //be the one from before the file was opened.
+      getFileRequestedOnOpen: function(){ return fileRequestedOnOpen; },
+      onSetTheme: function(mode){
+        if(mode == 'system')
+          nativeTheme.themeSource = 'system';
+        else if(mode == 'dark')
+          nativeTheme.themeSource = 'dark';
+        else if(mode == 'light')
+          nativeTheme.themeSource = 'light';
+      },
+      onShowAppMenu: function(){
+        app.applicationMenu.popup({ x: 0, y: 0 });
+      },
+      onConfirmExit: function(){
+        closeConfirmed = true;
+        app.quit();
+      },
+      //Sent by render.js as the last thing it does, once every handler is registered.
+      onNotifyRendererReady: function(){
+        rendererReady = true;
+      },
+      //The backing's own channel for non-fatal internal failures (a stray stash file it could not
+      //unlink, nmcli's stderr). The renderer's backing was given no logger at all before this, so
+      //these went nowhere; console is at least visible under `npm start`.
+      logError: function(err){ console.log(err); }
+    })));
+
+  return commandHost;
 }
 
-handlePlatformCommand('getAppPaths', function(){
-  return {
-    userData: app.getPath('userData').replaceAll('\\', '/'),
-    home: app.getPath('home').replaceAll('\\', '/'),
-    temp: app.getPath('temp').replaceAll('\\', '/'),
-    docs: app.getPath('documents').replaceAll('\\', '/'),
-    app: __dirname.replaceAll('\\', '/'),
-    downloads: app.getPath('downloads').replaceAll('\\', '/')
-  };
-});
-
-handlePlatformCommand('getPlatform', function(){
-  return { platform: process.platform, arch: process.arch };
-});
-
-handlePlatformCommand('getFileRequestedOnOpen', function(){
-  return fileRequestedOnOpen;
-});
-
-handlePlatformCommand('setTheme', function(args){
-  var mode = args.mode;
-  if(mode == 'system'){
-    nativeTheme.themeSource = 'system';
-  }
-  else if(mode == 'dark'){
-    nativeTheme.themeSource = 'dark';
-  }
-  else if(mode == 'light') {
-    nativeTheme.themeSource = 'light';
-  }
-});
-
-handlePlatformCommand('showAppMenu', function(){
-  app.applicationMenu.popup({
-    x: 0,
-    y: 0
+Object.keys(COMMANDS).forEach(function(name){
+  ipcMain.handle(name, function(event, args){
+    return host().invoke(name, args);
   });
-});
-
-handlePlatformCommand('confirmExit', function(){
-  closeConfirmed = true;
-  app.quit();
-});
-
-//Sent by render.js as the last thing it does, once every handler is registered.
-handlePlatformCommand('notifyRendererReady', function(){
-  rendererReady = true;
 });
 
 //safeStorage only reaches a real OS keystore when Chromium found one at startup. On Linux with no
@@ -571,6 +582,33 @@ function isSecureStorageAvailable(){
   catch(err){
     return false;
   }
+}
+
+//The shape createNodeBacking() (and, through it, credential-store.js) wants from a keystore. Group
+//J used to reach this from the renderer over the three sendSync channels below; with the backing in
+//this process it is a direct call, and those channels are only still here because render.js keeps
+//its own backing until the renderer conversion lands.
+function mainSecureStorage(){
+  return {
+    isAvailable: isSecureStorageAvailable,
+    //base64 ciphertext, or null when the OS keystore refused or is not really there.
+    encrypt: function(text){
+      try{
+        return isSecureStorageAvailable() ? safeStorage.encryptString(text).toString('base64') : null;
+      }
+      catch(err){
+        return null;
+      }
+    },
+    decrypt: function(content){
+      try{
+        return isSecureStorageAvailable() ? safeStorage.decryptString(Buffer.from(content, 'base64')) : null;
+      }
+      catch(err){
+        return null;
+      }
+    }
+  };
 }
 
 ipcMain.on('secure-storage-available', function(e){

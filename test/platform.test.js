@@ -1,4 +1,4 @@
-const test = require('node:test');
+const nodeTest = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('node:os');
@@ -13,6 +13,8 @@ const {
   createPlatform, COMMANDS, EVENTS, CODES, PlatformError, SAVED_SECRET
 } = require('../src/components/controllers/platform');
 const { createNodeBacking, NOTES_PREPEND, OLD_VERSION_FLAG } = require('../src/components/controllers/platform-node');
+const { createIpcBacking } = require('../src/components/controllers/platform-ipc');
+const { createFakeBridge } = require('./fake-bridge');
 
 //Real temp directories, like every other test here - the facade exists so the suite can keep doing
 //this rather than growing a filesystem mock.
@@ -49,9 +51,64 @@ function backingIn(t, options){
   };
 }
 
+//---------------------------------------------------------------------------------------------
+// The two transports every test below runs against.
+//---------------------------------------------------------------------------------------------
+//
+//`direct` is what this file has always done: createPlatform over the node backing, one function
+//call, no serialization anywhere.
+//
+//`bridge` is the same suite with a real structured-clone boundary in the middle - platform-ipc.js
+//on the near side, platform-host.js on the far side, exactly the two halves the app runs. Until
+//Phase 9a there was no way to run any of these against the ipc backing at all, which meant nothing
+//in the suite said the two backings behave alike. That was the stated purpose of the Phase 5
+//backfill and it could not be fulfilled as written.
+//
+//Duplicating 119 tests would have been the other way to get here, and would have tested the copies
+//rather than the boundary. What this catches instead is the class of failure the boundary itself
+//introduces and nothing else can see: a PlatformError arriving as a plain Error with `code`
+//undefined (which turns all 65 commands' documented failures into one generic IO_ERROR and takes
+//rule 5 with them), a Buffer arriving as a Uint8Array, a Date, an undefined-vs-null, a value that
+//does not survive the clone at all - and SAVED_SECRET, which is a string with NUL bytes in it.
+//
+//A handful of tests below assert on the contract table, the source files, or createPlatform itself
+//rather than on a command's behavior; those use testOnce() and are defined for the first transport
+//only, since running them through a bridge asserts nothing new.
+const TRANSPORTS = [
+  {
+    label: 'direct',
+    suffix: '',
+    wrap: function(backing){ return createPlatform(backing); }
+  },
+  {
+    label: 'bridge',
+    suffix: ' [through the bridge]',
+    wrap: function(backing){
+      return createPlatform(createIpcBacking({ bridge: createFakeBridge(createPlatform(backing)) }));
+    }
+  }
+];
+
+TRANSPORTS.forEach(function(transport, transportIndex){
+
+//Shadows node:test's own `test` so every declaration below gets the transport's name appended
+//without 179 call sites having to say so.
+function test(name, fn){
+  nodeTest(name + transport.suffix, fn);
+}
+
+function testOnce(name, fn){
+  if(transportIndex === 0)
+    nodeTest(name, fn);
+}
+
+function wrap(backing){
+  return transport.wrap(backing);
+}
+
 function platformIn(t, options){
   const built = backingIn(t, options);
-  return { dir: built.dir, backing: built.backing, platform: createPlatform(built.backing) };
+  return { dir: built.dir, backing: built.backing, platform: wrap(built.backing) };
 }
 
 //A write stream whose 'finish' and 'close' are decoupled, for proving buildEpub/archiveProject
@@ -242,7 +299,7 @@ test('a live platform cannot be extended with an undeclared command', function(t
 //was still outstanding). A bare-bones fake backing missing one method proves the same createPlatform-
 //level property - NOT_IMPLEMENTED, not a bare "not a function" TypeError, for anything COMMANDS
 //declares but a backing does not supply - independent of which group happens to be finished.
-test('a declared command the backing does not implement rejects with NOT_IMPLEMENTED', async function(t){
+testOnce('a declared command the backing does not implement rejects with NOT_IMPLEMENTED', async function(t){
   const platform = createPlatform({ on: function(){}, off: function(){} });
   const err = await rejection(platform.checkForUpdate({}));
 
@@ -253,7 +310,7 @@ test('a declared command the backing does not implement rejects with NOT_IMPLEME
 
 //A caller must never have to both try/catch and .catch() the same command, so a backing that fails
 //before it ever returns a promise still comes back as a rejection.
-test('a backing that throws synchronously still rejects', async function(){
+testOnce('a backing that throws synchronously still rejects', async function(){
   const platform = createPlatform({
     logError: function(){ throw new Error('boom'); },
     on: function(){}, off: function(){}
@@ -266,7 +323,7 @@ test('a backing that throws synchronously still rejects', async function(){
   assert.strictEqual(err.command, 'logError');
 });
 
-test('errno codes become stable contract codes', async function(){
+testOnce('errno codes become stable contract codes', async function(){
   const cases = [
     ['ENOENT', CODES.NOT_FOUND],
     ['EACCES', CODES.PERMISSION_DENIED],
@@ -293,7 +350,7 @@ test('errno codes become stable contract codes', async function(){
 
 //A backing that already speaks the contract - the ipc and tauri ones will, having reconstituted a
 //code from the wire - must not have its code rewritten to IO_ERROR on the way out.
-test('an error that is already a PlatformError passes through unchanged', async function(){
+testOnce('an error that is already a PlatformError passes through unchanged', async function(){
   const platform = createPlatform({
     pathExists: function(){ throw PlatformError(CODES.LOCKED, 'already ours'); },
     on: function(){}, off: function(){}
@@ -325,7 +382,7 @@ test('every command is documented and takes a single object argument', function(
   });
 });
 
-test('every group in the inventory is represented', function(){
+testOnce('every group in the inventory is represented', function(){
   const groups = {};
   Object.keys(COMMANDS).forEach(function(name){
     groups[COMMANDS[name].group] = true;
@@ -363,7 +420,7 @@ test('events are validated by name and unsubscribe cleanly', function(t){
 //literal channel names index.js sends on - the ipc backing passes them straight to
 //ipcRenderer.on() - so a name that drifts from the main process subscribes to a channel nothing
 //sends, with no error anywhere. Phase 1 shipped exactly that mistake in one of the 36 entries.
-test('every event name matches a channel the main process actually sends', function(){
+testOnce('every event name matches a channel the main process actually sends', function(){
   const main = fs.readFileSync(path.join(__dirname, '..', 'src', 'index.js'), 'utf8');
   const sent = new Set(Array.from(main.matchAll(/webContents\.send\(['"]([^'"]+)['"]/g),
     function(match){ return match[1]; }));
@@ -374,14 +431,14 @@ test('every event name matches a channel the main process actually sends', funct
     'channels the main process sends that EVENTS does not declare');
 });
 
-test('the contract file itself reaches for nothing native', function(){
+testOnce('the contract file itself reaches for nothing native', function(){
   const contract = fs.readFileSync(
     path.join(__dirname, '..', 'src', 'components', 'controllers', 'platform.js'), 'utf8');
 
   assert.strictEqual(contract.indexOf('require('), -1);
 });
 
-test('createPlatform refuses to wrap nothing', function(){
+testOnce('createPlatform refuses to wrap nothing', function(){
   assert.throws(function(){
     createPlatform(null);
   }, function(err){
@@ -398,7 +455,7 @@ test('createPlatform refuses to wrap nothing', function(){
 // under test at all.
 
 test('getAppPaths returns exactly the six documented fields, field by field', async function(){
-  const platform = createPlatform(createNodeBacking({
+  const platform = wrap(createNodeBacking({
     paths: { userData: '/u', home: '/h', temp: '/t', docs: '/d', app: '/a', downloads: '/dl',
       somethingElseEntirely: 'should not leak' }
   }));
@@ -411,14 +468,14 @@ test('getAppPaths returns exactly the six documented fields, field by field', as
 });
 
 test('getPlatform reports this process\'s own platform and arch', async function(){
-  const platform = createPlatform(createNodeBacking({}));
+  const platform = wrap(createNodeBacking({}));
 
   assert.deepStrictEqual(await platform.getPlatform(), { platform: process.platform, arch: process.arch });
 });
 
 test('getFileRequestedOnOpen returns whatever the backing was constructed with, or null', async function(){
-  const withOne = createPlatform(createNodeBacking({ fileRequestedOnOpen: '/opened/via/argv.woolf' }));
-  const withNone = createPlatform(createNodeBacking({}));
+  const withOne = wrap(createNodeBacking({ fileRequestedOnOpen: '/opened/via/argv.woolf' }));
+  const withNone = wrap(createNodeBacking({}));
 
   assert.strictEqual(await withOne.getFileRequestedOnOpen(), '/opened/via/argv.woolf');
   assert.strictEqual(await withNone.getFileRequestedOnOpen(), null);
@@ -428,7 +485,7 @@ test('getFileRequestedOnOpen returns whatever the backing was constructed with, 
 //with them is entirely the injected hook's business, which is exactly what these assert.
 test('setTheme, showAppMenu, confirmExit, and notifyRendererReady call their injected hooks', async function(){
   const seen = { mode: undefined, menu: 0, exit: 0, ready: 0 };
-  const platform = createPlatform(createNodeBacking({
+  const platform = wrap(createNodeBacking({
     onSetTheme: function(mode){ seen.mode = mode; },
     onShowAppMenu: function(){ seen.menu++; },
     onConfirmExit: function(){ seen.exit++; },
@@ -444,7 +501,7 @@ test('setTheme, showAppMenu, confirmExit, and notifyRendererReady call their inj
 });
 
 test('setTheme, showAppMenu, confirmExit, and notifyRendererReady are no-ops without injected hooks', async function(){
-  const platform = createPlatform(createNodeBacking({}));
+  const platform = wrap(createNodeBacking({}));
 
   await assert.doesNotReject(platform.setTheme({ mode: 'light' }));
   await assert.doesNotReject(platform.showAppMenu({}));
@@ -1242,7 +1299,7 @@ test('saveUserSettings and loadUserSettings round-trip an object', async functio
 });
 
 test('user settings commands reject UNAVAILABLE without a userData directory configured', async function(){
-  const platform = createPlatform(createNodeBacking({}));
+  const platform = wrap(createNodeBacking({}));
 
   assert.strictEqual((await rejection(platform.loadUserSettings({}))).code, CODES.UNAVAILABLE);
   assert.strictEqual((await rejection(platform.saveUserSettings({ settings: {} }))).code, CODES.UNAVAILABLE);
@@ -1276,7 +1333,7 @@ test('the corkboard commands refuse arguments they cannot act on', async functio
 test('readLicenses returns the shipped license text', async function(t){
   const appDir = tempDir(t).replaceAll('\\', '/');
   fs.writeFileSync(appDir + 'licenses.txt', 'MIT License...', 'utf8');
-  const platform = createPlatform(createNodeBacking({ paths: { app: appDir } }));
+  const platform = wrap(createNodeBacking({ paths: { app: appDir } }));
 
   assert.strictEqual(await platform.readLicenses(), 'MIT License...');
 });
@@ -1285,9 +1342,9 @@ test('readLicenses returns the shipped license text', async function(t){
 //so this resolves empty rather than rejecting, whether there is no app directory at all or the file
 //just is not there.
 test('readLicenses returns an empty string rather than rejecting when there is nothing to read', async function(t){
-  const withoutApp = createPlatform(createNodeBacking({}));
+  const withoutApp = wrap(createNodeBacking({}));
   const emptyAppDir = tempDir(t).replaceAll('\\', '/');
-  const withApp = createPlatform(createNodeBacking({ paths: { app: emptyAppDir } }));
+  const withApp = wrap(createNodeBacking({ paths: { app: emptyAppDir } }));
 
   assert.strictEqual(await withoutApp.readLicenses(), '');
   assert.strictEqual(await withApp.readLicenses(), '');
@@ -1704,7 +1761,7 @@ test('buildEpub\'s promise resolves only once the file is immediately readable a
 //'close' back until the test says so, so the promise's state can be checked in the gap between them.
 test('buildEpub resolves on the write stream\'s "close", not on archiver\'s "finish"', async function(t){
   const output = controllableWriteStream();
-  const platform = createPlatform(createNodeBacking({ createWriteStream: function(){ return output; } }));
+  const platform = wrap(createNodeBacking({ createWriteStream: function(){ return output; } }));
 
   let settled = false;
   const finished = new Promise(function(resolve){ output.once('finish', resolve); });
@@ -1795,7 +1852,7 @@ test('archiveProject resolves on the write stream\'s "close", not on archiver\'s
   const fixture = makeBackupProjectFixture(dir);
 
   const output = controllableWriteStream();
-  const platform = createPlatform(createNodeBacking({ createWriteStream: function(){ return output; } }));
+  const platform = wrap(createNodeBacking({ createWriteStream: function(){ return output; } }));
 
   let settled = false;
   const finished = new Promise(function(resolve){ output.once('finish', resolve); });
@@ -1909,7 +1966,7 @@ function writeSharedDictionary(appDir){
 test('loadDictionary returns the shipped .aff and .dic text', async function(t){
   const appDir = tempDir(t).replaceAll('\\', '/');
   writeSharedDictionary(appDir);
-  const platform = createPlatform(createNodeBacking({ paths: { app: appDir } }));
+  const platform = wrap(createNodeBacking({ paths: { app: appDir } }));
 
   const dict = await platform.loadDictionary();
 
@@ -1918,14 +1975,14 @@ test('loadDictionary returns the shipped .aff and .dic text', async function(t){
 });
 
 test('loadDictionary rejects UNAVAILABLE without an app directory configured', async function(){
-  const platform = createPlatform(createNodeBacking({}));
+  const platform = wrap(createNodeBacking({}));
 
   assert.strictEqual((await rejection(platform.loadDictionary())).code, CODES.UNAVAILABLE);
 });
 
 test('loadDictionary rejects NOT_FOUND when the shipped dictionary files are missing', async function(t){
   const appDir = tempDir(t).replaceAll('\\', '/');
-  const platform = createPlatform(createNodeBacking({ paths: { app: appDir } }));
+  const platform = wrap(createNodeBacking({ paths: { app: appDir } }));
 
   assert.strictEqual((await rejection(platform.loadDictionary())).code, CODES.NOT_FOUND);
 });
@@ -1948,7 +2005,7 @@ test('savePersonalDictionary and loadPersonalDictionary round-trip the word list
 });
 
 test('personal dictionary commands reject UNAVAILABLE without a userData directory configured', async function(){
-  const platform = createPlatform(createNodeBacking({}));
+  const platform = wrap(createNodeBacking({}));
 
   assert.strictEqual((await rejection(platform.loadPersonalDictionary())).code, CODES.UNAVAILABLE);
   assert.strictEqual((await rejection(platform.savePersonalDictionary({ words: [] }))).code, CODES.UNAVAILABLE);
@@ -1969,7 +2026,7 @@ function releaseJson(overrides){
 }
 
 test('checkForUpdate resolves the parsed release JSON on a 200 response', async function(t){
-  const platform = createPlatform(createNodeBacking({
+  const platform = wrap(createNodeBacking({
     httpsRequest: fakeHttpsRequest({ statusCode: 200, body: releaseJson() })
   }));
 
@@ -1979,7 +2036,7 @@ test('checkForUpdate resolves the parsed release JSON on a 200 response', async 
 });
 
 test('checkForUpdate rejects IO_ERROR, with GitHub\'s own status and body, on a non-200 response', async function(t){
-  const platform = createPlatform(createNodeBacking({
+  const platform = wrap(createNodeBacking({
     httpsRequest: fakeHttpsRequest({ statusCode: 403, body: JSON.stringify({ message: 'API rate limit exceeded' }) })
   }));
 
@@ -1990,7 +2047,7 @@ test('checkForUpdate rejects IO_ERROR, with GitHub\'s own status and body, on a 
 });
 
 test('checkForUpdate rejects instead of throwing when the response body is not valid JSON', async function(t){
-  const platform = createPlatform(createNodeBacking({
+  const platform = wrap(createNodeBacking({
     httpsRequest: fakeHttpsRequest({ statusCode: 200, body: '<html>not json</html>' })
   }));
 
@@ -1999,7 +2056,7 @@ test('checkForUpdate rejects instead of throwing when the response body is not v
 });
 
 test('checkForUpdate rejects when the request itself errors', async function(t){
-  const platform = createPlatform(createNodeBacking({
+  const platform = wrap(createNodeBacking({
     httpsRequest: fakeHttpsRequest({ triggerError: new Error('ENOTFOUND api.github.com') })
   }));
 
@@ -2009,7 +2066,7 @@ test('checkForUpdate rejects when the request itself errors', async function(t){
 
 test('checkForUpdate sets a request timeout and destroys the request once it fires', async function(t){
   let capturedOptions, capturedReq;
-  const platform = createPlatform(createNodeBacking({
+  const platform = wrap(createNodeBacking({
     httpsRequest: function(options){
       capturedOptions = options;
       const req = new EventEmitter();
@@ -2038,7 +2095,7 @@ function updateFixture(t){
 test('downloadUpdate downloads a fresh asset, writes it to disk, and vouches the path', async function(t){
   const dir = updateFixture(t).dir;
   const destPath = dir + 'warewoolf_2.0.0_amd64.deb';
-  const platform = createPlatform(createNodeBacking({
+  const platform = wrap(createNodeBacking({
     httpsGet: fakeHttpsGet([{ statusCode: 200, body: 'binary-content-stand-in' }])
   }));
 
@@ -2053,7 +2110,7 @@ test('downloadUpdate resolves immediately, without a network call, when the file
   const destPath = dir + 'already-here.deb';
   fs.writeFileSync(destPath, 'already here');
   const getFake = fakeHttpsGet([]);
-  const platform = createPlatform(createNodeBacking({ httpsGet: getFake }));
+  const platform = wrap(createNodeBacking({ httpsGet: getFake }));
 
   const result = await platform.downloadUpdate({ url: 'https://example.com/x', destPath: destPath });
 
@@ -2068,7 +2125,7 @@ test('downloadUpdate follows one redirect to the real asset location', async fun
     { statusCode: 302, headers: { location: 'https://cdn.example.com/real-asset.deb' } },
     { statusCode: 200, body: 'redirected-content' }
   ]);
-  const platform = createPlatform(createNodeBacking({ httpsGet: getFake }));
+  const platform = wrap(createNodeBacking({ httpsGet: getFake }));
 
   const result = await platform.downloadUpdate({ url: 'https://github.com/release/amd64.deb', destPath: destPath });
 
@@ -2079,7 +2136,7 @@ test('downloadUpdate follows one redirect to the real asset location', async fun
 test('downloadUpdate rejects and removes the partial file when the server responds with an error status', async function(t){
   const dir = updateFixture(t).dir;
   const destPath = dir + 'missing.deb';
-  const platform = createPlatform(createNodeBacking({
+  const platform = wrap(createNodeBacking({
     httpsGet: fakeHttpsGet([{ statusCode: 404 }])
   }));
 
@@ -2091,7 +2148,7 @@ test('downloadUpdate rejects and removes the partial file when the server respon
 test('downloadUpdate rejects and removes the partial file when the request itself errors', async function(t){
   const dir = updateFixture(t).dir;
   const destPath = dir + 'flaky.deb';
-  const platform = createPlatform(createNodeBacking({
+  const platform = wrap(createNodeBacking({
     httpsGet: fakeHttpsGet([{ triggerError: new Error('socket hang up') }])
   }));
 
@@ -2108,7 +2165,7 @@ test('downloadUpdate resolves on the write stream\'s "close", not when the respo
   const dir = updateFixture(t).dir;
   const destPath = dir + 'slow-close.deb';
   const output = controllableWriteStream();
-  const platform = createPlatform(createNodeBacking({
+  const platform = wrap(createNodeBacking({
     createWriteStream: function(){ return output; },
     httpsGet: fakeHttpsGet([{ statusCode: 200, body: 'content' }])
   }));
@@ -2133,7 +2190,7 @@ test('downloadUpdate resolves on the write stream\'s "close", not when the respo
 //visible to installUpdate against the exact same instance, the way updates.js's own single standing
 //instance keeps them together in the real app.
 function updatePlatform(deps){
-  return createPlatform(createNodeBacking(deps || {}));
+  return wrap(createNodeBacking(deps || {}));
 }
 
 async function vouchedInstallerPath(platform, dir, name){
@@ -2211,7 +2268,7 @@ test('installUpdate resolves once apt closes with exit code 0', async function(t
 
 function credentialFixture(t, deps){
   const dir = tempDir(t);
-  return createPlatform(createNodeBacking(Object.assign({ paths: { userData: dir } }, deps)));
+  return wrap(createNodeBacking(Object.assign({ paths: { userData: dir } }, deps)));
 }
 
 test('sendEmail sends a literal attachment as-is', async function(t){
@@ -2266,13 +2323,13 @@ test('sendEmail rejects INVALID_ARGUMENT for SAVED_SECRET when nothing is stored
 
 test('sendEmail rejects LOCKED for SAVED_SECRET against a passphrase-protected credential nobody unlocked', async function(t){
   const dir = tempDir(t);
-  const seeded = createPlatform(createNodeBacking({ paths: { userData: dir } }));
+  const seeded = wrap(createNodeBacking({ paths: { userData: dir } }));
   await seeded.storeCredential({ service: 'email', secret: 'the-real-password', passphrase: 'hunter2' });
 
   let transportCalls = 0;
   //A fresh backing over the same directory: the passphrase-derived session key lives in the first
   //backing's own closure and never reached this one, so the credential is locked here.
-  const platform = createPlatform(createNodeBacking({
+  const platform = wrap(createNodeBacking({
     paths: { userData: dir },
     createMailTransport: function(){ transportCalls++; return { sendMail: function(){} }; }
   }));
@@ -2411,7 +2468,7 @@ function patchPowerSupplyDir(t, entriesOrThrow){
 }
 
 test('wifiListNetworks parses nmcli\'s terse output into ssid/isConnected pairs', async function(t){
-  const platform = createPlatform(createNodeBacking({
+  const platform = wrap(createNodeBacking({
     spawnProcess: fakeSpawn([{ chunks: [':aa:bb:cc:dd:ee:ff:Office\n*:aa:bb:cc:dd:ee:ff:HomeNet\n'] }])
   }));
 
@@ -2424,7 +2481,7 @@ test('wifiListNetworks parses nmcli\'s terse output into ssid/isConnected pairs'
 });
 
 test('wifiListNetworks unescapes an SSID containing a literal colon and drops blank-ssid lines', async function(t){
-  const platform = createPlatform(createNodeBacking({
+  const platform = wrap(createNodeBacking({
     spawnProcess: fakeSpawn([{ chunks: ['*:aa:bb:cc:dd:ee:ff:Office\\:5G\n:aa:bb:cc:dd:ee:ff:\n\n'] }])
   }));
 
@@ -2434,7 +2491,7 @@ test('wifiListNetworks unescapes an SSID containing a literal colon and drops bl
 });
 
 test('wifiListNetworks rejects UNAVAILABLE when nmcli is not installed', async function(t){
-  const platform = createPlatform(createNodeBacking({
+  const platform = wrap(createNodeBacking({
     spawnProcess: fakeSpawn([{ error: enoent('nmcli') }])
   }));
 
@@ -2444,7 +2501,7 @@ test('wifiListNetworks rejects UNAVAILABLE when nmcli is not installed', async f
 
 test('wifiConnect spawns nmcli with ssid/psk as separate argv elements and resolves on success', async function(t){
   const spawnFake = fakeSpawn([{ code: 0 }]);
-  const platform = createPlatform(createNodeBacking({ spawnProcess: spawnFake }));
+  const platform = wrap(createNodeBacking({ spawnProcess: spawnFake }));
 
   await platform.wifiConnect({ ssid: 'Office:5G', psk: 'p"a$s\'w`ord; rm -rf /' });
 
@@ -2456,7 +2513,7 @@ test('wifiConnect spawns nmcli with ssid/psk as separate argv elements and resol
 
 test('wifiConnect omits the password argument entirely when none is given', async function(t){
   const spawnFake = fakeSpawn([{ code: 0 }]);
-  const platform = createPlatform(createNodeBacking({ spawnProcess: spawnFake }));
+  const platform = wrap(createNodeBacking({ spawnProcess: spawnFake }));
 
   await platform.wifiConnect({ ssid: 'OpenNetwork' });
 
@@ -2464,7 +2521,7 @@ test('wifiConnect omits the password argument entirely when none is given', asyn
 });
 
 test('wifiConnect rejects IO_ERROR with nmcli\'s own output when the connection attempt fails', async function(t){
-  const platform = createPlatform(createNodeBacking({
+  const platform = wrap(createNodeBacking({
     spawnProcess: fakeSpawn([{ stderrChunks: ['Error: No network with SSID \'Office\' found.'], code: 1 }])
   }));
 
@@ -2475,14 +2532,14 @@ test('wifiConnect rejects IO_ERROR with nmcli\'s own output when the connection 
 });
 
 test('wifiConnect rejects UNAVAILABLE when nmcli is not installed', async function(t){
-  const platform = createPlatform(createNodeBacking({ spawnProcess: fakeSpawn([{ error: enoent('nmcli') }]) }));
+  const platform = wrap(createNodeBacking({ spawnProcess: fakeSpawn([{ error: enoent('nmcli') }]) }));
 
   const err = await rejection(platform.wifiConnect({ ssid: 'Office' }));
   assert.strictEqual(err.code, CODES.UNAVAILABLE);
 });
 
 test('wifiGetAddress resolves the first address reported by hostname -I', async function(t){
-  const platform = createPlatform(createNodeBacking({
+  const platform = wrap(createNodeBacking({
     spawnProcess: fakeSpawn([{ chunks: ['192.168.1.42 fe80::1\n'] }])
   }));
 
@@ -2490,13 +2547,13 @@ test('wifiGetAddress resolves the first address reported by hostname -I', async 
 });
 
 test('wifiGetAddress resolves an empty string rather than a sentinel when there is no output', async function(t){
-  const platform = createPlatform(createNodeBacking({ spawnProcess: fakeSpawn([{ chunks: [] }]) }));
+  const platform = wrap(createNodeBacking({ spawnProcess: fakeSpawn([{ chunks: [] }]) }));
 
   assert.strictEqual(await platform.wifiGetAddress(), '');
 });
 
 test('wifiGetAddress rejects UNAVAILABLE when hostname is not installed', async function(t){
-  const platform = createPlatform(createNodeBacking({ spawnProcess: fakeSpawn([{ error: enoent('hostname') }]) }));
+  const platform = wrap(createNodeBacking({ spawnProcess: fakeSpawn([{ error: enoent('hostname') }]) }));
 
   const err = await rejection(platform.wifiGetAddress());
   assert.strictEqual(err.code, CODES.UNAVAILABLE);
@@ -2509,7 +2566,7 @@ test('wifiGetAddress rejects UNAVAILABLE when hostname is not installed', async 
 //case throughout, matching every other wifi/battery command in this group.
 
 test('wifiGetConnectionState reports the wifi device\'s state and connection name', async function(t){
-  const platform = createPlatform(createNodeBacking({
+  const platform = wrap(createNodeBacking({
     spawnProcess: fakeSpawn([{ chunks: ['eth0:ethernet:connected:Wired\nwlan0:wifi:connected:HomeNet\n'] }])
   }));
 
@@ -2519,7 +2576,7 @@ test('wifiGetConnectionState reports the wifi device\'s state and connection nam
 });
 
 test('wifiGetConnectionState resolves unknown/null instead of throwing when no wifi device is present', async function(t){
-  const platform = createPlatform(createNodeBacking({
+  const platform = wrap(createNodeBacking({
     spawnProcess: fakeSpawn([{ chunks: ['eth0:ethernet:connected:Wired\n'] }])
   }));
 
@@ -2529,7 +2586,7 @@ test('wifiGetConnectionState resolves unknown/null instead of throwing when no w
 });
 
 test('wifiGetConnectionState unescapes a connection name containing a literal colon', async function(t){
-  const platform = createPlatform(createNodeBacking({
+  const platform = wrap(createNodeBacking({
     spawnProcess: fakeSpawn([{ chunks: ['wlan0:wifi:connected:My\\:Home\n'] }])
   }));
 
@@ -2539,7 +2596,7 @@ test('wifiGetConnectionState unescapes a connection name containing a literal co
 });
 
 test('wifiGetConnectionState rejects UNAVAILABLE when nmcli is not installed', async function(t){
-  const platform = createPlatform(createNodeBacking({ spawnProcess: fakeSpawn([{ error: enoent('nmcli') }]) }));
+  const platform = wrap(createNodeBacking({ spawnProcess: fakeSpawn([{ error: enoent('nmcli') }]) }));
 
   const err = await rejection(platform.wifiGetConnectionState());
   assert.strictEqual(err.code, CODES.UNAVAILABLE);
@@ -2547,14 +2604,14 @@ test('wifiGetConnectionState rejects UNAVAILABLE when nmcli is not installed', a
 
 test('wifiGetStatus resolves the trimmed radio state', async function(t){
   const spawnFake = fakeSpawn([{ chunks: ['enabled\n'] }]);
-  const platform = createPlatform(createNodeBacking({ spawnProcess: spawnFake }));
+  const platform = wrap(createNodeBacking({ spawnProcess: spawnFake }));
 
   assert.strictEqual(await platform.wifiGetStatus(), 'enabled');
   assert.deepStrictEqual(spawnFake.calls[0].args, ['radio', 'wifi']);
 });
 
 test('wifiGetStatus rejects UNAVAILABLE when nmcli is not installed', async function(t){
-  const platform = createPlatform(createNodeBacking({ spawnProcess: fakeSpawn([{ error: enoent('nmcli') }]) }));
+  const platform = wrap(createNodeBacking({ spawnProcess: fakeSpawn([{ error: enoent('nmcli') }]) }));
 
   const err = await rejection(platform.wifiGetStatus());
   assert.strictEqual(err.code, CODES.UNAVAILABLE);
@@ -2562,7 +2619,7 @@ test('wifiGetStatus rejects UNAVAILABLE when nmcli is not installed', async func
 
 test('wifiEnable spawns "nmcli radio wifi on" and resolves on success', async function(t){
   const spawnFake = fakeSpawn([{ code: 0 }]);
-  const platform = createPlatform(createNodeBacking({ spawnProcess: spawnFake }));
+  const platform = wrap(createNodeBacking({ spawnProcess: spawnFake }));
 
   await platform.wifiEnable();
 
@@ -2572,7 +2629,7 @@ test('wifiEnable spawns "nmcli radio wifi on" and resolves on success', async fu
 
 test('wifiDisable spawns "nmcli radio wifi off" and resolves on success', async function(t){
   const spawnFake = fakeSpawn([{ code: 0 }]);
-  const platform = createPlatform(createNodeBacking({ spawnProcess: spawnFake }));
+  const platform = wrap(createNodeBacking({ spawnProcess: spawnFake }));
 
   await platform.wifiDisable();
 
@@ -2580,7 +2637,7 @@ test('wifiDisable spawns "nmcli radio wifi off" and resolves on success', async 
 });
 
 test('wifiEnable rejects IO_ERROR with nmcli\'s own output when the radio command fails', async function(t){
-  const platform = createPlatform(createNodeBacking({
+  const platform = wrap(createNodeBacking({
     spawnProcess: fakeSpawn([{ stderrChunks: ['nmcli: radio control unavailable'], code: 1 }])
   }));
 
@@ -2591,7 +2648,7 @@ test('wifiEnable rejects IO_ERROR with nmcli\'s own output when the radio comman
 });
 
 test('wifiDisable rejects IO_ERROR with nmcli\'s own output when the radio command fails', async function(t){
-  const platform = createPlatform(createNodeBacking({
+  const platform = wrap(createNodeBacking({
     spawnProcess: fakeSpawn([{ stderrChunks: ['nmcli: radio control unavailable'], code: 1 }])
   }));
 
@@ -2602,14 +2659,14 @@ test('wifiDisable rejects IO_ERROR with nmcli\'s own output when the radio comma
 });
 
 test('wifiEnable rejects UNAVAILABLE when nmcli is not installed', async function(t){
-  const platform = createPlatform(createNodeBacking({ spawnProcess: fakeSpawn([{ error: enoent('nmcli') }]) }));
+  const platform = wrap(createNodeBacking({ spawnProcess: fakeSpawn([{ error: enoent('nmcli') }]) }));
 
   const err = await rejection(platform.wifiEnable());
   assert.strictEqual(err.code, CODES.UNAVAILABLE);
 });
 
 test('wifiDisable rejects UNAVAILABLE when nmcli is not installed', async function(t){
-  const platform = createPlatform(createNodeBacking({ spawnProcess: fakeSpawn([{ error: enoent('nmcli') }]) }));
+  const platform = wrap(createNodeBacking({ spawnProcess: fakeSpawn([{ error: enoent('nmcli') }]) }));
 
   const err = await rejection(platform.wifiDisable());
   assert.strictEqual(err.code, CODES.UNAVAILABLE);
@@ -2617,7 +2674,7 @@ test('wifiDisable rejects UNAVAILABLE when nmcli is not installed', async functi
 
 test('getBatteryCapacity resolves the capacity reported by the kernel for a real battery', async function(t){
   patchPowerSupplyDir(t, ['AC', 'BAT0']);
-  const platform = createPlatform(createNodeBacking({ spawnProcess: fakeSpawn([{ chunks: ['87\n'] }]) }));
+  const platform = wrap(createNodeBacking({ spawnProcess: fakeSpawn([{ chunks: ['87\n'] }]) }));
 
   assert.strictEqual(await platform.getBatteryCapacity(), 87);
 });
@@ -2628,7 +2685,7 @@ test('getBatteryCapacity rejects UNAVAILABLE, the everyday case, when there is n
     err.code = 'ENOENT';
     throw err;
   });
-  const platform = createPlatform(createNodeBacking({}));
+  const platform = wrap(createNodeBacking({}));
 
   const err = await rejection(platform.getBatteryCapacity());
   assert.strictEqual(err.code, CODES.UNAVAILABLE);
@@ -2636,7 +2693,7 @@ test('getBatteryCapacity rejects UNAVAILABLE, the everyday case, when there is n
 
 test('getBatteryCapacity rejects UNAVAILABLE when the directory exists but nothing starts with BAT', async function(t){
   patchPowerSupplyDir(t, ['AC']);
-  const platform = createPlatform(createNodeBacking({}));
+  const platform = wrap(createNodeBacking({}));
 
   const err = await rejection(platform.getBatteryCapacity());
   assert.strictEqual(err.code, CODES.UNAVAILABLE);
@@ -2646,7 +2703,7 @@ test('getBatteryCapacity rejects UNAVAILABLE when the directory exists but nothi
 //real problem (IO_ERROR), not the everyday result CODES.UNAVAILABLE exists for.
 test('getBatteryCapacity rejects IO_ERROR when a battery exists but the kernel read fails to spawn', async function(t){
   patchPowerSupplyDir(t, ['BAT0']);
-  const platform = createPlatform(createNodeBacking({ spawnProcess: fakeSpawn([{ error: new Error('spawn cat ENOENT') }]) }));
+  const platform = wrap(createNodeBacking({ spawnProcess: fakeSpawn([{ error: new Error('spawn cat ENOENT') }]) }));
 
   const err = await rejection(platform.getBatteryCapacity());
   assert.strictEqual(err.code, CODES.IO_ERROR);
@@ -2654,7 +2711,7 @@ test('getBatteryCapacity rejects IO_ERROR when a battery exists but the kernel r
 
 test('getBatteryCapacity rejects IO_ERROR when the kernel read produces non-numeric output', async function(t){
   patchPowerSupplyDir(t, ['BAT0']);
-  const platform = createPlatform(createNodeBacking({
+  const platform = wrap(createNodeBacking({
     spawnProcess: fakeSpawn([{ stderrChunks: ['cat: permission denied'], chunks: [] }])
   }));
 
@@ -2663,7 +2720,7 @@ test('getBatteryCapacity rejects IO_ERROR when the kernel read produces non-nume
 });
 
 test('the network/hardware commands refuse arguments they cannot act on', async function(t){
-  const platform = createPlatform(createNodeBacking({ spawnProcess: fakeSpawn([]) }));
+  const platform = wrap(createNodeBacking({ spawnProcess: fakeSpawn([]) }));
 
   assert.strictEqual((await rejection(platform.installUpdate({}))).code, CODES.INVALID_ARGUMENT);
   assert.strictEqual((await rejection(platform.installUpdate({ path: '/tmp/x' }))).code, CODES.INVALID_ARGUMENT);
@@ -2678,7 +2735,7 @@ test('the network/hardware commands refuse arguments they cannot act on', async 
 //filesystem at all. Anything they need has to be a declared command, which is what makes "the
 //renderer cannot write an arbitrary path" checkable rather than a convention. Phase 9 turns this
 //from a property into a build error; until then, this is what holds it.
-test('the project and chapter models no longer require anything native', function(){
+testOnce('the project and chapter models no longer require anything native', function(){
   ['models/project.js', 'models/chapter.js'].forEach(function(relative){
     const source = fs.readFileSync(
       path.join(__dirname, '..', 'src', 'components', relative.split('/')[0], relative.split('/')[1]), 'utf8');
@@ -2693,7 +2750,7 @@ test('the project and chapter models no longer require anything native', functio
 //The layout of a chapter on disk - the extension, the notes prefix, the stash name used during a
 //save - belongs to the native side now. A renderer that still spelled any of it out would be
 //deciding filenames the command is supposed to hand back.
-test('the chapter model no longer spells out how a chapter is laid out on disk', function(){
+testOnce('the chapter model no longer spells out how a chapter is laid out on disk', function(){
   const source = fs.readFileSync(
     path.join(__dirname, '..', 'src', 'components', 'models', 'chapter.js'), 'utf8');
 
@@ -2701,4 +2758,6 @@ test('the chapter model no longer spells out how a chapter is laid out on disk',
     assert.strictEqual(source.indexOf(literal), -1,
       'chapter.js still knows about ' + literal);
   });
+});
+
 });

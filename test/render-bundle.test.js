@@ -74,8 +74,17 @@ function fakeElectron(){
 
 async function loadBundle(){
   const electronPath = require.resolve('electron');
+  const electron = fakeElectron();
   require.cache[electronPath] = {
-    id: electronPath, filename: electronPath, loaded: true, exports: fakeElectron()
+    id: electronPath, filename: electronPath, loaded: true, exports: electron
+  };
+  //Phase 9a: the platform commands cross through window.warewoolf (preload.js), not ipcRenderer.
+  //Both are installed because the bundle still subscribes to the menu channels on ipcRenderer
+  //directly; the bridge is a view onto the same fake rather than a second one.
+  globalThis.warewoolf = {
+    invoke: electron.ipcRenderer.invoke,
+    on: electron.ipcRenderer.on,
+    off: electron.ipcRenderer.removeListener
   };
   delete require.cache[bundlePath];
   document.body.innerHTML = bodyShell();
