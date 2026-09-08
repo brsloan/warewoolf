@@ -10,18 +10,22 @@ const ESCAPABLE_AT_LINE_START = [/^-/, /^\+/, /^(?:\d+|[a-z])\. /];
 
 //Whether a backslash at `index` is at the start of its line, for the purpose of reading escapes.
 //Line-start list markers ("- ", "1. ") are only ever written with an escaping backslash right after
-//a paragraph's leading tabs (see escapeListMarkers), never after any other character - so "at line
-//start" means "nothing but tabs precedes this backslash", not literally index === 0.
+//a paragraph's indent (see escapeListMarkers), never after any other character - so "at line start"
+//means "nothing but indent precedes this backslash", not literally index === 0.
+//
+//Spaces count as indent alongside tabs, and have to: escapeListMarkers writes the backslash after
+//whatever indent it finds, so refusing spaces here would leave the backslash it wrote sitting in
+//the text as a literal character.
 //
 //Walks backwards rather than forwards, which is what keeps it cheap: a backslash in the middle of a
 //sentence is preceded by an ordinary character, so the very first comparison settles it. Only a
-//backslash genuinely sitting in a paragraph's opening tabs reads more than one, and there are never
-//many of those. This used to ask the same question as /^\t*$/.test(text.slice(0, index)), which
-//copied the whole preceding text on every backslash - about a fifth of the parse time on a chapter
-//dense with escaped markers, such as the MarkdownFic page of the Help doc.
-function onlyTabsPrecede(text, index){
+//backslash genuinely sitting in a paragraph's indent reads more than one, and there are never many
+//of those. This used to ask the same question as /^\t*$/.test(text.slice(0, index)), which copied
+//the whole preceding text on every backslash - about a fifth of the parse time on a chapter dense
+//with escaped markers, such as the MarkdownFic page of the Help doc.
+function onlyIndentPrecedes(text, index){
   for(let i = index - 1; i >= 0; i--)
-    if(text[i] !== '\t')
+    if(text[i] !== '\t' && text[i] !== ' ')
       return false;
 
   return true;
@@ -81,7 +85,7 @@ function tokenizeInline(text){
     var ch = text[i];
 
     if(ch === '\\'){
-      var escaped = consumeEscape(text, i, onlyTabsPrecede(text, i));
+      var escaped = consumeEscape(text, i, onlyIndentPrecedes(text, i));
       if(escaped !== null){
         buffer += escaped;
         i += 1 + escaped.length;
@@ -140,7 +144,40 @@ function tokenizeInline(text){
 }
 
 const ALIGNMENTS = { l: 'left', r: 'right', c: 'center', j: 'justify' };
-const LIST_MARKER = /^(\t*)([-*+]|(?:\d+|[a-z])\.) (.*)$/;
+const LIST_MARKER = /^([\t ]*)([-*+]|(?:\d+|[a-z])\.) (.*)$/;
+
+//Four spaces read as one tab, the way CommonMark counts an indent. WareWoolf still writes tabs, so
+//a file that came in space-indented is normalized on the first save, exactly as a '-' marker is
+//rewritten as '*'.
+const SPACES_PER_LEVEL = 4;
+
+//MarkdownFic carries three levels, and so do the .docx/.epub writers - anything deeper folds into
+//the last one. See getListLevel in quill-utils.js, which draws the same ceiling from the other end.
+const MAX_LIST_LEVEL = 2;
+
+//How deep a list item's indent puts it. A tab is a level; so is each group of four spaces, with a
+//remainder of fewer than four counting for nothing - so two spaces leave an item at the level of
+//the one above rather than nested under it.
+function indentLevelFor(indent){
+  var level = 0;
+  var spaces = 0;
+
+  for(let i = 0; i < indent.length; i++){
+    if(indent[i] === '\t'){
+      level++;
+      spaces = 0;
+      continue;
+    }
+
+    spaces++;
+    if(spaces === SPACES_PER_LEVEL){
+      level++;
+      spaces = 0;
+    }
+  }
+
+  return Math.min(level, MAX_LIST_LEVEL);
+}
 const BLOCKQUOTE_MARKER = /^>+ ?(.+)$/;
 const ALIGN_MARKER = /^\[>([lrcj])\] (.*)$/;
 const HEADER_MARKER = /^(#{1,4}) (.*)$/;
@@ -150,16 +187,26 @@ const HEADER_MARKER = /^(#{1,4}) (.*)$/;
 //regexes - only the inline styling in the remaining text needs tokenizeInline's character-by-
 //character scan. Alignment and heading markers combine (in that order); list and blockquote don't
 //combine with anything else, matching what convertDeltaToMDF below ever actually writes.
-function parseLine(line){
+//`afterListItem` says whether the line immediately above this one was a list item, and it gates one
+//thing only: whether a SPACE-indented marker opens a list.
+//
+//A tab-indented marker, or one with no indent at all, is a list item wherever it appears - that has
+//always been true and is untouched. Spaces are the addition, and they are gated because a space
+//indent is not a marker a writer opts into: fiction is full of space-indented paragraphs, imported
+//manuscripts especially (Convert Marked Tabs exists for exactly that, and defaults to four spaces).
+//A paragraph of prose that happens to open with a hyphen would otherwise become a bullet, silently
+//losing its indent and its first character. Requiring a list item directly above is CommonMark's
+//own rule - an indented item nests under something - and it keeps a lone indented paragraph prose.
+function parseLine(line, afterListItem){
   var attributes = {};
 
   var list = LIST_MARKER.exec(line);
-  if(list){
+  if(list && (afterListItem || list[1].indexOf(' ') === -1)){
     attributes.list = /^[-*+]$/.test(list[2]) ? 'bullet' : 'ordered';
-    if(list[1].length === 1)
-      attributes.indent = 1;
-    else if(list[1].length >= 2)
-      attributes.indent = 2;
+
+    var level = indentLevelFor(list[1]);
+    if(level > 0)
+      attributes.indent = level;
 
     return { attributes: attributes, runs: tokenizeInline(list[3]) };
   }
@@ -202,8 +249,14 @@ function parseMDF(str){
 
   var ops = [];
 
+  //Whether the line just parsed was a list item, which is all the context parseLine needs - see the
+  //note on it. Deliberately the line immediately above, not the last non-blank one: a blank line
+  //ends the list, which keeps the gate as narrow as it can be.
+  var afterListItem = false;
+
   lines.forEach(function(line){
-    var parsed = parseLine(line);
+    var parsed = parseLine(line, afterListItem);
+    afterListItem = parsed.attributes.list != null;
 
     parsed.runs.forEach(function(run){
       var op = { insert: run.text };
@@ -325,11 +378,16 @@ function escapeAnyMarkers(text, runIndex){
   return text;
 }
 
+//Escaped after any indent, tabs or spaces, and without regard to what the paragraph above was.
+//parseLine only reads a space-indented marker as a list when a list item precedes it, but escaping
+//only in that case would mean a paragraph's spelling on disk depended on its neighbour - so a
+//paragraph edited above it could change how this one reads. Escaping always costs a backslash and
+//makes the line mean the same thing wherever it lands.
 function escapeListMarkers(text){
-  const listUnordered = /^(\t*)(-|\*|\+) /gm; 
+  const listUnordered = /^([\t ]*)(-|\*|\+) /gm;
   text = text.replace(listUnordered, '$1\\$2 ');
 
-  const listOrdered = /^(\t*)((?:\d+|[a-z])\.) /gm;
+  const listOrdered = /^([\t ]*)((?:\d+|[a-z])\.) /gm;
   text = text.replace(listOrdered, '$1\\$2 ');
 
   return text;

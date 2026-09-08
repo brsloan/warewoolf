@@ -75,6 +75,70 @@ test('a second numbered list starts again at one', function(){
   ]}, '1. a\r\n2. b\r\ngap\r\n1. c\r\n');
 });
 
+//---------------------------------------------------------------------------
+// space-indented list items (CommonMark-style)
+//---------------------------------------------------------------------------
+
+//How each line of a document parsed: its list level, or 'prose'. Enough to say what the indent
+//rule did without asserting on whole deltas.
+function levelsIn(mdf){
+  return parseMDF(mdf).ops.filter(function(op){ return op.insert === '\n'; }).map(function(op){
+    var a = op.attributes || {};
+    return a.list ? a.list + '/' + (a.indent || 0) : 'prose';
+  });
+}
+
+test('four spaces nest an item under the one above it', function(){
+  assert.deepStrictEqual(levelsIn('* one\r\n    * two\r\n'), ['bullet/0', 'bullet/1']);
+});
+
+test('eight spaces nest it two levels, and deeper folds into the second', function(){
+  assert.deepStrictEqual(levelsIn('* one\r\n        * two\r\n'), ['bullet/0', 'bullet/2']);
+  assert.deepStrictEqual(levelsIn('* one\r\n            * two\r\n'), ['bullet/0', 'bullet/2']);
+});
+
+//A remainder of fewer than four spaces counts for nothing, so this is a sibling rather than a
+//child - four spaces is one level, exactly as a tab is.
+test('fewer than four spaces leaves an item at the level above', function(){
+  assert.deepStrictEqual(levelsIn('* one\r\n  * two\r\n'), ['bullet/0', 'bullet/0']);
+  assert.deepStrictEqual(levelsIn('* one\r\n      * two\r\n'), ['bullet/0', 'bullet/1']);
+});
+
+test('tabs and spaces count together', function(){
+  assert.deepStrictEqual(levelsIn('* one\r\n\t    * two\r\n'), ['bullet/0', 'bullet/2']);
+});
+
+//The gate, and the reason it exists: fiction is full of space-indented paragraphs, and one that
+//happens to open with a hyphen must not silently become a bullet.
+test('a space indented marker is prose when nothing above it is a list item', function(){
+  assert.deepStrictEqual(levelsIn('a paragraph of prose\r\n    - Get out, she said.\r\n'), ['prose', 'prose']);
+});
+
+test('a blank line ends the list, so what follows it is prose again', function(){
+  assert.deepStrictEqual(levelsIn('* one\r\n\r\n    - Get out, she said.\r\n'), ['bullet/0', 'prose', 'prose']);
+});
+
+//Tabs and bare markers are ungated - they always were, and that has to stay true.
+test('a tab indented or unindented marker is a list item wherever it appears', function(){
+  assert.deepStrictEqual(levelsIn('prose\r\n\t- one\r\n'), ['prose', 'bullet/1']);
+  assert.deepStrictEqual(levelsIn('prose\r\n- one\r\n'), ['prose', 'bullet/0']);
+});
+
+//The other half of the gate: prose that opens like an indented marker has to survive being written
+//and read back even when it lands directly under a list item, where the gate would otherwise open.
+test('space indented prose is escaped, so it stays prose next to a list item', function(){
+  assertRoundTrip({ ops: [
+    {insert: 'an item'}, {insert: '\n', attributes: {list: 'bullet'}},
+    {insert: '    - Get out, she said.'}, {insert: '\n'}
+  ]}, '* an item\r\n    \\- Get out, she said.\r\n');
+});
+
+test('a space indented list read from disk is written back with tabs', function(){
+  var delta = parseMDF('* one\r\n    * two\r\n        * three\r\n');
+
+  assert.strictEqual(convertDeltaToMDF(delta), '* one\r\n\t* two\r\n\t\t* three\r\n');
+});
+
 test('prose that opens like a list marker is escaped and comes back intact', function(){
   assertRoundTrip({ ops: [
     {insert: '- not a list, it is a dash'}, {insert: '\n'},

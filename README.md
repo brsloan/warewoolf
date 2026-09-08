@@ -80,6 +80,7 @@ Unreleased. Changes made:
 * Fixed bug where the Bullets/Numbered List shortcut (Ctrl/Cmd+Shift+B) never worked, because the File > Backup menu item claimed the same keys. Backup is still on the File menu, without a shortcut.
 * Automatic substitutions as you type: straight quotes become curly ones (opening or closing to suit), two hyphens become an em dash, and three periods become an ellipsis. Ctrl+Z undoes just the substitution, leaving what you typed. All of it can be switched off, in whole or rule by rule, in File > Settings.
 * New Tools > Convert Straight Quotes Etc.: applies those same substitutions to a whole manuscript at once, for work written before the feature existed or imported from elsewhere. Uncheck any you would rather not apply.
+* MarkdownFic now reads four spaces as a tab when nesting list items, matching how most Markdown editors indent a sub-list. Spaces only nest an item that directly follows another list item, so an indented paragraph of prose that happens to begin with a hyphen is still prose. WareWoolf still writes tabs, so a space-indented list is normalized on the first save.
 * Spellcheck now understands contractions written with a curly apostrophe, instead of stopping on both halves of "don't".
 * A straight quote typed into Find/Replace now finds curly ones too, so searching for a line of dialogue still works. Searching for a specific curly quote still finds only that one.
 

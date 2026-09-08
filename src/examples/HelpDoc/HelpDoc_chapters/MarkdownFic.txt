@@ -14,7 +14,7 @@ The core supported syntax is all the same as Markdown:
 * Lists:
 	* Unordered: ‘- item’, ‘\* item’, or ‘+ item’
 	* Ordered: ‘1. item’
-	* Indent a list item with a tab (two tabs for a second level) to nest it under the item above.
+	* Indent a list item with a tab (two tabs for a second level) to nest it under the item above. Four spaces count as one tab and eight as two, so a list written the way most Markdown editors write one nests correctly here as well. Spaces only nest an item that comes directly after another list item, so an indented paragraph of ordinary prose is never mistaken for one.
 	* WareWoolf always writes ‘\*’ for unordered items and numerals for ordered items when it saves/exports, but it will read any of the markers above back in just fine.
 * Footnotes:
 	* ‘Text with a footnote. \[^1]’
