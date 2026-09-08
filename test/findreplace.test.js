@@ -114,6 +114,33 @@ test('replaceAllInDelta guards against an empty search term instead of looping f
   assert.strictEqual(result.delta, delt);
 });
 
+//Regression: a footnote marker is an embed, and Quill drops embeds from getText() entirely - so
+//every index past the marker came back one short of the index deleteText/insertText actually act
+//on, and Replace All cut from the wrong place ("the cat sat" losing " ca" rather than "cat").
+//getIndexableText counts one U+FFFC per embed, matching Quill's own index space.
+test('replaceAllInDelta replaces correctly in a chapter containing a footnote marker', function(){
+  const { registerFootnoteBlots } = require('../src/components/blots/footnotes');
+  registerFootnoteBlots();
+
+  var delt = { ops: [
+    { insert: 'The cat sat' },
+    { insert: { footnote: { n: '1' } } },
+    { insert: ' and the cat slept.\n' },
+    { insert: 'A note about cats.' },
+    { insert: '\n', attributes: { footnoteBody: '1' } }
+  ]};
+
+  var result = replaceAllInDelta('cat', 'dog', true, delt);
+
+  assert.strictEqual(result.changed, 3);
+  assert.deepStrictEqual(result.delta.ops, [
+    { insert: 'The dog sat' },
+    { insert: { footnote: { n: '1' } } },
+    { insert: ' and the dog slept.\nA note about dogs.' },
+    { insert: '\n', attributes: { footnoteBody: '1' } }
+  ]);
+});
+
 test('replaceAllInAllChapters only marks chapters that actually changed', async function(){
   var hasMatch = makeChapter(textDelta('the cat sat'));
   var noMatch = makeChapter(textDelta('the dog sat'));

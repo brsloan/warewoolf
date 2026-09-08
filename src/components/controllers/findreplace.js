@@ -155,7 +155,12 @@ function replaceAllInDelta(oldStr, newStr, caseSensitive, delt, wholeWordOnly = 
     var counter = 0;
 
     tempQuill.setContents(delt);
-    var text = tempQuill.getText();
+    //getIndexableText rather than getText for the same reason find() above uses it: Quill drops
+    //embeds from getText() entirely, so a chapter with a footnote marker in it reports every
+    //index after that marker one short of the index deleteText/insertText below actually act on.
+    //Replace All would then cut from the wrong place - "the cat sat" losing " ca" instead of
+    //"cat" - and could delete the marker itself.
+    var text = getIndexableText(tempQuill);
 
     var foundIndex = 0;
     var startingIndex = 0;
@@ -167,7 +172,7 @@ function replaceAllInDelta(oldStr, newStr, caseSensitive, delt, wholeWordOnly = 
             tempQuill.deleteText(foundIndex, oldStr.length);
             tempQuill.insertText(foundIndex, newStr);
             startingIndex = foundIndex + newStr.length;
-            text = tempQuill.getText();
+            text = getIndexableText(tempQuill);
         }
     }
 

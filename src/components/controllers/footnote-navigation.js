@@ -32,14 +32,25 @@ function insertOrJumpFootnote(quill){
 //to be unshifted directly onto keyboard.bindings[13] instead (see render.js's setup). listen() stops
 //at the first handler that returns something other than literal `true`, so returning true here is
 //what lets Quill's own Enter handler still run on everything but the one case this owns.
+//
+//The whole binding rather than a bare handler, so the one condition that decides whether this
+//owns the keypress at all travels with it. `collapsed: true` is that condition: markerAt() below
+//looks at range.index, which for a selection is where it *starts*, so without it a writer who had
+//selected a run of text beginning immediately before a marker would find Enter jumping to the note
+//instead of replacing what they had selected. Quill checks it in listen() before calling any
+//handler, which is what makes Enter with a selection fall to Quill's own handler untouched.
 function footnoteEnterBinding(quill){
-  return function(range){
-    var beforeMarker = markerAt(quill, range.index);
-    if(beforeMarker == null)
-      return true;
+  return {
+    key: 13,
+    collapsed: true,
+    handler: function(range){
+      var beforeMarker = markerAt(quill, range.index);
+      if(beforeMarker == null)
+        return true;
 
-    jumpToFootnoteBody(quill, beforeMarker);
-    return false;
+      jumpToFootnoteBody(quill, beforeMarker);
+      return false;
+    }
   };
 }
 
@@ -169,21 +180,26 @@ function attachFootnoteClipboard(quill){
   quill.root.addEventListener('cut', function(e){ handleCut(quill, e); });
 }
 
+//Returns whether it took the event over. Only a selection that actually contains a marker needs
+//this treatment at all; everything else is left entirely to the browser's own copy/cut, which is
+//what Quill has always relied on. handleCut below reads the answer rather than assuming one -
+//deleting the text itself while the native cut is still armed leaves two mechanisms racing to
+//remove the same characters, with no clipboard written by either.
 function handleCopy(quill, e){
   var selection = window.getSelection();
   if(!selection || selection.rangeCount === 0)
-    return;
+    return false;
 
   var range = selection.getRangeAt(0);
   if(range.collapsed)
-    return;
+    return false;
 
   var container = document.createElement('div');
   container.appendChild(range.cloneContents());
 
   var markers = container.querySelectorAll('.ww-fnref[data-n]');
   if(markers.length === 0)
-    return;
+    return false;
 
   markers.forEach(function(markerEl){
     var bodyOps = footnoteBodyOps(quill, markerEl.getAttribute('data-n'));
@@ -191,22 +207,46 @@ function handleCopy(quill, e){
       markerEl.setAttribute('data-fn-body', JSON.stringify(bodyOps));
   });
 
-  //A plain-text flavour spells the marker as "[^N]" rather than carrying the (invisible, in plain
-  //text) guard characters an embed's DOM leaves behind - matching what a writer would type by hand.
-  var plainContainer = container.cloneNode(true);
-  plainContainer.querySelectorAll('.ww-fnref[data-n]').forEach(function(markerEl){
-    markerEl.replaceWith(document.createTextNode('[^' + markerEl.getAttribute('data-n') + ']'));
-  });
-
   e.preventDefault();
   e.clipboardData.setData('text/html', container.innerHTML);
-  e.clipboardData.setData('text/plain', plainContainer.textContent);
+  e.clipboardData.setData('text/plain', plainTextForSelection(quill, container));
+
+  return true;
+}
+
+//The plain-text flavour, spelling each marker "[^N]" rather than carrying the (invisible, in plain
+//text) guard characters an embed's DOM leaves behind - what a writer would have typed by hand.
+//
+//Built from the selection's own delta rather than from the cloned DOM's textContent, which is
+//where the paragraph breaks come from: textContent runs the blocks together, so copying several
+//paragraphs and pasting them anywhere outside the app produced one unbroken line. The delta has a
+//real '\n' at every paragraph end, so they survive.
+function plainTextForSelection(quill, container){
+  var range = quill.getSelection();
+
+  //Nothing but a guard: the DOM selection this was called for is a non-collapsed one inside this
+  //editor, so Quill has a range for it. Falling back to the flattened text is still better than
+  //writing nothing, since preventDefault has left this the only plain text the clipboard will get.
+  if(range == null || range.length === 0)
+    return container.textContent;
+
+  return quill.getContents(range.index, range.length).ops.map(function(op){
+    if(typeof op.insert === 'string')
+      return op.insert;
+
+    return isFootnoteMarker(op.insert) ? '[^' + op.insert.footnote.n + ']' : '';
+  }).join('');
 }
 
 function handleCut(quill, e){
   var selection = quill.getSelection();
 
-  handleCopy(quill, e);
+  //Nothing to carry, so the native cut does both halves itself, exactly as it did before footnotes
+  //existed. Deleting the text here as well would be deleting it twice over - and since handleCopy
+  //never called preventDefault or wrote anything to the clipboard on this path, the browser would
+  //be left to copy a selection this function had already removed.
+  if(!handleCopy(quill, e))
+    return;
 
   //Ordering is load-bearing: the clipboard is written first (handleCopy, above, already has
   //everything it needs off the live DOM), the deletion applies second, and only then does the

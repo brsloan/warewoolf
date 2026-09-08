@@ -9,11 +9,26 @@ const { flattenInserts, isFootnoteMarker } = require('./quill-utils');
 //A "line" is a paragraph's content ops plus the op that terminates it - the same shape parseDelta
 //in quill-utils.js builds, but keeping the terminating op itself (not just its attributes) rather
 //than discarding it is what lets fromLines() below reproduce the delta exactly.
+//
+//Every op is copied on the way in, which is what makes the passes below genuinely pure. They do
+//not all rewrite a marker by building a new line the way the body steps build a new line object -
+//materializePayloads, renumberAndReorder and namespaceFootnotes each assign straight to
+//`op.insert` - and flattenInserts hands back the caller's own op object, untouched, for anything
+//whose insert is not a string (which is every embed, footnote markers included). Without this
+//copy those assignments reach back into the delta the caller passed in, and every caller here
+//diffs its result against that same delta to decide what to apply: render.js's two live-editor
+//passes, chapter.js's save, and compile.js's per-chapter namespacing. A mutated base makes the
+//marker half of the diff cancel out, so marker numbers never reach the editor and a pasted
+//marker's payload is never stripped - which materializes a fresh copy of the note body on every
+//keystroke after a paste. A shallow copy is enough: nothing below edits an insert object in
+//place, they replace it wholesale.
 function toLines(ops){
   var lines = [];
   var content = [];
 
-  flattenInserts(ops || []).forEach(function(op){
+  flattenInserts(ops || []).forEach(function(original){
+    var op = Object.assign({}, original);
+
     if(op.insert === '\n'){
       lines.push({ content: content, line: op });
       content = [];

@@ -69,7 +69,7 @@ var editorQuill = new Quill('#editor-container', {
 //setUpQuills(): unlike the formatting shortcuts, this one isn't tagged with a warewoolfAction, so
 //re-running the block that attaches it would stack a duplicate on every rebind.
 editorQuill.keyboard.bindings[13] = editorQuill.keyboard.bindings[13] || [];
-editorQuill.keyboard.bindings[13].unshift({ key: 13, handler: footnoteEnterBinding(editorQuill) });
+editorQuill.keyboard.bindings[13].unshift(footnoteEnterBinding(editorQuill));
 
 attachFootnoteClipboard(editorQuill);
 
