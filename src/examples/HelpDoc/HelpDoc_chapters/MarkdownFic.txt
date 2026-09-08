@@ -12,8 +12,8 @@ Unlike Markdown, MarkdownFic allows you to use regular indented paragraphs witho
 	* Blockquote: ‘\> blockquoted text’
 	* Strikethrough: ‘\~~struck through text\~~’
 	* Lists:
-		* Unordered: ‘\- item’, ‘\* item’, or ‘\+ item’
-		* Ordered: ‘\1. item’
+		* Unordered: ‘- item’, ‘\* item’, or ‘+ item’
+		* Ordered: ‘1. item’
 		* Indent a list item with a tab (two tabs for a second level) to nest it under the item above.
 		* WareWoolf always writes ‘\*’ for unordered items and numerals for ordered items when it saves/exports, but it will read any of the markers above back in just fine.
 	* Footnotes:
