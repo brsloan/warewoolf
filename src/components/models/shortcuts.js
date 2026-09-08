@@ -182,6 +182,9 @@ const SHORTCUT_DEFS = [
   { id: 'formatClearHeading', label: 'Clear Heading', section: 'Formatting', target: 'quill', defaultBinding: makeBinding('0', { mod: true }) },
   { id: 'formatList', label: 'Bullets/Numbered List', section: 'Formatting', target: 'quill', defaultBinding: makeBinding('B', { mod: true, shift: true }) },
   { id: 'formatBlockquote', label: 'Blockquote', section: 'Formatting', target: 'quill', defaultBinding: makeBinding('Q', { mod: true, shift: true }) },
+  //Not Ctrl+Shift+F: that is already File Manager (see MENU_ACCELERATORS above). Ctrl+Alt+T
+  //(Typewriter Mode, below) is the precedent for the Ctrl+Alt row.
+  { id: 'insertFootnote', label: 'Insert Footnote', section: 'Formatting', target: 'quill', defaultBinding: makeBinding('F', { mod: true, alt: true }) },
   { id: 'formatAlignLeft', label: 'Left Align', section: 'Formatting', target: 'quill', defaultBinding: makeBinding('L', { mod: true }) },
   { id: 'formatAlignRight', label: 'Right Align', section: 'Formatting', target: 'quill', defaultBinding: makeBinding('R', { mod: true }) },
   { id: 'formatAlignCenter', label: 'Center Align', section: 'Formatting', target: 'quill', defaultBinding: makeBinding('E', { mod: true }) },

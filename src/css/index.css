@@ -317,6 +317,46 @@ button, input[type=submit] {
   margin-bottom: 0px;
 }
 
+/* Footnotes - blots/footnotes.js. The marker's own visible number and the body's are both drawn
+   entirely from CSS (::before, reading the data-n/data-footnote attribute) rather than written
+   into the DOM by the blot itself - nothing here is ever read back by anything. */
+.ql-editor sup.ww-fnref {
+  cursor: pointer;
+  user-select: none;
+}
+
+.ql-editor sup.ww-fnref::before {
+  content: attr(data-n);
+}
+
+.ql-editor [data-footnote] {
+  margin-left: 1.5em;
+}
+
+.ql-editor [data-footnote]::before {
+  content: attr(data-footnote) ". ";
+  font-weight: bold;
+}
+
+/* Only the very first footnote paragraph in the document gets the separator - the general sibling
+   combinator matches any later [data-footnote], whether it's a continuation of the same note or an
+   entirely different one, and removes it there instead. */
+.ql-editor [data-footnote] {
+  border-top: 1px solid gray;
+  padding-top: 0.5em;
+  margin-top: 1.5em;
+}
+
+.ql-editor [data-footnote] ~ [data-footnote] {
+  border-top: none;
+  padding-top: 0;
+  margin-top: 0;
+}
+
+.ql-editor [data-footnote] + [data-footnote]::before {
+  content: "";
+}
+
 .file-select-container {
   width: 100%;
   height: 200px;

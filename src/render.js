@@ -7,8 +7,19 @@ const newProject = require('./components/models/project');
 const autosaver = require('./components/controllers/autosave');
 const chapterList = require('./components/controllers/chapter-list');
 const { registerKeybindings } = require('./components/controllers/keybindings');
-const { applyQuillShortcuts } = require('./components/controllers/quill-utils');
+const { applyQuillShortcuts, splitDeltaAtIndices } = require('./components/controllers/quill-utils');
 const { attachAutocorrect } = require('./components/controllers/autocorrect');
+const { registerFootnoteBlots } = require('./components/blots/footnotes');
+const {
+  applyStructuralFootnoteChanges,
+  renumberFootnotes,
+  redistributeFootnotes
+} = require('./components/controllers/reconcile-footnotes');
+const {
+  footnoteEnterBinding,
+  attachFootnoteClipboard,
+  markerAt
+} = require('./components/controllers/footnote-navigation');
 const { resolveShortcuts } = require('./components/models/shortcuts');
 const { resolveAutocorrect } = require('./components/models/autocorrect');
 const { enableTypewriterMode, disableTypewriterMode } = require('./components/controllers/typewriter-mode');
@@ -31,6 +42,11 @@ const { renderChapterList, renameChapterInList } = require('./components/views/c
 //requires 'electron' at all.
 var platform = createPlatform(createIpcBacking());
 
+//Must run before either Quill instance below is constructed - scroll.js's whitelist (built from
+//the `formats` option) is what makes 'footnote'/'footnoteBody' insertable at all, and Parchment has
+//to know the blot/attributor exists before that whitelist can even name it.
+registerFootnoteBlots();
+
 var editorQuill = new Quill('#editor-container', {
   modules: {
     history: {
@@ -41,8 +57,21 @@ var editorQuill = new Quill('#editor-container', {
     }
   },
   placeholder: '',
-  formats: ['bold', 'italic', 'strike', 'underline', 'blockquote', 'header', 'align', 'list', 'indent']
+  //footnote/footnoteBody are editor-only, deliberately absent from notesQuill's own list below - a
+  //footnote pasted into notes degrades to literal "[^N]" text instead (see setUpQuills), since a
+  //note has no chapter of its own for the body to belong to.
+  formats: ['bold', 'italic', 'strike', 'underline', 'blockquote', 'header', 'align', 'list', 'indent', 'footnote', 'footnoteBody']
 });
+
+//Quill's own Enter handler is added unconditionally after the named `options.bindings` loop (see
+//keyboard.js's constructor), which is why quillBindingsToDisable() cannot reach it - this has to be
+//unshifted directly onto the bindings array instead. Attached once, here, rather than from
+//setUpQuills(): unlike the formatting shortcuts, this one isn't tagged with a warewoolfAction, so
+//re-running the block that attaches it would stack a duplicate on every rebind.
+editorQuill.keyboard.bindings[13] = editorQuill.keyboard.bindings[13] || [];
+editorQuill.keyboard.bindings[13].unshift({ key: 13, handler: footnoteEnterBinding(editorQuill) });
+
+attachFootnoteClipboard(editorQuill);
 
 var notesQuill = new Quill('#notes-editor', {
   modules: {
@@ -55,6 +84,14 @@ var notesQuill = new Quill('#notes-editor', {
   },
   placeholder: 'Notes...',
   formats: ['bold', 'italic', 'strike', 'underline', 'blockquote', 'header', 'align', 'list', 'indent']
+});
+
+//notesQuill's own `formats` above has no 'footnote' entry, so a pasted marker would otherwise be
+//silently dropped by scroll.js's whitelist check - the writer loses characters with no indication.
+//Degrading it to the literal reference text instead is what a writer would have typed by hand.
+notesQuill.clipboard.addMatcher('sup.ww-fnref', function(node, delta){
+  var Delta = Quill.import('delta');
+  return new Delta().insert('[^' + (node.getAttribute('data-n') || '') + ']');
 });
 
 //Quill binds Ctrl+B/I/U itself, and those three are in the Shortcuts popup's list like every other
@@ -891,8 +928,20 @@ function clearCurrentChapterIfUnchanged(){
   }
 };
 
+//Structural vs cosmetic footnote changes apply on different schedules and with different sources -
+//see docs/footnotes-plan.md's "Source discipline". A structural change (a marker's own deletion
+//cascading to its body, a pasted marker's payload materializing into a real body) is a real edit
+//and belongs in the same undo entry as whatever triggered it, so it runs synchronously here, with
+//source 'user'. Cosmetic renumbering/reordering is not itself a thing a writer should be able to
+//undo, so it is debounced and applied with source 'silent' below.
+var applyingFootnoteStructuralChange = false;
+var footnoteRenumberTimer = null;
+
 editorQuill.on('text-change', function(delta, oldDelta, source) {
   if(source == "user"){
+    if(!applyingFootnoteStructuralChange)
+      applyFootnoteStructuralChanges();
+
     //Guarded the same way the notes handler below already is: getActiveChapter() is undefined once
     //every chapter has been permanently deleted, and there is nothing to attach this text to.
     var chap = project.getActiveChapter();
@@ -901,14 +950,108 @@ editorQuill.on('text-change', function(delta, oldDelta, source) {
       chap.hasUnsavedChanges = true;
       project.hasUnsavedChanges = true;
     }
+
+    scheduleFootnoteRenumber();
   }
 });
+
+//Applying this from inside the text-change handler re-enters it the moment updateContents() below
+//fires its own text-change - applyingFootnoteStructuralChange is what stops that from recursing
+//forever; the re-entrant call sees the now-clean content and finds nothing left to do regardless,
+//but the flag makes that a guarantee rather than something resting on this pass happening to be
+//idempotent.
+function applyFootnoteStructuralChanges(){
+  var Delta = Quill.import('delta');
+  var current = editorQuill.getContents();
+  var structural = applyStructuralFootnoteChanges(current);
+  var diff = new Delta(current).diff(new Delta(structural));
+
+  if(diff.ops.length === 0)
+    return;
+
+  applyingFootnoteStructuralChange = true;
+  try{
+    editorQuill.updateContents(diff, 'user');
+  }
+  finally{
+    applyingFootnoteStructuralChange = false;
+  }
+}
+
+function scheduleFootnoteRenumber(){
+  if(footnoteRenumberTimer)
+    clearTimeout(footnoteRenumberTimer);
+
+  footnoteRenumberTimer = setTimeout(runFootnoteRenumber, 1000);
+}
+
+//Skipped while the caret sits inside a footnote body, so a reorder never yanks the ground out from
+//under someone mid-sentence in a note - deferred to save instead (see reconcile-footnotes.js's
+//callers), which runs the full pass regardless of where the caret is.
+function runFootnoteRenumber(){
+  footnoteRenumberTimer = null;
+
+  //getFormat() with no arguments force-focuses the editor to find a selection (see Quill's own
+  //default parameter) - which is both pointless here (a debounced timer firing well after the
+  //editor lost focus has no caret to protect) and, against a torn-down or never-focused editor,
+  //throws rather than returning null. getSelection() alone never forces focus.
+  var range = editorQuill.getSelection();
+  if(range){
+    var format = editorQuill.getFormat(range);
+    if(format && format.footnoteBody != null)
+      return;
+  }
+
+  var Delta = Quill.import('delta');
+  var current = editorQuill.getContents();
+  var renumbered = renumberFootnotes(current);
+  var diff = new Delta(current).diff(new Delta(renumbered));
+
+  if(diff.ops.length > 0)
+    editorQuill.updateContents(diff, 'silent');
+}
 
 editorQuill.on('selection-change', function(range, oldRange, source){
   if(range){
     project.textCursorPosition = range.index;
   }
+
+  updateActiveFootnoteHighlight(range);
 })
+
+//Highlights the marker and body that belong to each other. Only #editor-container - the element
+//Quill was constructed on, outside .ql-editor itself - is ever touched here; a dedicated <style>
+//element is what actually paints the highlight, via a plain, non-dynamic selector rebuilt on every
+//selection change, rather than mutating any node .ql-editor's own MutationObserver would see.
+var footnoteHighlightStyle = null;
+
+function updateActiveFootnoteHighlight(range){
+  if(footnoteHighlightStyle == null){
+    footnoteHighlightStyle = document.createElement('style');
+    document.head.appendChild(footnoteHighlightStyle);
+  }
+
+  var id = null;
+  if(range){
+    var format = editorQuill.getFormat(range);
+    id = (format && format.footnoteBody != null) ? String(format.footnoteBody) : markerAt(editorQuill, range.index);
+  }
+
+  var container = document.getElementById('editor-container');
+
+  if(id == null){
+    container.removeAttribute('data-active-footnote');
+    footnoteHighlightStyle.textContent = '';
+    return;
+  }
+
+  container.setAttribute('data-active-footnote', id);
+
+  var escaped = id.replace(/"/g, '\\"');
+  footnoteHighlightStyle.textContent =
+    '#editor-container .ww-fnref[data-n="' + escaped + '"], ' +
+    '#editor-container [data-footnote="' + escaped + '"] { background-color: rgba(255, 213, 79, 0.45); }';
+}
 
 notesQuill.on('text-change', function(delta, oldDelta, source){
   if(source == 'user'){
@@ -1063,15 +1206,32 @@ function changeChapterTitle(ind){
   });
 }
 
+//A footnote's marker and its body must land on the same side of the split, wherever the marker
+//went - see reconcile-footnotes.js's redistributeFootnotes. Refused outright when the caret sits
+//inside a footnote body: any snapping rule would either produce an empty chapter or silently move
+//the split point the writer actually chose, and neither is better than asking them to move the
+//caret out of the note first.
 async function splitChapter(){
   var selection = editorQuill.getSelection(true);
-  if(selection){
-      var newChap = editorQuill.getContents(selection.index);
-      console.log("deleting " + selection.index + " to " + editorQuill.getLength());
-      editorQuill.deleteText(selection.index, editorQuill.getLength(), 'user');
-      await addImportedChapter(newChap, "untitled");
-      changeChapterTitle(project.activeChapterIndex);
+  if(!selection)
+    return;
+
+  var format = editorQuill.getFormat(selection);
+  if(format && format.footnoteBody != null){
+    const showBlockedActionAlert = require('./components/views/blocked-action_display');
+    showBlockedActionAlert('Cannot split a chapter inside a footnote. Move the caret out of the note first.');
+    return;
   }
+
+  var current = editorQuill.getContents();
+  var fragments = redistributeFootnotes(splitDeltaAtIndices(current, [selection.index]));
+
+  var Delta = Quill.import('delta');
+  var reconciledFirst = new Delta(fragments[0]);
+  editorQuill.updateContents(new Delta(current).diff(reconciledFirst), 'user');
+
+  await addImportedChapter(fragments[1], "untitled");
+  changeChapterTitle(project.activeChapterIndex);
 }
 
 function increaseEditorWidthSetting(){
@@ -1267,8 +1427,9 @@ const menuCommands = {
   'spellcheck-clicked': { requiresFocus: true, run: function(){
     const showSpellcheck = require('./components/views/spellcheck_display');
     const { getBeginningOfCurrentWord } = require('./components/controllers/spellcheck');
+    const { getIndexableText } = require('./components/controllers/quill-utils');
     var currentIndex = editorQuill.getSelection(true).index;
-    var beginningOfWord = getBeginningOfCurrentWord(editorQuill.getText(), currentIndex);
+    var beginningOfWord = getBeginningOfCurrentWord(getIndexableText(editorQuill), currentIndex);
     return showSpellcheck(editorQuill, project, detached(displayChapterByIndex), beginningOfWord);
   } },
   'convert-first-lines-clicked': { requiresFocus: true, run: function(){

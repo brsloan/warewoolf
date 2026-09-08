@@ -308,3 +308,72 @@ test('a style nested in the middle of another style does not clobber it', functi
     {insert: '\n'}
   ]}, '**bold and __underlined__ within**\r\n');
 });
+
+//---------------------------------------------------------------------------
+// footnotes
+//---------------------------------------------------------------------------
+
+test('a footnote marker and its body round trip', function(){
+  assertRoundTrip({ ops: [
+    {insert: 'See note'}, {insert: {footnote: {n: '1'}}}, {insert: ' here.'}, {insert: '\n'},
+    {insert: 'The note.'}, {insert: '\n', attributes: {footnoteBody: '1'}}
+  ]}, 'See note[^1] here.\r\n[^1]: The note.\r\n');
+});
+
+//The multi-paragraph convention documented in the Help doc: the same marker at the start of every
+//paragraph belonging to the note, rather than Markdown's own tab-indented continuation.
+test('a multi-paragraph footnote round trips', function(){
+  assertRoundTrip({ ops: [
+    {insert: 'Reference'}, {insert: {footnote: {n: '1'}}}, {insert: '\n'},
+    {insert: 'First paragraph.'}, {insert: '\n', attributes: {footnoteBody: '1'}},
+    {insert: 'Second paragraph.'}, {insert: '\n', attributes: {footnoteBody: '1'}}
+  ]}, 'Reference[^1]\r\n[^1]: First paragraph.\r\n[^1]: Second paragraph.\r\n');
+});
+
+//A footnote body that is also a list item: alignment > footnote > list/blockquote/header, per
+//markdownFic.js's own comment on parseLine and getLineMarker.
+test('a footnote body that is also a list item round trips', function(){
+  assertRoundTrip({ ops: [
+    {insert: 'Reference'}, {insert: {footnote: {n: '1'}}}, {insert: '\n'},
+    {insert: 'a note that is also a bullet'}, {insert: '\n', attributes: {footnoteBody: '1', list: 'bullet'}}
+  ]}, 'Reference[^1]\r\n[^1]: * a note that is also a bullet\r\n');
+});
+
+//A centered footnote body: alignment is the outermost marker and combines with everything after it,
+//the same way it already does with list/blockquote/header.
+test('a centered footnote body round trips', function(){
+  assertRoundTrip({ ops: [
+    {insert: 'Reference'}, {insert: {footnote: {n: '1'}}}, {insert: '\n'},
+    {insert: 'a centered note'}, {insert: '\n', attributes: {footnoteBody: '1', align: 'center'}}
+  ]}, 'Reference[^1]\r\n[>c] [^1]: a centered note\r\n');
+});
+
+//A blank footnote body paragraph (a writer left it empty, or it is mid-edit) keeps its marker
+//rather than losing it - the (.*) in FOOTNOTE_BODY_MARKER exists for exactly this, matching how
+//every other block marker in this file handles a blank line.
+test('a blank footnote body paragraph keeps its marker', function(){
+  assertRoundTrip({ ops: [
+    {insert: 'Reference'}, {insert: {footnote: {n: '1'}}}, {insert: '\n'},
+    {insert: ''}, {insert: '\n', attributes: {footnoteBody: '1'}}
+  ]}, 'Reference[^1]\r\n[^1]: \r\n');
+});
+
+//Regression: escapeAnyMarkers used to escape every "[^" unconditionally, including a real marker's
+//own rendering, which is what corrupted every footnote WareWoolf ever wrote (see the top of
+//docs/footnotes-plan.md). A literal "[^" a writer actually types as prose still has to come back
+//escaped - it is not a marker, and tokenizeInline only recognises the unescaped form.
+test('a literal "[^" typed as prose round trips escaped, distinct from a real marker', function(){
+  assertRoundTrip({ ops: [
+    {insert: 'a literal [^ in prose, and a real'}, {insert: {footnote: {n: '2'}}}, {insert: ' marker'},
+    {insert: '\n'}
+  ]}, 'a literal \\[^ in prose, and a real[^2] marker\r\n');
+});
+
+//A footnote reference keeps whatever inline style was active around it.
+test('a footnote reference inside a bold run keeps the style on either side', function(){
+  assertRoundTrip({ ops: [
+    {insert: 'bold note', attributes: {bold: true}}, {insert: {footnote: {n: '1'}}, attributes: {bold: true}},
+    {insert: ' still bold', attributes: {bold: true}},
+    {insert: '\n'}
+  ]}, '**bold note[^1] still bold**\r\n');
+});

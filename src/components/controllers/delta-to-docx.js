@@ -1,6 +1,6 @@
 const docx = require('docx');
 const { logError } = require('./error-log');
-const { parseDelta, getOrderedListNumbers, getListLevel, getListMarker } = require('./quill-utils');
+const { parseDelta, getOrderedListNumbers, getListLevel, getListMarker, isFootnoteMarker } = require('./quill-utils');
 const { createPlatform } = require('./platform');
 const { createIpcBacking } = require('./platform-ipc');
 
@@ -52,36 +52,27 @@ function convertDeltaToDocx(delt, options, project, addressInfo, totalWordCount)
   }
   var parsedQuill = parseDelta(delt);
 
-  var fnoteParRegx = /^\[\^\d+]:/;
-
   var footnoteBodies = [];
   var nonfootnoteParas = [];
 
-  //first, extract footnote body paragraphs
+  //first, extract footnote body paragraphs - grouped by the block attribute a footnote body
+  //carries (see blots/footnotes.js) rather than by string-matching a "[^N]: " prefix in the text,
+  //which is what this used to do before markers became real embeds. There is no prefix to strip
+  //any more: a body paragraph's text is exactly the note's content.
   parsedQuill.paragraphs.forEach(function(para){
-    if(para.textRuns && para.textRuns.length > 0 && para.textRuns[0].text)
-    {
-      var thisMarker = fnoteParRegx.exec(para.textRuns[0].text);
+    var footnoteId = para.attributes && para.attributes.footnoteBody != null ? String(para.attributes.footnoteBody) : null;
 
-      if(thisMarker){
-        para.textRuns[0].text = para.textRuns[0].text.replace(thisMarker, '');
+    if(footnoteId != null){
+      var matchingBody = footnoteBodies.findIndex(function(fb){ return fb.marker == footnoteId; });
 
-        var matchingBody = footnoteBodies.findIndex(function(fb,i,arr){
-          return fb.marker == thisMarker[0].slice(0,-1);
-        });
-
-        if(matchingBody > -1){
-            footnoteBodies[matchingBody].paras.push(para);
-        }
-        else {
-          footnoteBodies.push({
-            marker: thisMarker[0].slice(0,-1),
-            paras: [ para ]
-          });
-        }
+      if(matchingBody > -1){
+        footnoteBodies[matchingBody].paras.push(para);
       }
       else {
-        nonfootnoteParas.push(para);
+        footnoteBodies.push({
+          marker: footnoteId,
+          paras: [ para ]
+        });
       }
     }
     else {
@@ -117,7 +108,6 @@ function convertDeltaToDocx(delt, options, project, addressInfo, totalWordCount)
   });
 
   var xParagraphs = [];
-  var fnoteMarkerRegx = /\[\^\d+]/gm;
 
   //Word continues the previous list's sequence unless a numbered list is given its own numbering
   //instance, so each new list takes the next one. This lives here rather than at module scope so a
@@ -128,42 +118,22 @@ function convertDeltaToDocx(delt, options, project, addressInfo, totalWordCount)
     var previousPara = paraIndex > 0 ? nonfootnoteParas[paraIndex - 1] : null;
     var xRuns = [];
     para.textRuns.forEach(function(run){
-      var fnoteMarker = run.text.match(fnoteMarkerRegx);
+      //A marker is now its own run, one embed to one op via parseDelta - there is no substring to
+      //split out of a longer run the way a literal "[^N]" used to require.
+      if(isFootnoteMarker(run.text)){
+        var fnoteBodyNum = footnoteBodies.findIndex(function(fn){
+          return fn.marker == String(run.text.footnote.n);
+        }) + 1;
 
-      //If run has a footnote marker, split into 2 runs with marker between.
-      if(fnoteMarker){
-        var textToSplit = run.text;
-
-        for(let m=0; m < fnoteMarker.length; m++){
-          var cutPoint = textToSplit.indexOf(fnoteMarker[m]);
-          var text1 = textToSplit.slice(0, cutPoint);
-          var text2 = textToSplit.slice(cutPoint + fnoteMarker[m].length)
-          var xRun1Attr = convertRunAtttributes(run.attributes);
-
-          var fnoteBodyNum = footnoteBodies.findIndex(function(fn, i, arr){
-            return fn.marker == fnoteMarker[m];
-          }) + 1;
-
-          if(fnoteBodyNum > 0){
-            xRun1Attr.text = text1;
-            xRuns.push(new docx.TextRun(xRun1Attr));
-            xRuns.push(new docx.FootnoteReferenceRun(fnoteBodyNum));
-          }
-          else {
-            //No footnote body matches this marker (deleted or mistyped) - keep it as plain text
-            //rather than referencing a footnote id that does not exist in the document.
-            xRun1Attr.text = text1 + fnoteMarker[m];
-            xRuns.push(new docx.TextRun(xRun1Attr));
-          }
-
-          textToSplit = text2;
-
-          if(m == fnoteMarker.length - 1){
-            var xRun2Attr = convertRunAtttributes(run.attributes);
-            xRun2Attr.text = text2;
-            xRuns.push(new docx.TextRun(xRun2Attr));
-          }
-
+        if(fnoteBodyNum > 0){
+          xRuns.push(new docx.FootnoteReferenceRun(fnoteBodyNum));
+        }
+        else {
+          //No footnote body matches this marker (deleted or mistyped) - keep it as plain text
+          //rather than referencing a footnote id that does not exist in the document.
+          var orphanAttr = convertRunAtttributes(run.attributes);
+          orphanAttr.text = '[^' + run.text.footnote.n + ']';
+          xRuns.push(new docx.TextRun(orphanAttr));
         }
       }
       else {

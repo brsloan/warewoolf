@@ -42,10 +42,15 @@ function makeSysDirectories(){
   return useSysDirectories({ app: appDir, userData: userDataDir });
 }
 
-//spellcheck.js only ever calls getText() on the editor it's given, so a bare object stands in
-//fine - no need for a real Quill instance like findreplace.test.js uses.
+//spellcheck.js reads the editor through getIndexableText() (quill-utils.js), which calls
+//getContents() rather than getText() - so a bare object needs only that one method to stand in,
+//no real Quill instance like findreplace.test.js uses. getText() is kept too, for any assertion
+//in this file that still reads it directly.
 function makeEditorQuill(text){
-  return { getText: function(){ return text; } };
+  return {
+    getText: function(){ return text; },
+    getContents: function(){ return { ops: [ { insert: text } ] }; }
+  };
 }
 
 test.beforeEach(function(){

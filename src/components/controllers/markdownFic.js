@@ -1,4 +1,4 @@
-const { parseDelta, getOrderedListNumbers, getListMarker } = require('./quill-utils');
+const { parseDelta, getOrderedListNumbers, getListMarker, isFootnoteMarker } = require('./quill-utils');
 
 //Sequences a leading backslash can escape. The two-char markers are listed before their one-char
 //prefixes so "\*\*" is read as an escaped "**" rather than an escaped "*" followed by a literal
@@ -135,6 +135,38 @@ function tokenizeInline(text){
       continue;
     }
 
+    //An unescaped footnote reference. The escape check above already consumed a backslash-prefixed
+    //"\[^", which is how a writer who genuinely wants the literal characters gets them back - see
+    //ESCAPABLE_ANYWHERE - so a bare "[" reaching here is either a real reference or ordinary prose
+    //that happens to contain a bracket. A run's `text` becomes the marker's embed object rather
+    //than a string in that one case, the same dual shape parseDelta already gives a run whose
+    //insert is an embed - which is what lets parseMDF below hand `run.text` straight to `insert`
+    //with no extra branch of its own.
+    if(ch === '['){
+      var footnoteRef = FOOTNOTE_REF_MARKER.exec(text.slice(i));
+      if(footnoteRef){
+        flush();
+
+        var refAttributes = {};
+        if(state.bold) refAttributes.bold = true;
+        if(state.italic) refAttributes.italic = true;
+        if(state.underline) refAttributes.underline = true;
+        if(state.strike) refAttributes.strike = true;
+
+        var markerRun = { text: { footnote: { n: footnoteRef[1] } } };
+        if(Object.keys(refAttributes).length > 0)
+          markerRun.attributes = refAttributes;
+
+        runs.push(markerRun);
+        i += footnoteRef[0].length;
+        continue;
+      }
+
+      buffer += ch;
+      i += 1;
+      continue;
+    }
+
     buffer += ch;
     i += 1;
   }
@@ -185,6 +217,17 @@ const BLOCKQUOTE_MARKER = /^>+ ?(.*)$/;
 const ALIGN_MARKER = /^\[>([lrcj])\] (.*)$/;
 const HEADER_MARKER = /^(#{1,4}) (.*)$/;
 
+//The body marker ("[^1]: ") is only ever read at true line start, once, by parseLine below - never
+//by tokenizeInline, which only ever sees the reference form (no colon) once parseLine has already
+//stripped this. (.*) rather than (.+), matching every other block marker here, so a blank note
+//paragraph ("[^1]:" with nothing after it) still parses instead of losing its marker.
+const FOOTNOTE_BODY_MARKER = /^\[\^(\d+)\]: ?(.*)$/;
+
+//The reference form (no colon), recognised anywhere inline by tokenizeInline rather than only at
+//line start the way every other marker here is - a footnote reference is ordinary inline content,
+//free to sit in the middle of a sentence rather than opening it.
+const FOOTNOTE_REF_MARKER = /^\[\^(\d+)\]/;
+
 //A line's block-level markers (alignment, then list/blockquote/heading) only ever appear at the very
 //start of the line, in that order, so they're read off with a handful of anchored regexes - only the
 //inline styling in the remaining text needs tokenizeInline's character-by-character scan.
@@ -213,6 +256,15 @@ function parseLine(line, afterListItem){
   if(align){
     attributes.align = ALIGNMENTS[align[1]];
     rest = align[2];
+  }
+
+  //Stripped and kept, like alignment above, rather than returned early like list/blockquote below -
+  //a footnote body combines with any of the three that follow (a note that is also a list item
+  //spells as "[^1]: - item"), so the rest of the line still has to be read for one.
+  var footnote = FOOTNOTE_BODY_MARKER.exec(rest);
+  if(footnote){
+    attributes.footnoteBody = footnote[1];
+    rest = footnote[2];
   }
 
   var list = LIST_MARKER.exec(rest);
@@ -329,7 +381,12 @@ function convertDeltaToMDF(delt){
     para.textRuns.forEach((run, i) => {
       var styles = activeStyles(run.attributes);
       mdf += markersBetween(openStyles, styles);
-      mdf += escapeAnyMarkers(run.text, i);
+
+      //A footnote marker embed rather than a string run (parseDelta hands one through with
+      //flattenInserts's Phase 0 fix, unchanged) - written out as the literal, unescaped reference
+      //it represents rather than run through escapeAnyMarkers, which would either throw on a
+      //non-string or, if it accepted one, wrongly treat a real marker as prose to escape.
+      mdf += isFootnoteMarker(run.text) ? '[^' + run.text.footnote.n + ']' : escapeAnyMarkers(run.text, i);
       openStyles = styles;
     });
 
@@ -360,6 +417,11 @@ function getLineMarker(attr, listItemNum = 0){
       else if(attr.align == 'justify')
         marker = '[>j] '
     }
+
+    //Also combines with whatever follows, the same as alignment - not part of the list/blockquote/
+    //header chain below, which stays mutually exclusive since Quill's own blots are.
+    if(attr.footnoteBody != null)
+      marker += '[^' + attr.footnoteBody + ']: ';
 
     var listMarker = getListMarker(attr, listItemNum);
 

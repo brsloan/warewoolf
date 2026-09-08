@@ -166,6 +166,34 @@ test('compileProject does not throw when called without a callback (legacy call 
   });
 });
 
+//Regression: whole-project compile concatenates every chapter into one delta before converting it,
+//but each chapter numbers its own footnotes independently starting at 1 - so two chapters that each
+//had a "note 1" collided into duplicate id="fnote_1" anchors in the compiled HTML/EPUB, wrong
+//backlinks, and delta-to-docx resolving every "[^1]" reference to whichever chapter's body came
+//first. Reconciling the concatenated copy renumbers globally instead.
+test('compileProject renumbers footnotes across chapters instead of colliding on duplicate numbers', async function(t){
+  var chap1 = makeChapter({ ops: [
+    { insert: 'first chapter' }, { insert: { footnote: { n: '1' } } }, { insert: '\n' },
+    { insert: 'note in chapter one' }, { insert: '\n', attributes: { footnoteBody: '1' } }
+  ]});
+  var chap2 = makeChapter({ ops: [
+    { insert: 'second chapter' }, { insert: { footnote: { n: '1' } } }, { insert: '\n' },
+    { insert: 'note in chapter two' }, { insert: '\n', attributes: { footnoteBody: '1' } }
+  ]});
+  var project = makeTestProject([chap1, chap2]);
+  var options = { type: '.mdfc', insertStrng: '***', insertHead: false };
+  var filepath = tempFilePath(t, '.mdfc');
+
+  await compileProject(project, {}, options, filepath);
+
+  var text = fs.readFileSync(filepath, 'utf8');
+
+  assert.match(text, /first chapter\[\^1\]/);
+  assert.match(text, /\[\^1\]: note in chapter one/);
+  assert.match(text, /second chapter\[\^2\]/);
+  assert.match(text, /\[\^2\]: note in chapter two/);
+});
+
 test('compileChapterDeltas does not leak an implicit global "i"', async function(){
   delete global.i;
 

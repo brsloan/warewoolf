@@ -1,10 +1,10 @@
-const { getTempQuill } = require('./quill-utils');
+const { getTempQuill, getIndexableText } = require('./quill-utils');
 
 function find(editorQuill, project, str, caseSensitive = true, startingIndex, searchAllChapters, displayChapterByIndex, wholeWordOnly = false){
     var index = -1;
 
     if(str){
-        var totalText = editorQuill.getText();
+        var totalText = getIndexableText(editorQuill);
 
         if(!caseSensitive){
             totalText = totalText.toLowerCase();

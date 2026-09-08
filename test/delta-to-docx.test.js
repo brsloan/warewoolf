@@ -121,9 +121,9 @@ test('a bullet list between two numbered lists separates them', async function()
 //numId, producing an invalid .docx. List numbers inside footnotes are rendered as plain text instead.
 test('a numbered list inside a footnote renders as plain-text numbers instead of an unresolved numId', async function(){
   const delta = { ops: [
-    {insert: 'main text'}, {insert: '[^1]'}, {insert: '\n'},
-    {insert: '[^1]: item one'}, {insert: '\n', attributes: {list: 'ordered'}},
-    {insert: '[^1]: item two'}, {insert: '\n', attributes: {list: 'ordered'}}
+    {insert: 'main text'}, {insert: {footnote: {n: '1'}}}, {insert: '\n'},
+    {insert: 'item one'}, {insert: '\n', attributes: {list: 'ordered', footnoteBody: '1'}},
+    {insert: 'item two'}, {insert: '\n', attributes: {list: 'ordered', footnoteBody: '1'}}
   ]};
 
   const doc = convertDeltaToDocx(delta, {}, project, null);
@@ -139,12 +139,12 @@ test('a numbered list inside a footnote renders as plain-text numbers instead of
   assert.match(text, /2\.\s*item two/, 'expected the second footnote list item numbered 2, got: ' + text);
 });
 
-//Regression: a [^N] marker with no matching "[^N]:" footnote body (deleted body paragraph, typo'd
+//Regression: a footnote marker with no matching footnote body (deleted body paragraph, typo'd
 //number) resolved footnoteBodies.findIndex to -1, so fnoteBodyNum became 0 and the export emitted a
 //FootnoteReferenceRun pointing at footnote id 0, which does not exist in the document (footnote ids
 //start at 1). The marker is kept as plain text instead when no footnote body matches it.
 test('a footnote marker with no matching footnote body is kept as text instead of referencing a missing footnote', async function(){
-  const delta = { ops: [ {insert: 'see note'}, {insert: '[^1]'}, {insert: '\n'} ] };
+  const delta = { ops: [ {insert: 'see note'}, {insert: {footnote: {n: '1'}}}, {insert: '\n'} ] };
 
   const doc = convertDeltaToDocx(delta, {}, project, null);
   const buffer = await docx.Packer.toBuffer(doc);
@@ -221,8 +221,8 @@ test('convertDeltaToDocx does not leak an implicit global "i"', function(){
   delete global.i;
 
   convertDeltaToDocx({ ops: [
-    {insert: 'main text'}, {insert: '[^1]'}, {insert: '\n'},
-    {insert: '[^1]: a footnote'}, {insert: '\n'}
+    {insert: 'main text'}, {insert: {footnote: {n: '1'}}}, {insert: '\n'},
+    {insert: 'a footnote'}, {insert: '\n', attributes: {footnoteBody: '1'}}
   ]}, {}, project, null);
 
   assert.strictEqual(typeof global.i, 'undefined', 'convertDeltaToDocx leaked "i" as an implicit global');

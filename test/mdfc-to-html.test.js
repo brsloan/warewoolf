@@ -239,3 +239,16 @@ test('the page stylesheet zeroes out blockquote\'s top and bottom margin', funct
   assert.match(blockquoteRule[1], /margin-top:\s*0px/);
   assert.match(blockquoteRule[1], /margin-bottom:\s*0px/);
 });
+
+//Regression: escapeAnyMarkers used to escape every "[^" unconditionally, so a footnote authored in
+//WareWoolf saved as "\[^1]" and this converter's convertFootnotes anchors on the *unescaped*
+//"^\[\^\d+\]:" - it never matched, the backslash leaked into the exported HTML, and the body
+//paragraph never became a div.footnote. See the worked example at the top of
+//docs/footnotes-plan.md, reproduced here exactly.
+test('a footnote reference and its body convert without a leaked backslash', function(){
+  assert.strictEqual(
+    convertMdfcToHtml('See note[^1] here.\n[^1]: The note.\n'),
+    '<p>See note<sup><a href="#fnote_1" id="fnoteRef_1">1</a></sup> here.</p>\n'
+      + '<div class="footnote" id="fnote_1"><p><sup><a href="#fnoteRef_1">1</a></sup>The note.\n</p></div>\n'
+  );
+});

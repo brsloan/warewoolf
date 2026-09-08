@@ -138,3 +138,14 @@ test('CRLF line endings do not break indented-paragraph conversion', function(){
     'First para.\n\nSecond para.\n\nThird para.\n'
   );
 });
+
+//Regression: escapeAnyMarkers in markdownFic.js used to escape every "[^" unconditionally, so a
+//footnote authored in WareWoolf saved as "\[^1]" - this converter's convertFootnotes anchors on the
+//*unescaped* "^\[\^\d+\]:", so consolidation never ran and the backslash leaked straight into the
+//exported Markdown. See the worked example at the top of docs/footnotes-plan.md.
+test('a footnote reference and its body export without a leaked backslash', function(){
+  assert.strictEqual(
+    convertMdfcToMd('See note[^1] here.\n[^1]: The note.\n'),
+    'See note[^1] here.\n[^1]: The note.\n'
+  );
+});

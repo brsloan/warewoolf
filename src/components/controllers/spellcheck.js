@@ -2,6 +2,7 @@ var nspell = require('nspell');
 const { logError } = require('./error-log');
 const { createPlatform } = require('./platform');
 const { createIpcBacking } = require('./platform-ipc');
+const { getIndexableText } = require('./quill-utils');
 
 //Group I used to need the app/userData paths wired in, so this module took sysDirectories from
 //every caller and built a node backing out of it. Phase 9a moved the backing into the main process,
@@ -35,7 +36,7 @@ async function loadDictionaries(){
 function findInvalidWord(editorQuill, spellchecker, startingIndex = 0, wordsToIgnore = []) {
     var invalidWord = null;
 
-    var text = editorQuill.getText().slice(startingIndex);
+    var text = getIndexableText(editorQuill).slice(startingIndex);
 
     //A contraction may be written with either apostrophe: a straight one, or the curly one the
     //editors' smart quotes produce (see models/autocorrect.js). Without the second, "don’t"

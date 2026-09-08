@@ -201,7 +201,7 @@ test('every formatting shortcut is bound on its default key with the platform mo
     'formatAlignCenter', 'formatAlignJustify', 'formatAlignLeft', 'formatAlignRight',
     'formatBlockquote', 'formatBold', 'formatClearHeading', 'formatHeading1', 'formatHeading2',
     'formatHeading3', 'formatHeading4', 'formatItalics', 'formatList', 'formatStrikethrough',
-    'formatTitle', 'formatUnderline'
+    'formatTitle', 'formatUnderline', 'insertFootnote'
   ]);
 
   assert.ok(q.applied().every(function(binding){ return binding.shortKey === true; }));
@@ -322,7 +322,7 @@ test('a shortcut a writer has unassigned is not bound at all', function(){
   var q = recordingQuill({}, { formatBold: null });
 
   assert.strictEqual(q.find('formatBold'), undefined);
-  assert.strictEqual(q.applied().length, 15);
+  assert.strictEqual(q.applied().length, 16);
 });
 
 //Quill 1.x has no removeBinding(), so re-applying has to strip what it added last time - or every
@@ -334,7 +334,7 @@ test('re-applying replaces the bindings it added before, leaving Quill to keep i
     formatBold: { key: 'W', mod: true, alt: false, shift: false, code: 'KeyW' }
   }));
 
-  assert.strictEqual(q.applied().length, 16, 'no duplicates left over from the first application');
+  assert.strictEqual(q.applied().length, 17, 'no duplicates left over from the first application');
   assert.strictEqual(q.find('formatBold').key, 87);
   assert.deepStrictEqual((q.keyboard.bindings[66] || []).map(function(binding){
     return binding.warewoolfAction;
@@ -366,7 +366,7 @@ test('a binding Quill could not match is left off rather than added dead', funct
   applyQuillShortcuts(q, bindings);
 
   assert.strictEqual(q.find('formatBold'), undefined);
-  assert.strictEqual(q.applied().length, 15);
+  assert.strictEqual(q.applied().length, 16);
 });
 
 //---------------------------------------------------------------------------

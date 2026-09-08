@@ -78,6 +78,14 @@ function flattenInserts(ops){
   var flattened = [];
 
   for(let i=0;i<ops.length;i++){
+    //An embed (a footnote marker, say) has an object insert rather than a string - there is no
+    //line to split it out of, so it passes through as its own op untouched. Without this check
+    //`.split('\n')` below throws, since objects have no such method.
+    if(typeof ops[i].insert !== 'string'){
+      flattened.push(ops[i]);
+      continue;
+    }
+
     if(ops[i].insert == '\n')
       flattened.push(ops[i]);
     else{
@@ -95,6 +103,31 @@ function flattenInserts(ops){
   }
 
   return flattened;
+}
+
+//Whether a delta insert is a footnote marker embed, shared by everything that has to tell a real
+//character run apart from one: the reconcile pass, the MarkdownFic writer, the docx exporter, and
+//the keyboard's context-sensitive insert/jump handler.
+function isFootnoteMarker(insertValue){
+  return Boolean(insertValue && typeof insertValue === 'object' && insertValue.footnote);
+}
+
+//Quill drops embeds entirely from getText() (core/editor.js filters to string inserts only), which
+//leaves every index after the first marker off by one against Quill's own index space - anything
+//that hands an offset computed from getText() back to setSelection lands one short per marker
+//before it. Built from getContents() instead, with one U+FFFC (object replacement character) per
+//embed: same length as Quill's own count, and a non-letter placeholder still breaks words correctly
+//for the spellchecker.
+const OBJECT_REPLACEMENT_CHAR = '￼';
+
+function getIndexableText(quill){
+  var text = '';
+
+  (quill.getContents().ops || []).forEach(function(op){
+    text += typeof op.insert === 'string' ? op.insert : OBJECT_REPLACEMENT_CHAR;
+  });
+
+  return text;
 }
 
 //Numbered lists restart at one for each new list and count independently at each nesting level, so
@@ -230,7 +263,15 @@ const QUILL_HANDLERS = {
     else
       this.quill.format('list', 'bullet', 'user');
   },
-  formatBlockquote: toggleHandler('blockquote')
+  formatBlockquote: toggleHandler('blockquote'),
+  //Context-sensitive rather than a single insert action - see footnote-navigation.js. Required
+  //lazily, inside the handler rather than at this module's top level, because that module reaches
+  //back into reconcile-footnotes.js, which itself requires this module for flattenInserts; a
+  //top-level require here would complete that circle before either file has finished exporting.
+  insertFootnote: function(){
+    const { insertOrJumpFootnote } = require('./footnote-navigation');
+    insertOrJumpFootnote(this.quill);
+  }
 };
 
 function headingHandler(level){
@@ -391,6 +432,9 @@ module.exports = {
   splitDeltaAtIndices,
   generateChapTitleFromFirstLine,
   parseDelta,
+  flattenInserts,
+  isFootnoteMarker,
+  getIndexableText,
   convertToPlainText,
   getOrderedListNumbers,
   getListLevel,
