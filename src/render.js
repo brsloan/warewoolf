@@ -8,7 +8,9 @@ const autosaver = require('./components/controllers/autosave');
 const chapterList = require('./components/controllers/chapter-list');
 const { registerKeybindings } = require('./components/controllers/keybindings');
 const { applyQuillShortcuts } = require('./components/controllers/quill-utils');
+const { attachAutocorrect } = require('./components/controllers/autocorrect');
 const { resolveShortcuts } = require('./components/models/shortcuts');
+const { resolveAutocorrect } = require('./components/models/autocorrect');
 const { enableTypewriterMode, disableTypewriterMode } = require('./components/controllers/typewriter-mode');
 const {
   removeElementsByClass,
@@ -72,6 +74,13 @@ var project = newProject();
 //keybindings.js reads it through a getter on every keypress, so nothing there needs re-registering,
 //while Quill's own bindings do have to be re-applied (see applyShortcutChanges below).
 var shortcutBindings = resolveShortcuts(null);
+
+//The automatic substitutions in force - smart quotes, em dashes and the rest. Same shape and same
+//reasoning as shortcutBindings above: the defaults with the writer's saved changes over them,
+//replaced wholesale when Settings is saved, and read through a getter by the two editors so
+//nothing has to be re-attached when it changes. Empty while the master switch is off, which is how
+//"substitute nothing" is said to controllers/autocorrect.js.
+var autocorrectRules = resolveAutocorrect(null);
 
 //Populated by loadPlatformState() below, once getAppPaths()/getFileRequestedOnOpen() resolve.
 //Nothing above this line needs them; everything below runs from inside functions and reads these by
@@ -154,6 +163,7 @@ async function loadPlatformState(){
 
   userSettings = await getUserSettings(sysDirectories.userData + "/user-settings.json").load();
   shortcutBindings = resolveShortcuts(userSettings.keyboardShortcuts);
+  autocorrectRules = resolveAutocorrectSetting();
   await migrateLegacyCredential();
 
   await initialize();
@@ -326,7 +336,25 @@ async function loadInitialProject(){
 function setUpQuills(){
   applyQuillShortcuts(editorQuill, shortcutBindings);
   applyQuillShortcuts(notesQuill, shortcutBindings);
+  //Attached once and never re-attached: unlike Quill's own bindings, these read the rules through
+  //the getter below on every keystroke, so a change in Settings takes effect on the next character
+  //typed. The returned detach functions are dropped because both editors live as long as the
+  //window does - there is nothing here to tear down.
+  attachAutocorrect(editorQuill, getAutocorrectRules);
+  attachAutocorrect(notesQuill, getAutocorrectRules);
   disableTabbingToEditors();
+}
+
+function getAutocorrectRules(){
+  return autocorrectRules;
+}
+
+//The master switch is folded in here rather than checked on every keystroke: with it off there are
+//simply no rules, which is the same thing said in the shape controllers/autocorrect.js already
+//understands. The individual rules a writer chose are left in user settings untouched, so turning
+//it back on restores them rather than starting from the defaults.
+function resolveAutocorrectSetting(){
+  return userSettings.autocorrectEnabled ? resolveAutocorrect(userSettings.autocorrect) : {};
 }
 
 //What the Shortcuts popup calls when a writer saves a change. `overrides` is only what differs from
@@ -1319,6 +1347,7 @@ const menuCommands = {
     const showSettings = require('./components/views/settings_display');
     return showSettings(userSettings, autosaver, sysDirectories, detached(autosaveProject), function(){
       setDarkMode();
+      autocorrectRules = resolveAutocorrectSetting();
     }, platformInfo);
   } },
   'corkboard-clicked': { run: function(){

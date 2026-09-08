@@ -61,6 +61,7 @@ function findInText(str, text, caseSensitive, startingIndex, wholeWordOnly = fal
 
 function getNextIndex(str, text, startingIndex, wholeWordOnly){
     var index = -1;
+    text = foldQuotesInText(str, text);
     if(wholeWordOnly == false){
         index = text.indexOf(str, startingIndex);
     }
@@ -72,6 +73,24 @@ function getNextIndex(str, text, startingIndex, wholeWordOnly){
             index = match.index;
     }
     return index;
+}
+
+//A writer's fingers still type a straight quote into the search box long after the editors stopped
+//putting one in the manuscript (see models/autocorrect.js), so searching for "don't" or for a bare
+//quote has to find the curly ones as well - otherwise the commonest search there is quietly finds
+//nothing. Imported manuscripts bring the low and reversed quotes with them, so those count too.
+//
+//Only in that direction: a curly quote typed or pasted into the box means that exact character,
+//which is what still allows hunting down one particular quote.
+//
+//Length-preserving on purpose, and that is not incidental - every quote folds to exactly one
+//character, so the index this produces and the search term's own length still describe the match
+//in the untouched text, which is what the caller selects and replaces.
+function foldQuotesInText(str, text){
+    if(!/['"]/.test(str))
+        return text;
+
+    return text.replace(/[“”„‟]/g, '"').replace(/[‘’‚‛]/g, "'");
 }
 
 //The search term comes straight from the user, so it must be escaped before going into a

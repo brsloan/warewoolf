@@ -42,7 +42,8 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 * Corkboard that saves as a markdown file that doubles as an outline.
 * Adjust width of text editor and how large text is displayed.
 * Customizable keyboard shortcuts: rebind any shortcut in the Shortcut Helper (Ctrl+H), or restore the defaults, and your choices are remembered.
-* Spellcheck, but it must be run after writing (no form of auto-correct or red squiggles or godawful grammar advice).
+* Automatic substitutions as you type: smart quotes, em dashes from two hyphens, and an ellipsis from three periods. Ctrl+Z undoes any one of them, and the whole thing can be switched off in Settings.
+* Spellcheck, but it must be run after writing (no red squiggles or godawful grammar advice).
 * Word .docx support for import/export
 * Auto-saving and auto-backup options
 * Saves chapters as .txt files with light Markdown-style formatting, so even if WareWoolf disappears you will always be able to read/edit the documents you create with it. This is also widely considered the most "archival" file format, so people will still be able to open your files in 100 years (if people still read then).
@@ -77,6 +78,9 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 Unreleased. Changes made:
 * Keyboard shortcuts are now customizable: open the Shortcut Helper (Ctrl+H, Cmd+Shift+H on Mac), choose a shortcut, and press the keys you want. Backspace clears one; Restore Defaults puts them all back. Your changes are saved between sessions.
 * Fixed bug where the Bullets/Numbered List shortcut (Ctrl/Cmd+Shift+B) never worked, because the File > Backup menu item claimed the same keys. Backup is still on the File menu, without a shortcut.
+* Automatic substitutions as you type: straight quotes become curly ones (opening or closing to suit), two hyphens become an em dash, and three periods become an ellipsis. Ctrl+Z undoes just the substitution, leaving what you typed. All of it can be switched off, in whole or rule by rule, in File > Settings.
+* Spellcheck now understands contractions written with a curly apostrophe, instead of stopping on both halves of "don't".
+* A straight quote typed into Find/Replace now finds curly ones too, so searching for a line of dialogue still works. Searching for a specific curly quote still finds only that one.
 
 2026-09-07: v2.5.0. Chages made:
 * Security improvements

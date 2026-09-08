@@ -1,0 +1,18 @@
+[>c] # Automatic Substitutions
+
+As you type, WareWoolf quietly replaces a few things with what you almost certainly meant:
+
+- A straight double quote becomes a curly one, opening or closing to suit where it falls: “Get out,” she said.
+- A straight single quote does the same, and an apostrophe inside a word curls the right way round, so “don’t” and “it’s” come out properly.
+- Two hyphens in a row become an em dash: “wait” followed by two hyphens gives you “wait—”.
+- Three periods in a row become a single ellipsis: “well…”.
+
+If a substitution is not the one you wanted, press **Ctrl+Z** once. That puts back exactly what you typed and leaves the rest of the sentence alone. Press it again and you undo the typing itself, as usual.
+
+You can switch any of this off in **File > Settings**, under **Automatic Substitutions**. The top checkbox turns the whole feature off; the ones below it turn off a single substitution while leaving the others working. Turning the whole thing off and on again brings back the choices you had made rather than starting over.
+
+Two rules worth knowing about:
+
+A quote typed immediately after a dash closes rather than opens, because interrupted dialogue is far commoner in fiction than a dash leading into a speech. And two hyphens turn into a dash the moment you type the second one, so a line of three or more hyphens used as a scene break will need an undo, or the Em Dash rule switched off.
+
+None of this touches writing you have already done. It applies only to what you type from here on: existing chapters, and anything you import or paste in, are left exactly as they are. To bring an older manuscript into line, use **Tools > Find/Replace** — a straight quote typed into the search box finds the curly ones as well, so searching for one finds both.

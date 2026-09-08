@@ -34,6 +34,8 @@ function makeUserSettings(overrides){
     autosaveIntMinutes: 5,
     darkMode: 'system',
     showBattery: false,
+    autocorrectEnabled: true,
+    autocorrect: {},
     save: function(){}
   }, overrides);
 }
@@ -156,4 +158,73 @@ test('a recognized darkMode value is still checked and round-trips on Save', fun
   findButton('Save').onclick();
 
   assert.strictEqual(userSettings.darkMode, 'dark');
+});
+
+//---------------------------------------------------------------------------
+// automatic substitutions
+//---------------------------------------------------------------------------
+
+function openSettings(userSettings){
+  var showSettings = freshSettingsDisplay({});
+  showSettings(userSettings, { updateAutosave: function(){} }, sysDirectories(), function(){}, function(){}, platformInfo());
+  return userSettings;
+}
+
+test('every substitution rule gets a checkbox, showing what is actually in force', function(t){
+  openSettings(makeUserSettings({ autocorrect: { emDash: false } }));
+
+  //Shown as the defaults with the writer's one change over them, not as the stored override alone.
+  assert.strictEqual(document.getElementById('autocorrect-smartDoubleQuotes').checked, true);
+  assert.strictEqual(document.getElementById('autocorrect-smartSingleQuotes').checked, true);
+  assert.strictEqual(document.getElementById('autocorrect-ellipsis').checked, true);
+  assert.strictEqual(document.getElementById('autocorrect-emDash').checked, false);
+});
+
+test('the master switch reflects the stored setting and greys the rules out while it is off', function(t){
+  openSettings(makeUserSettings({ autocorrectEnabled: false }));
+
+  assert.strictEqual(document.getElementById('autocorrect-check').checked, false);
+  assert.strictEqual(document.getElementById('autocorrect-emDash').disabled, true);
+  assert.strictEqual(document.getElementById('autocorrect-ellipsis').disabled, true);
+});
+
+test('turning the master switch on releases the individual rules', function(t){
+  openSettings(makeUserSettings({ autocorrectEnabled: false }));
+
+  var master = document.getElementById('autocorrect-check');
+  master.checked = true;
+  master.onchange();
+
+  assert.strictEqual(document.getElementById('autocorrect-emDash').disabled, false);
+});
+
+//Greyed out, not cleared: a writer who switches substitutions off and on again gets back the rules
+//they had chosen rather than the defaults.
+test('the rules a writer chose survive the master switch being turned off and saved', function(t){
+  var userSettings = openSettings(makeUserSettings({ autocorrect: { emDash: false } }));
+
+  document.getElementById('autocorrect-check').checked = false;
+  findButton('Save').onclick();
+
+  assert.strictEqual(userSettings.autocorrectEnabled, false);
+  assert.deepStrictEqual(userSettings.autocorrect, { emDash: false });
+});
+
+test('Save stores only the rules that differ from their defaults', function(t){
+  var userSettings = openSettings(makeUserSettings());
+
+  document.getElementById('autocorrect-ellipsis').checked = false;
+  findButton('Save').onclick();
+
+  assert.strictEqual(userSettings.autocorrectEnabled, true);
+  assert.deepStrictEqual(userSettings.autocorrect, { ellipsis: false });
+});
+
+test('Save stores nothing at all when every rule is left on its default', function(t){
+  var userSettings = openSettings(makeUserSettings({ autocorrect: { emDash: false } }));
+
+  document.getElementById('autocorrect-emDash').checked = true;
+  findButton('Save').onclick();
+
+  assert.deepStrictEqual(userSettings.autocorrect, {});
 });

@@ -1971,3 +1971,89 @@ test('the Error Log dialog gets the same working platform, since it can send as 
   const described = await opened.platform.describeCredential({ service: 'email' });
   assert.strictEqual(described.hasPassword, false, 'nothing stored yet, from a clean credential store');
 });
+
+//---------------------------------------------------------------------------
+// automatic substitutions
+//---------------------------------------------------------------------------
+
+//One character at a time at the end of the document, which is as close to a keystroke as this gets
+//without a browser - see test/autocorrect-controller.test.js, which covers the rules themselves.
+//These are about the wiring: that setUpQuills() actually attached them to both editors, and that
+//the settings reach them.
+function typeInto(quill, text){
+  text.split('').forEach(function(character){
+    quill.insertText(quill.getLength() - 1, character, 'user');
+  });
+}
+
+test('typing in the editor gets the automatic substitutions', async function(){
+  var r = await freshRender();
+  r.project.chapters = [makeChap('')];
+  await r.displayChapterByIndex(0);
+  r.editorQuill.setText('\n');
+
+  typeInto(r.editorQuill, '"Wait--" she said...');
+
+  assert.strictEqual(r.editorQuill.getText().trim(), '“Wait—” she said…');
+});
+
+test('the notes pane gets them too', async function(){
+  var r = await freshRender();
+  r.notesQuill.setText('\n');
+
+  typeInto(r.notesQuill, 'wait--no');
+
+  assert.strictEqual(r.notesQuill.getText().trim(), 'wait—no');
+});
+
+//The substitution is a 'user' change of its own, so the chapter has to end up holding the
+//substituted text rather than the straight quotes that were typed.
+test('a substitution is saved onto the chapter like any other edit', async function(){
+  var r = await freshRender();
+  var c0 = makeChap('');
+  r.project.chapters = [c0];
+  await r.displayChapterByIndex(0);
+  r.editorQuill.setText('\n');
+
+  typeInto(r.editorQuill, 'wait--');
+
+  assert.strictEqual(c0.contents.ops[0].insert.trim(), 'wait—');
+  assert.strictEqual(c0.hasUnsavedChanges, true);
+});
+
+//Driven through the real menu command and the real Save button, so this covers the callback
+//render.js hands the popup as well as the popup itself.
+function settingsPopupSaveButton(){
+  return Array.from(document.querySelectorAll('.popup button')).find(function(b){
+    return b.textContent === 'Save';
+  });
+}
+
+function saveSettingsPopup(){
+  currentBridge().handlers['settings-clicked']();
+  settingsPopupSaveButton().onclick();
+}
+
+test('switching the substitutions off in Settings stops them on the next keystroke', async function(){
+  var r = await freshRender();
+  r.editorQuill.setText('\n');
+
+  typeInto(r.editorQuill, '"');
+  r.userSettings.autocorrectEnabled = false;
+  saveSettingsPopup();
+  typeInto(r.editorQuill, '"');
+
+  assert.strictEqual(r.editorQuill.getText().trim(), '“"');
+});
+
+test('a single rule switched off in Settings leaves the others working', async function(){
+  var r = await freshRender();
+  r.editorQuill.setText('\n');
+
+  currentBridge().handlers['settings-clicked']();
+  document.getElementById('autocorrect-emDash').checked = false;
+  settingsPopupSaveButton().onclick();
+  typeInto(r.editorQuill, '"wait--"');
+
+  assert.strictEqual(r.editorQuill.getText().trim(), '“wait--”');
+});

@@ -196,3 +196,77 @@ test('getBeginningOfCurrentWord does not treat an internal apostrophe as a word 
 test('getBeginningOfCurrentWord returns 0 at the start of the text', function(){
   assert.strictEqual(getBeginningOfCurrentWord('hello', 0), 0);
 });
+
+//---------------------------------------------------------------------------
+// curly apostrophes
+//---------------------------------------------------------------------------
+
+//Regression: the word pattern only knew the straight apostrophe, so once the editors started
+//turning one into '’' as it was typed (see models/autocorrect.js) every contraction in the
+//manuscript tokenized as two words - "don" and "t" - and the writer was stopped on both.
+test('a contraction written with a curly apostrophe is not flagged', async function(){
+  makeSysDirectories();
+  var editorQuill = makeEditorQuill('she said don’t stop\n');
+
+  var result = await runSpellcheck(editorQuill);
+
+  assert.strictEqual(result, null);
+});
+
+test('a misspelling with a curly apostrophe is reported as it is written in the manuscript', async function(){
+  makeSysDirectories();
+  var editorQuill = makeEditorQuill('she said zxqzxq’t here\n');
+
+  var result = await runSpellcheck(editorQuill);
+
+  //The word carries the curly apostrophe, because the popup selects and replaces it by this
+  //string - it has to match the text on the page character for character.
+  assert.strictEqual(result.word, 'zxqzxq’t');
+  assert.strictEqual(result.index, 9);
+});
+
+//A suggestion arrives from the dictionary with a straight apostrophe, and accepting it would undo
+//the smart quote the writer just got.
+test('suggestions come back with the same apostrophe the misspelled word used', async function(){
+  makeSysDirectories();
+  var editorQuill = makeEditorQuill('she said don’tt here\n');
+
+  var result = await runSpellcheck(editorQuill);
+
+  assert.ok(result.suggestions.includes('don’t'),
+    'expected a curly-apostrophe suggestion in: ' + JSON.stringify(result.suggestions));
+  assert.ok(!result.suggestions.includes("don't"));
+});
+
+test('a word added to the personal dictionary is stored the way the dictionary spells it', async function(){
+  var userDataDir = tempDir('warewoolf-spellcheck-userdata-');
+  var dictDir = path.join(userDataDir, 'dictionaries');
+  fs.mkdirSync(dictDir, { recursive: true });
+  var personalPath = path.join(dictDir, 'personal.dic');
+  fs.writeFileSync(personalPath, 'WareWoolf\n', 'utf8');
+
+  useSysDirectories({ userData: userDataDir });
+  await addWordToPersonalDictFile('Ozy’mandias');
+
+  //Stored straight, so the flattened lookup every later spellcheck does actually finds it.
+  var contents = fs.readFileSync(personalPath, 'utf8');
+  assert.ok(contents.includes("Ozy'mandias"), 'expected a straight apostrophe in: ' + JSON.stringify(contents));
+});
+
+test('a word added with a curly apostrophe is not flagged the next time round', async function(){
+  var dirs = makeSysDirectories();
+  await addWordToPersonalDictFile('Ozy’mandias');
+
+  useSysDirectories(dirs);
+  var result = await runSpellcheck(makeEditorQuill('she said Ozy’mandias here\n'));
+
+  assert.strictEqual(result, null);
+});
+
+test('getBeginningOfCurrentWord treats an em dash as a word border', function(){
+  assert.strictEqual(getBeginningOfCurrentWord('wait—stop', 9), 5);
+});
+
+test('getBeginningOfCurrentWord does not treat a curly apostrophe as a word border', function(){
+  assert.strictEqual(getBeginningOfCurrentWord('don’t stop', 5), 0);
+});

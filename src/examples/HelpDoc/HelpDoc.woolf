@@ -11,6 +11,12 @@
 			"summary": null
 		},
 		{
+			"title": "Automatic Substitutions",
+			"filename": "Automatic Substitutions.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
 			"title": "Backup / Auto-Backup",
 			"filename": "Backup  Auto-Backup.txt",
 			"filter": null,

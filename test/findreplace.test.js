@@ -231,3 +231,53 @@ test('find visits each other chapter once and restores the starting chapter when
   assert.deepStrictEqual(visited, [1, 2, 0]);
   assert.strictEqual(project.activeChapterIndex, 0);
 });
+
+//---------------------------------------------------------------------------
+// straight quotes in the search box, curly ones in the manuscript
+//---------------------------------------------------------------------------
+
+//A writer's fingers still type a straight quote into the search box long after the editors stopped
+//putting one in the manuscript (see models/autocorrect.js), so the commonest search there is - for
+//a line of dialogue, or for a contraction - has to keep working.
+test('a straight quote in the search term finds a curly one', function(){
+  assert.strictEqual(getNextIndex('"', '“Get out,” she said.', 0, false), 0);
+  assert.strictEqual(getNextIndex("don't", 'and he don’t stop', 0, false), 7);
+});
+
+test('the index a folded match reports still describes the untouched text', function(){
+  var text = 'she said “get out” loudly';
+
+  //Pointing at the closing curly quote, not at some position shifted by the folding.
+  assert.strictEqual(getNextIndex('"', text, 10, false), 17);
+  assert.strictEqual(text[17], '”');
+});
+
+test('a curly quote in the search term means that exact quote', function(){
+  //So one particular quote can still be hunted down: the opening quote is not found by searching
+  //for a closing one.
+  assert.strictEqual(getNextIndex('”', '“Get out,” she said.', 0, false), 9);
+  assert.strictEqual(getNextIndex('“', '“Get out,” she said.', 1, false), -1);
+});
+
+test('the low and reversed quotes an imported manuscript brings with it are folded too', function(){
+  assert.strictEqual(getNextIndex('"', '„Raus!‟', 0, false), 0);
+  assert.strictEqual(getNextIndex("'", '‚so‛', 0, false), 0);
+});
+
+test('a search term with no quote in it is matched against the text as written', function(){
+  assert.strictEqual(getNextIndex('out', '“Get out,” she said.', 0, false), 5);
+  assert.strictEqual(getNextIndex('Get out,”', '“Get out,” she said.', 0, false), 1);
+});
+
+test('whole word search folds quotes the same way', function(){
+  assert.strictEqual(getNextIndex("don't", 'and he don’t stop', 0, true), 7);
+});
+
+test('Replace All reaches curly quotes through a straight search term', function(){
+  var delt = { ops: [{ insert: 'and he don’t stop\n' }] };
+
+  var result = replaceAllInDelta("don't", 'will not', true, delt);
+
+  assert.strictEqual(result.changed, 1);
+  assert.strictEqual(result.delta.ops[0].insert, 'and he will not stop\n');
+});

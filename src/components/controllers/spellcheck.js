@@ -37,8 +37,11 @@ function findInvalidWord(editorQuill, spellchecker, startingIndex = 0, wordsToIg
 
     var text = editorQuill.getText().slice(startingIndex);
 
-    var wordRegx = /\w+(?:'\w+)*/;
-    var numberRegx = /'*\d+'*s*/;
+    //A contraction may be written with either apostrophe: a straight one, or the curly one the
+    //editors' smart quotes produce (see models/autocorrect.js). Without the second, "don’t"
+    //tokenizes as "don" and "t", and the writer is stopped on a word they spelled correctly.
+    var wordRegx = /\w+(?:['’]\w+)*/;
+    var numberRegx = /['’]*\d+['’]*s*/;
     var nextWord = {};
     var masterIndex = 0;
     var wordIsValid = true;
@@ -51,12 +54,15 @@ function findInvalidWord(editorQuill, spellchecker, startingIndex = 0, wordsToIg
             masterIndex += nextStart;
             text = text.slice(nextStart);
 
-            wordIsValid = spellchecker.correct(nextWord[0]);
+            wordIsValid = spellchecker.correct(forDictionary(nextWord[0]));
             if(!wordIsValid){
                 invalidWord = {
+                    //The word as it is written in the manuscript, not as the dictionary was asked
+                    //about it: this is what gets shown, selected, and searched for by Change All,
+                    //all of which have to match the text on the page character for character.
                     word: nextWord[0],
                     index: currentWordPosition + startingIndex,
-                    suggestions: spellchecker.suggest(nextWord[0])
+                    suggestions: matchApostrophes(spellchecker.suggest(forDictionary(nextWord[0])), nextWord[0])
                 };
                 //Skip invalid word if in ignore list or a number
                 if(wordsToIgnore.indexOf(nextWord[0]) > -1 || nextWord[0].match(numberRegx)){
@@ -70,9 +76,33 @@ function findInvalidWord(editorQuill, spellchecker, startingIndex = 0, wordsToIg
     return invalidWord;
 }
 
+//nspell's dictionaries are written with straight apostrophes, so a curly one has to be flattened
+//before a word is looked up or stored - otherwise every contraction a writer types with smart
+//quotes on comes back misspelled.
+function forDictionary(word){
+  return word.replaceAll('’', "'");
+}
+
+//And the other way for anything headed back into the manuscript. A suggestion arrives from the
+//dictionary with a straight apostrophe, and accepting it would undo the smart quote the writer
+//just got. Only done when the word being corrected had a curly one, so a writer who has smart
+//quotes switched off is left alone.
+function matchApostrophes(suggestions, word){
+  if(word.indexOf('’') === -1)
+    return suggestions;
+
+  return suggestions.map(function(suggestion){
+    return suggestion.replaceAll("'", '’');
+  });
+}
+
+//Stored in the dictionary's own spelling rather than the manuscript's, for the same reason
+//findInvalidWord looks words up that way: a personal entry of "don’t" would never be found again,
+//since every later lookup flattens the apostrophe before asking.
 async function addWordToPersonalDictFile(word){
   try{
     var personal = await platform.loadPersonalDictionary();
+    word = forDictionary(word);
     if(personal.indexOf(word) == -1){
         personal.push(word);
         await platform.savePersonalDictionary({ words: personal });
@@ -85,7 +115,10 @@ async function addWordToPersonalDictFile(word){
 
 function getBeginningOfCurrentWord(text, position){
   var firstLetter = false;
-  var wordBorders = /\s|\.|-/;
+  //The em and en dashes are borders alongside the hyphen now that '--' becomes one as it is typed;
+  //the ellipsis for the same reason beside the period. An apostrophe of either kind is deliberately
+  //absent: it is part of the word, not a border between two.
+  var wordBorders = /\s|\.|-|—|–|…/;
 
   while(firstLetter == false){
     if(text[position - 1] == null || wordBorders.test(text[position - 1]) ){

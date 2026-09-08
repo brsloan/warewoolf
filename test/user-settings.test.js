@@ -250,6 +250,58 @@ test('a shortcuts field that is not a map of overrides falls back to no override
   }
 });
 
+//The automatic substitutions carry the same shape as the shortcuts above: a master switch that is
+//on out of the box, and a map holding only the individual rules a writer has changed.
+test('automatic substitutions start on with no rules overridden', function(t){
+  const dir = configurePlatform(t);
+  const settings = getUserSettings(settingsPath(dir));
+
+  assert.strictEqual(settings.autocorrectEnabled, true);
+  assert.deepStrictEqual(settings.autocorrect, {});
+});
+
+test('the substitution settings round-trip through the file', async function(t){
+  const dir = configurePlatform(t);
+  const settings = getUserSettings(settingsPath(dir));
+
+  settings.autocorrectEnabled = false;
+  settings.autocorrect = { emDash: false };
+  await settings.save();
+
+  const reloaded = await getUserSettings(settingsPath(dir)).load();
+
+  assert.strictEqual(reloaded.autocorrectEnabled, false);
+  assert.deepStrictEqual(reloaded.autocorrect, { emDash: false });
+});
+
+//A plain `type: 'object'` check would have waved all of this through, which is why this field
+//carries a sanitizer too: an unknown rule or a value that is not a boolean is dropped, leaving
+//that rule on its default.
+test('substitution overrides are sanitized entry by entry on load', async function(t){
+  const dir = configurePlatform(t);
+  fs.writeFileSync(settingsPath(dir), JSON.stringify({
+    autocorrect: {
+      emDash: false,
+      madeUpRule: true,
+      ellipsis: 'no'
+    }
+  }), 'utf8');
+
+  const settings = await getUserSettings(settingsPath(dir)).load();
+
+  assert.deepStrictEqual(settings.autocorrect, { emDash: false });
+});
+
+test('a substitutions field that is not a map of overrides falls back to no overrides', async function(t){
+  const dir = configurePlatform(t);
+
+  for(const value of ['on', 42, [], null]){
+    fs.writeFileSync(settingsPath(dir), JSON.stringify({ autocorrect: value }), 'utf8');
+    const settings = await getUserSettings(settingsPath(dir)).load();
+    assert.deepStrictEqual(settings.autocorrect, {}, JSON.stringify(value));
+  }
+});
+
 test('getSettingsFilepath returns the path the settings were constructed with', function(t){
   const dir = configurePlatform(t);
   const settings = getUserSettings(settingsPath(dir));

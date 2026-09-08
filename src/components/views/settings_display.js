@@ -1,6 +1,7 @@
 const { closePopups, createButton, removeElementsByClass, convertFilepath, generateRow } = require('../controllers/utils');
 const { showBattery, removeBattery } = require('./battery_display');
 const showFileDialog = require('./file-dialog_display');
+const { getAutocorrectDefs, resolveAutocorrect, diffFromDefaults } = require('../models/autocorrect');
 
 function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, callback, platformInfo){
   removeElementsByClass('popup');
@@ -107,6 +108,52 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
   saveSet.appendChild(backupTbl);
   settingsForm.appendChild(saveSet);
 
+  var substitutionSet = document.createElement('fieldset');
+  var substitutionLeg = document.createElement('legend');
+  substitutionLeg.innerText = 'Automatic Substitutions';
+  substitutionSet.appendChild(substitutionLeg);
+
+  var substitutionTbl = document.createElement('table');
+
+  var autocorrectLabel = document.createElement('label');
+  autocorrectLabel.innerText = 'Substitute As I Type: ';
+  autocorrectLabel.htmlFor = 'autocorrect-check';
+
+  var autocorrectCheck = document.createElement('input');
+  autocorrectCheck.type = 'checkbox';
+  autocorrectCheck.id = 'autocorrect-check';
+  autocorrectCheck.checked = userSettings.autocorrectEnabled;
+
+  substitutionTbl.appendChild(generateRow(autocorrectLabel, autocorrectCheck));
+
+  //Shown as what is in force - the defaults with the writer's saved changes over them - rather
+  //than as the stored overrides, which are only the handful that differ.
+  var rules = resolveAutocorrect(userSettings.autocorrect);
+  var ruleChecks = {};
+
+  getAutocorrectDefs().forEach(function(def){
+    var ruleLabel = document.createElement('label');
+    ruleLabel.innerText = def.label + ' (' + def.example + '): ';
+    ruleLabel.htmlFor = 'autocorrect-' + def.id;
+
+    var ruleCheck = document.createElement('input');
+    ruleCheck.type = 'checkbox';
+    ruleCheck.id = 'autocorrect-' + def.id;
+    ruleCheck.checked = rules[def.id];
+
+    ruleChecks[def.id] = ruleCheck;
+    substitutionTbl.appendChild(generateRow(ruleLabel, ruleCheck));
+  });
+
+  //A rule means nothing while the master switch is off, so the list greys out rather than sitting
+  //there looking as though it still decides something. Disabled, not cleared: a writer who turns
+  //substitutions back on gets the rules they had chosen, since Save reads .checked either way.
+  autocorrectCheck.onchange = updateRuleAvailability;
+  updateRuleAvailability();
+
+  substitutionSet.appendChild(substitutionTbl);
+  settingsForm.appendChild(substitutionSet);
+
   var appearanceSet = document.createElement('fieldset');
   var appearanceLeg = document.createElement('legend');
   appearanceLeg.innerText = "Appearance";
@@ -200,6 +247,9 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
     userSettings.darkMode = document.querySelector('input[type=radio][name=dark-mode]:checked').value;
     userSettings.defaultAuthor = defAuthIn.value;
     userSettings.addressInfo = addressIn.value;
+    userSettings.autocorrectEnabled = autocorrectCheck.checked;
+    //Stored as only what differs from the defaults - see diffFromDefaults in models/autocorrect.js.
+    userSettings.autocorrect = diffFromDefaults(checkedRules());
     if(platformInfo.platform == 'linux'){
       if(userSettings.showBattery && batteryDisplayCheck.checked == false){
         userSettings.showBattery = batteryDisplayCheck.checked;
@@ -227,6 +277,22 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
   document.body.appendChild(popup);
 
   defAuthIn.focus();
+
+  function updateRuleAvailability(){
+    Object.keys(ruleChecks).forEach(function(id){
+      ruleChecks[id].disabled = !autocorrectCheck.checked;
+    });
+  }
+
+  function checkedRules(){
+    var checked = {};
+
+    Object.keys(ruleChecks).forEach(function(id){
+      checked[id] = ruleChecks[id].checked;
+    });
+
+    return checked;
+  }
 }
 
 function promptToChooseDirectory(defPath, sysDirectories, cback){

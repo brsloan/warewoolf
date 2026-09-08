@@ -1,5 +1,6 @@
 const { logError } = require('../controllers/error-log');
 const { sanitizeOverrides } = require('./shortcuts');
+const { sanitizeAutocorrect } = require('./autocorrect');
 
 //Set once by render.js's loadPlatformState(), the same instance error-log.js uses. As of Phase 9a
 //that is the ipc-backed one: loadUserSettings()/saveUserSettings() were plain fs reachable straight
@@ -16,12 +17,13 @@ function setPlatform(p){
 //never be copied onto the live object. senderPass holds an {iv, content} blob before migration (see
 //credential-store.js migrateLegacyPassword) and is null afterward, hence the 'object' type.
 //
-//A field may also carry a `sanitize` function, for the one case a type name cannot describe:
-//keyboardShortcuts is a map whose every entry has to be checked in its own right, since `object`
-//would wave through an array, or a map of bindings no key could ever produce. Where one is given
-//it replaces the type check entirely and its return value is what lands on the object, so it must
-//be total - shortcuts.js's sanitizeOverrides answers with {} (meaning "all defaults") for anything
-//it cannot make sense of, rather than throwing or handing back a partial map.
+//A field may also carry a `sanitize` function, for the cases a type name cannot describe:
+//keyboardShortcuts and autocorrect are maps whose every entry has to be checked in its own right,
+//since `object` would wave through an array, or a map of bindings no key could ever produce. Where
+//one is given it replaces the type check entirely and its return value is what lands on the object,
+//so it must be total - shortcuts.js's sanitizeOverrides and autocorrect.js's sanitizeAutocorrect
+//both answer with {} (meaning "all defaults") for anything they cannot make sense of, rather than
+//throwing or handing back a partial map.
 const SETTINGS_SCHEMA = {
   editorWidth: { type: 'number' },
   fontSize: { type: 'number' },
@@ -47,7 +49,9 @@ const SETTINGS_SCHEMA = {
   darkMode: { type: 'string' },
   showBattery: { type: 'boolean' },
   displayChapNotes: { type: 'boolean' },
-  keyboardShortcuts: { type: 'object', sanitize: sanitizeOverrides }
+  keyboardShortcuts: { type: 'object', sanitize: sanitizeOverrides },
+  autocorrectEnabled: { type: 'boolean' },
+  autocorrect: { type: 'object', sanitize: sanitizeAutocorrect }
 };
 
 function getUserSettings(userSettingsFilepath){
@@ -80,6 +84,13 @@ function getUserSettings(userSettingsFilepath){
     //never the whole map. An action missing from here is on its default, which is what lets a
     //default changed in a later version reach a writer who never touched that shortcut.
     keyboardShortcuts: {},
+    //The master switch for the editors' automatic substitutions - smart quotes, em dashes and the
+    //rest. On by default: a writer who wants none of it turns this off once rather than clearing
+    //every rule.
+    autocorrectEnabled: true,
+    //And, exactly like keyboardShortcuts above, only the individual rules a writer has actually
+    //changed, keyed by the ids in autocorrect.js. A rule missing from here is on its default.
+    autocorrect: {},
     save: save,
     load: load,
     getSettingsFilepath: getSettingsFilepath
