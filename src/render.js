@@ -976,6 +976,17 @@ function applyFootnoteStructuralChanges(){
   finally{
     applyingFootnoteStructuralChange = false;
   }
+
+  //Numbered here and now rather than left to the debounce below. A structural change is the one
+  //case where waiting is visible: it has just put a marker and a body on screen carrying whatever
+  //id materializePayloads picked for them, and both render their number straight from that id, so
+  //a second of debounce is a second of the writer watching the wrong number. Both updates land
+  //inside the same text-change, so the browser paints once, with the right number already in it.
+  //
+  //Unguarded by the caret check runFootnoteRenumber makes, deliberately: that check protects a
+  //writer mid-sentence in a note from an idle timer reordering the ground under them, which is not
+  //what this is - the writer just made an edit, and the reorder is part of it.
+  applyFootnoteRenumber();
 }
 
 function scheduleFootnoteRenumber(){
@@ -1002,6 +1013,13 @@ function runFootnoteRenumber(){
       return;
   }
 
+  applyFootnoteRenumber();
+}
+
+//Silent, so it is not itself undoable and does not re-enter the text-change handler above. Quill
+//still hears about it through editor-change, which is what History listens on, so the undo stack
+//is transformed rather than left pointing at indices this has moved.
+function applyFootnoteRenumber(){
   var Delta = Quill.import('delta');
   var current = editorQuill.getContents();
   var renumbered = renumberFootnotes(current);

@@ -267,8 +267,11 @@ test('a pasted marker\'s payload becomes a real body and is stripped from the ma
   var result = applyStructuralFootnoteChanges(delta);
 
   assert.deepStrictEqual(result, { ops: [
-    { insert: 'See note' }, marker('__pasted_0'), { insert: ' here.' }, { insert: '\n' },
-    ...body('The note.', '__pasted_0')
+    //2 rather than 1: the marker's own carried number is still an id in the document until this
+    //step replaces it, so it counts towards the next free one. renumberFootnotes settles it back
+    //at 1 - reconcileFootnotes runs both, and render.js applies both in the same text-change.
+    { insert: 'See note' }, marker('2'), { insert: ' here.' }, { insert: '\n' },
+    ...body('The note.', '2')
   ]});
 });
 
@@ -283,4 +286,47 @@ test('materializing a pasted payload is idempotent - a second pass adds no furth
   var twice = applyStructuralFootnoteChanges(once);
 
   assert.deepStrictEqual(twice, once);
+});
+
+//Regression: a materialized note's id is on screen the instant the structural pass is applied -
+//the marker and the body both render their number from it with a CSS ::before - so it has to be a
+//number a writer can read, not an internal placeholder. It used to be "__pasted_0", which is what
+//the writer saw for the full second before the debounced renumber replaced it.
+test('a materialized note takes the next free number, never an internal placeholder', function(){
+  var delta = { ops: [
+    { insert: 'a' }, marker('1'), { insert: 'b' }, marker('2'),
+    { insert: 'c' }, { insert: { footnote: { n: '2', payload: body('pasted note', '2') } } },
+    { insert: '\n' },
+    ...body('note one', '1'),
+    ...body('note two', '2')
+  ]};
+
+  var result = applyStructuralFootnoteChanges(delta);
+
+  var ids = result.ops
+    .filter(function(op){ return op.insert && op.insert.footnote; })
+    .map(function(op){ return op.insert.footnote.n; });
+
+  assert.deepStrictEqual(ids, ['1', '2', '3']);
+  ids.forEach(function(id){
+    assert.match(id, /^\d+$/, 'every id has to read as a footnote number');
+  });
+});
+
+//The number chosen has to clear the bodies as well as the markers. An orphaned body is pruned
+//straight after this step, but if the materialized note were given that body's id first, the prune
+//would keep it - and the pasted note would silently gain a stale paragraph.
+test('a materialized note does not take the id of an orphaned body still to be pruned', function(){
+  var delta = { ops: [
+    { insert: 'a' }, { insert: { footnote: { n: '1', payload: body('pasted note', '1') } } },
+    { insert: '\n' },
+    ...body('body whose marker is gone', '4')
+  ]};
+
+  var result = applyStructuralFootnoteChanges(delta);
+
+  assert.deepStrictEqual(result, { ops: [
+    { insert: 'a' }, marker('5'), { insert: '\n' },
+    ...body('pasted note', '5')
+  ]});
 });

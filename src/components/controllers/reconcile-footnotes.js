@@ -81,6 +81,28 @@ function footnoteBodyId(line){
   return line.attributes && line.attributes.footnoteBody != null ? String(line.attributes.footnoteBody) : null;
 }
 
+//The highest number any marker or body in the document is currently using, ignoring ids that are
+//not numbers at all - compile.js namespaces a chapter's ids as "c0_1" before concatenating, and
+//those are never in the same document as one this has to pick a number alongside. Bodies count as
+//well as markers so that a number chosen here cannot land on an orphaned body still waiting to be
+//pruned, which would silently adopt it into the note being materialized.
+function highestFootnoteNumber(lines){
+  var highest = 0;
+
+  function consider(id){
+    var n = Number(id);
+    if(id != null && isFinite(n) && n > highest)
+      highest = n;
+  }
+
+  lines.forEach(function(l){
+    l.content.forEach(function(op){ consider(footnoteMarkerId(op)); });
+    consider(footnoteBodyId(l.line));
+  });
+
+  return highest;
+}
+
 //Step 3 of the reconcile pass: a marker pasted in from footnote-navigation.js's copy/cut handling
 //carries its body as delta JSON on the embed itself, since the body lives elsewhere in the
 //document - or in a document that isn't even open - and cannot ride along in the DOM the way plain
@@ -91,8 +113,14 @@ function footnoteBodyId(line){
 //Mutates `lines` in place - appending during a forEach is safe here (forEach captures the length
 //once, so newly appended lines are never revisited by this same pass) and matches the shape every
 //other step in this file returns instead, rather than making this one an exception.
+//
+//The id a materialized note is given is the next number free in the document rather than an
+//internal placeholder, because it is on screen the moment this pass is applied: the marker and the
+//body both render their number straight from the id with a CSS ::before (see src/css/index.css),
+//so a placeholder is a placeholder the writer can read. renumberAndReorder gives it its real
+//number immediately afterwards - a number here only has to be plausible and unused until it does.
 function materializePayloads(lines){
-  var counter = 0;
+  var nextId = highestFootnoteNumber(lines) + 1;
 
   lines.forEach(function(l){
     l.content.forEach(function(op){
@@ -101,7 +129,7 @@ function materializePayloads(lines){
 
       var payload = op.insert.footnote.payload;
       var payloadOps = Array.isArray(payload) ? payload : (payload.ops || []);
-      var tempId = '__pasted_' + (counter++);
+      var tempId = String(nextId++);
 
       toLines(payloadOps).forEach(function(pl){
         pl.line = Object.assign({}, pl.line, {
