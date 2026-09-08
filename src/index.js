@@ -200,8 +200,12 @@ const createWindow = () => {
           }
         },
         {
+          //No accelerator: Ctrl/Cmd+Shift+B is the editor's Bullets/Numbered List shortcut, and a
+          //menu accelerator is handled natively before the page ever sees the keydown - so for as
+          //long as Backup claimed it, the bullets shortcut the Shortcuts popup documents could
+          //not fire. Backup stays reachable from this menu, where it is not competing for a key
+          //a writer presses mid-sentence.
           label: 'Backup',
-          accelerator: 'CmdOrCtrl+Shift+B',
           click(item, focusWindow){
             mainWindow.webContents.send('save-backup-clicked');
           }
