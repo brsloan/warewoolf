@@ -4,21 +4,21 @@ MarkdownFic is a Revised/Simplified Version of Markdown Designed For Fiction, wh
 
 Unlike Markdown, MarkdownFic allows you to use regular indented paragraphs without space between them. It will keep your manual tabs and your white space. You are freed from writing fiction like it’s a blog!
 
-* The core supported syntax is all the same as Markdown:
-	* Headings: ‘\# My Heading 1’, ‘\#\# My Heading 2’ 
-		* WareWoolf supports up to 4 heading levels.
-	* Italics: ‘\*italicized text\*’
-	* Bold: ‘\**bold text\**’
-	* Blockquote: ‘\> blockquoted text’
-	* Strikethrough: ‘\~~struck through text\~~’
-	* Lists:
-		* Unordered: ‘- item’, ‘\* item’, or ‘+ item’
-		* Ordered: ‘1. item’
-		* Indent a list item with a tab (two tabs for a second level) to nest it under the item above.
-		* WareWoolf always writes ‘\*’ for unordered items and numerals for ordered items when it saves/exports, but it will read any of the markers above back in just fine.
-	* Footnotes:
-		* ‘Text with a footnote. \[^1]’
-		* ‘\[^1]: The footnote.’
+The core supported syntax is all the same as Markdown:
+* Headings: ‘\# My Heading 1’, ‘\#\# My Heading 2’ 
+	* WareWoolf supports up to 4 heading levels.
+* Italics: ‘\*italicized text\*’
+* Bold: ‘\**bold text\**’
+* Blockquote: ‘\> blockquoted text’
+* Strikethrough: ‘\~~struck through text\~~’
+* Lists:
+	* Unordered: ‘- item’, ‘\* item’, or ‘+ item’
+	* Ordered: ‘1. item’
+	* Indent a list item with a tab (two tabs for a second level) to nest it under the item above.
+	* WareWoolf always writes ‘\*’ for unordered items and numerals for ordered items when it saves/exports, but it will read any of the markers above back in just fine.
+* Footnotes:
+	* ‘Text with a footnote. \[^1]’
+	* ‘\[^1]: The footnote.’
 
 But here are some differences:
 * Tabs/Indentation. MarkdownFic ignores all tabs, so they can be used as normal for writing conventional pargraphs in fiction.
