@@ -23,6 +23,7 @@ const {
 const { resolveShortcuts } = require('./components/models/shortcuts');
 const { resolveAutocorrect } = require('./components/models/autocorrect');
 const { setSelectedDictionaries, setProjectWords, releaseSpellchecker } = require('./components/controllers/spellcheck');
+const { normalizeSlashes } = require('./components/controllers/path-utils');
 const { enableTypewriterMode, disableTypewriterMode } = require('./components/controllers/typewriter-mode');
 const {
   removeElementsByClass,
@@ -452,19 +453,50 @@ function setDarkMode(){
   });
 }
 
+//Anything living inside the installed app directory is shipped with the app, not the writer's to
+//edit: the Help doc, the bundled Frankenstein example, and whatever a later release adds beside
+//them. On a packaged install that directory is Program Files or the app bundle, so a save against
+//it dies with EACCES - and running from source it is this repository, where a save silently edits
+//the tracked file that ships to everyone.
+//
+//That was reachable three ways, all of which decided read-only-ness by not deciding it. Opening the
+//Help doc through File > Open Project loaded it writable AND recorded it as lastProject, so every
+//launch afterwards reopened it writable; a .woolf double-clicked in the file manager took the same
+//route; and loadInitialProject's lastProject branch called setProject with no `readOnly` at all.
+//The bundled-example branch guarded it and nothing else did.
+//
+//Lowercased on both sides because the install path arrives from app.getPath and the project path
+//from a dialog or a settings file, and Windows does not agree with itself about case. Two
+//directories differing only in case would be conflated on Linux, which is not a real layout, and
+//errs toward read-only if it ever happened.
+function isInsideInstallDirectory(filepath){
+  if(filepath == null || sysDirectories == null || sysDirectories.app == null)
+    return false;
+
+  var installDir = normalizeSlashes(sysDirectories.app).replace(/\/+$/, '') + '/';
+
+  return normalizeSlashes(filepath).toLowerCase().indexOf(installDir.toLowerCase()) === 0;
+}
+
 //`readOnly` has to be an argument rather than something the caller sets afterward, and that is not
 //a convenience. loadFile() clears the flag on every load, and convertLegacyProject() below ends in
 //an unconditional project.saveFile() - so a caller that opened a read-only copy and set the flag on
 //the way back would already have written to it. That is how the bundled example, opened from the
 //install directory because its copy out to userData failed, was saved over before anything knew it
 //was read-only.
+//
+//Omitting it now means "decide from where the file is" rather than "writable": a caller that knows
+//better (the bundled example, which knows whether its copy out to userData succeeded) still says
+//so explicitly, and a caller that has no opinion gets the safe answer instead of the unsafe one.
 async function setProject(filepath, readOnly){
   if(filepath && filepath != null){
     var missingChaps = await project.loadFile(filepath);
     if(await projectFailedToLoad(filepath))
       return;
     //Set before anything downstream can write. Nothing else in this function may run first.
-    project.isReadOnly = readOnly === true;
+    project.isReadOnly = readOnly === undefined
+      ? isInsideInstallDirectory(filepath)
+      : readOnly === true;
     if(missingChaps.length > 0){
       console.log('could not find all chapters.');
       const promptForMissingPups = require('./components/views/missing-pups_display');
@@ -911,6 +943,10 @@ function openAProject() {
       var missingChaps = await project.loadFile(filepath[0]);
       if(await projectFailedToLoad(filepath[0]))
         return;
+      //Before displayProject() below, for the same reason setProject sets it before anything else:
+      //a writer who browses to the bundled Help doc gets it read-only, exactly as Help > Open Help
+      //Document already gives them.
+      project.isReadOnly = isInsideInstallDirectory(filepath[0]);
       if(missingChaps.length > 0){
         const promptForMissingPups = require('./components/views/missing-pups_display');
         await promptForMissingPups(project, function(resp){
@@ -1599,6 +1635,9 @@ platform.on('file-opened-from-outside-warewoolf', detached(async function(fPath)
     var missingChaps = await project.loadFile(fPath);
     if(await projectFailedToLoad(fPath))
       return;
+    //A .woolf double-clicked in the file manager reaches this rather than openAProject, and a
+    //shipped one has to come up read-only here too.
+    project.isReadOnly = isInsideInstallDirectory(fPath);
     if(missingChaps.length > 0){
       const promptForMissingPups = require('./components/views/missing-pups_display');
       await promptForMissingPups(project, function(resp){

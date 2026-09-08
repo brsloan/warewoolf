@@ -2090,3 +2090,79 @@ test('Convert Straight Quotes Etc. opens its popup with every substitution offer
     assert.strictEqual(check.checked, true);
   });
 });
+
+//---------------------------------------------------------------------------
+// Anything shipped inside the install directory opens read-only
+//---------------------------------------------------------------------------
+
+//Help > Open Help Document has always set the flag itself (above). These are the three routes that
+//did not, all of which decided read-only-ness by never deciding it - so the shipped Help doc came
+//up writable and the next save wrote it. Running from source that directory is the repository, so
+//it was the tracked HelpDoc.woolf that got edited; on a packaged install it is Program Files or the
+//app bundle, where the same save dies with EACCES instead.
+test('a lastProject inside the install directory is reopened read-only', async function(t){
+  const bundled = withBundledHelpDoc(t);
+  const helpDocPath = bundled.helpDocPath.split(path.sep).join('/');
+
+  var r = await renderWithLastProject(helpDocPath);
+
+  assert.strictEqual(r.module.project.title, 'WareWoolf Help', 'the project should still open');
+  assert.strictEqual(r.module.project.isReadOnly, true);
+});
+
+//The route that put it in lastProject to begin with: browsing to the shipped Help doc through
+//File > Open Project, which loads it directly rather than through setProject. render.js requires
+//the file dialog lazily inside openAProject(), so priming require.cache just before the handler
+//runs is enough to stand in for the writer picking that file.
+test('a project browsed to inside the install directory opens read-only', async function(t){
+  const bundled = withBundledHelpDoc(t);
+  const helpDocPath = bundled.helpDocPath.split(path.sep).join('/');
+  var r = await freshRender();
+  r.project.hasUnsavedChanges = false;
+
+  const fileDialogPath = require.resolve('../src/components/views/file-dialog_display');
+  const realDialog = require.cache[fileDialogPath];
+  require.cache[fileDialogPath] = {
+    id: fileDialogPath, filename: fileDialogPath, loaded: true,
+    exports: function(options, callback){ return callback([helpDocPath]); }
+  };
+  t.after(function(){
+    if(realDialog) require.cache[fileDialogPath] = realDialog;
+    else delete require.cache[fileDialogPath];
+  });
+
+  await currentBridge().handlers['open-clicked']();
+  await flushMicrotasks();
+
+  assert.strictEqual(r.project.title, 'WareWoolf Help');
+  assert.strictEqual(r.project.isReadOnly, true);
+});
+
+//And the same file double-clicked in the file manager, which reaches its own handler rather than
+//either of the two above.
+test('a project opened from outside the app inside the install directory opens read-only', async function(t){
+  const bundled = withBundledHelpDoc(t);
+  const helpDocPath = bundled.helpDocPath.split(path.sep).join('/');
+  var r = await freshRender();
+
+  await currentBridge().handlers['file-opened-from-outside-warewoolf'](helpDocPath);
+
+  assert.strictEqual(r.project.title, 'WareWoolf Help');
+  assert.strictEqual(r.project.isReadOnly, true);
+});
+
+//The other half of the guard: an ordinary project must stay writable, or Ctrl+S would start
+//offering Save As for every project a writer owns.
+test('a project outside the install directory stays writable', async function(t){
+  withBundledHelpDoc(t);
+  const ordinary = path.join(userDataDir, 'Ordinary.woolf');
+  fs.writeFileSync(ordinary, JSON.stringify({
+    title: 'An Ordinary Novel', author: '', chapsDirectory: '',
+    chapters: [], reference: [], trash: []
+  }), 'utf8');
+
+  var r = await renderWithLastProject(ordinary.split(path.sep).join('/'));
+
+  assert.strictEqual(r.module.project.title, 'An Ordinary Novel');
+  assert.strictEqual(r.module.project.isReadOnly, false);
+});
