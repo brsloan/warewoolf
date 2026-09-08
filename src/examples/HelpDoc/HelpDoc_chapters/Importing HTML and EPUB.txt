@@ -1,0 +1,37 @@
+[>c] # Importing HTML and EPUB
+
+Alongside plain text, MarkdownFic and .docx, the Import tool reads HTML files (.html, .htm, .xhtml) and EPUB ebooks (.epub). Both are useful for getting an existing book into WareWoolf to work on — a draft someone sent you as a web page, an out-of-copyright novel from Project Gutenberg, or a manuscript you exported from WareWoolf itself and want back.
+
+Anything WareWoolf cannot hold is stripped as the file comes in. Images, video, scripts and forms are dropped entirely. Links keep their text and lose their address. Everything WareWoolf *can* hold is kept: bold, italics, underline, strikethrough, headings, blockquotes, lists and alignment all survive.
+
+# Italics That Aren't Marked With Tags
+A web page can mark a word as italic in more than one way. Some use an “i” or “em” tag, and some instead attach a style to it — which is what Google Docs does when you download a document as HTML, and what most ebooks do. WareWoolf reads the file's own stylesheet, so italics arrive as italics either way. You should not have to go looking for lost emphasis after an import.
+
+# Tables
+WareWoolf has no table format. Rather than throwing a table's contents away or flattening it into a single run-on paragraph, each row is brought in as one line of Markdown-style pipes:
+
+| Ishmael | Sailor |
+| Queequeg | Harpooneer |
+
+That keeps which words shared a row, and you can then reformat it however you like. A single-column table — usually a layout trick rather than real tabular data — comes in as ordinary paragraphs, with no pipes.
+
+Horizontal rules become a centred "\* \* \*", the usual manuscript scene break.
+
+# HTML Options
+Because one HTML file is often an entire book, the Import tool can split it into chapters as it reads:
+
+- "Split Into Chapters At Headings" with a heading level. This defaults to level 2, not level 1, because a book written as a single web page usually puts its *title* in the level 1 heading and its chapter titles in level 2. If you get one enormous chapter, try a different level.
+- "Split At Horizontal Rules", if the file separates its sections that way instead. This can be used on its own or together with the heading split.
+
+# EPUB Options
+An EPUB needs no split options, because it already knows where its chapters are: the ebook's own table of contents says so, and WareWoolf follows it. Each entry becomes a chapter, named the way the book names it.
+
+This matters more than it sounds. An ebook's internal file layout often has nothing to do with its chapters — Moby-Dick's 141 chapters, in the Project Gutenberg edition, are packed into eleven files. Following the table of contents gets you 141 chapters; following the files would get you eleven very long ones.
+
+"Use Book's Title And Author" fills in your project's Title and Author from the ebook's own, but only where you have left them blank. It will never overwrite a title you have already set, so importing a reference book into a manuscript you have named cannot rename your manuscript. Both fields stay yours to edit under File > Properties.
+
+# Project Gutenberg Boilerplate
+Books from Project Gutenberg carry a licence header and footer around the actual text. Tick "Strip Project Gutenberg Boilerplate" and those are removed as the book is read, leaving you with the chapters and nothing else. It is off by default, since it is specific to one source — turn it on when you are importing from there, and leave it off otherwise.
+
+# Chapter Titles
+The "Chapter Label Options" at the bottom of the Import tool apply here as they do to every other format. "Filename" names each chapter after the file, numbering them when one file becomes several. "First line" uses the chapter's own opening line — except for an EPUB, where the book's table of contents has already given each chapter a name, and that name is used instead.
