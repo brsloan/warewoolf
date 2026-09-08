@@ -187,6 +187,22 @@ test('a blockquote round trips', function(){
   ]}, '> Quoted line.\r\n');
 });
 
+//Regression: BLOCKQUOTE_MARKER required at least one character after "> ", so the optional space
+//backtracked into the capture and a blank quoted line came back as a line containing one literal
+//space instead of staying blank.
+test('a blank blockquote line round trips without picking up a stray space', function(){
+  assertRoundTrip({ ops: [
+    {insert: ''}, {insert: '\n', attributes: {blockquote: true}}
+  ]}, '> \r\n');
+});
+
+test('parseMDF reads a blank blockquote line whether or not the marker keeps its trailing space', function(){
+  var expected = { ops: [ {insert: '\n', attributes: {blockquote: true}} ] };
+
+  assert.deepStrictEqual(normalizeDelta(parseMDF('>\n')), normalizeDelta(expected));
+  assert.deepStrictEqual(normalizeDelta(parseMDF('> \n')), normalizeDelta(expected));
+});
+
 test('parseMDF reads list markers written with any bullet character', function(){
   ['-', '*', '+'].forEach(function(marker){
     var delta = parseMDF(marker + ' item\n');

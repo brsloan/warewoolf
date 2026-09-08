@@ -268,6 +268,8 @@ function convertMdfcToHtmlPage(text, title, author = null, insertTitle = false){
       "    } " +
       "    blockquote {" +
       "      white-space: pre-wrap;" +
+      "      margin-top: 0px;" +
+      "      margin-bottom: 0px;" +
       "    }" +
       "    .footnote {" +
       "      text-indent: 1em;" +

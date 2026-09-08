@@ -40,6 +40,7 @@ test('the defaults carry over the shortcuts the app shipped with', function(){
   assert.deepStrictEqual(defaults.moveChapterUp, { key: 'ArrowUp', mod: true, alt: false, shift: true });
   assert.deepStrictEqual(defaults.formatBold, { key: 'B', mod: true, alt: false, shift: false });
   assert.deepStrictEqual(defaults.formatList, { key: 'B', mod: true, alt: false, shift: true });
+  assert.deepStrictEqual(defaults.formatBlockquote, { key: 'Q', mod: true, alt: false, shift: true });
   assert.deepStrictEqual(defaults.toggleChapterList, { key: 'F1', mod: false, alt: false, shift: false });
   assert.deepStrictEqual(defaults.typewriterMode, { key: 'T', mod: true, alt: true, shift: false });
 });

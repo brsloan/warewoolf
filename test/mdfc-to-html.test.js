@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const { convertMdfcToHtml } = require('../src/components/controllers/mdfc-to-html');
+const { convertMdfcToHtml, convertMdfcToHtmlPage } = require('../src/components/controllers/mdfc-to-html');
 
 test('headings convert at every level', function(){
   assert.strictEqual(
@@ -185,4 +185,16 @@ test('a style that outlives an outer style it was nested in stays validly nested
 test('a bare blockquote marker produces an empty element, not literal text', function(){
   assert.strictEqual(convertMdfcToHtml('>\n'), '<blockquote></blockquote>\n');
   assert.strictEqual(convertMdfcToHtml('> \n'), '<blockquote></blockquote>\n');
+});
+
+//Regression: blockquote got white-space: pre-wrap but no margin reset, so it kept the browser
+//default 1em top/bottom margin - since each Quill line becomes its own <blockquote>, a multi-line
+//quote rendered with a visible gap between every line.
+test('the page stylesheet zeroes out blockquote\'s top and bottom margin', function(){
+  const page = convertMdfcToHtmlPage('> Quoted.\n', 'Title');
+  const blockquoteRule = /blockquote\s*\{([^}]*)\}/.exec(page);
+
+  assert.ok(blockquoteRule, 'expected a blockquote rule in the page stylesheet');
+  assert.match(blockquoteRule[1], /margin-top:\s*0px/);
+  assert.match(blockquoteRule[1], /margin-bottom:\s*0px/);
 });

@@ -259,6 +259,8 @@ function getCss(){
       "    } " +
       "    blockquote {" +
       "      white-space: pre-wrap;" +
+      "      margin-top: 0px;" +
+      "      margin-bottom: 0px;" +
       "    }" +
       "    .footnote {" +
       "      text-indent: 1em;" +

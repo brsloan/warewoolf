@@ -178,6 +178,25 @@ test('an ordered list nested past the third level still uses a configured number
     'a fourth-level item should fold into the deepest configured level (2) instead of an unconfigured one');
 });
 
+//Regression: convertParaAttributes never looked at attr.blockquote, so a quoted paragraph exported
+//identical to plain body text and the formatting was silently lost.
+test('a blockquote paragraph exports with left and right indentation', async function(){
+  const delta = { ops: [
+    {insert: 'quoted'}, {insert: '\n', attributes: {blockquote: true}},
+    {insert: 'plain'},  {insert: '\n'}
+  ]};
+
+  const doc = convertDeltaToDocx(delta, {}, project, null);
+  const buffer = await docx.Packer.toBuffer(doc);
+  const dir = await unzipper.Open.buffer(buffer);
+  const documentXml = (await dir.files.find(f => f.path === 'word/document.xml').buffer()).toString();
+
+  const indents = [...documentXml.matchAll(/<w:ind ([^\/]*)\/>/g)].map(m => m[1]);
+  assert.strictEqual(indents.length, 1, 'expected exactly one paragraph to carry an indent: ' + documentXml);
+  assert.match(indents[0], /w:left="720"/);
+  assert.match(indents[0], /w:right="720"/);
+});
+
 //Regression: the loop building the footnotes object assigned its counter with a bare `i = 0`, leaking
 //it as an implicit global - the same bug class already fixed (and regression-tested) in compile.js.
 test('convertDeltaToDocx does not leak an implicit global "i"', function(){

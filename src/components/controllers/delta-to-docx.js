@@ -285,6 +285,12 @@ function convertParaAttributes(attr, previousAttr = null, numberedList = { insta
     if(attr.align){
       xAttr.alignment = docx.AlignmentType[attr.align.toUpperCase()];
     }
+    if(attr.blockquote){
+      xAttr.indent = {
+        left: docx.convertInchesToTwip(0.5),
+        right: docx.convertInchesToTwip(0.5)
+      };
+    }
     if(attr.list){
       //Quill's indent has no ceiling, but the numbering config below only declares 3 levels - anything
       //deeper needs to be folded into the last one the same way getListLevel does it for other formats,
@@ -325,6 +331,12 @@ function convertFootnoteParaAttributes(attr){
     }
     if(attr.align){
       xAttr.alignment = docx.AlignmentType[attr.align.toUpperCase()];
+    }
+    if(attr.blockquote){
+      xAttr.indent = {
+        left: docx.convertInchesToTwip(0.5),
+        right: docx.convertInchesToTwip(0.5)
+      };
     }
     if(attr.list == 'bullet'){
       xAttr.bullet = {level: getListLevel(attr)};

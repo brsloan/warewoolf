@@ -55,6 +55,34 @@ test('indented list items keep their leading tabs', function(){
   );
 });
 
+//Regression: CommonMark's lazy-continuation rule pulls a non-blank line directly after a block
+//quote's paragraph into that same blockquote, so a quote followed by unindented prose used to
+//render as one blockquote containing both.
+test('a blockquote is separated from the unindented paragraph that follows it', function(){
+  assert.strictEqual(
+    convertMdfcToMd('> Quoted line.\nBack to prose.\n'),
+    '> Quoted line.\n\nBack to prose.\n'
+  );
+});
+
+test('a blockquote followed by an indented paragraph gets exactly one blank line', function(){
+  assert.strictEqual(
+    convertMdfcToMd('> Quoted line.\n\tIndented para.\n'),
+    '> Quoted line.\n\nIndented para.\n'
+  );
+});
+
+test('consecutive quoted lines are not separated from each other', function(){
+  assert.strictEqual(
+    convertMdfcToMd('> First quoted line.\n> Second quoted line.\n'),
+    '> First quoted line.\n> Second quoted line.\n'
+  );
+});
+
+test('a blockquote at the very end of the text is left unchanged', function(){
+  assert.strictEqual(convertMdfcToMd('Some prose.\n> Quoted line.\n'), 'Some prose.\n> Quoted line.\n');
+});
+
 test('headings and inline formatting pass through unchanged', function(){
   assert.strictEqual(
     convertMdfcToMd('# Title\nSome **bold** and *italic* text.\n'),

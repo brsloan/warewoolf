@@ -181,6 +181,7 @@ const SHORTCUT_DEFS = [
   { id: 'formatHeading4', label: 'Heading 4', section: 'Formatting', target: 'quill', defaultBinding: makeBinding('4', { mod: true }) },
   { id: 'formatClearHeading', label: 'Clear Heading', section: 'Formatting', target: 'quill', defaultBinding: makeBinding('0', { mod: true }) },
   { id: 'formatList', label: 'Bullets/Numbered List', section: 'Formatting', target: 'quill', defaultBinding: makeBinding('B', { mod: true, shift: true }) },
+  { id: 'formatBlockquote', label: 'Blockquote', section: 'Formatting', target: 'quill', defaultBinding: makeBinding('Q', { mod: true, shift: true }) },
   { id: 'formatAlignLeft', label: 'Left Align', section: 'Formatting', target: 'quill', defaultBinding: makeBinding('L', { mod: true }) },
   { id: 'formatAlignRight', label: 'Right Align', section: 'Formatting', target: 'quill', defaultBinding: makeBinding('R', { mod: true }) },
   { id: 'formatAlignCenter', label: 'Center Align', section: 'Formatting', target: 'quill', defaultBinding: makeBinding('E', { mod: true }) },

@@ -229,7 +229,8 @@ const QUILL_HANDLERS = {
       this.quill.format('list', null, 'user');
     else
       this.quill.format('list', 'bullet', 'user');
-  }
+  },
+  formatBlockquote: toggleHandler('blockquote')
 };
 
 function headingHandler(level){

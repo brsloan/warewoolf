@@ -24,6 +24,7 @@ Here is a summary of the defaults (Ctrl is Cmd on Mac unless otherwise noted):
  Heading 1 through 4	: **Ctrl + 1**, **2**, **3**, **4**
  Clear Heading	: **Ctrl + 0**
  Bullets/Numbered List	: **Ctrl + Shift + B**
+ Blockquote	: **Ctrl + Shift + Q**
  Left Align	: **Ctrl + L**
  Right Align	: **Ctrl + R**
  Center Align	: **Ctrl + E**

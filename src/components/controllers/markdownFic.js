@@ -178,7 +178,10 @@ function indentLevelFor(indent){
 
   return Math.min(level, MAX_LIST_LEVEL);
 }
-const BLOCKQUOTE_MARKER = /^>+ ?(.+)$/;
+//(.*) rather than (.+): a blank quoted line is written as "> " (marker, no text), and (.+) would
+//force the optional space to backtrack into the capture, turning every blank line inside a quote
+//into a line containing one literal space. mdfc-to-html.js already carries this fix; mirror it here.
+const BLOCKQUOTE_MARKER = /^>+ ?(.*)$/;
 const ALIGN_MARKER = /^\[>([lrcj])\] (.*)$/;
 const HEADER_MARKER = /^(#{1,4}) (.*)$/;
 
