@@ -1978,29 +1978,196 @@ function writeSharedDictionary(appDir){
   fs.writeFileSync(appDir + 'dictionaries/en_US-large.dic', '2\nhello\nworld', 'utf8');
 }
 
+function writeDictionaryPair(dir, id, affText, dicText){
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(dir + '/' + id + '.aff', affText == null ? 'SET UTF-8' : affText, 'utf8');
+  fs.writeFileSync(dir + '/' + id + '.dic', dicText == null ? '1\nhello' : dicText, 'utf8');
+}
+
+function dictPlatformIn(t){
+  const dir = tempDir(t).replaceAll('\\', '/');
+  const appDir = dir + 'app';
+  const userDataDir = dir + 'user';
+  fs.mkdirSync(appDir, { recursive: true });
+  fs.mkdirSync(userDataDir, { recursive: true });
+
+  return {
+    appDir: appDir,
+    userDataDir: userDataDir,
+    platform: wrap(createNodeBacking({ paths: { app: appDir, userData: userDataDir } }))
+  };
+}
+
 //nspell is pure JS and stays in the webview - only the dictionary text crosses.
-test('loadDictionary returns the shipped .aff and .dic text', async function(t){
-  const appDir = tempDir(t).replaceAll('\\', '/');
-  writeSharedDictionary(appDir);
-  const platform = wrap(createNodeBacking({ paths: { app: appDir } }));
+test('loadDictionaries returns the requested bundled and imported pairs, in order', async function(t){
+  const built = dictPlatformIn(t);
+  writeDictionaryPair(built.appDir + '/dictionaries', 'en_US-large', 'SET UTF-8', '2\nhello\nworld');
+  writeDictionaryPair(built.userDataDir + '/dictionaries', 'fr_FR', 'SET UTF-8', '1\nbonjour');
 
-  const dict = await platform.loadDictionary();
+  const loaded = await built.platform.loadDictionaries({ ids: ['fr_FR', 'en_US-large'] });
 
-  assert.strictEqual(dict.aff, 'SET UTF-8');
-  assert.strictEqual(dict.dic, '2\nhello\nworld');
+  assert.deepStrictEqual(loaded, [
+    { id: 'fr_FR', aff: 'SET UTF-8', dic: '1\nbonjour' },
+    { id: 'en_US-large', aff: 'SET UTF-8', dic: '2\nhello\nworld' }
+  ]);
 });
 
-test('loadDictionary rejects UNAVAILABLE without an app directory configured', async function(){
+test('loadDictionaries skips an id that is not on disk', async function(t){
+  const built = dictPlatformIn(t);
+  writeDictionaryPair(built.appDir + '/dictionaries', 'en_US-large');
+
+  const loaded = await built.platform.loadDictionaries({ ids: ['en_US-large', 'nonexistent'] });
+
+  assert.deepStrictEqual(loaded.map(function(d){ return d.id; }), ['en_US-large']);
+});
+
+//The behaviour when a writer removes a dictionary they had selected, unticks everything, or copies
+//user-settings.json to a machine an import does not exist on - spellcheck must not simply stop
+//working.
+test('loadDictionaries falls back to the shared default when the selection resolves to nothing', async function(t){
+  const built = dictPlatformIn(t);
+  writeSharedDictionary(built.appDir + '/');
+
+  const emptyIds = await built.platform.loadDictionaries({ ids: [] });
+  const missingIds = await built.platform.loadDictionaries({ ids: ['nonexistent'] });
+  const noArgs = await built.platform.loadDictionaries({});
+
+  [emptyIds, missingIds, noArgs].forEach(function(loaded){
+    assert.deepStrictEqual(loaded, [{ id: 'en_US-large', aff: 'SET UTF-8', dic: '2\nhello\nworld' }]);
+  });
+});
+
+test('loadDictionaries rejects UNAVAILABLE when the fallback has no app directory configured', async function(){
   const platform = wrap(createNodeBacking({}));
 
-  assert.strictEqual((await rejection(platform.loadDictionary())).code, CODES.UNAVAILABLE);
+  assert.strictEqual((await rejection(platform.loadDictionaries({ ids: [] }))).code, CODES.UNAVAILABLE);
 });
 
-test('loadDictionary rejects NOT_FOUND when the shipped dictionary files are missing', async function(t){
+test('loadDictionaries rejects NOT_FOUND when the fallback dictionary files are missing', async function(t){
   const appDir = tempDir(t).replaceAll('\\', '/');
   const platform = wrap(createNodeBacking({ paths: { app: appDir } }));
 
-  assert.strictEqual((await rejection(platform.loadDictionary())).code, CODES.NOT_FOUND);
+  assert.strictEqual((await rejection(platform.loadDictionaries({ ids: [] }))).code, CODES.NOT_FOUND);
+});
+
+test('listDictionaries finds both bundled pairs and excludes personal.dic and license', async function(t){
+  const built = dictPlatformIn(t);
+  writeDictionaryPair(built.appDir + '/dictionaries', 'en_US-large');
+  writeDictionaryPair(built.appDir + '/dictionaries', 'en_us');
+  fs.writeFileSync(built.appDir + '/dictionaries/personal.dic', 'WareWoolf\n', 'utf8');
+  fs.writeFileSync(built.appDir + '/dictionaries/license', 'MIT', 'utf8');
+
+  const listed = await built.platform.listDictionaries();
+
+  assert.deepStrictEqual(listed, [
+    { id: 'en_US-large', source: 'bundled', removable: false },
+    { id: 'en_us', source: 'bundled', removable: false }
+  ]);
+});
+
+test('an .aff with no .dic is not listed', async function(t){
+  const built = dictPlatformIn(t);
+  fs.mkdirSync(built.appDir + '/dictionaries', { recursive: true });
+  fs.writeFileSync(built.appDir + '/dictionaries/orphan.aff', 'SET UTF-8', 'utf8');
+
+  assert.deepStrictEqual(await built.platform.listDictionaries(), []);
+});
+
+test('listDictionaries marks imported entries removable and bundled ones not', async function(t){
+  const built = dictPlatformIn(t);
+  writeDictionaryPair(built.appDir + '/dictionaries', 'en_US-large');
+  writeDictionaryPair(built.userDataDir + '/dictionaries', 'fr_FR');
+
+  const listed = await built.platform.listDictionaries();
+
+  assert.deepStrictEqual(listed, [
+    { id: 'en_US-large', source: 'bundled', removable: false },
+    { id: 'fr_FR', source: 'imported', removable: true }
+  ]);
+});
+
+test('readDictionaryFiles decodes an ISO8859-1 pair and rewrites the stored SET line to UTF-8', async function(t){
+  const dir = tempDir(t).replaceAll('\\', '/');
+  const affPath = dir + 'café.aff';
+  const dicPath = dir + 'café.dic';
+  //café encoded as ISO8859-1/latin1 bytes.
+  fs.writeFileSync(affPath, Buffer.from('SET ISO8859-1\n', 'latin1'));
+  fs.writeFileSync(dicPath, Buffer.from('1\ncafé', 'latin1'));
+  const built = dictPlatformIn(t);
+
+  const result = await built.platform.readDictionaryFiles({ affPath: affPath, dicPath: dicPath });
+
+  assert.strictEqual(result.id, 'café');
+  assert.strictEqual(result.aff, 'SET UTF-8\n');
+  assert.strictEqual(result.dic, '1\ncafé');
+});
+
+//A .txt or .dic of names with no affix file at all - what a writer importing "every character in my
+//series" actually has.
+test('readDictionaryFiles generates a SET UTF-8 affix for a bare word list with no affPath', async function(t){
+  const dir = tempDir(t).replaceAll('\\', '/');
+  const dicPath = dir + 'characters.dic';
+  fs.writeFileSync(dicPath, '2\nAurelion\nDorrigo', 'utf8');
+  const built = dictPlatformIn(t);
+
+  const result = await built.platform.readDictionaryFiles({ dicPath: dicPath });
+
+  assert.strictEqual(result.id, 'characters');
+  assert.strictEqual(result.aff, 'SET UTF-8\n');
+  assert.strictEqual(result.dic, '2\nAurelion\nDorrigo');
+});
+
+test('importDictionary writes a new pair into userData/dictionaries', async function(t){
+  const built = dictPlatformIn(t);
+
+  await built.platform.importDictionary({ id: 'fr_FR', aff: 'SET UTF-8\n', dic: '1\nbonjour' });
+
+  assert.strictEqual(fs.readFileSync(built.userDataDir + '/dictionaries/fr_FR.aff', 'utf8'), 'SET UTF-8\n');
+  assert.strictEqual(fs.readFileSync(built.userDataDir + '/dictionaries/fr_FR.dic', 'utf8'), '1\nbonjour');
+  assert.deepStrictEqual(await built.platform.listDictionaries(),
+    [{ id: 'fr_FR', source: 'imported', removable: true }]);
+});
+
+test('importDictionary generates a SET UTF-8 affix when none is given', async function(t){
+  const built = dictPlatformIn(t);
+
+  await built.platform.importDictionary({ id: 'characters', dic: '1\nAurelion' });
+
+  assert.strictEqual(fs.readFileSync(built.userDataDir + '/dictionaries/characters.aff', 'utf8'), 'SET UTF-8\n');
+});
+
+test('importDictionary refuses a colliding id whether bundled or already imported', async function(t){
+  const built = dictPlatformIn(t);
+  writeDictionaryPair(built.appDir + '/dictionaries', 'en_US-large');
+  await built.platform.importDictionary({ id: 'fr_FR', aff: 'SET UTF-8\n', dic: '1\nbonjour' });
+
+  const bundledCollision = await rejection(
+    built.platform.importDictionary({ id: 'en_US-large', aff: 'SET UTF-8\n', dic: '1\nx' }));
+  const importedCollision = await rejection(
+    built.platform.importDictionary({ id: 'fr_FR', aff: 'SET UTF-8\n', dic: '1\nx' }));
+
+  assert.strictEqual(bundledCollision.code, CODES.ALREADY_EXISTS);
+  assert.strictEqual(importedCollision.code, CODES.ALREADY_EXISTS);
+});
+
+test('removeDictionary deletes an imported pair', async function(t){
+  const built = dictPlatformIn(t);
+  writeDictionaryPair(built.userDataDir + '/dictionaries', 'fr_FR');
+
+  await built.platform.removeDictionary({ id: 'fr_FR' });
+
+  assert.strictEqual(fs.existsSync(built.userDataDir + '/dictionaries/fr_FR.aff'), false);
+  assert.strictEqual(fs.existsSync(built.userDataDir + '/dictionaries/fr_FR.dic'), false);
+});
+
+test('removeDictionary refuses a bundled id with INVALID_ARGUMENT', async function(t){
+  const built = dictPlatformIn(t);
+  writeDictionaryPair(built.appDir + '/dictionaries', 'en_US-large');
+
+  const err = await rejection(built.platform.removeDictionary({ id: 'en_US-large' }));
+
+  assert.strictEqual(err.code, CODES.INVALID_ARGUMENT);
+  assert.strictEqual(fs.existsSync(built.appDir + '/dictionaries/en_US-large.aff'), true);
 });
 
 //Folds in the bootstrap write createPersonalDicIfNeeded() used to require the caller run first

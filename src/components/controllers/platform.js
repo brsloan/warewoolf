@@ -289,8 +289,52 @@ var COMMANDS = {
     note: 'Deletes each path unconditionally; one bad path is logged and does not stop the rest, matching deleteOldBackups\' original per-file try/catch.' },
 
   // --- I. Spellcheck ------------------------------------------------------------------------
-  loadDictionary: { group: 'I', params: [], returns: '{ aff, dic }',
-    note: 'nspell is pure JS and stays in the webview. Only the dictionary text crosses.' },
+  //nspell is pure JS and stays in the webview - only dictionary text crosses. loadDictionary became
+  //loadDictionaries(ids) so a writer can select more than one at once (see spellcheck.js's
+  //getSpellchecker): one instance per selected dictionary, since nspell's own multi-dictionary
+  //support only honors the first entry's .aff. One round trip fetches every selected pair rather
+  //than one invoke per id - each pair is around a megabyte of text crossing the bridge.
+  //
+  //ids that are not on disk are skipped, and an ids that resolves to nothing at all - empty, absent,
+  //or every entry missing - falls back to SHARED_DICT_BASENAME. That is not defensiveness: it is the
+  //behaviour when a writer removes a dictionary they had selected, unticks everything, or copies
+  //user-settings.json to a machine an import does not exist on. The returned ids are what let the
+  //Dictionaries dialog say which dictionaries are genuinely in use rather than which were asked for.
+  loadDictionaries: { group: 'I', params: ['ids'], returns: '{ id, aff, dic }[]' },
+  //A dictionary is a .aff/.dic pair sharing a basename, and the basename is its id. Bundled
+  //dictionaries are read from paths.app/dictionaries; imported ones are written to and read from
+  //paths.userData/dictionaries, the directory personal.dic already lives in - paths.app is often
+  //read-only (Program Files, an app bundle) and is wiped by the next update. personal.dic is excluded
+  //by the pairing rule alone (it has no .aff), never as a special case.
+  listDictionaries: { group: 'I', params: [],
+    returns: '{ id, source: "bundled"|"imported", removable }[]' },
+  //Separate from importDictionary on purpose: import is validate-then-commit, so the renderer reads
+  //the pair, hands the text to nspell, and only calls importDictionary once nspell has parsed it.
+  //Nothing is ever written that spellcheck cannot then load.
+  //
+  //It is also the one piece of this that genuinely has to be native, and not for file access.
+  //Hunspell .aff files declare their own encoding on a SET line, and plenty of dictionaries in
+  //circulation are ISO8859-1, not UTF-8 - readTextFile (group F) decodes as UTF-8 unconditionally,
+  //which would mangle every accented word into replacement characters, and nspell would accept the
+  //mojibake as valid text. This reads bytes, decodes per the SET line, and returns UTF-8 strings with
+  //that line rewritten to say so - byte decoding is the OS-level job, and it is the only part of this
+  //feature that is.
+  //
+  //dicPath is the one that is always present - there is always a word list. affPath is the one that
+  //may be omitted, for a bare word list (a .txt or .dic of names with no affix file at all, which is
+  //what a writer importing "every character in my series" actually has) - with no .aff, `SET UTF-8\n`
+  //is generated as one. (Correction: the params these two names suggest by alphabetical habit would
+  //be backwards - affPath optional, dicPath required is the only shape a dictionary that must always
+  //carry a word list can take.)
+  readDictionaryFiles: { group: 'I', params: ['dicPath'], optional: ['affPath'],
+    returns: '{ id, aff, dic }' },
+  //Refused with ALREADY_EXISTS when the id collides with anything already listed, bundled or
+  //imported, rather than shadowing it - shadowing would mean removing an imported dictionary silently
+  //changes which words are correct, with no way to show that in a list.
+  importDictionary: { group: 'I', params: ['id', 'aff', 'dic'], returns: 'void' },
+  //Refuses anything under paths.app with INVALID_ARGUMENT - bundled dictionaries are not the writer's
+  //to delete. The `removable` flag listDictionaries returns is a UI hint, not the guard; this is.
+  removeDictionary: { group: 'I', params: ['id'], returns: 'void' },
   loadPersonalDictionary: { group: 'I', params: [], returns: 'string[]',
     note: 'Folds in the bootstrap write at spellcheck.js:38-44 - the caller stops knowing the file has to be created before it can be read.' },
   savePersonalDictionary: { group: 'I', params: ['words'], returns: 'void' },

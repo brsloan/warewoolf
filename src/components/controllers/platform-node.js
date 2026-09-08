@@ -59,9 +59,11 @@ const MAX_LOG_SIZE_BYTES = 1024 * 1024;
 const SETTINGS_FILENAME = 'user-settings.json';
 const CORKBOARD_FILENAME = 'project_corkboard.txt';
 const LICENSES_FILENAME = 'licenses.txt';
-//Group I: spellcheck dictionaries. The shared dictionary ships under the app directory; the
-//personal one is a per-user file under userData, seeded on first read exactly as
-//createPersonalDicIfNeeded() used to (spellcheck.js:35-51).
+//Group I: spellcheck dictionaries. Bundled pairs ship under the app directory; imported ones live
+//alongside the personal dictionary under userData, since paths.app is often read-only and is wiped
+//by the next update. SHARED_DICT_BASENAME is loadDictionaries' fallback when a selection resolves to
+//nothing at all, not the only dictionary any more. The personal one is a per-user file under
+//userData, seeded on first read exactly as createPersonalDicIfNeeded() used to (spellcheck.js:35-51).
 const DICTIONARIES_DIR = 'dictionaries';
 const SHARED_DICT_BASENAME = 'en_US-large';
 const PERSONAL_DICT_FILENAME = 'personal.dic';
@@ -225,7 +227,11 @@ function createNodeBacking(deps){
     pruneBackups: pruneBackups,
 
     // --- I. Spellcheck -----------------------------------------------------------------------
-    loadDictionary: loadDictionary,
+    loadDictionaries: loadDictionaries,
+    listDictionaries: listDictionaries,
+    readDictionaryFiles: readDictionaryFiles,
+    importDictionary: importDictionary,
+    removeDictionary: removeDictionary,
     loadPersonalDictionary: loadPersonalDictionary,
     savePersonalDictionary: savePersonalDictionary,
 
@@ -1052,16 +1058,184 @@ function createNodeBacking(deps){
   // Group I (spellcheck dictionaries)
   // ------------------------------------------------------------------------------------------
 
-  function loadDictionary(){
-    if(paths.app == null)
-      throw PlatformError(CODES.UNAVAILABLE, 'No app directory configured for the dictionary.');
+  function bundledDictDir(){
+    return paths.app == null ? null : normalizePath(paths.app, 'app') + '/' + DICTIONARIES_DIR;
+  }
 
-    var base = normalizePath(paths.app, 'app') + '/' + DICTIONARIES_DIR + '/' + SHARED_DICT_BASENAME;
+  function importedDictDir(){
+    return paths.userData == null ? null : normalizePath(paths.userData, 'userData') + '/' + DICTIONARIES_DIR;
+  }
 
+  //A dictionary is a .aff/.dic pair sharing a basename - that basename is its id, resolved bundled
+  //first so an id that (should never, but could on a hand-edited disk) exist in both places prefers
+  //the one a writer cannot delete out from under a selection.
+  function dictionaryBaseFor(id){
+    var bundledDir = bundledDictDir();
+    if(bundledDir != null && fs.existsSync(bundledDir + '/' + id + '.aff') && fs.existsSync(bundledDir + '/' + id + '.dic'))
+      return bundledDir + '/' + id;
+
+    var importedDir = importedDictDir();
+    if(importedDir != null && fs.existsSync(importedDir + '/' + id + '.aff') && fs.existsSync(importedDir + '/' + id + '.dic'))
+      return importedDir + '/' + id;
+
+    return null;
+  }
+
+  function readDictionaryPairText(base, id){
     return {
+      id: id,
       aff: fs.readFileSync(base + '.aff', 'utf8'),
       dic: fs.readFileSync(base + '.dic', 'utf8')
     };
+  }
+
+  //ids that are not on disk are skipped rather than rejecting the whole call - a writer's saved
+  //selection outliving an import it names is not a failure. An ids that resolves to nothing at all
+  //falls back to SHARED_DICT_BASENAME so spellcheck never simply stops working.
+  function loadDictionaries(args){
+    var ids = (args == null || args.ids == null) ? [] : args.ids;
+    var loaded = [];
+
+    ids.forEach(function(id){
+      var base = dictionaryBaseFor(id);
+      if(base != null)
+        loaded.push(readDictionaryPairText(base, id));
+    });
+
+    if(loaded.length === 0){
+      var bundledDir = bundledDictDir();
+      if(bundledDir == null)
+        throw PlatformError(CODES.UNAVAILABLE, 'No app directory configured for the dictionary.');
+
+      loaded.push(readDictionaryPairText(bundledDir + '/' + SHARED_DICT_BASENAME, SHARED_DICT_BASENAME));
+    }
+
+    return loaded;
+  }
+
+  //Every .aff/.dic pair in both directories, bundled first. personal.dic is excluded by the pairing
+  //rule alone (it has no .aff) - never as a special case - and so is any lone .aff or .dic missing
+  //its other half.
+  function listDictionaries(){
+    return listDictionaryPairsIn(bundledDictDir(), 'bundled', false)
+      .concat(listDictionaryPairsIn(importedDictDir(), 'imported', true));
+  }
+
+  function listDictionaryPairsIn(dir, source, removable){
+    if(dir == null || !fs.existsSync(dir))
+      return [];
+
+    var files = fs.readdirSync(dir);
+
+    return files
+      .filter(function(name){ return name.endsWith('.aff'); })
+      .map(function(name){ return name.slice(0, -4); })
+      .filter(function(id){ return files.indexOf(id + '.dic') > -1; })
+      .sort()
+      .map(function(id){ return { id: id, source: source, removable: removable }; });
+  }
+
+  //Hunspell .aff files declare their own encoding on a SET line - this is deliberately narrow rather
+  //than a full charset table: every dictionary this app ships is UTF-8, and the one documented
+  //exception in circulation (ISO8859-1) is the one Node's Buffer already decodes natively as
+  //'latin1'. An encoding this cannot recognize decodes as UTF-8, same as no .aff at all.
+  function detectAffEncoding(buffer){
+    //Scanned as latin1 - a byte-preserving decode - rather than the (possibly different) declared
+    //encoding, since the SET line itself is always plain ASCII regardless of what the rest of the
+    //file is written in.
+    var scanned = buffer.toString('latin1');
+    var match = scanned.match(/^SET\s+(\S+)/m);
+
+    if(match == null)
+      return 'utf8';
+
+    var key = match[1].toUpperCase().replace(/[^A-Z0-9]/g, '');
+    var ENCODING_MAP = { UTF8: 'utf8', ISO88591: 'latin1' };
+
+    return ENCODING_MAP[key] || 'utf8';
+  }
+
+  function rewriteSetLine(affText, newSet){
+    if(/^SET\s+\S+/m.test(affText))
+      return affText.replace(/^SET\s+\S+/m, 'SET ' + newSet);
+
+    return 'SET ' + newSet + '\n' + affText;
+  }
+
+  //dicPath is the required half - there is always a word list. affPath may be omitted for a bare
+  //word list (a .txt or .dic of names with no affix file at all), in which case a generated
+  //'SET UTF-8\n' stands in for it. Decodes per the .aff's own declared encoding and returns UTF-8
+  //strings with the SET line rewritten to say so, matching what is actually being returned.
+  function readDictionaryFiles(args){
+    var dicPath = normalizePath(args == null ? undefined : args.dicPath, 'dicPath');
+    var affPath = (args == null || args.affPath == null) ? null : normalizePath(args.affPath, 'affPath');
+
+    var extIndex = dicPath.lastIndexOf('.');
+    var id = (extIndex > -1 ? dicPath.substring(0, extIndex) : dicPath).split('/').pop();
+
+    var encoding = 'utf8';
+    var affText = 'SET UTF-8\n';
+
+    if(affPath != null){
+      var affBytes = fs.readFileSync(affPath);
+      encoding = detectAffEncoding(affBytes);
+      affText = affBytes.toString(encoding);
+    }
+
+    return {
+      id: id,
+      aff: rewriteSetLine(affText, 'UTF-8'),
+      dic: fs.readFileSync(dicPath).toString(encoding)
+    };
+  }
+
+  //Refuses a colliding id (ALREADY_EXISTS) rather than shadowing it - shadowing would mean removing
+  //an imported dictionary silently changes which words are correct, with no way to show that in a
+  //list. `aff` is generated the same way readDictionaryFiles generates one for a bare word list, so
+  //this can be called directly with no affix text at all and still produce a usable pair.
+  function importDictionary(args){
+    var id = args == null ? undefined : args.id;
+    requireText(id, 'id');
+    requireText(args.dic, 'dic');
+
+    if(paths.userData == null)
+      throw PlatformError(CODES.UNAVAILABLE, 'No userData directory configured for imported dictionaries.');
+
+    if(dictionaryBaseFor(id) != null)
+      throw PlatformError(CODES.ALREADY_EXISTS,
+        'A dictionary named "' + id + '" already exists.', { id: id });
+
+    var affText = (args.aff == null || args.aff === '') ? 'SET UTF-8\n' : args.aff;
+
+    var dir = importedDictDir();
+    if(!fs.existsSync(dir))
+      fs.mkdirSync(dir);
+
+    fs.writeFileSync(dir + '/' + id + '.aff', affText, 'utf8');
+    fs.writeFileSync(dir + '/' + id + '.dic', args.dic, 'utf8');
+  }
+
+  //Bundled dictionaries are not the writer's to delete - the `removable` flag listDictionaries
+  //returns is a UI hint, not the guard; this is. Idempotent past that guard, matching deleteEntry
+  //(group E): removing an id that is not actually on disk in userData is not a failure.
+  function removeDictionary(args){
+    var id = args == null ? undefined : args.id;
+    requireText(id, 'id');
+
+    var bundledDir = bundledDictDir();
+    if(bundledDir != null && fs.existsSync(bundledDir + '/' + id + '.aff'))
+      throw PlatformError(CODES.INVALID_ARGUMENT,
+        'Cannot remove the bundled dictionary "' + id + '".', { id: id });
+
+    if(paths.userData == null)
+      throw PlatformError(CODES.UNAVAILABLE, 'No userData directory configured for imported dictionaries.');
+
+    var dir = importedDictDir();
+
+    if(fs.existsSync(dir + '/' + id + '.aff'))
+      fs.unlinkSync(dir + '/' + id + '.aff');
+    if(fs.existsSync(dir + '/' + id + '.dic'))
+      fs.unlinkSync(dir + '/' + id + '.dic');
   }
 
   //Seeds the personal dictionary on first read, folding in the bootstrap write

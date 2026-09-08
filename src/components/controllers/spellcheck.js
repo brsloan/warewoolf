@@ -17,12 +17,16 @@ async function runSpellcheck(editorQuill, startingIndex = 0, wordsToIgnore){
     return findInvalidWord(editorQuill, spellchecker, startingIndex, wordsToIgnore)
 }
 
+//Temporary: still a single instance built off whatever loadDictionaries({ids:[]}) falls back to.
+//Phase 2 replaces this with getSpellchecker() - one nspell instance per selected dictionary, cached
+//for the length of a spellcheck pass - so this stays minimal rather than growing logic that call is
+//about to replace wholesale.
 async function loadDictionaries(){
   try{
-    var dict = await platform.loadDictionary();
+    var dicts = await platform.loadDictionaries({ ids: [] });
     var personal = await platform.loadPersonalDictionary();
 
-    var spellchecker = nspell({ aff: dict.aff, dic: dict.dic });
+    var spellchecker = nspell({ aff: dicts[0].aff, dic: dicts[0].dic });
     spellchecker.personal(personal.join('\n'));
     return spellchecker;
   }

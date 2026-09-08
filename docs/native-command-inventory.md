@@ -488,13 +488,42 @@ callback-style signature and now delegates to the native command internally.
 
 ## I. Spellcheck
 
-`nspell` is pure JS and stays in the webview. Only dictionary loading crosses.
+`nspell` is pure JS and stays in the webview. Only dictionary loading and file
+handling crosses.
 
 | Command | Replaces |
 |---|---|
-| `loadDictionary()` → `{ aff, dic }` | `spellcheck.js:19-20` |
+| `loadDictionaries(ids)` → `{ id, aff, dic }[]` | `loadDictionary()` (Phase 9, this table's original entry); `spellcheck.js:19-20` |
+| `listDictionaries()` → `{ id, source, removable }[]` | new — the Dictionaries dialog's checklist |
+| `readDictionaryFiles(dicPath, affPath?)` → `{ id, aff, dic }` | new — import's validate step |
+| `importDictionary(id, aff, dic)` | new — import's commit step |
+| `removeDictionary(id)` | new |
 | `loadPersonalDictionary()` → `string[]` | `spellcheck.js:22`, `:93` |
 | `savePersonalDictionary(words)` | `spellcheck.js:105`; folds in the bootstrap at `:38-44` |
+
+**`loadDictionary` became `loadDictionaries(ids)`.** A writer may now select more
+than one dictionary at once — nspell's own multi-dictionary support only honors
+the first entry's `.aff`, so `spellcheck.js` builds one nspell instance per
+selected id instead (see its own header comment). One round trip fetches every
+selected pair. An `ids` that resolves to nothing on disk — empty, absent, or
+every entry missing — falls back to the shared default rather than leaving
+spellcheck broken.
+
+**`listDictionaries`/`readDictionaryFiles`/`importDictionary`/`removeDictionary`
+back the Dictionaries dialog's import flow.** A dictionary is a `.aff`/`.dic`
+pair sharing a basename, which is its id; bundled pairs live under
+`paths.app/dictionaries`, imported ones under `paths.userData/dictionaries`
+alongside `personal.dic` (excluded from every listing by the pairing rule
+alone — it has no `.aff`). `readDictionaryFiles` is the one piece of this that
+is native by necessity rather than convenience: Hunspell `.aff` files declare
+their own encoding on a `SET` line, and `readTextFile` (group F) decodes as
+UTF-8 unconditionally, which would mangle a non-UTF-8 dictionary into mojibake
+that nspell would still accept as valid. It reads bytes, decodes per the `SET`
+line, and returns UTF-8 strings with that line rewritten to say so.
+`importDictionary` only ever writes what `readDictionaryFiles` plus a
+renderer-side nspell parse have already validated, and refuses a colliding id
+rather than shadowing it. `removeDictionary` refuses anything under `paths.app`
+with `INVALID_ARGUMENT` — bundled dictionaries are not the writer's to delete.
 
 ---
 
