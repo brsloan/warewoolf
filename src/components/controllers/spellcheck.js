@@ -207,6 +207,26 @@ async function addWordToPersonalDictFile(word){
   }
 }
 
+//Add To Project's counterpart to addWordToPersonalDictFile. Synchronous and does not write - it
+//sets project.hasUnsavedChanges = true rather than saving, the same thing convert-italics.js and
+//every other project-wide edit does, so the word is picked up by the next Ctrl+S or autosave and is
+//covered by the existing unsaved-changes guard on exit. Pushes straight onto project.projectDictionary
+//itself rather than through setProjectWords - that array is extraWords by reference (see
+//setProjectWords above), so this is already visible to the next getSpellchecker() rebuild with no
+//second call needed, and acceptOnLiveInstances keeps the *current* cached pass in sync too.
+function addWordToProjectDictionary(project, word){
+  if(project == null)
+    return;
+
+  word = forDictionary(word);
+
+  if(project.projectDictionary.indexOf(word) === -1){
+    project.projectDictionary.push(word);
+    project.hasUnsavedChanges = true;
+    acceptOnLiveInstances(word);
+  }
+}
+
 function getBeginningOfCurrentWord(text, position){
   var firstLetter = false;
   //The em and en dashes are borders alongside the hyphen now that '--' becomes one as it is typed;
@@ -229,6 +249,7 @@ function getBeginningOfCurrentWord(text, position){
 module.exports = {
   runSpellcheck,
   addWordToPersonalDictFile,
+  addWordToProjectDictionary,
   getBeginningOfCurrentWord,
   setSelectedDictionaries,
   setProjectWords,

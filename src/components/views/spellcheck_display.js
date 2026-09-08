@@ -1,5 +1,5 @@
 const { closePopups, createButton, removeElementsByClass, enableSearchView } = require('../controllers/utils');
-const { runSpellcheck, addWordToPersonalDictFile } = require('../controllers/spellcheck');
+const { runSpellcheck, addWordToPersonalDictFile, addWordToProjectDictionary } = require('../controllers/spellcheck');
 const { replace, replaceAllInAllChapters } = require('../controllers/findreplace');
 
 //Async now that loading the dictionaries goes through the platform facade.
@@ -135,6 +135,24 @@ async function showSpellcheck(editorQuill, project, displayChapterByIndex, start
     }
     addToDic.accessKey = "a";
     popup.appendChild(addToDic);
+
+    //The answer for a character name and the answer for a word the writer will use in every book
+    //are different, and only the writer knows which they are looking at. Keeping 'a' on the
+    //personal dictionary is deliberate even though Add To Project is the more common action for a
+    //novelist - silently repointing a key a writer already has in their fingers is worse than a
+    //suboptimal default.
+    var addToProject = createButton("Add To <span class='access-key'>P</span>roject");
+    addToProject.onclick = async function(){
+      if(invalidWord){
+        addWordToProjectDictionary(project, invalidWord.word);
+        return ignoreBtn.onclick();
+      }
+    }
+    addToProject.accessKey = "p";
+    //A project that cannot be saved (the read-only Help doc) has nothing to add the word to that
+    //would survive - see project.saveFile()'s own isReadOnly guard.
+    addToProject.disabled = project == null || project.isReadOnly;
+    popup.appendChild(addToProject);
 
     popup.appendChild(document.createElement('br'));
 

@@ -8,7 +8,7 @@ const { setPlatform } = require('../src/components/controllers/error-log');
 const { createPlatform } = require('../src/components/controllers/platform');
 const { createNodeBacking } = require('../src/components/controllers/platform-node');
 const {
-  runSpellcheck, addWordToPersonalDictFile, getBeginningOfCurrentWord,
+  runSpellcheck, addWordToPersonalDictFile, addWordToProjectDictionary, getBeginningOfCurrentWord,
   setSelectedDictionaries, setProjectWords, releaseSpellchecker
 } = require('../src/components/controllers/spellcheck');
 const { installBridge, uninstallBridge } = require('./fake-bridge');
@@ -399,6 +399,79 @@ test('an unknown id is skipped and an all-unknown selection falls back to the sh
   setSelectedDictionaries(['nonexistent']);
 
   var editorQuill = makeEditorQuill('the cat sat on the mat\n');
+
+  assert.strictEqual(await runSpellcheck(editorQuill), null);
+});
+
+//---------------------------------------------------------------------------
+// addWordToProjectDictionary
+//---------------------------------------------------------------------------
+
+test('addWordToProjectDictionary adds the word and marks the project unsaved', function(){
+  makeSysDirectories();
+  var project = { projectDictionary: [], hasUnsavedChanges: false };
+
+  addWordToProjectDictionary(project, 'Aurelion');
+
+  assert.deepStrictEqual(project.projectDictionary, ['Aurelion']);
+  assert.strictEqual(project.hasUnsavedChanges, true);
+});
+
+test('addWordToProjectDictionary does not add the same word twice', function(){
+  makeSysDirectories();
+  var project = { projectDictionary: [], hasUnsavedChanges: false };
+
+  addWordToProjectDictionary(project, 'Aurelion');
+  addWordToProjectDictionary(project, 'Aurelion');
+
+  assert.deepStrictEqual(project.projectDictionary, ['Aurelion']);
+});
+
+test('addWordToProjectDictionary stores the word the way the dictionary spells it', function(){
+  makeSysDirectories();
+  var project = { projectDictionary: [], hasUnsavedChanges: false };
+
+  addWordToProjectDictionary(project, 'Ozy’mandias');
+
+  assert.deepStrictEqual(project.projectDictionary, ["Ozy'mandias"]);
+});
+
+test('addWordToProjectDictionary does nothing when there is no project', function(){
+  makeSysDirectories();
+
+  assert.doesNotThrow(function(){
+    addWordToProjectDictionary(null, 'Aurelion');
+  });
+});
+
+test('nspell#add via addWordToProjectDictionary takes effect without a rebuild', async function(){
+  makeSysDirectories();
+  var editorQuill = makeEditorQuill('the cat sat on the aurelion mat\n');
+  var project = { projectDictionary: [], hasUnsavedChanges: false };
+
+  var before = await runSpellcheck(editorQuill);
+  assert.strictEqual(before.word, 'aurelion');
+
+  var calls = countInvocations('loadDictionaries');
+  addWordToProjectDictionary(project, 'aurelion');
+  var after = await runSpellcheck(editorQuill);
+
+  assert.strictEqual(after, null);
+  assert.strictEqual(calls.count(), 0, 'expected no dictionary reparse');
+});
+
+test('project words pushed via addWordToProjectDictionary survive a cache rebuild too', async function(){
+  makeSysDirectories();
+  var project = { projectDictionary: [], hasUnsavedChanges: false };
+  setProjectWords(project.projectDictionary);
+
+  var editorQuill = makeEditorQuill('the cat sat on the aurelion mat\n');
+  assert.strictEqual((await runSpellcheck(editorQuill)).word, 'aurelion');
+
+  //setProjectWords holds the array by reference, so a word pushed straight onto
+  //project.projectDictionary (as Add To Project does) is visible to a rebuild with no second call.
+  addWordToProjectDictionary(project, 'aurelion');
+  releaseSpellchecker();
 
   assert.strictEqual(await runSpellcheck(editorQuill), null);
 });
