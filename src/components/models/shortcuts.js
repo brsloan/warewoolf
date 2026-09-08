@@ -283,7 +283,13 @@ function bindingsEqual(a, b){
     Boolean(a.alt) === Boolean(b.alt) && Boolean(a.shift) === Boolean(b.shift);
 }
 
+//An unbound action matches nothing. Worth stating outright rather than leaving to bindingsEqual:
+//that answers true for two nulls, and bindingFromEvent() returns null for a modifier pressed on
+//its own - so an unbound shortcut would otherwise fire on every bare press of Shift.
 function bindingMatchesEvent(binding, e){
+  if(binding == null)
+    return false;
+
   return bindingsEqual(binding, bindingFromEvent(e));
 }
 
@@ -411,6 +417,9 @@ function sanitizeBinding(raw){
     shift: raw.shift
   });
 
+  if(!isSafeToBind(binding))
+    return null;
+
   //A code is only carried through when it looks like one - it is handed straight to Quill, and an
   //arbitrary string from a hand-edited file has no business getting that far.
   if(typeof raw.code === 'string' && /^[A-Za-z0-9]{1,20}$/.test(raw.code))
@@ -421,6 +430,28 @@ function sanitizeBinding(raw){
 
 function copyBinding(binding){
   return binding == null ? null : Object.assign({}, binding);
+}
+
+//The rules a binding must satisfy to be stored at all, as opposed to the ones validateBinding adds
+//on top when a writer is choosing one. The split is between what would BREAK the app and what
+//merely would not work:
+//
+//  here             - a shortcut on Escape, Tab or Enter takes away the keys the app is navigated
+//                     and escaped by, and one on an unmodified letter takes that letter out of the
+//                     editor. user-settings.json is a file on disk, so neither may be reachable by
+//                     hand-editing it: both fall back to the default instead.
+//  validateBinding  - conflicts, and the menu accelerators. A shortcut on Ctrl+S simply never
+//                     fires, which is worth refusing while a writer is picking one and not worth
+//                     dropping a stored setting over.
+function isSafeToBind(binding){
+  if(RESERVED_KEYS[binding.key])
+    return false;
+
+  //Ctrl/Cmd+M opens the menu bar, which on Mac is the only way in to it.
+  if(bindingsEqual(binding, MENU_KEY_BINDING))
+    return false;
+
+  return binding.mod || binding.alt || FUNCTION_KEY.test(binding.key);
 }
 
 //Whether `binding` may be assigned to `actionId`, given every binding currently in force. Returns
@@ -434,23 +465,29 @@ function validateBinding(binding, actionId, bindings){
   if(binding == null)
     return { valid: true };
 
+  //sanitizeBinding refuses the unstorable outright (see isSafeToBind), so the work here is saying
+  //WHICH rule a refused binding fell foul of - a writer pressing Escape expecting it to be
+  //bindable is owed better than "that key cannot be used".
   var candidate = sanitizeBinding(binding);
-  if(candidate == null)
-    return { valid: false, message: 'That key cannot be used in a shortcut.' };
+  if(candidate == null){
+    var key = normalizeKeyName(binding.key);
 
-  if(RESERVED_KEYS[candidate.key])
-    return { valid: false, message: RESERVED_KEYS[candidate.key] };
+    if(key == null)
+      return { valid: false, message: 'That key cannot be used in a shortcut.' };
 
-  //Without Ctrl/Cmd or Alt, an ordinary key is just typing - binding one would make that key
-  //unusable in the editor. Function keys type nothing, so they stand alone.
-  if(!candidate.mod && !candidate.alt && !FUNCTION_KEY.test(candidate.key))
+    if(RESERVED_KEYS[key])
+      return { valid: false, message: RESERVED_KEYS[key] };
+
+    if(bindingsEqual(makeBinding(key, binding), MENU_KEY_BINDING))
+      return { valid: false, message: 'That shortcut opens the menu bar.' };
+
+    //Without Ctrl/Cmd or Alt, an ordinary key is just typing - binding one would make that key
+    //unusable in the editor. Function keys type nothing, so they stand alone.
     return {
       valid: false,
       message: 'A shortcut needs Ctrl (Cmd on Mac) or Alt, unless it uses a function key.'
     };
-
-  if(bindingsEqual(candidate, MENU_KEY_BINDING))
-    return { valid: false, message: 'That shortcut opens the menu bar.' };
+  }
 
   var def = getShortcutDef(actionId);
   if(def == null)

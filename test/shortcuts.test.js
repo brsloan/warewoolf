@@ -154,6 +154,13 @@ test('bindingMatchesEvent matches on the modifiers as well as the key', function
   assert.ok(!shortcuts.bindingMatchesEvent(binding, keyEvent('ArrowUp', { ctrlKey: true, shiftKey: true, altKey: true })));
 });
 
+//Regression: bindingsEqual answers true for two nulls, and a bare modifier press is not a binding
+//at all - so an unbound shortcut would have fired on every press of Shift by itself.
+test('an unbound shortcut matches nothing, not even a bare modifier press', function(){
+  assert.strictEqual(shortcuts.bindingMatchesEvent(null, keyEvent('Shift', { shiftKey: true })), false);
+  assert.strictEqual(shortcuts.bindingMatchesEvent(null, keyEvent('b', { ctrlKey: true })), false);
+});
+
 test('bindings are equal regardless of the code they were captured from', function(){
   var typed = shortcuts.makeBinding('T', { mod: true, code: 'KeyT' });
   var declared = shortcuts.makeBinding('T', { mod: true });
@@ -252,6 +259,25 @@ test('sanitizeOverrides copes with a settings file that is not an object', funct
   [null, undefined, 'nope', 42, []].forEach(function(value){
     assert.deepStrictEqual(shortcuts.sanitizeOverrides(value), {}, String(value));
   });
+});
+
+//The popup will not let a writer bind these, but user-settings.json is a file on disk that can be
+//hand-edited - and a shortcut sitting on Escape takes away the key every dialog is closed with,
+//including the one a writer would go to in order to undo it. Dropped on the way in, so the action
+//falls back to its default rather than stranding them.
+test('a stored override on a key the app cannot give up falls back to the default', function(){
+  var overrides = {
+    toggleNotes: { key: 'Escape', mod: true },
+    toggleEditor: { key: 'Tab', mod: true },
+    focusNotes: { key: 'M', mod: true },
+    formatBold: { key: 'Q' }
+  };
+
+  assert.deepStrictEqual(shortcuts.sanitizeOverrides(overrides), {});
+
+  var resolved = shortcuts.resolveShortcuts(overrides);
+  assert.deepStrictEqual(resolved.toggleNotes, shortcuts.getDefaultBindings().toggleNotes);
+  assert.deepStrictEqual(resolved.formatBold, shortcuts.getDefaultBindings().formatBold);
 });
 
 test('sanitizeBinding coerces the flags and refuses a code that is not one', function(){
