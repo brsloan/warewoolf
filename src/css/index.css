@@ -217,6 +217,16 @@ input, textarea, select, button {
   min-height: 1.2em;
 }
 
+/* A message sits in a row of its own directly under the shortcut it is about, so it is read
+   without scrolling to the end of a list that is longer than the screen. Slightly indented, and
+   released from the column's minimum width so a long sentence wraps rather than stretching the
+   table. */
+.shortcuts-table td.shortcut-message {
+  min-width: 0;
+  padding: 0 0 6px 8px;
+  white-space: normal;
+}
+
 .popup-outliner {
   width: 100%;
   height: 100%;

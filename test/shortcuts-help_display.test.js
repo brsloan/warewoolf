@@ -55,8 +55,26 @@ function keyButtonFor(label){
   return row ? row.cells[1].querySelector('button') : null;
 }
 
-function messageText(){
-  return document.querySelector('.shortcut-message').innerText;
+//The message a shortcut is currently showing, which lives in a row of its own directly beneath
+//that shortcut - the list is longer than the popup, so a message about the row a writer is looking
+//at has to be next to it rather than at the end. Empty when it has nothing to say, so a test can
+//assert silence the same way it asserts a message.
+function messageFor(label){
+  var rows = Array.from(document.querySelectorAll('.shortcuts-table tr'));
+  var index = rows.findIndex(function(row){
+    return row.cells[0].innerText === label;
+  });
+  var next = rows[index + 1];
+
+  if(next == null || !next.classList.contains('shortcut-message-row') || next.hidden)
+    return '';
+
+  return next.cells[0].innerText;
+}
+
+//The message about the list as a whole, next to the buttons that act on all of it.
+function listMessage(){
+  return document.querySelector('p.shortcut-message').innerText;
 }
 
 test.beforeEach(function(){
@@ -171,7 +189,7 @@ test('choosing a shortcut and pressing keys assigns them to it', function(t){
   keydown(document, 'w', { ctrlKey: true, shiftKey: true, code: 'KeyW' });
 
   assert.strictEqual(button.textContent, 'Ctrl + Shift + W');
-  assert.match(messageText(), /Bold is now Ctrl \+ Shift \+ W/);
+  assert.match(messageFor('Bold'), /Bold is now Ctrl \+ Shift \+ W/);
 });
 
 //Nothing may act on the keypress that is being captured - not the popup's own Escape handler, not
@@ -223,7 +241,7 @@ test('Backspace clears a shortcut, and the cleared state is what gets saved', fu
   keydown(document, 'Backspace');
 
   assert.strictEqual(button.textContent, 'None');
-  assert.match(messageText(), /unassigned/);
+  assert.match(messageFor('Bold'), /unassigned/);
 
   buttonLabelled('Save').onclick();
   assert.deepStrictEqual(saved, [{ formatBold: null }]);
@@ -236,7 +254,7 @@ test('a refused binding says why and leaves the writer still choosing', function
   button.onclick();
   keydown(document, 'k', { ctrlKey: true, code: 'KeyK' });
 
-  assert.match(messageText(), /Strikethrough already uses that shortcut/);
+  assert.match(messageFor('Bold'), /Strikethrough already uses that shortcut/);
   assert.strictEqual(button.textContent, 'Press keys...', 'still capturing, so another key can be tried');
 
   keydown(document, 'y', { ctrlKey: true, code: 'KeyY' });
@@ -250,7 +268,7 @@ test('a key the app needs for itself is refused with the reason', function(t){
   button.onclick();
   keydown(document, 'Tab', { ctrlKey: true });
 
-  assert.match(messageText(), /Tab moves between inputs/);
+  assert.match(messageFor('Bold'), /Tab moves between inputs/);
   assert.strictEqual(button.textContent, 'Press keys...');
 });
 
@@ -261,7 +279,35 @@ test('a menu accelerator is refused, naming the menu item that holds it', functi
   button.onclick();
   keydown(document, 's', { ctrlKey: true, code: 'KeyS' });
 
-  assert.match(messageText(), /Save menu item/);
+  assert.match(messageFor('Bold'), /Save menu item/);
+});
+
+//Regression: every message used to appear in one line under the buttons at the end of the popup.
+//The list is longer than the screen, so a writer being told why their key was refused had to scroll
+//past thirty rows to find out - if they knew there was anything to find.
+test('a message about a shortcut appears in the row directly beneath it', function(t){
+  showEditable(t);
+
+  keyButtonFor('Bold').onclick();
+  keydown(document, 's', { ctrlKey: true, code: 'KeyS' });
+
+  assert.match(messageFor('Bold'), /Save menu item/);
+  assert.strictEqual(listMessage(), '', 'nothing should be left at the end of the popup');
+  assert.strictEqual(messageFor('Italics'), '', 'no other shortcut should be showing a message');
+});
+
+//Only one message at a time, or a refusal would be left behind under a shortcut the writer has
+//since moved on from.
+test('a message is taken down when another shortcut is chosen', function(t){
+  showEditable(t);
+
+  keyButtonFor('Bold').onclick();
+  keydown(document, 's', { ctrlKey: true, code: 'KeyS' });
+  assert.notStrictEqual(messageFor('Bold'), '');
+
+  keyButtonFor('Italics').onclick();
+
+  assert.strictEqual(messageFor('Bold'), '');
 });
 
 //Starting a second rebind must not leave the first one stuck asking for keys.
@@ -320,7 +366,7 @@ test('Restore Defaults puts every shortcut back, and saves as no overrides at al
 
   assert.strictEqual(keyButtonFor('Bold').textContent, 'Ctrl + B');
   assert.strictEqual(keyButtonFor('Toggle Notes Display').textContent, 'F3');
-  assert.match(messageText(), /Defaults restored/);
+  assert.match(listMessage(), /Defaults restored/);
 
   buttonLabelled('Save').onclick();
   assert.deepStrictEqual(saved, [{}]);

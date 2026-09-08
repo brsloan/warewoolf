@@ -32,6 +32,14 @@ function showShortcutsHelp(options){
   //The button showing each shortcut's keys, so a rebind (and Restore Defaults, which changes all of
   //them at once) can rewrite the ones it affects without rebuilding the table.
   var keyButtons = {};
+  //A row under each shortcut, empty and hidden until that shortcut has something to say. The list
+  //is longer than the popup, so a message about the shortcut a writer is looking at has to appear
+  //where they are looking - a single message line under the buttons at the end was regularly off
+  //the bottom of the screen, saying why a key had been refused to nobody.
+  var messageRows = {};
+  //Which shortcut's message row is currently showing, so it can be taken down again without
+  //walking all of them.
+  var shownMessageId = null;
   //The rebind in progress, if any: which shortcut, which button, and what the button said before it
   //started asking - so cancelling can put it back.
   var capturing = null;
@@ -57,9 +65,11 @@ function showShortcutsHelp(options){
       ]);
   });
 
-  var message = document.createElement('p');
-  message.classList.add('shortcut-message');
-  popup.appendChild(message);
+  //Restore Defaults is about the whole list rather than any one shortcut, and its button is right
+  //here, so its message goes here too.
+  var listMessage = document.createElement('p');
+  listMessage.classList.add('shortcut-message');
+  popup.appendChild(listMessage);
 
   if(onSave){
     var hint = document.createElement('p');
@@ -120,6 +130,9 @@ function showShortcutsHelp(options){
 
     defs.forEach(function(def){
       table.appendChild(shortcutRow(def));
+
+      if(onSave)
+        table.appendChild(messageRowFor(def));
     });
 
     popup.appendChild(table);
@@ -188,13 +201,30 @@ function showShortcutsHelp(options){
     return labelledRow(def.label, keysCell);
   }
 
+  //An empty row per shortcut, rather than one built when there is something to show: inserting a
+  //row into the table mid-rebind would move every row below it, including the one the writer is
+  //looking at.
+  function messageRowFor(def){
+    var row = document.createElement('tr');
+    row.classList.add('shortcut-message-row');
+    row.hidden = true;
+
+    var cell = document.createElement('td');
+    cell.colSpan = 2;
+    cell.classList.add('shortcut-message');
+    row.appendChild(cell);
+
+    messageRows[def.id] = row;
+    return row;
+  }
+
   function beginCapture(def, button){
     cancelCapture();
 
     capturing = { def: def, button: button, previousText: button.textContent };
     button.textContent = 'Press keys...';
     button.classList.add('capturing');
-    showMessage('', false);
+    clearMessages();
 
     //On `document`, in the capture phase, so it runs before anything else in the app can act on the
     //keypress: the popup's own Escape handler, keybindings.js's listeners, and Quill's. A writer
@@ -226,7 +256,7 @@ function showShortcutsHelp(options){
     if(!result.valid){
       //Still capturing: a refused combination leaves the writer where they were, free to press
       //another rather than having to start the rebind again.
-      showMessage(result.message, true);
+      showMessage(result.message, true, capturing.def.id);
       return;
     }
 
@@ -243,7 +273,8 @@ function showShortcutsHelp(options){
 
     showMessage(binding == null
       ? label + ' is now unassigned. Choose Save to keep the change.'
-      : label + ' is now ' + formatBinding(binding, isMac) + '. Choose Save to keep the change.', false);
+      : label + ' is now ' + formatBinding(binding, isMac) + '. Choose Save to keep the change.',
+      false, id);
   }
 
   function cancelCapture(){
@@ -271,9 +302,42 @@ function showShortcutsHelp(options){
       keyButtons[id].textContent = formatBinding(bindings[id], isMac);
   }
 
-  function showMessage(text, isWarning){
-    message.innerText = text;
-    message.classList.toggle('warning-text', Boolean(isWarning));
+  //Shown under `actionId`'s own row where there is one - which is every message about a particular
+  //shortcut - and under the buttons at the end otherwise. Only ever one at a time, so a message
+  //cannot be left behind under a shortcut a writer has moved on from.
+  function showMessage(text, isWarning, actionId){
+    clearMessages();
+
+    if(!text)
+      return;
+
+    var row = actionId ? messageRows[actionId] : null;
+
+    if(row == null){
+      listMessage.innerText = text;
+      listMessage.classList.toggle('warning-text', Boolean(isWarning));
+      return;
+    }
+
+    row.hidden = false;
+    row.cells[0].innerText = text;
+    row.cells[0].classList.toggle('warning-text', Boolean(isWarning));
+    shownMessageId = actionId;
+  }
+
+  function clearMessages(){
+    listMessage.innerText = '';
+    listMessage.classList.remove('warning-text');
+
+    var row = shownMessageId ? messageRows[shownMessageId] : null;
+    shownMessageId = null;
+
+    if(row == null)
+      return;
+
+    row.hidden = true;
+    row.cells[0].innerText = '';
+    row.cells[0].classList.remove('warning-text');
   }
 }
 
