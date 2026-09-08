@@ -21,7 +21,9 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish){
   var filetypes = [
     { name: 'Docx', id: 'docxSelect', extensions: ['docx']},
     { name: 'Plain Text', id: 'txtSelect', extensions: ['txt'] },
-    { name: 'MarkdownFic', id: 'mdfcSelect', extensions: ['mdfc', 'txt', "md"] }
+    { name: 'MarkdownFic', id: 'mdfcSelect', extensions: ['mdfc', 'txt', "md"] },
+    { name: 'HTML', id: 'htmlSelect', extensions: ['html', 'htm', 'xhtml'] },
+    { name: 'EPUB', id: 'epubSelect', extensions: ['epub'] }
   ];
 
   filetypes.forEach((type, i) => {
@@ -152,6 +154,102 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish){
   docxOptionsSet.appendChild(docxOpsTable);
   importForm.appendChild(docxOptionsSet);
 
+  var htmlOptionsSet = document.createElement('fieldset');
+
+  var htmlOptionsLabel = document.createElement('legend');
+  htmlOptionsLabel.innerText = 'HTML Options';
+  htmlOptionsSet.appendChild(htmlOptionsLabel);
+
+  var htmlOpsTable = document.createElement('table');
+
+  var htmlSplitChapsLabel = document.createElement("label");
+  htmlSplitChapsLabel.innerText = "Split Into Chapters At Headings: ";
+  htmlSplitChapsLabel.htmlFor = "html-split-chaps-check";
+
+  var htmlSplitChapsCheck = document.createElement("input");
+  htmlSplitChapsCheck.type = "checkbox";
+  htmlSplitChapsCheck.id = "html-split-chaps-check";
+  htmlSplitChapsCheck.checked = true;
+
+  htmlOpsTable.appendChild(generateRow(htmlSplitChapsLabel, htmlSplitChapsCheck));
+
+  var htmlHeadingLevelLabel = document.createElement("label");
+  htmlHeadingLevelLabel.innerText = "Heading level: ";
+  htmlHeadingLevelLabel.htmlFor = "html-heading-level-select";
+  htmlHeadingLevelLabel.classList.add('sublabel');
+
+  //A level selector rather than the docx importer's fixed level 1, because an HTML book puts its
+  //title in <h1> and its chapter titles in <h2> - every one of the sample books in
+  //test/fixtures/books does - so a fixed level 1 would import the whole book as one chapter.
+  var htmlHeadingLevelSelect = document.createElement("select");
+  htmlHeadingLevelSelect.id = "html-heading-level-select";
+  htmlHeadingLevelSelect.classList.add('sublabel');
+  ["1", "2", "3", "4"].forEach(function(level){
+    var levelOption = document.createElement("option");
+    levelOption.value = level;
+    levelOption.innerText = level;
+    htmlHeadingLevelSelect.appendChild(levelOption);
+  });
+  htmlHeadingLevelSelect.value = "2";
+
+  htmlOpsTable.appendChild(generateRow(htmlHeadingLevelLabel, htmlHeadingLevelSelect));
+
+  var htmlSplitRulesLabel = document.createElement("label");
+  htmlSplitRulesLabel.innerText = "Split At Horizontal Rules: ";
+  htmlSplitRulesLabel.htmlFor = "html-split-rules-check";
+
+  var htmlSplitRulesCheck = document.createElement("input");
+  htmlSplitRulesCheck.type = "checkbox";
+  htmlSplitRulesCheck.id = "html-split-rules-check";
+
+  htmlOpsTable.appendChild(generateRow(htmlSplitRulesLabel, htmlSplitRulesCheck));
+
+  var htmlStripBoilerplateLabel = document.createElement("label");
+  htmlStripBoilerplateLabel.innerText = "Strip Project Gutenberg Boilerplate: ";
+  htmlStripBoilerplateLabel.htmlFor = "html-strip-boilerplate-check";
+
+  var htmlStripBoilerplateCheck = document.createElement("input");
+  htmlStripBoilerplateCheck.type = "checkbox";
+  htmlStripBoilerplateCheck.id = "html-strip-boilerplate-check";
+
+  htmlOpsTable.appendChild(generateRow(htmlStripBoilerplateLabel, htmlStripBoilerplateCheck));
+  htmlOptionsSet.appendChild(htmlOpsTable);
+  importForm.appendChild(htmlOptionsSet);
+
+  //An epub needs no split options at all: its own table of contents says where the chapters are and
+  //what they are called, which is better than anything this dialog could ask for. See the note on
+  //the spine in epub-import.js.
+  var epubOptionsSet = document.createElement('fieldset');
+
+  var epubOptionsLabel = document.createElement('legend');
+  epubOptionsLabel.innerText = 'EPUB Options';
+  epubOptionsSet.appendChild(epubOptionsLabel);
+
+  var epubOpsTable = document.createElement('table');
+
+  var epubStripBoilerplateLabel = document.createElement("label");
+  epubStripBoilerplateLabel.innerText = "Strip Project Gutenberg Boilerplate: ";
+  epubStripBoilerplateLabel.htmlFor = "epub-strip-boilerplate-check";
+
+  var epubStripBoilerplateCheck = document.createElement("input");
+  epubStripBoilerplateCheck.type = "checkbox";
+  epubStripBoilerplateCheck.id = "epub-strip-boilerplate-check";
+
+  epubOpsTable.appendChild(generateRow(epubStripBoilerplateLabel, epubStripBoilerplateCheck));
+
+  var epubUseMetadataLabel = document.createElement("label");
+  epubUseMetadataLabel.innerText = "Use Book's Title And Author (if blank): ";
+  epubUseMetadataLabel.htmlFor = "epub-use-metadata-check";
+
+  var epubUseMetadataCheck = document.createElement("input");
+  epubUseMetadataCheck.type = "checkbox";
+  epubUseMetadataCheck.id = "epub-use-metadata-check";
+  epubUseMetadataCheck.checked = true;
+
+  epubOpsTable.appendChild(generateRow(epubUseMetadataLabel, epubUseMetadataCheck));
+  epubOptionsSet.appendChild(epubOpsTable);
+  importForm.appendChild(epubOptionsSet);
+
   importForm.appendChild(document.createElement('br'));
 
   var chapLabelSet = document.createElement('fieldset');
@@ -228,6 +326,24 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish){
       chapLabels: selectedChapLabel
     };
 
+    importOptions.htmlOptions = {
+      splitChapters: {
+        //Null rather than the selected level when the box is unticked - that is what tells the
+        //converter not to split at headings at all, and it leaves splitting at rules free to be
+        //chosen on its own.
+        headingLevel: htmlSplitChapsCheck.checked ? parseInt(htmlHeadingLevelSelect.value, 10) : null,
+        atRules: htmlSplitRulesCheck.checked
+      },
+      stripBoilerplate: htmlStripBoilerplateCheck.checked,
+      chapLabels: selectedChapLabel
+    };
+
+    importOptions.epubOptions = {
+      stripBoilerplate: epubStripBoilerplateCheck.checked,
+      useMetadata: epubUseMetadataCheck.checked,
+      chapLabels: selectedChapLabel
+    };
+
     importOptions.mdfcOptions = {
       chapLabels: selectedChapLabel
     };
@@ -243,11 +359,17 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish){
   docxSelect.checked = true;
   plainTextOptionsSet.disabled = true;
   docxOptionsSet.disabled = false;
+  htmlOptionsSet.disabled = true;
+  epubOptionsSet.disabled = true;
 
   var textSelect = document.getElementById('txtSelect');
+  var htmlSelect = document.getElementById('htmlSelect');
+  var epubSelect = document.getElementById('epubSelect');
   importForm.onchange = function(){
     plainTextOptionsSet.disabled = !textSelect.checked;
     docxOptionsSet.disabled = !docxSelect.checked;
+    htmlOptionsSet.disabled = !htmlSelect.checked;
+    epubOptionsSet.disabled = !epubSelect.checked;
   };
 
   importBtn.focus();

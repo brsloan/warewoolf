@@ -216,6 +216,239 @@ test('importMDF regression: a missing file logs an error and calls back with no 
 });
 
 //---------------------------------------------------------------------------
+// importHtml
+//---------------------------------------------------------------------------
+//The conversion itself is html-import.js's job and is covered exhaustively in
+//test/html-import.test.js. What is asserted here is the wiring: that the file is read, that the
+//options this controller is handed reach the converter, and that the resulting chapters are titled
+//the same way every other importer titles them.
+
+function runImportHtml(ctrl, filepath, options){
+  return new Promise(function(resolve){
+    ctrl.importHtml(filepath, options, function(delts){ resolve(delts); });
+  });
+}
+
+function htmlOptions(overrides){
+  return Object.assign({
+    splitChapters: { headingLevel: null, atRules: false },
+    stripBoilerplate: false,
+    chapLabels: 'firstLine'
+  }, overrides);
+}
+
+function writeHtml(name, html){
+  const dir = tempDir();
+  const file = path.join(dir, name);
+  fs.writeFileSync(file, html);
+  return file;
+}
+
+test('importHtml reads an html file and packages it as a chapter delta titled from its first line', async function(){
+  const file = writeHtml('story.html', '<h2>Chapter One</h2><p>Body <i>text</i>.</p>');
+
+  const packagedDeltas = await runImportHtml(importCtrl, file, htmlOptions());
+
+  assert.strictEqual(packagedDeltas.length, 1);
+  assert.strictEqual(packagedDeltas[0].title, 'Chapter One');
+  assert.deepStrictEqual(packagedDeltas[0].delta.ops, [
+    { insert: 'Chapter One' }, { insert: '\n', attributes: { header: 2 } },
+    { insert: 'Body ' },
+    { insert: 'text', attributes: { italic: true } },
+    { insert: '.' },
+    { insert: '\n' }
+  ]);
+});
+
+test('importHtml splits at the requested heading level and titles each chapter from its heading', async function(){
+  const file = writeHtml('book.html',
+    '<h1>Book</h1><p>front</p><h2>One</h2><p>a</p><h2>Two</h2><p>b</p>');
+
+  const packagedDeltas = await runImportHtml(importCtrl, file,
+    htmlOptions({ splitChapters: { headingLevel: 2, atRules: false } }));
+
+  assert.deepStrictEqual(packagedDeltas.map(function(p){ return p.title; }), ['Book', 'One', 'Two']);
+});
+
+//The same numbering the docx importer needed, reached through the helper both now share - an HTML
+//book split at its headings is the case that makes it matter most, since one file routinely becomes
+//thirty-odd chapters.
+test('importHtml numbers filename-based titles when one file becomes several chapters', async function(){
+  const file = writeHtml('my.novel.draft.html', '<h2>One</h2><p>a</p><h2>Two</h2><p>b</p>');
+
+  const packagedDeltas = await runImportHtml(importCtrl, file,
+    htmlOptions({ chapLabels: 'filename', splitChapters: { headingLevel: 2, atRules: false } }));
+
+  assert.deepStrictEqual(packagedDeltas.map(function(p){ return p.title; }),
+    ['my.novel.draft 1', 'my.novel.draft 2']);
+});
+
+test('importHtml does not number a filename-based title when the file becomes one chapter', async function(){
+  const file = writeHtml('novel.html', '<h2>One</h2><p>a</p>');
+
+  const packagedDeltas = await runImportHtml(importCtrl, file,
+    htmlOptions({ chapLabels: 'filename', splitChapters: { headingLevel: 2, atRules: false } }));
+
+  assert.strictEqual(packagedDeltas.length, 1);
+  assert.strictEqual(packagedDeltas[0].title, 'novel');
+});
+
+test('importHtml passes the boilerplate option through to the converter', async function(){
+  const html = '<header id="pg-header"><p>licence</p></header><h2>One</h2><p>a</p>';
+
+  const kept = await runImportHtml(importCtrl, writeHtml('pg.html', html), htmlOptions());
+  assert.match(textOfDelta(kept[0].delta), /^licence/);
+
+  const stripped = await runImportHtml(importCtrl, writeHtml('pg.html', html),
+    htmlOptions({ stripBoilerplate: true }));
+  assert.strictEqual(textOfDelta(stripped[0].delta), 'One\na\n');
+});
+
+//Regression: same unchecked read error as importPlainText and importMDF.
+test('importHtml regression: a missing file logs an error and calls back with no chapters instead of throwing', { timeout: 5000 }, async function(){
+  const logErrorMock = test.mock.method(errorLog, 'logError', function(){});
+  const ctrl = freshImportCtrl();
+
+  const missingFile = path.join(tempDir(), 'does-not-exist.html');
+  const packagedDeltas = await runImportHtml(ctrl, missingFile, htmlOptions());
+
+  assert.deepStrictEqual(packagedDeltas, []);
+  assert.strictEqual(logErrorMock.mock.calls.length, 1);
+});
+
+function textOfDelta(delta){
+  return delta.ops.map(function(op){
+    return typeof op.insert === 'string' ? op.insert : '';
+  }).join('');
+}
+
+//---------------------------------------------------------------------------
+// importEpubFile
+//---------------------------------------------------------------------------
+//The reading of the archive is epub-import.js's job and is covered in test/epub-import.test.js.
+//What is asserted here is the wiring: how a chapter gets its title, and how the book's own title and
+//author reach the caller.
+
+function buildEpubFixture(name, entries){
+  return new Promise(function(resolve, reject){
+    const dir = tempDir();
+    const filepath = path.join(dir, name).replaceAll('\\', '/');
+    const output = fs.createWriteStream(filepath);
+    const archive = archiver('zip', { zlib: { level: 9 } });
+
+    output.on('close', function(){ resolve(filepath); });
+    archive.on('error', reject);
+
+    archive.pipe(output);
+    archive.append('application/epub+zip', { name: 'mimetype' });
+    Object.keys(entries).forEach(function(entryName){
+      archive.append(entries[entryName], { name: entryName });
+    });
+    archive.finalize();
+  });
+}
+
+//A two-chapter book with a table of contents that names both, and a third chapter the contents does
+//not name - so the fallback to the first line has something to fall back on.
+function epubFixtureEntries(title, author){
+  return {
+    'META-INF/container.xml':
+      '<?xml version="1.0"?><container version="1.0" '
+      + 'xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles>'
+      + '<rootfile full-path="OEBPS/content.opf"/></rootfiles></container>',
+    'OEBPS/content.opf':
+      '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0">'
+      + '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">'
+      + '<dc:title>' + title + '</dc:title><dc:creator>' + author + '</dc:creator></metadata>'
+      + '<manifest>'
+      + '<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>'
+      + '<item id="c1" href="chapter_1.xhtml" media-type="application/xhtml+xml"/>'
+      + '<item id="c2" href="chapter_2.xhtml" media-type="application/xhtml+xml"/>'
+      + '<item id="c3" href="chapter_3.xhtml" media-type="application/xhtml+xml"/>'
+      + '</manifest>'
+      + '<spine toc="ncx"><itemref idref="c1"/><itemref idref="c2"/><itemref idref="c3"/></spine>'
+      + '</package>',
+    'OEBPS/toc.ncx':
+      '<?xml version="1.0"?><ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1"><navMap>'
+      + '<navPoint id="n1" playOrder="1"><navLabel><text>Named By The Book</text></navLabel>'
+      + '<content src="chapter_1.xhtml"/></navPoint>'
+      + '<navPoint id="n2" playOrder="2"><navLabel><text>Also Named</text></navLabel>'
+      + '<content src="chapter_2.xhtml"/></navPoint>'
+      + '</navMap></ncx>',
+    'OEBPS/chapter_1.xhtml': epubChapter('<h2>A Different Heading</h2><p>first</p>'),
+    'OEBPS/chapter_2.xhtml': epubChapter('<h2>Another Heading</h2><p>second</p>'),
+    'OEBPS/chapter_3.xhtml': epubChapter('<h2>Unlisted Chapter</h2><p>third</p>')
+  };
+}
+
+function epubChapter(body){
+  return '<?xml version="1.0" encoding="utf-8"?>'
+    + '<html xmlns="http://www.w3.org/1999/xhtml"><head><title>c</title></head>'
+    + '<body>' + body + '</body></html>';
+}
+
+function runImportEpubFile(ctrl, filepath, options){
+  return new Promise(function(resolve){
+    ctrl.importEpubFile(filepath, options, function(delts, metadata){
+      resolve({ delts: delts, metadata: metadata });
+    });
+  });
+}
+
+//An epub already knows what each of its chapters is called, and that is a better name than the first
+//line in every case where the two differ - so here "first line" means "the book's own name for it",
+//falling back to the first line only where the contents named nothing.
+test('importEpubFile titles chapters from the table of contents, falling back to the first line', async function(){
+  const filepath = await buildEpubFixture('book.epub', epubFixtureEntries('A Title', 'An Author'));
+
+  const result = await runImportEpubFile(importCtrl, filepath, { chapLabels: 'firstLine' });
+
+  assert.deepStrictEqual(result.delts.map(function(d){ return d.title; }),
+    ['Named By The Book', 'Also Named', 'Unlisted Chapter']);
+});
+
+test('importEpubFile numbers filename-based titles like every other multi-chapter importer', async function(){
+  const filepath = await buildEpubFixture('my.book.epub', epubFixtureEntries('A Title', 'An Author'));
+
+  const result = await runImportEpubFile(importCtrl, filepath, { chapLabels: 'filename' });
+
+  assert.deepStrictEqual(result.delts.map(function(d){ return d.title; }),
+    ['my.book 1', 'my.book 2', 'my.book 3']);
+});
+
+test('importEpubFile reports the book title and author alongside the chapters', async function(){
+  const filepath = await buildEpubFixture('book.epub', epubFixtureEntries('Moby Dick', 'Herman Melville'));
+
+  const result = await runImportEpubFile(importCtrl, filepath, { chapLabels: 'firstLine' });
+
+  assert.deepStrictEqual(result.metadata, { title: 'Moby Dick', author: 'Herman Melville' });
+});
+
+test('importEpubFile withholds the metadata when the writer asked it not to be used', async function(){
+  const filepath = await buildEpubFixture('book.epub', epubFixtureEntries('Moby Dick', 'Herman Melville'));
+
+  const result = await runImportEpubFile(importCtrl, filepath,
+    { chapLabels: 'firstLine', useMetadata: false });
+
+  assert.strictEqual(result.metadata, null);
+  assert.strictEqual(result.delts.length, 3, 'the chapters should still import');
+});
+
+test('importEpubFile passes the boilerplate option through', async function(){
+  const entries = epubFixtureEntries('A Title', 'An Author');
+  entries['OEBPS/chapter_3.xhtml'] = epubChapter(
+    '<p>*** END OF THE PROJECT GUTENBERG EBOOK A TITLE ***</p><p>licence</p>');
+  const filepath = await buildEpubFixture('pg.epub', entries);
+
+  const kept = await runImportEpubFile(importCtrl, filepath, { chapLabels: 'firstLine' });
+  assert.strictEqual(kept.delts.length, 3);
+
+  const stripped = await runImportEpubFile(importCtrl, filepath,
+    { chapLabels: 'firstLine', stripBoilerplate: true });
+  assert.strictEqual(stripped.delts.length, 2);
+});
+
+//---------------------------------------------------------------------------
 // importFilesAsync
 //---------------------------------------------------------------------------
 
@@ -226,6 +459,19 @@ function runImportFilesAsync(ctrl, filepaths, options, sysDirectories){
       added.push({ delta: delta, title: title });
     }, function(){
       resolve(added);
+    }, sysDirectories);
+  });
+}
+
+//The same, but keeping what the finish callback was handed - the imported book's own title and
+//author, which is how a project takes its defaults from an epub.
+function runImportFilesAsyncWithMetadata(ctrl, filepaths, options, sysDirectories){
+  const added = [];
+  return new Promise(function(resolve){
+    ctrl.importFilesAsync(filepaths, options, function(delta, title){
+      added.push({ delta: delta, title: title });
+    }, function(bookMetadata){
+      resolve({ added: added, metadata: bookMetadata });
     }, sysDirectories);
   });
 }
@@ -277,7 +523,71 @@ test('importFilesAsync does not number a filename-based title when a docx produc
   assert.strictEqual(added[0].title, 'novel');
 });
 
-//Regression: an unrecognized fileType.id fell through all three importer branches with no `else`,
+test('importFilesAsync imports an html file end-to-end, split into chapters', async function(){
+  const dir = tempDir();
+  const file = path.join(dir, 'book.html');
+  fs.writeFileSync(file, '<h2>One</h2><p>a</p><h2>Two</h2><p>b</p>');
+
+  const options = {
+    fileType: { id: 'htmlSelect' },
+    htmlOptions: {
+      splitChapters: { headingLevel: 2, atRules: false },
+      stripBoilerplate: false,
+      chapLabels: 'firstLine'
+    }
+  };
+  const added = await runImportFilesAsync(importCtrl, [file], options, { temp: dir });
+
+  assert.strictEqual(added.length, 2);
+  assert.deepStrictEqual(added.map(function(a){ return a.title; }), ['One', 'Two']);
+});
+
+test('importFilesAsync imports an epub end-to-end, one chapter per contents entry', async function(){
+  const filepath = await buildEpubFixture('novel.epub', epubFixtureEntries('A Title', 'An Author'));
+
+  const options = {
+    fileType: { id: 'epubSelect' },
+    epubOptions: { stripBoilerplate: false, useMetadata: true, chapLabels: 'firstLine' }
+  };
+  const result = await runImportFilesAsyncWithMetadata(importCtrl, [filepath], options,
+    { temp: tempDir() });
+
+  assert.deepStrictEqual(result.added.map(function(a){ return a.title; }),
+    ['Named By The Book', 'Also Named', 'Unlisted Chapter']);
+  assert.deepStrictEqual(result.metadata, { title: 'A Title', author: 'An Author' });
+});
+
+//The finish callback has never taken an argument, and every caller before this ignores it - which is
+//why the metadata travels that way rather than through a parameter of its own.
+test('importFilesAsync reports no metadata for a format that carries none', async function(){
+  const dir = tempDir();
+  const file = path.join(dir, 'story.txt');
+  fs.writeFileSync(file, 'Chapter One\r\nBody.');
+
+  const options = { fileType: { id: 'txtSelect' }, txtOptions: plainTextOptions() };
+  const result = await runImportFilesAsyncWithMetadata(importCtrl, [file], options, { temp: dir });
+
+  assert.strictEqual(result.metadata, null);
+  assert.strictEqual(result.added.length, 1);
+});
+
+//Importing several books at once must not let the last one's title quietly replace the first one's.
+test('importFilesAsync keeps the first book metadata when several epubs are imported together', async function(){
+  const first = await buildEpubFixture('first.epub', epubFixtureEntries('The First Book', 'First Author'));
+  const second = await buildEpubFixture('second.epub', epubFixtureEntries('The Second Book', 'Second Author'));
+
+  const options = {
+    fileType: { id: 'epubSelect' },
+    epubOptions: { stripBoilerplate: false, useMetadata: true, chapLabels: 'firstLine' }
+  };
+  const result = await runImportFilesAsyncWithMetadata(importCtrl, [first, second], options,
+    { temp: tempDir() });
+
+  assert.deepStrictEqual(result.metadata, { title: 'The First Book', author: 'First Author' });
+  assert.strictEqual(result.added.length, 6, 'both books should have imported');
+});
+
+//Regression: an unrecognized fileType.id fell through all the importer branches with no `else`,
 //so `recurse` (and therefore hideWorking/cback) never ran and the working overlay hung forever
 //with nothing logged.
 test('importFilesAsync regression: an unrecognized fileType.id logs an error and finishes instead of hanging', { timeout: 5000 }, async function(){
@@ -289,4 +599,65 @@ test('importFilesAsync regression: an unrecognized fileType.id logs an error and
 
   assert.strictEqual(added.length, 0);
   assert.strictEqual(logErrorMock.mock.calls.length, 1);
+});
+
+//---------------------------------------------------------------------------
+// applyBookMetadata
+//---------------------------------------------------------------------------
+//An epub knows its own title and author. Filling a blank project field from it is the helpful part;
+//overwriting one the writer has already set is not, and a project field has no undo.
+
+function bareProject(overrides){
+  return Object.assign({ title: '', author: '', hasUnsavedChanges: false }, overrides || {});
+}
+
+test('applyBookMetadata fills a blank title and author from the book', function(){
+  const project = bareProject();
+
+  const changed = importCtrl.applyBookMetadata(project, { title: 'Moby Dick', author: 'Herman Melville' });
+
+  assert.strictEqual(changed, true);
+  assert.strictEqual(project.title, 'Moby Dick');
+  assert.strictEqual(project.author, 'Herman Melville');
+  assert.strictEqual(project.hasUnsavedChanges, true);
+});
+
+test('applyBookMetadata never overwrites a title or author the writer already set', function(){
+  const project = bareProject({ title: 'My Own Novel', author: 'Me' });
+
+  const changed = importCtrl.applyBookMetadata(project, { title: 'Moby Dick', author: 'Herman Melville' });
+
+  assert.strictEqual(changed, false);
+  assert.strictEqual(project.title, 'My Own Novel');
+  assert.strictEqual(project.author, 'Me');
+  assert.strictEqual(project.hasUnsavedChanges, false);
+});
+
+test('applyBookMetadata fills only the field that is blank', function(){
+  const project = bareProject({ author: 'Me' });
+
+  importCtrl.applyBookMetadata(project, { title: 'Moby Dick', author: 'Herman Melville' });
+
+  assert.strictEqual(project.title, 'Moby Dick');
+  assert.strictEqual(project.author, 'Me');
+});
+
+//Marking the project dirty for a no-op would have the writer prompted to save a file nothing
+//changed in.
+test('applyBookMetadata leaves the project clean when there is nothing to fill', function(){
+  const project = bareProject({ title: 'Mine', author: 'Me' });
+  importCtrl.applyBookMetadata(project, { title: 'Other', author: 'Someone' });
+  assert.strictEqual(project.hasUnsavedChanges, false);
+
+  const blank = bareProject();
+  importCtrl.applyBookMetadata(blank, { title: '', author: '' });
+  assert.strictEqual(blank.hasUnsavedChanges, false);
+});
+
+test('applyBookMetadata does nothing at all for a format that reported no metadata', function(){
+  const project = bareProject();
+
+  assert.strictEqual(importCtrl.applyBookMetadata(project, null), false);
+  assert.strictEqual(importCtrl.applyBookMetadata(project, undefined), false);
+  assert.strictEqual(project.hasUnsavedChanges, false);
 });

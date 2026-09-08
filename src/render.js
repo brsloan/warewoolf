@@ -1460,7 +1460,11 @@ const menuCommands = {
   'new-project-clicked': { run: function(){ createNewProject(); } },
   'import-clicked': { run: function(){
     const showImportOptions = require('./components/views/import_display');
-    showImportOptions(sysDirectories, detached(addImportedChapter), detached(async function(){
+    //The finish callback carries the imported book's own title and author when the format had any -
+    //only an epub does. applyBookMetadata (import.js) decides what to do with it.
+    const { applyBookMetadata } = require('./components/controllers/import');
+    showImportOptions(sysDirectories, detached(addImportedChapter), detached(async function(bookMetadata){
+      applyBookMetadata(project, bookMetadata);
       await displayChapterByIndex(project.activeChapterIndex);
       if(project.chapters.length > 0)
         editorQuill.enable();
