@@ -254,6 +254,14 @@ const createWindow = () => {
             mainWindow.webContents.send('settings-clicked');
           }
         },
+        {
+          //No accelerator: this is a dialog opened rarely and does not need to spend a chord - see
+          //the note on Backup above.
+          label: 'Dictionaries',
+          click(item, focusWindow){
+            mainWindow.webContents.send('dictionaries-clicked');
+          }
+        },
         {type: 'separator'},
         {
           label: 'File Manager',

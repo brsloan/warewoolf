@@ -789,7 +789,7 @@ var ALL_MENU_CHANNELS = [
   'save-copy-clicked', 'help-doc-clicked', 'renumber-chapters-clicked', 'send-via-email-clicked',
   'view-error-log-clicked', 'file-manager-clicked', 'wifi-manager-clicked', 'save-backup-clicked',
   'settings-clicked', 'corkboard-clicked', 'file-opened-from-outside-warewoolf',
-  'indent-all-clicked', 'center-all-heads-clicked'
+  'indent-all-clicked', 'center-all-heads-clicked', 'dictionaries-clicked'
 ];
 
 //The bridge set up for the current freshRender() call - the same object render.js subscribed its
@@ -2034,6 +2034,16 @@ function saveSettingsPopup(){
   currentBridge().handlers['settings-clicked']();
   settingsPopupSaveButton().onclick();
 }
+
+test('dictionaries-clicked opens the Dictionaries popup', async function(){
+  var r = await freshRender();
+
+  currentBridge().handlers['dictionaries-clicked']();
+
+  var popup = document.querySelector('.popup');
+  assert.ok(popup, 'expected a popup to open');
+  assert.strictEqual(popup.querySelector('h1').innerText, 'Dictionaries');
+});
 
 test('switching the substitutions off in Settings stops them on the next keystroke', async function(){
   var r = await freshRender();

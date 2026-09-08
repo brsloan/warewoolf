@@ -135,7 +135,7 @@ var EVENTS = [
   'about-clicked', 'add-chapter-clicked', 'center-all-heads-clicked', 'compile-clicked',
   'convert-first-lines-clicked', 'convert-italics-clicked', 'convert-substitutions-clicked',
   'convert-tabs-clicked',
-  'corkboard-clicked', 'delete-chapter-clicked', 'exit-app-clicked', 'export-clicked',
+  'corkboard-clicked', 'delete-chapter-clicked', 'dictionaries-clicked', 'exit-app-clicked', 'export-clicked',
   'file-manager-clicked', 'find-replace-clicked', 'headings-to-chaps-clicked', 'help-doc-clicked',
   'import-clicked', 'indent-all-clicked', 'new-project-clicked', 'open-clicked',
   'outliner-clicked', 'properties-clicked', 'renumber-chapters-clicked', 'restore-chapter-clicked',

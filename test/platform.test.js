@@ -399,7 +399,7 @@ test('events are validated by name and unsubscribe cleanly', function(t){
   const seen = [];
   const handler = function(){ seen.push(1); };
 
-  assert.strictEqual(EVENTS.length, 37);
+  assert.strictEqual(EVENTS.length, 38);
   assert.ok(EVENTS.indexOf('save-clicked') > -1);
 
   const unsubscribe = built.platform.on('save-clicked', handler);

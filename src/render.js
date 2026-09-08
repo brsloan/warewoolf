@@ -22,7 +22,7 @@ const {
 } = require('./components/controllers/footnote-navigation');
 const { resolveShortcuts } = require('./components/models/shortcuts');
 const { resolveAutocorrect } = require('./components/models/autocorrect');
-const { setSelectedDictionaries, setProjectWords } = require('./components/controllers/spellcheck');
+const { setSelectedDictionaries, setProjectWords, releaseSpellchecker } = require('./components/controllers/spellcheck');
 const { enableTypewriterMode, disableTypewriterMode } = require('./components/controllers/typewriter-mode');
 const {
   removeElementsByClass,
@@ -1542,6 +1542,14 @@ const menuCommands = {
       setDarkMode();
       autocorrectRules = resolveAutocorrectSetting();
     }, platformInfo);
+  } },
+  'dictionaries-clicked': { run: function(){
+    const showDictionaries = require('./components/views/dictionaries_display');
+    return showDictionaries(userSettings, project, function(){
+      setSelectedDictionaries(userSettings.spellcheckDictionaries);
+      setProjectWords(project.projectDictionary);
+      releaseSpellchecker();
+    });
   } },
   'corkboard-clicked': { run: function(){
     const showCorkboard = require('./components/views/corkboard_display');
