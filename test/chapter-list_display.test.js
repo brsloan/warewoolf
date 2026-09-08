@@ -87,6 +87,34 @@ test('the active row is highlighted wherever it falls, including in trash', func
   assert.strictEqual(active[0].textContent, 't0');
 });
 
+//jsdom has no layout, so the scroll distance itself cannot be checked here - but the bug that broke
+//this was one of ordering, not arithmetic. The active row used to be measured as it was appended,
+//while the rows below it did not exist yet: it was the last row in the document, so it always
+//measured as sitting at the bottom of the view, read as already visible, and nothing scrolled.
+//Stubbing getBoundingClientRect catches the moment the measurement is taken and counts the rows
+//that exist by then.
+test('the active row is measured for scrolling only once every row has been rendered', function(){
+  var rowCountsWhenMeasured = [];
+  var sidebar = document.getElementById('chapter-list-sidebar');
+
+  sidebar.getBoundingClientRect = function(){
+    rowCountsWhenMeasured.push(document.querySelectorAll('#chapter-list li').length);
+    return { top: 0, bottom: 100, height: 100 };
+  };
+  window.Element.prototype.getBoundingClientRect = function(){
+    return { top: 0, bottom: 10, height: 10 };
+  };
+
+  var chapters = [];
+  for(var i = 0; i < 10; i++)
+    chapters.push(chap('c' + i));
+
+  renderChapterList(makeProject(chapters, [], [], 3), noopHandlers());
+
+  assert.deepStrictEqual(rowCountsWhenMeasured, [10],
+    'the sidebar should be measured once, after all ten rows are in the document');
+});
+
 test('clicking a row selects it and double-clicking renames it, both by combined index', function(){
   var selected = [];
   var renamed = [];

@@ -26,6 +26,10 @@ function renderChapterList(project, handlers){
   //to trip over.
   removeElementsByClass('name-box');
 
+  //Only the chapters list scrolls itself into view, which is how it has always behaved: stepping
+  //into a reference or trash row with the keyboard can still leave it below the fold.
+  var rowToReveal = null;
+
   SECTIONS.forEach(function(section){
     var chapters = chapterList.listOf(project, section.list);
     var rows = document.getElementById(section.rowsId);
@@ -38,15 +42,25 @@ function renderChapterList(project, handlers){
 
       rows.appendChild(row);
 
-      //Marked active only once the row is in the document, because scrolling it into view below
-      //reads a position the row does not have while detached.
-      if(combinedIndex == project.activeChapterIndex)
-        markActive(row, section.list);
+      if(combinedIndex == project.activeChapterIndex){
+        row.classList.add("activeChapter");
+        if(section.list == 'chapters')
+          rowToReveal = row;
+      }
     });
 
     if(section.headerId)
       markHeaderEmpty(document.getElementById(section.headerId), chapters.length == 0);
   });
+
+  //Deliberately after the whole list is rebuilt, not as the active row is appended. Every render
+  //clears all three lists and re-appends every row, so mid-loop the active row is the *last* row in
+  //the document - it measures as sitting at the bottom of the view no matter which chapter it is,
+  //reads as already visible, and no scroll happens. The rows below it are then appended and carry
+  //its real position off the top of the sidebar. That is why stepping up through a long book left
+  //the list frozen while the bold title walked off the top.
+  if(rowToReveal)
+    scrollIntoViewIfNeeded(document.getElementById('chapter-list-sidebar'), rowToReveal);
 }
 
 function buildRow(chap, combinedIndex, handlers){
@@ -64,14 +78,20 @@ function buildRow(chap, combinedIndex, handlers){
   return row;
 }
 
-function markActive(row, listName){
-  row.classList.add("activeChapter");
+//row.offsetTop is measured against the nearest *positioned* ancestor, and nothing between a row
+//and <body> has position set - so it lands relative to <body>, not the scrollable sidebar, and is
+//useless for deciding how far to scroll. getBoundingClientRect() is always viewport-relative
+//regardless of positioning, so comparing rects tells us exactly how far out of view the row is (in
+//either direction) and by how much to move scrollTop to bring it back in - without disturbing the
+//scroll position at all when the row is already visible.
+function scrollIntoViewIfNeeded(container, row){
+  var containerRect = container.getBoundingClientRect();
+  var rowRect = row.getBoundingClientRect();
 
-  //Only the chapters list scrolls itself into view, which is how it has always behaved: stepping
-  //into a reference or trash row with the keyboard can still leave it below the fold. Worth
-  //unifying, but it is a behaviour change and jsdom has no layout to check it against.
-  if(listName == 'chapters')
-    document.getElementById('chapter-list-sidebar').scrollTop = row.offsetTop;
+  if(rowRect.top < containerRect.top)
+    container.scrollTop -= containerRect.top - rowRect.top;
+  else if(rowRect.bottom > containerRect.bottom)
+    container.scrollTop += rowRect.bottom - containerRect.bottom;
 }
 
 function markHeaderEmpty(header, isEmpty){
@@ -134,5 +154,6 @@ function renameChapterInList(combinedIndex, handlers){
 
 module.exports = {
   renderChapterList,
-  renameChapterInList
+  renameChapterInList,
+  scrollIntoViewIfNeeded
 };

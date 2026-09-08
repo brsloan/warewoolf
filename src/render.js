@@ -30,7 +30,7 @@ const {
   disableSearchView
 } = require('./components/controllers/utils');
 const { showBattery } = require('./components/views/battery_display');
-const { renderChapterList, renameChapterInList } = require('./components/views/chapter-list_display');
+const { renderChapterList, renameChapterInList, scrollIntoViewIfNeeded } = require('./components/views/chapter-list_display');
 
 //The single boundary to the OS and the main process - see platform.js. getAppPaths/
 //getFileRequestedOnOpen used to be sendSync calls made here at module load; both are now regular
@@ -1329,8 +1329,7 @@ function scrollChapterListToActiveChapter(){
   if(!activeChapter)
     return;
 
-  document.getElementById('chapter-list-sidebar').scrollTop =
-    activeChapter.offsetTop - (document.getElementById('chapters-header').offsetHeight * 3);
+  scrollIntoViewIfNeeded(document.getElementById('chapter-list-sidebar'), activeChapter);
 }
 
 //The Help doc is reference material, not the reader's own work: it has to describe the version
