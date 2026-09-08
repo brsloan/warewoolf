@@ -179,15 +179,32 @@ module.exports = async function({ page, main_, check, evaluate, userData }){
   // Group I: spellcheck loading the real dictionary across IPC
   // -------------------------------------------------------------------------------------------
 
+  //Asked for with an empty selection on purpose: that is the state a writer who has never opened
+  //File > Dictionaries is in, and it exercises loadDictionaries' fallback to the shipped default
+  //rather than assuming this machine has any particular dictionary ticked.
   const dict = await evaluate(page, `(async function(){
     var t0 = Date.now();
-    var d = await globalThis.warewoolf.invoke('loadDictionary', {});
-    return { ms: Date.now() - t0, keys: d ? Object.keys(d).sort() : null,
+    var loaded = await globalThis.warewoolf.invoke('loadDictionaries', { ids: [] });
+    var d = Array.isArray(loaded) ? loaded[0] : null;
+    return { ms: Date.now() - t0, count: Array.isArray(loaded) ? loaded.length : null,
+             id: d ? d.id : null,
              affLen: d && d.aff ? d.aff.length : null,
              dicLen: d && d.dic ? d.dic.length : null };
   })()`);
-  check('loadDictionary carried the real dictionary across IPC',
-    dict.dicLen > 500000 && dict.affLen > 0, JSON.stringify(dict));
+  check('loadDictionaries carried the real dictionary across IPC',
+    dict.count === 1 && dict.dicLen > 500000 && dict.affLen > 0, JSON.stringify(dict));
+
+  const dictList = await evaluate(page, `(async function(){
+    var list = await globalThis.warewoolf.invoke('listDictionaries', {});
+    return { count: Array.isArray(list) ? list.length : null,
+             ids: Array.isArray(list) ? list.map(function(d){ return d.id; }) : null };
+  })()`);
+  //Both shipped pairs, and never personal.dic - which has no .aff, so the pairing rule excludes it
+  //without a special case. A writer's own word list turning up as a selectable language is exactly
+  //the kind of thing only a real install directory would show.
+  check('listDictionaries found the shipped pairs and not personal.dic',
+    dictList.ids != null && dictList.ids.indexOf('en_US-large') > -1
+      && dictList.ids.indexOf('personal') === -1, JSON.stringify(dictList));
 
   // -------------------------------------------------------------------------------------------
   // Group J: credentials against whatever real keystore this machine has

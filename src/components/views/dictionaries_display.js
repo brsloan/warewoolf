@@ -100,6 +100,13 @@ function buildDictionaryChecklist(initialAvailable, selectedIds){
 
   var usingFallback = selectedIds.length === 0;
   var effectiveSelected = usingFallback ? [DEFAULT_DICTIONARY_ID] : selectedIds;
+  //An empty selection does not mean "en_US-large", it means "whatever this version of the app
+  //ships as its default" - which is what lets a default changed in a later release reach a writer
+  //who never opened this dialog. Ticking the fallback below is a display convenience, so saving it
+  //back as a literal id would quietly destroy that property for anyone who opened the dialog once
+  //and clicked Save. This records whether the writer actually changed anything; if they did not,
+  //getSelectedIds() hands back the empty selection it was given.
+  var touched = false;
 
   var list = document.createElement('div');
   list.classList.add('dictionary-checklist');
@@ -140,6 +147,7 @@ function buildDictionaryChecklist(initialAvailable, selectedIds){
     checkbox.type = 'checkbox';
     checkbox.id = 'dictionary-checkbox-' + dict.id;
     checkbox.checked = ticked;
+    checkbox.addEventListener('change', function(){ touched = true; });
     checkboxes[dict.id] = checkbox;
 
     var label = document.createElement('label');
@@ -182,6 +190,10 @@ function buildDictionaryChecklist(initialAvailable, selectedIds){
         delete checkboxes[idToRemove];
         delete removableFlags[idToRemove];
         highlightedId = null;
+        //Importing or removing a dictionary is a change to the selection as much as ticking a box
+        //is, so neither one may be mistaken for an untouched dialog and saved back as the empty
+        //"use the shipped default" selection.
+        touched = true;
         refreshRemoveButton();
       }
       catch(err){
@@ -234,11 +246,15 @@ function buildDictionaryChecklist(initialAvailable, selectedIds){
     await platform.importDictionary({ id: read.id, aff: read.aff, dic: read.dic });
 
     addRow({ id: read.id, source: 'imported', removable: true }, true);
+    touched = true;
   }
 
   return {
     element: fieldset,
     getSelectedIds: function(){
+      if(usingFallback && !touched)
+        return [];
+
       return Object.keys(checkboxes).filter(function(id){ return checkboxes[id].checked; });
     }
   };
@@ -443,13 +459,24 @@ function wordListEditor(options){
     cancelEditBtn.hidden = !editing;
   }
 
+  //Renaming a word onto one already in the list drops the entry being edited rather than writing a
+  //second copy of the target - the list is a set, and two identical rows are only ever something to
+  //go back and delete by hand.
   saveWordBtn.onclick = function(){
     var newWord = forDictionary(filterInput.value.trim());
-    if(newWord !== ''){
-      var idx = currentWords.indexOf(editingWord);
-      if(idx > -1)
+    var idx = currentWords.indexOf(editingWord);
+
+    if(newWord !== '' && idx > -1){
+      //Compared by index, not by presence: a writer who opens Edit and saves the word unchanged
+      //finds it already in the list at its own position, which is not a duplicate to collapse.
+      var existing = currentWords.indexOf(newWord);
+
+      if(existing > -1 && existing !== idx)
+        currentWords.splice(idx, 1);
+      else
         currentWords[idx] = newWord;
     }
+
     endEdit();
   };
 

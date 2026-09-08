@@ -23,8 +23,22 @@ function fakeBridge(){
   };
 }
 
+//Escape is one of the two ways out of the Spell Check popup (the other is its own Cancel button),
+//so it is where the dictionaries a pass parsed get dropped - see spellcheck.js's getSpellchecker.
+//Stubbed rather than exercised for real: what this file has to prove is that the key calls it, and
+//the controller would otherwise drag nspell and a platform round trip into every test here.
+var spellcheckControllerPath = require.resolve('../src/components/controllers/spellcheck');
+var releaseCalls = 0;
+
 function freshKeybindings(){
   delete require.cache[keybindingsPath];
+  releaseCalls = 0;
+  require.cache[spellcheckControllerPath] = {
+    id: spellcheckControllerPath,
+    filename: spellcheckControllerPath,
+    loaded: true,
+    exports: { releaseSpellchecker: function(){ releaseCalls++; } }
+  };
   globalThis.warewoolf = fakeBridge();
   return require(keybindingsPath);
 }
@@ -201,6 +215,20 @@ test('Escape clears popups, exits search view, and refreshes the panel layout', 
   assert.strictEqual(document.querySelector('.popup-dialog'), null);
   assert.strictEqual(document.getElementById('chapter-list-sidebar').classList.contains('sidebar-search-view'), false);
   assert.deepStrictEqual(env.actions.calls, [['updatePanelDisplays']]);
+
+  teardown(env);
+});
+
+//Escape does not go through closePopups(), so without this the dictionaries a spellcheck pass
+//parsed - tens of megabytes each - stayed resident for the rest of the session whenever a writer
+//left the popup with the key rather than the Cancel button.
+test('Escape releases the dictionaries a spellcheck pass parsed', function(){
+  var env = setup();
+  document.body.appendChild(Object.assign(document.createElement('div'), { className: 'popup' }));
+
+  keydown(document, 'Escape');
+
+  assert.strictEqual(releaseCalls, 1);
 
   teardown(env);
 });

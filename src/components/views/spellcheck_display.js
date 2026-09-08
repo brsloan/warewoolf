@@ -1,5 +1,7 @@
 const { closePopups, createButton, removeElementsByClass, enableSearchView } = require('../controllers/utils');
-const { runSpellcheck, addWordToPersonalDictFile, addWordToProjectDictionary } = require('../controllers/spellcheck');
+const {
+  runSpellcheck, addWordToPersonalDictFile, addWordToProjectDictionary, releaseSpellchecker
+} = require('../controllers/spellcheck');
 const { replace, replaceAllInAllChapters } = require('../controllers/findreplace');
 
 //Async now that loading the dictionaries goes through the platform facade.
@@ -157,7 +159,14 @@ async function showSpellcheck(editorQuill, project, displayChapterByIndex, start
     popup.appendChild(document.createElement('br'));
 
     var cancelBtn = createButton("Cancel");
+    //The pass is over, so the parsed dictionaries go with it. getSpellchecker() holds them for the
+    //length of one pass - which is what stops the reparse this popup used to do on every Ignore and
+    //Change click - but a parsed en_US-large is tens of megabytes, and two or three of those
+    //resident for the rest of the session to save a parse the writer takes minutes to trigger again
+    //is the wrong trade on a writerDeck. Escape does the same thing (keybindings.js), those being
+    //the two ways out of this dialog.
     cancelBtn.onclick = function(){
+      releaseSpellchecker();
       closePopups();
     }
     popup.appendChild(cancelBtn);

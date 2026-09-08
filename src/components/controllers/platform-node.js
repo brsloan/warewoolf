@@ -68,6 +68,17 @@ const DICTIONARIES_DIR = 'dictionaries';
 const SHARED_DICT_BASENAME = 'en_US-large';
 const PERSONAL_DICT_FILENAME = 'personal.dic';
 const PERSONAL_DICT_SEED = 'WareWoolf\n';
+//What a dictionary id may not contain - see isValidDictionaryId below for why an id is checked at
+//all. Module scope rather than inside createNodeBacking: everything in there below the `return` is
+//a hoisted function declaration, so a `var` initialized down beside its callers would never be
+//assigned at all.
+//
+//Deliberately structural rather than a character allowlist: a dictionary someone downloads may
+//legitimately be named with spaces or accents, and refusing those would reject a usable file for no
+//reason. What is refused is anything that could denote something other than a single name in the
+//directory being addressed - a separator of either kind, a drive-relative "C:name", or a control
+//character.
+const DICTIONARY_ID_FORBIDDEN = /[\/\\:\x00-\x1f]/;
 
 //Group H: backup archives. Timestamp shape and extension moved here verbatim from
 //backup-project.js's own getTimeStamp()/ARCHIVE_EXTENSION - allocating the archive's name is now
@@ -1066,10 +1077,43 @@ function createNodeBacking(deps){
     return paths.userData == null ? null : normalizePath(paths.userData, 'userData') + '/' + DICTIONARIES_DIR;
   }
 
+  //An id names one file in one of the two dictionary directories, and every id this app produces is
+  //a basename readDictionaryFiles already stripped of its directory. It still has to be checked
+  //here, because it is the one value in group I that arrives from the renderer and is then joined
+  //into a path: "../../x" would otherwise write and unlink outside the dictionaries directory
+  //entirely. That is not a privilege the renderer lacks - writeTextFile (group G) and deleteEntry
+  //(group E) are generic by design - but every other path in this group is composed natively, and
+  //rule 2 of the contract (see platform.js) is that a command takes identities rather than paths.
+  //An id is that identity, so it has to actually be one. See DICTIONARY_ID_FORBIDDEN above.
+  //
+  function isValidDictionaryId(id){
+    if(typeof id !== 'string' || id === '')
+      return false;
+    if(DICTIONARY_ID_FORBIDDEN.test(id))
+      return false;
+    //Also covers "." and "..", and keeps an id from producing a dotfile named for its extension
+    //alone - an empty id used to write files literally called ".aff" and ".dic".
+    return id.charAt(0) !== '.';
+  }
+
+  function requireDictionaryId(id){
+    if(!isValidDictionaryId(id))
+      throw PlatformError(CODES.INVALID_ARGUMENT,
+        'Not a usable dictionary name: "' + id + '".', { id: id });
+  }
+
   //A dictionary is a .aff/.dic pair sharing a basename - that basename is its id, resolved bundled
   //first so an id that (should never, but could on a hand-edited disk) exist in both places prefers
   //the one a writer cannot delete out from under a selection.
+  //
+  //An unusable id answers null rather than throwing, so loadDictionaries skips it exactly as it
+  //skips one naming a dictionary that is simply not there - a saved selection is not worth failing
+  //a spellcheck over, whichever way it went bad. import/remove call requireDictionaryId instead,
+  //since those have to say why.
   function dictionaryBaseFor(id){
+    if(!isValidDictionaryId(id))
+      return null;
+
     var bundledDir = bundledDictDir();
     if(bundledDir != null && fs.existsSync(bundledDir + '/' + id + '.aff') && fs.existsSync(bundledDir + '/' + id + '.dic'))
       return bundledDir + '/' + id;
@@ -1195,7 +1239,7 @@ function createNodeBacking(deps){
   //this can be called directly with no affix text at all and still produce a usable pair.
   function importDictionary(args){
     var id = args == null ? undefined : args.id;
-    requireText(id, 'id');
+    requireDictionaryId(id);
     requireText(args.dic, 'dic');
 
     if(paths.userData == null)
@@ -1220,7 +1264,7 @@ function createNodeBacking(deps){
   //(group E): removing an id that is not actually on disk in userData is not a failure.
   function removeDictionary(args){
     var id = args == null ? undefined : args.id;
-    requireText(id, 'id');
+    requireDictionaryId(id);
 
     var bundledDir = bundledDictDir();
     if(bundledDir != null && fs.existsSync(bundledDir + '/' + id + '.aff'))

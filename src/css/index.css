@@ -389,6 +389,21 @@ button, input[type=submit] {
   overflow-y: auto;
 }
 
+/* Highlighting a row is what enables Remove, and it is deliberately separate from whether the row's
+   checkbox is ticked - so it has to be visible on its own. Without a rule here the button enables
+   against a selection nothing on screen shows. Not split across darkmode.css/lightmode.css because
+   popups are the same dark panel in both themes (see .popup there), so one translucent overlay
+   reads correctly on either. */
+.dictionary-row {
+  padding: 2px 4px;
+  border-left: 3px solid transparent;
+}
+
+.dictionary-row.selected {
+  background-color: rgba(255, 255, 255, 0.15);
+  border-left-color: #EF233C;
+}
+
 .to-be-cut {
   font-style: italic;
   opacity: 0.5;

@@ -1,6 +1,7 @@
 const { removeElementsByClass, disableSearchView } = require('./utils');
 const { enableTypewriterMode, disableTypewriterMode } = require('./typewriter-mode');
 const { goPageDown } = require('./quill-utils');
+const { releaseSpellchecker } = require('./spellcheck');
 const { createPlatform } = require('./platform');
 const { createIpcBacking } = require('./platform-ipc');
 const { getShortcutDefs, bindingMatchesEvent } = require('../models/shortcuts');
@@ -215,6 +216,11 @@ function registerKeybindings(context){
       removeElementsByClass('popup');
       removeElementsByClass('popup-dialog');
       disableSearchView();
+      //Escape is the other way out of the Spell Check popup, alongside its own Cancel button - and
+      //the one that does not go through closePopups() - so the dictionaries a pass parsed are
+      //dropped here too rather than staying resident for the rest of the session. Harmless when the
+      //popup being dismissed was some other dialog: there is nothing cached to release.
+      releaseSpellchecker();
       context.actions.updatePanelDisplays();
     }
     else if((e.ctrlKey || e.metaKey) && e.key === "m"){

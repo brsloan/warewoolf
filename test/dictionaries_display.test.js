@@ -358,3 +358,106 @@ test('import failure: a colliding id is refused and nothing is overwritten', asy
     fs.readFileSync(path.join(appDir, 'dictionaries', 'en_US-large.dic'), 'utf8'),
     '1\nhello\n');
 });
+
+//---------------------------------------------------------------------------
+// An empty selection must survive being looked at
+//---------------------------------------------------------------------------
+
+//An empty spellcheckDictionaries means "whatever this version ships as its default", which is what
+//lets a default changed in a later release reach a writer who never opened this dialog. The
+//fallback is ticked here as a display convenience, so saving it back as a literal id would quietly
+//destroy that for anyone who opened the dialog once and clicked Save.
+test('opening with an empty selection and saving untouched leaves it empty', async function(t){
+  const appDir = tempDir('warewoolf-dict-app-');
+  const userDataDir = tempDir('warewoolf-dict-userdata-');
+  writeDictFixture(appDir, 'en_US-large', ['hello']);
+  writeDictFixture(appDir, 'en_us', ['hi']);
+  installBridge({ paths: { app: appDir, userData: userDataDir, docs: '/docs', home: '/home' } });
+
+  const showDictionaries = freshDictionariesDisplay({});
+  const userSettings = makeUserSettings({ spellcheckDictionaries: [] });
+  await showDictionaries(userSettings, makeProject(), function(){});
+
+  //Ticked on screen, so the writer can see which dictionary is actually in use...
+  var fallbackRow = Array.from(document.querySelectorAll('.dictionary-row')).find(function(r){
+    return r.querySelector('label').innerText.indexOf('en_US-large (') === 0;
+  });
+  assert.strictEqual(fallbackRow.querySelector('input').checked, true);
+
+  await buttonIn(document, 'Save').onclick();
+
+  //...but not written back as a pin.
+  assert.deepStrictEqual(userSettings.spellcheckDictionaries, []);
+});
+
+test('ticking a box from an empty selection saves the whole visible selection', async function(t){
+  const appDir = tempDir('warewoolf-dict-app-');
+  const userDataDir = tempDir('warewoolf-dict-userdata-');
+  writeDictFixture(appDir, 'en_US-large', ['hello']);
+  writeDictFixture(appDir, 'en_us', ['hi']);
+  installBridge({ paths: { app: appDir, userData: userDataDir, docs: '/docs', home: '/home' } });
+
+  const showDictionaries = freshDictionariesDisplay({});
+  const userSettings = makeUserSettings({ spellcheckDictionaries: [] });
+  await showDictionaries(userSettings, makeProject(), function(){});
+
+  //click(), not `.checked = true`: the dialog learns the selection was touched from the change
+  //event, which only a real activation fires.
+  Array.from(document.querySelectorAll('.dictionary-row')).find(function(r){
+    return r.querySelector('label').innerText.indexOf('en_us (') === 0;
+  }).querySelector('input').click();
+
+  await buttonIn(document, 'Save').onclick();
+
+  assert.deepStrictEqual(userSettings.spellcheckDictionaries.slice().sort(), ['en_US-large', 'en_us']);
+});
+
+//---------------------------------------------------------------------------
+// Editing a word onto one already in the list
+//---------------------------------------------------------------------------
+
+test('renaming a word onto an existing one collapses the two instead of duplicating', async function(t){
+  const appDir = tempDir('warewoolf-dict-app-');
+  const userDataDir = tempDir('warewoolf-dict-userdata-');
+  fs.mkdirSync(path.join(userDataDir, 'dictionaries'), { recursive: true });
+  fs.writeFileSync(path.join(userDataDir, 'dictionaries', 'personal.dic'), 'cat\ndog\n', 'utf8');
+  installBridge({ paths: { app: appDir, userData: userDataDir, docs: '/docs', home: '/home' } });
+
+  const showDictionaries = freshDictionariesDisplay({});
+  await showDictionaries(makeUserSettings(), makeProject(), function(){});
+
+  var personalFieldset = fieldsetByLegend('Personal Dictionary');
+  var filterInput = personalFieldset.querySelector('input[type=text]');
+  var listbox = personalFieldset.querySelector('select');
+
+  Array.from(listbox.options).find(function(o){ return o.value === 'cat'; }).selected = true;
+  listbox.onchange();
+  buttonIn(personalFieldset, 'Edit').onclick();
+  filterInput.value = 'dog';
+  buttonIn(personalFieldset, 'Save Word').onclick();
+
+  assert.deepStrictEqual(optionValues(listbox), ['dog']);
+});
+
+//The other half of the same guard: a writer who opens Edit and saves the word unchanged finds it
+//already in the list at its own index, which is not a duplicate to collapse.
+test('opening Edit and saving a word unchanged keeps it', async function(t){
+  const appDir = tempDir('warewoolf-dict-app-');
+  const userDataDir = tempDir('warewoolf-dict-userdata-');
+  fs.mkdirSync(path.join(userDataDir, 'dictionaries'), { recursive: true });
+  fs.writeFileSync(path.join(userDataDir, 'dictionaries', 'personal.dic'), 'cat\ndog\n', 'utf8');
+  installBridge({ paths: { app: appDir, userData: userDataDir, docs: '/docs', home: '/home' } });
+
+  const showDictionaries = freshDictionariesDisplay({});
+  await showDictionaries(makeUserSettings(), makeProject(), function(){});
+
+  var personalFieldset = fieldsetByLegend('Personal Dictionary');
+  var listbox = personalFieldset.querySelector('select');
+
+  Array.from(listbox.options).find(function(o){ return o.value === 'cat'; }).selected = true;
+  listbox.onchange();
+  buttonIn(personalFieldset, 'Edit').onclick();
+  buttonIn(personalFieldset, 'Save Word').onclick();
+
+  assert.deepStrictEqual(optionValues(listbox).sort(), ['cat', 'dog']);
+});

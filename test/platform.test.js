@@ -2170,6 +2170,59 @@ test('removeDictionary refuses a bundled id with INVALID_ARGUMENT', async functi
   assert.strictEqual(fs.existsSync(built.appDir + '/dictionaries/en_US-large.aff'), true);
 });
 
+//An id is the one value in group I that arrives from the renderer and is then joined into a path.
+//Left unchecked, "../../x" wrote and unlinked outside the dictionaries directory entirely, and an
+//empty id produced files literally named ".aff" and ".dic".
+[
+  { label: 'a parent-directory traversal', id: '../../escaped' },
+  { label: 'a nested path', id: 'sub/escaped' },
+  { label: 'a Windows separator', id: 'sub\\escaped' },
+  { label: 'a drive-relative name', id: 'C:escaped' },
+  { label: 'an empty id', id: '' },
+  { label: 'the current directory', id: '.' },
+  { label: 'the parent directory', id: '..' }
+].forEach(function(bad){
+  test('importDictionary refuses ' + bad.label + ' as an id', async function(t){
+    const built = dictPlatformIn(t);
+
+    const err = await rejection(built.platform.importDictionary({ id: bad.id, dic: '1\nhello' }));
+
+    assert.strictEqual(err.code, CODES.INVALID_ARGUMENT);
+    assert.deepStrictEqual(fs.readdirSync(built.userDataDir), [],
+      'nothing may be written anywhere for an id the command refuses');
+  });
+
+  test('removeDictionary refuses ' + bad.label + ' as an id', async function(t){
+    const built = dictPlatformIn(t);
+
+    const err = await rejection(built.platform.removeDictionary({ id: bad.id }));
+
+    assert.strictEqual(err.code, CODES.INVALID_ARGUMENT);
+  });
+});
+
+//Neither writes nor deletes, so an unusable id here is skipped like any other id that names no
+//dictionary - a saved selection gone bad is not worth failing a spellcheck over. The fallback is
+//what the caller gets instead.
+test('loadDictionaries skips an unusable id rather than rejecting', async function(t){
+  const built = dictPlatformIn(t);
+  writeDictionaryPair(built.appDir + '/dictionaries', 'en_US-large');
+
+  const loaded = await built.platform.loadDictionaries({ ids: ['../../escaped', 'en_US-large'] });
+
+  assert.deepStrictEqual(loaded.map(function(d){ return d.id; }), ['en_US-large']);
+});
+
+//A name with a space or an accent is a perfectly ordinary dictionary filename - the guard is
+//structural, and must not turn into a character allowlist that rejects usable files.
+test('importDictionary accepts an ordinary name with a space in it', async function(t){
+  const built = dictPlatformIn(t);
+
+  await built.platform.importDictionary({ id: 'Aurelion Names', dic: '1\nAurelion' });
+
+  assert.strictEqual(fs.existsSync(built.userDataDir + '/dictionaries/Aurelion Names.dic'), true);
+});
+
 //Folds in the bootstrap write createPersonalDicIfNeeded() used to require the caller run first
 //(spellcheck.js:38-44) - the caller stops knowing the file has to be created before it can be read.
 test('loadPersonalDictionary seeds the file on first read', async function(t){
