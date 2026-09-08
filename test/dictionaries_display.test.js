@@ -152,7 +152,7 @@ test('the filter narrows the word list and updates its count', async function(t)
   var personalFieldset = fieldsetByLegend('Personal Dictionary');
   var filterInput = personalFieldset.querySelector('input[type=text]');
   var listbox = personalFieldset.querySelector('select');
-  var countLine = personalFieldset.querySelector('p.sublabel');
+  var countLine = personalFieldset.querySelector('.word-list-count');
 
   assert.strictEqual(optionValues(listbox).length, 3);
   assert.strictEqual(countLine.innerText, '(3 of 3)');
@@ -190,7 +190,7 @@ test('Add, Edit and Delete mutate the pending word list', async function(t){
   buttonIn(personalFieldset, 'Edit').onclick();
   assert.strictEqual(filterInput.value, 'Nebula');
   filterInput.value = 'Nebulon';
-  buttonIn(personalFieldset, 'Save Word').onclick();
+  buttonIn(personalFieldset, 'Save').onclick();
   assert.deepStrictEqual(optionValues(listbox).sort(), ['Nebulon', 'WareWoolf']);
 
   //Delete
@@ -434,7 +434,7 @@ test('renaming a word onto an existing one collapses the two instead of duplicat
   listbox.onchange();
   buttonIn(personalFieldset, 'Edit').onclick();
   filterInput.value = 'dog';
-  buttonIn(personalFieldset, 'Save Word').onclick();
+  buttonIn(personalFieldset, 'Save').onclick();
 
   assert.deepStrictEqual(optionValues(listbox), ['dog']);
 });
@@ -457,7 +457,234 @@ test('opening Edit and saving a word unchanged keeps it', async function(t){
   Array.from(listbox.options).find(function(o){ return o.value === 'cat'; }).selected = true;
   listbox.onchange();
   buttonIn(personalFieldset, 'Edit').onclick();
-  buttonIn(personalFieldset, 'Save Word').onclick();
+  buttonIn(personalFieldset, 'Save').onclick();
 
   assert.deepStrictEqual(optionValues(listbox).sort(), ['cat', 'dog']);
+});
+
+//---------------------------------------------------------------------------
+// Keyboard handling in the filter/word field
+//---------------------------------------------------------------------------
+
+function seedPersonalDict(userDataDir, words){
+  fs.mkdirSync(path.join(userDataDir, 'dictionaries'), { recursive: true });
+  fs.writeFileSync(path.join(userDataDir, 'dictionaries', 'personal.dic'), words.join('\n') + '\n', 'utf8');
+}
+
+function editorParts(legend){
+  var fieldset = fieldsetByLegend(legend);
+  return {
+    fieldset: fieldset,
+    input: fieldset.querySelector('input[type=text]'),
+    listbox: fieldset.querySelector('select'),
+    count: fieldset.querySelector('.word-list-count'),
+    primary: fieldset.querySelector('.word-list-buttons button')
+  };
+}
+
+function keydownOn(el, key){
+  var event = new window.KeyboardEvent('keydown', { key: key, bubbles: true, cancelable: true });
+  el.dispatchEvent(event);
+  return event;
+}
+
+function typeInto(input, value){
+  input.value = value;
+  input.oninput();
+}
+
+function selectWord(parts, word){
+  Array.from(parts.listbox.options).find(function(o){ return o.value === word; }).selected = true;
+  parts.listbox.onchange();
+}
+
+async function openPersonalEditor(words){
+  const appDir = tempDir('warewoolf-dict-app-');
+  const userDataDir = tempDir('warewoolf-dict-userdata-');
+  seedPersonalDict(userDataDir, words);
+  installBridge({ paths: { app: appDir, userData: userDataDir, docs: '/docs', home: '/home' } });
+
+  const showDictionaries = freshDictionariesDisplay({});
+  await showDictionaries(makeUserSettings(), makeProject(), function(){});
+  return editorParts('Personal Dictionary');
+}
+
+//"No matches" rather than "no exact match" is the line: with "dor" typed and Dorset in the list the
+//writer is still narrowing, and Enter adding "dor" there would be an entry nobody asked for.
+test('Enter adds the typed word when the filter has matched nothing', async function(t){
+  var parts = await openPersonalEditor(['Dorset']);
+
+  typeInto(parts.input, 'Nebula');
+  assert.strictEqual(parts.count.innerText, '(0 of 1)');
+  keydownOn(parts.input, 'Enter');
+
+  assert.deepStrictEqual(optionValues(parts.listbox).sort(), ['Dorset', 'Nebula']);
+  assert.strictEqual(parts.input.value, '');
+});
+
+test('Enter does nothing while the filter is still narrowing', async function(t){
+  var parts = await openPersonalEditor(['Dorset']);
+
+  typeInto(parts.input, 'dor');
+  assert.strictEqual(parts.count.innerText, '(1 of 1)');
+  keydownOn(parts.input, 'Enter');
+
+  assert.deepStrictEqual(optionValues(parts.listbox), ['Dorset']);
+  assert.strictEqual(parts.input.value, 'dor', 'the filter should be left alone');
+});
+
+test('Enter commits the edit in progress', async function(t){
+  var parts = await openPersonalEditor(['cat', 'dog']);
+
+  selectWord(parts, 'cat');
+  buttonIn(parts.fieldset, 'Edit').onclick();
+  parts.input.value = 'cattle';
+  keydownOn(parts.input, 'Enter');
+
+  assert.deepStrictEqual(optionValues(parts.listbox).sort(), ['cattle', 'dog']);
+});
+
+//---------------------------------------------------------------------------
+// Add becomes Save, and cancelling without a Cancel button
+//---------------------------------------------------------------------------
+
+test('the Add button becomes Save while editing and goes back afterwards', async function(t){
+  var parts = await openPersonalEditor(['cat']);
+
+  assert.strictEqual(parts.primary.textContent, 'Add');
+
+  selectWord(parts, 'cat');
+  buttonIn(parts.fieldset, 'Edit').onclick();
+
+  assert.strictEqual(parts.primary.textContent, 'Save');
+  assert.strictEqual(buttonIn(parts.fieldset, 'Edit').disabled, true,
+    'Edit acts on the list selection, not on the edit in progress');
+  assert.strictEqual(buttonIn(parts.fieldset, 'Delete').disabled, true);
+  //Neither of the buttons this replaces should exist any more.
+  assert.strictEqual(buttonIn(parts.fieldset, 'Save Word'), undefined);
+  assert.strictEqual(buttonIn(parts.fieldset, 'Cancel Edit'), undefined);
+
+  parts.primary.onclick();
+
+  assert.strictEqual(parts.primary.textContent, 'Add');
+});
+
+//Escape has to cancel the edit and stop there - keybindings.js closes every popup on Escape, so an
+//unstopped one would take the whole dialog with the edit.
+test('Escape while editing cancels the edit without closing the dialog', async function(t){
+  var parts = await openPersonalEditor(['cat', 'dog']);
+
+  selectWord(parts, 'cat');
+  buttonIn(parts.fieldset, 'Edit').onclick();
+  parts.input.value = 'cattle';
+
+  //Asserted by watching for it at the document, where keybindings.js listens, rather than by
+  //reading a flag off the event - what matters is that the global handler never sees it.
+  var reachedDocument = 0;
+  document.addEventListener('keydown', function(){ reachedDocument++; });
+
+  var event = keydownOn(parts.input, 'Escape');
+
+  assert.strictEqual(event.defaultPrevented, true);
+  assert.strictEqual(reachedDocument, 0,
+    'Escape must not reach the global handler that closes every popup');
+  assert.deepStrictEqual(optionValues(parts.listbox).sort(), ['cat', 'dog'],
+    'the edit is abandoned, not applied');
+  assert.strictEqual(parts.primary.textContent, 'Add');
+  assert.strictEqual(document.querySelectorAll('.popup').length, 1);
+});
+
+//An Escape that is not cancelling an edit is the writer closing the dialog, and must travel.
+test('Escape outside an edit is left to the global handler', async function(t){
+  var parts = await openPersonalEditor(['cat']);
+
+  var event = keydownOn(parts.input, 'Escape');
+
+  assert.strictEqual(event.defaultPrevented, false);
+});
+
+test('leaving the field abandons the edit', async function(t){
+  var parts = await openPersonalEditor(['cat', 'dog']);
+
+  selectWord(parts, 'cat');
+  buttonIn(parts.fieldset, 'Edit').onclick();
+  parts.input.value = 'cattle';
+
+  parts.listbox.focus();
+
+  assert.deepStrictEqual(optionValues(parts.listbox).sort(), ['cat', 'dog']);
+  assert.strictEqual(parts.primary.textContent, 'Add');
+});
+
+//The one departure that is not an abandonment: without this, clicking Save would blur the input and
+//throw the edit away before the click that meant to commit it ever ran.
+test('moving focus to the Save button does not abandon the edit', async function(t){
+  var parts = await openPersonalEditor(['cat', 'dog']);
+
+  selectWord(parts, 'cat');
+  buttonIn(parts.fieldset, 'Edit').onclick();
+  parts.input.value = 'cattle';
+
+  parts.primary.focus();
+  parts.primary.onclick();
+
+  assert.deepStrictEqual(optionValues(parts.listbox).sort(), ['cattle', 'dog']);
+});
+
+//---------------------------------------------------------------------------
+// Layout and shortcuts
+//---------------------------------------------------------------------------
+
+test('the count sits beside the filter, and the buttons beside the list', async function(t){
+  var parts = await openPersonalEditor(['cat']);
+
+  assert.strictEqual(parts.count.parentNode, parts.input.parentNode,
+    'the count belongs on the filter row, not under the list');
+  assert.strictEqual(parts.count.parentNode.classList.contains('word-list-header'), true);
+
+  var buttonColumn = parts.fieldset.querySelector('.word-list-buttons');
+  assert.strictEqual(buttonColumn.parentNode, parts.listbox.parentNode);
+  assert.strictEqual(buttonColumn.parentNode.classList.contains('word-list-body'), true);
+  assert.deepStrictEqual(
+    Array.from(buttonColumn.querySelectorAll('button')).map(function(b){ return b.textContent; }),
+    ['Add', 'Edit', 'Delete']);
+});
+
+test('opening the dialog puts focus on Import', async function(t){
+  const appDir = tempDir('warewoolf-dict-app-');
+  const userDataDir = tempDir('warewoolf-dict-userdata-');
+  writeDictFixture(appDir, 'en_US-large', ['hello']);
+  installBridge({ paths: { app: appDir, userData: userDataDir, docs: '/docs', home: '/home' } });
+
+  const showDictionaries = freshDictionariesDisplay({});
+  await showDictionaries(makeUserSettings(), makeProject(), function(){});
+
+  assert.strictEqual(document.activeElement, buttonIn(document, 'Import...'));
+});
+
+//An accessKey has to be unique across the page to be reachable at all, which is why the two Delete
+//buttons do not both answer to Alt+D.
+test('Delete, Save and Close carry distinct access keys', async function(t){
+  const appDir = tempDir('warewoolf-dict-app-');
+  const userDataDir = tempDir('warewoolf-dict-userdata-');
+  seedPersonalDict(userDataDir, ['cat']);
+  installBridge({ paths: { app: appDir, userData: userDataDir, docs: '/docs', home: '/home' } });
+
+  const showDictionaries = freshDictionariesDisplay({});
+  await showDictionaries(makeUserSettings(), makeProject(), function(){});
+
+  assert.strictEqual(buttonIn(fieldsetByLegend('Personal Dictionary'), 'Delete').accessKey, 'd');
+  assert.strictEqual(buttonIn(fieldsetByLegend('Project Dictionary'), 'Delete').accessKey, 't');
+  assert.strictEqual(buttonIn(document, 'Save').accessKey, 's');
+  assert.strictEqual(buttonIn(document, 'Close').accessKey, 'c');
+
+  var keys = Array.from(document.querySelectorAll('button'))
+    .map(function(b){ return b.accessKey; })
+    .filter(function(k){ return k !== ''; });
+  assert.strictEqual(new Set(keys).size, keys.length,
+    'every access key in the dialog has to be unique or it is not reachable');
+
+  //The marked letter has to be the one the accessKey answers to, or the underline points at nothing.
+  assert.strictEqual(fieldsetByLegend('Project Dictionary')
+    .querySelector('.word-list-buttons .access-key').textContent, 't');
 });

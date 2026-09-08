@@ -379,9 +379,49 @@ button, input[type=submit] {
   float: left;
 }
 
+/* The filter and its count share one row above the list; the list and its buttons share one row
+   below it. Flex rather than the floats the file browser uses above: these two rows have to size
+   from the middle out - the input and the listbox take whatever the count and the button column
+   do not - which is what float cannot express without fixed percentages. */
+.word-list-header {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.word-list-header input[type=text] {
+  flex: 1 1 auto;
+  /* Without this a flex item refuses to shrink below its content width, and a long word typed into
+     the filter would push the count off the edge of the popup. */
+  min-width: 0;
+}
+
+.word-list-count {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.word-list-body {
+  display: flex;
+  gap: 6px;
+}
+
 .word-list {
-  width: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
   height: 200px;
+}
+
+.word-list-buttons {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+}
+
+/* So Add/Save, Edit and Delete are one column of equal width rather than three ragged ones - and
+   so Add becoming Save does not resize the button under the pointer. */
+.word-list-buttons button {
+  width: 100%;
 }
 
 .dictionary-checklist {

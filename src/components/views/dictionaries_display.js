@@ -38,13 +38,26 @@ async function showDictionaries(userSettings, project, callback){
   var dictionaryChecklist = buildDictionaryChecklist(available, selectedIds);
   popup.appendChild(dictionaryChecklist.element);
 
+  //An accessKey has to be unique across the whole page to be reachable at all, so the two Delete
+  //buttons cannot both answer to Alt+D - hence the second one marking its 't'. Add and Edit carry
+  //none deliberately: Enter in the field already does what Add does, and Edit is meaningless
+  //without first picking a row out of the list beside it.
   var personalWords = await platform.loadPersonalDictionary();
-  var personalEditor = wordListEditor({ legend: 'Personal Dictionary', words: personalWords });
+  var personalEditor = wordListEditor({
+    id: 'personal',
+    legend: 'Personal Dictionary',
+    words: personalWords,
+    deleteLabel: "<span class='access-key'>D</span>elete",
+    deleteAccessKey: 'd'
+  });
   popup.appendChild(personalEditor.element);
 
   var projectEditor = wordListEditor({
+    id: 'project',
     legend: 'Project Dictionary',
     words: project == null ? null : project.projectDictionary,
+    deleteLabel: "Dele<span class='access-key'>t</span>e",
+    deleteAccessKey: 't',
     emptyNote: 'Open a project to give it its own word list of character and place names.'
   });
   popup.appendChild(projectEditor.element);
@@ -60,7 +73,8 @@ async function showDictionaries(userSettings, project, callback){
     projectEditor.element.appendChild(importWordsBtn);
   }
 
-  var saveBtn = createButton('Save');
+  var saveBtn = createButton("<span class='access-key'>S</span>ave");
+  saveBtn.accessKey = 's';
   saveBtn.onclick = async function(){
     await platform.savePersonalDictionary({ words: personalEditor.getWords() });
 
@@ -78,14 +92,18 @@ async function showDictionaries(userSettings, project, callback){
   };
   popup.appendChild(saveBtn);
 
-  var closeBtn = createButton('Close');
+  var closeBtn = createButton("<span class='access-key'>C</span>lose");
+  closeBtn.accessKey = 'c';
   closeBtn.onclick = function(){
     closePopups();
   };
   popup.appendChild(closeBtn);
 
   document.body.appendChild(popup);
-  saveBtn.focus();
+  //The top of the dialog rather than the bottom: the checklist is what this is for, and Import is
+  //the first thing in it a writer can act on. Landing on Save would put the caret past everything
+  //the dialog exists to change.
+  dictionaryChecklist.focusImport();
 }
 
 //Checkboxes rather than a <select multiple> - multi-selecting in a listbox needs Ctrl+arrow, a
@@ -251,6 +269,7 @@ function buildDictionaryChecklist(initialAvailable, selectedIds){
 
   return {
     element: fieldset,
+    focusImport: function(){ importBtn.focus(); },
     getSelectedIds: function(){
       if(usingFallback && !touched)
         return [];
@@ -354,40 +373,57 @@ function wordListEditor(options){
 
   var currentWords = options.words.slice();
   var editingWord = null;
+  //What the filter is currently showing. Enter adds a word only when this is 0 - see the keydown
+  //handler below for why that is the line rather than "no exact match".
+  var visibleCount = 0;
+
+  //The filter and the count share a row above the list: the count is a fact about what the filter
+  //just did, and reads as one line with it rather than as a caption stranded under the listbox.
+  var header = document.createElement('div');
+  header.classList.add('word-list-header');
+  fieldset.appendChild(header);
 
   var filterLabel = document.createElement('label');
   filterLabel.innerText = 'Filter/Word: ';
-  fieldset.appendChild(filterLabel);
+  filterLabel.htmlFor = 'word-filter-' + options.id;
+  header.appendChild(filterLabel);
 
   var filterInput = document.createElement('input');
   filterInput.type = 'text';
-  fieldset.appendChild(filterInput);
-  fieldset.appendChild(document.createElement('br'));
+  filterInput.id = filterLabel.htmlFor;
+  header.appendChild(filterInput);
+
+  //Reads as "nothing matched" when it comes out 0 of a non-zero total, and "your dictionary is
+  //empty" only when the total itself is 0 - the count is what tells those two apart.
+  var countLine = document.createElement('span');
+  countLine.classList.add('sublabel');
+  countLine.classList.add('word-list-count');
+  header.appendChild(countLine);
+
+  var body = document.createElement('div');
+  body.classList.add('word-list-body');
+  fieldset.appendChild(body);
 
   var listbox = document.createElement('select');
   listbox.multiple = true;
   listbox.classList.add('word-list');
-  fieldset.appendChild(listbox);
+  body.appendChild(listbox);
 
-  //Reads as "nothing matched" when it comes out 0 of a non-zero total, and "your dictionary is
-  //empty" only when the total itself is 0 - the count line is what tells those two apart.
-  var countLine = document.createElement('p');
-  countLine.classList.add('sublabel');
-  fieldset.appendChild(countLine);
+  var buttonColumn = document.createElement('div');
+  buttonColumn.classList.add('word-list-buttons');
+  body.appendChild(buttonColumn);
 
-  var addBtn = createButton('Add');
+  //One button, two jobs, because they are the same job: commit whatever is in the input. It says
+  //Add while the input is a new word and Save while it is a word being edited, so there is never a
+  //Save sitting next to an Add for the writer to choose between.
+  var primaryBtn = createButton('Add');
   var editBtn = createButton('Edit');
-  var deleteBtn = createButton('Delete');
-  var saveWordBtn = createButton('Save Word');
-  var cancelEditBtn = createButton('Cancel Edit');
-  saveWordBtn.hidden = true;
-  cancelEditBtn.hidden = true;
+  var deleteBtn = createButton(options.deleteLabel);
+  deleteBtn.accessKey = options.deleteAccessKey;
 
-  fieldset.appendChild(addBtn);
-  fieldset.appendChild(editBtn);
-  fieldset.appendChild(deleteBtn);
-  fieldset.appendChild(saveWordBtn);
-  fieldset.appendChild(cancelEditBtn);
+  buttonColumn.appendChild(primaryBtn);
+  buttonColumn.appendChild(editBtn);
+  buttonColumn.appendChild(deleteBtn);
 
   function render(){
     var filterText = filterInput.value.trim().toLowerCase();
@@ -404,21 +440,28 @@ function wordListEditor(options){
       listbox.appendChild(opt);
     });
 
+    visibleCount = matches.length;
     countLine.innerText = '(' + matches.length + ' of ' + currentWords.length + ')';
-    updateAddButton();
+    updatePrimaryButton();
     updateSelectionButtons();
   }
 
-  //Enabled when the input is non-empty and no word matches it exactly - typing a word to check
-  //whether it is already there and then adding it is one gesture, not two.
-  function updateAddButton(){
+  //Adding: enabled when the input is non-empty and no word matches it exactly - typing a word to
+  //check whether it is already there and then adding it is one gesture, not two. Editing: enabled
+  //for anything non-empty, since the writer is replacing a word rather than proposing a new one.
+  function updatePrimaryButton(){
     var trimmed = filterInput.value.trim();
-    addBtn.disabled = trimmed === '' || currentWords.indexOf(forDictionary(trimmed)) > -1;
+
+    primaryBtn.disabled = trimmed === ''
+      || (editingWord == null && currentWords.indexOf(forDictionary(trimmed)) > -1);
   }
 
+  //Both act on the listbox selection, which is not what the writer is looking at mid-edit. Disabled
+  //rather than hidden: they sit in a fixed column beside the list now, and hiding them would shuffle
+  //the remaining buttons under the pointer.
   function updateSelectionButtons(){
-    editBtn.disabled = listbox.selectedOptions.length !== 1;
-    deleteBtn.disabled = listbox.selectedOptions.length === 0;
+    editBtn.disabled = editingWord != null || listbox.selectedOptions.length !== 1;
+    deleteBtn.disabled = editingWord != null || listbox.selectedOptions.length === 0;
   }
 
   //Filtering pauses while editing, so the list does not shift under the writer while they retype.
@@ -426,12 +469,66 @@ function wordListEditor(options){
     if(editingWord == null)
       render();
     else
-      updateAddButton();
+      updatePrimaryButton();
   };
+
+  //Enter commits whatever the button would: the edit in progress, or - when the filter has matched
+  //nothing at all - the word just typed. "No matches" rather than "no exact match" is the line
+  //deliberately: with "dor" typed and Dorset in the list the writer is still narrowing, and Enter
+  //adding "dor" there would be an entry nobody asked for. An empty result means there is nothing
+  //left to narrow to, so the text can only be a new word.
+  //
+  //Escape cancels an edit and must not travel any further - keybindings.js closes every popup on
+  //Escape, so without stopping it here the dialog would go with the edit.
+  filterInput.addEventListener('keydown', function(e){
+    if(e.key === 'Enter'){
+      e.preventDefault();
+      e.stopPropagation();
+
+      if(editingWord != null)
+        commitEdit();
+      else if(visibleCount === 0)
+        addTypedWord();
+
+      return;
+    }
+
+    if(e.key === 'Escape' && editingWord != null){
+      e.preventDefault();
+      e.stopPropagation();
+      endEdit();
+    }
+  });
+
+  //Leaving the field abandons the edit, which is what makes Cancel Edit unnecessary as a button.
+  //The one departure that is not an abandonment is the button that commits it - reached by Tab
+  //(relatedTarget) or by click (activeElement, for browsers that leave relatedTarget null).
+  filterInput.addEventListener('blur', function(e){
+    if(editingWord == null)
+      return;
+    if(e.relatedTarget === primaryBtn || document.activeElement === primaryBtn)
+      return;
+
+    endEdit();
+  });
+
+  //And a click on it must not blur the input first: the blur above would abandon the edit before
+  //the click that meant to commit it ever ran. Suppressing the mousedown's default keeps focus
+  //where it is; the click still fires.
+  primaryBtn.addEventListener('mousedown', function(e){
+    e.preventDefault();
+  });
 
   listbox.onchange = updateSelectionButtons;
 
-  addBtn.onclick = function(){
+  primaryBtn.onclick = function(){
+    if(editingWord != null)
+      commitEdit();
+    else
+      addTypedWord();
+  };
+
+  function addTypedWord(){
     var word = forDictionary(filterInput.value.trim());
     if(word === '' || currentWords.indexOf(word) > -1)
       return;
@@ -439,7 +536,7 @@ function wordListEditor(options){
     currentWords.push(word);
     filterInput.value = '';
     render();
-  };
+  }
 
   editBtn.onclick = function(){
     if(listbox.selectedOptions.length !== 1)
@@ -452,17 +549,15 @@ function wordListEditor(options){
   };
 
   function setEditingMode(editing){
-    addBtn.hidden = editing;
-    editBtn.hidden = editing;
-    deleteBtn.hidden = editing;
-    saveWordBtn.hidden = !editing;
-    cancelEditBtn.hidden = !editing;
+    primaryBtn.textContent = editing ? 'Save' : 'Add';
+    updatePrimaryButton();
+    updateSelectionButtons();
   }
 
   //Renaming a word onto one already in the list drops the entry being edited rather than writing a
   //second copy of the target - the list is a set, and two identical rows are only ever something to
   //go back and delete by hand.
-  saveWordBtn.onclick = function(){
+  function commitEdit(){
     var newWord = forDictionary(filterInput.value.trim());
     var idx = currentWords.indexOf(editingWord);
 
@@ -478,11 +573,7 @@ function wordListEditor(options){
     }
 
     endEdit();
-  };
-
-  cancelEditBtn.onclick = function(){
-    endEdit();
-  };
+  }
 
   function endEdit(){
     editingWord = null;
