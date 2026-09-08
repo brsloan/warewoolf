@@ -258,6 +258,25 @@ var COMMANDS = {
   extractZip: { group: 'F', params: ['zipPath'], optional: ['destPath'], returns: '{ path }' },
   importDocx: { group: 'F', params: ['path'], returns: '{ documentXml, footnotesXml }',
     note: 'Returns the XML text, not a temp directory. The parsing in docx-import.js is pure string work and stays in the webview.' },
+  //An epub is a zip of XHTML documents plus a manifest, and unzipper has no browser build - the
+  //same "native by necessity" reason importDocx is here. What crosses is the archive's *text*, and
+  //deciding what to do with it is the renderer's job: epub-import.js reads container.xml to find
+  //the OPF, the OPF for the spine and manifest, the nav document or toc.ncx for the chapter
+  //boundaries, and hands each chapter's XHTML to html-import.js. None of that is filesystem work,
+  //so none of it belongs on this side - the same call Phase 5 made for loadCorkboard and Phase 6
+  //for importDocx.
+  //
+  //Which is also why this command does not verify that the file is a valid epub. "Has a
+  //container.xml naming a readable OPF" is format knowledge, and the renderer needs to read those
+  //parts anyway; a check here would be a second, worse copy of it that could only report failure
+  //less precisely.
+  //
+  //Stylesheets are in the returned set, not just the markup. An epub links its CSS
+  //(<link rel="stylesheet" href="0.css">) rather than inlining a <style> block - every chapter of
+  //all three sample books does - so without the .css entries every class-driven italic in the book
+  //resolves to nothing, which is the exact failure html-import.js exists to avoid.
+  importEpub: { group: 'F', params: ['path'], returns: '{ entries: { [path]: string } }',
+    note: 'Text entries only - xhtml/html/xml/opf/ncx/css/txt, plus the "mimetype" file. Images, fonts and audio are never read, which is where "images are stripped" is actually enforced: they cannot reach the renderer to be stripped later. Paths are archive-relative with forward slashes, exactly as the zip stores them, because that is what the hrefs inside container.xml/the OPF/the nav document resolve against.' },
 
   // --- G. Export and compile ----------------------------------------------------------------
   ensureDirectory: { group: 'G', params: ['path'], returns: 'void' },

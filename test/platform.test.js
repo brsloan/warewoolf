@@ -1687,6 +1687,134 @@ test('importDocx rejects NOT_FOUND for a file that is not there', async function
   assert.strictEqual(err.code, CODES.NOT_FOUND);
 });
 
+//An epub is a zip of XHTML plus a manifest. Everything that decides what those parts *mean* - which
+//document is the OPF, what the spine holds, where the chapters break - is format knowledge and lives
+//in the renderer, so this command's whole job is to hand back the archive's text.
+function epubEntries(extra){
+  return [
+    { name: 'mimetype', content: 'application/epub+zip' },
+    { name: 'META-INF/container.xml',
+      content: '<?xml version="1.0"?><container><rootfiles>'
+        + '<rootfile full-path="OEBPS/content.opf"/></rootfiles></container>' },
+    { name: 'OEBPS/content.opf', content: '<package><manifest/><spine/></package>' },
+    { name: 'OEBPS/toc.ncx', content: '<ncx><navMap/></ncx>' },
+    { name: 'OEBPS/chapter_1.xhtml', content: '<html><body><p>Hello</p></body></html>' },
+    { name: 'OEBPS/CSS/template.css', content: '.right { text-align: right; }' }
+  ].concat(extra || []);
+}
+
+test('importEpub returns every text entry keyed by its path in the archive', async function(t){
+  const built = platformIn(t);
+  const epubPath = built.dir + 'book.epub';
+  await buildZip(epubPath, epubEntries());
+
+  const result = await built.platform.importEpub({ path: epubPath });
+
+  assert.deepStrictEqual(Object.keys(result).sort(), ['entries']);
+  assert.deepStrictEqual(Object.keys(result.entries).sort(), [
+    'META-INF/container.xml',
+    'OEBPS/CSS/template.css',
+    'OEBPS/chapter_1.xhtml',
+    'OEBPS/content.opf',
+    'OEBPS/toc.ncx',
+    'mimetype'
+  ]);
+  assert.strictEqual(result.entries['OEBPS/chapter_1.xhtml'], '<html><body><p>Hello</p></body></html>');
+  assert.strictEqual(result.entries['mimetype'], 'application/epub+zip');
+});
+
+//The enforcement point for "images are stripped": a cover jpeg is skipped before its bytes are ever
+//read, so it cannot reach the renderer to be stripped later. html-import.js dropping <img> tags is
+//the second line of the same defence, for markup naming a picture that is no longer there.
+test('importEpub never reads images, fonts or other binary parts', async function(t){
+  const built = platformIn(t);
+  const epubPath = built.dir + 'illustrated.epub';
+  await buildZip(epubPath, epubEntries([
+    { name: 'OEBPS/cover.jpg', content: Buffer.from([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10]) },
+    { name: 'OEBPS/fonts/serif.otf', content: Buffer.from([0x4F, 0x54, 0x54, 0x4F]) },
+    { name: 'OEBPS/audio/track.mp3', content: Buffer.from([0x49, 0x44, 0x33]) }
+  ]));
+
+  const result = await built.platform.importEpub({ path: epubPath });
+
+  Object.keys(result.entries).forEach(function(name){
+    assert.ok(!/\.(?:jpg|otf|mp3)$/.test(name), name + ' should not have been read');
+  });
+});
+
+//An epub links its stylesheets rather than inlining a <style> block - every chapter of all three
+//sample books does - so dropping .css here would mean every class-driven italic in the book resolves
+//to nothing on the renderer side.
+test('importEpub includes stylesheets, which are where an epub keeps its italics', async function(t){
+  const built = platformIn(t);
+  const epubPath = built.dir + 'styled.epub';
+  await buildZip(epubPath, epubEntries());
+
+  const result = await built.platform.importEpub({ path: epubPath });
+
+  assert.strictEqual(result.entries['OEBPS/CSS/template.css'], '.right { text-align: right; }');
+});
+
+test('importEpub strips a byte order mark rather than passing it into the markup', async function(t){
+  const built = platformIn(t);
+  const epubPath = built.dir + 'bom.epub';
+  await buildZip(epubPath, [
+    { name: 'OEBPS/chapter_1.xhtml', content: '﻿<html><body><p>Hi</p></body></html>' }
+  ]);
+
+  const result = await built.platform.importEpub({ path: epubPath });
+
+  assert.strictEqual(result.entries['OEBPS/chapter_1.xhtml'], '<html><body><p>Hi</p></body></html>');
+});
+
+//Nothing is extracted at all - unzipper.Open reads the central directory and pulls one entry's bytes
+//at a time - so unlike importDocx there is no temp directory to own or clean up, and a hostile entry
+//name cannot write anywhere because nothing is written.
+test('importEpub leaves nothing on disk, not even a temp directory', async function(t){
+  const built = platformIn(t);
+  const epubPath = built.dir + 'clean.epub';
+  await buildZip(epubPath, epubEntries());
+
+  const tmpBefore = fs.readdirSync(os.tmpdir()).length;
+  const dirBefore = fs.readdirSync(built.dir).sort();
+
+  await built.platform.importEpub({ path: epubPath });
+
+  assert.strictEqual(fs.readdirSync(os.tmpdir()).length, tmpBefore);
+  assert.deepStrictEqual(fs.readdirSync(built.dir).sort(), dirBefore);
+});
+
+test('importEpub rejects NOT_FOUND for a file that is not there', async function(t){
+  const built = platformIn(t);
+  const err = await rejection(built.platform.importEpub({ path: built.dir + 'missing.epub' }));
+
+  assert.strictEqual(err.code, CODES.NOT_FOUND);
+});
+
+//A file that is not a zip rejects out of unzipper with no errno of its own, so it must land on
+//IO_ERROR rather than being reported as a missing file the writer could go looking for.
+test('importEpub rejects IO_ERROR for a file that is not a zip', async function(t){
+  const built = platformIn(t);
+  fs.writeFileSync(built.dir + 'notreally.epub', 'this is just some text', 'utf8');
+
+  const err = await rejection(built.platform.importEpub({ path: built.dir + 'notreally.epub' }));
+
+  assert.strictEqual(err.code, CODES.IO_ERROR);
+});
+
+//It does not check container.xml or the mimetype: "is this a valid epub" is format knowledge, the
+//renderer has to read those parts anyway, and a check here would only be able to report the failure
+//less precisely than the code that actually needs the answer.
+test('importEpub does not judge whether the archive is a valid epub', async function(t){
+  const built = platformIn(t);
+  const zipPath = built.dir + 'plain.zip';
+  await buildZip(zipPath, [{ name: 'notes.txt', content: 'not a book' }]);
+
+  const result = await built.platform.importEpub({ path: zipPath });
+
+  assert.deepStrictEqual(result.entries, { 'notes.txt': 'not a book' });
+});
+
 // ---------------------------------------------------------------------------------------------
 // Group G - export and compile
 // ---------------------------------------------------------------------------------------------

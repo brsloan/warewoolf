@@ -225,6 +225,7 @@ function createNodeBacking(deps){
     readTextFile: readTextFile,
     extractZip: extractZip,
     importDocx: importDocx,
+    importEpub: importEpub,
 
     // --- G. Export and compile ----------------------------------------------------------
     ensureDirectory: ensureDirectory,
@@ -899,6 +900,65 @@ function createNodeBacking(deps){
           }
         });
     });
+  }
+
+  //An epub's text, keyed by the path the archive stores it under. Unlike importDocx this never
+  //extracts anything: unzipper.Open reads the central directory and pulls one entry's bytes at a
+  //time, so there is no temp directory to own, clean up, or leave behind if the process dies
+  //mid-import - and no chance of a hostile entry name ("../../..") writing anywhere, because
+  //nothing is written at all.
+  //
+  //Only text entries are read. Everything else in a book - the cover jpeg, embedded fonts, audio -
+  //is skipped before its bytes are ever touched, so a 250KB cover image costs nothing and cannot
+  //reach the renderer. That is the enforcement point for "images are stripped"; html-import.js
+  //dropping <img> tags is the second line of the same defence, for markup that names a picture the
+  //archive no longer carries.
+  function importEpub(args){
+    var filepath = normalizePath(args == null ? undefined : args.path, 'path');
+
+    return unzipper.Open.file(filepath).then(function(directory){
+      var entries = {};
+
+      var reads = directory.files.filter(function(entry){
+        return entry.type === 'File' && isEpubTextEntry(entry.path);
+      }).map(function(entry){
+        return entry.buffer().then(function(buffer){
+          //A BOM is legal at the head of an XML/CSS file and is not part of the content - left in,
+          //it becomes a stray character in front of the first tag and DOMParser reads the document
+          //as malformed.
+          entries[normalizeEntryPath(entry.path)] = stripBom(buffer.toString('utf8'));
+        });
+      });
+
+      return Promise.all(reads).then(function(){
+        return { entries: entries };
+      });
+    }).catch(function(err){
+      //A file that is not a zip at all rejects out of unzipper with no errno, so it lands on
+      //IO_ERROR rather than pretending to be a missing file. A genuinely missing path still carries
+      //ENOENT and still arrives as NOT_FOUND.
+      throw fromNodeError(err, { command: 'importEpub' });
+    });
+  }
+
+  //Written as the escape rather than the character itself so it stays visible in a diff.
+  function stripBom(text){
+    return text.charCodeAt(0) === 0xFEFF ? text.slice(1) : text;
+  }
+
+  //By extension, not by the OPF's declared media types: the manifest is one of the things being
+  //read, so it cannot be consulted to decide what to read. Everything an epub expresses in text is
+  //covered, plus the extensionless "mimetype" file the spec puts first in every archive.
+  function isEpubTextEntry(entryPath){
+    var name = normalizeEntryPath(entryPath);
+    return name === 'mimetype' || /\.(?:xhtml|html|htm|xml|opf|ncx|css|txt)$/i.test(name);
+  }
+
+  //Zip paths are stored with forward slashes, but not every writer obeys that, and a leading "./"
+  //is legal. Both are normalized away here so the renderer can resolve an OPF href against an entry
+  //name by plain string work.
+  function normalizeEntryPath(entryPath){
+    return String(entryPath).replaceAll('\\', '/').replace(/^\.\//, '');
   }
 
   // ------------------------------------------------------------------------------------------
