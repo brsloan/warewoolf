@@ -122,7 +122,7 @@ function fromNodeError(err, details){
 var SAVED_SECRET = '\u0000warewoolf:saved-secret\u0000';
 
 //Main -> renderer. Absent from native-command-inventory.md, which names only the file-open event:
-//there are 36 channels, and every one of them has to cross the bridge in Phase 9 or the menu stops
+//there are 37 channels, and every one of them has to cross the bridge in Phase 9 or the menu stops
 //working. Validated by name so a typo fails at subscribe time rather than never firing.
 //
 //These are the literal channel names index.js sends on, not tidied-up versions of them - the ipc
@@ -133,7 +133,8 @@ var SAVED_SECRET = '\u0000warewoolf:saved-secret\u0000';
 var EVENTS = [
   'file-opened-from-outside-warewoolf',
   'about-clicked', 'add-chapter-clicked', 'center-all-heads-clicked', 'compile-clicked',
-  'convert-first-lines-clicked', 'convert-italics-clicked', 'convert-tabs-clicked',
+  'convert-first-lines-clicked', 'convert-italics-clicked', 'convert-substitutions-clicked',
+  'convert-tabs-clicked',
   'corkboard-clicked', 'delete-chapter-clicked', 'exit-app-clicked', 'export-clicked',
   'file-manager-clicked', 'find-replace-clicked', 'headings-to-chaps-clicked', 'help-doc-clicked',
   'import-clicked', 'indent-all-clicked', 'new-project-clicked', 'open-clicked',

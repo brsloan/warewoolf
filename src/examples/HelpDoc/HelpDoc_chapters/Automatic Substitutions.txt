@@ -15,4 +15,8 @@ Two rules worth knowing about:
 
 A quote typed immediately after a dash closes rather than opens, because interrupted dialogue is far commoner in fiction than a dash leading into a speech. And two hyphens turn into a dash the moment you type the second one, so a line of three or more hyphens used as a scene break will need an undo, or the Em Dash rule switched off.
 
-None of this touches writing you have already done. It applies only to what you type from here on: existing chapters, and anything you import or paste in, are left exactly as they are. To bring an older manuscript into line, use **Tools > Find/Replace** — a straight quote typed into the search box finds the curly ones as well, so searching for one finds both.
+None of this touches writing you have already done. It applies only to what you type from here on: existing chapters, and anything you import or paste in, are left exactly as they are.
+
+To bring an older manuscript into line, use **Tools > Convert Straight Quotes Etc.** It runs the same substitutions over every chapter at once, reading each one as though you had typed it, so a converted chapter comes out the same as a retyped one. The popup lets you uncheck any substitution you would rather leave alone; by default it applies all of them, whatever you have switched off in Settings. Unlike a substitution made as you type, this one cannot be undone, so save first.
+
+Searching is not affected either way: a straight quote typed into **Tools > Find/Replace** finds the curly ones as well, so looking for a line of dialogue still works whether or not the manuscript has been converted.

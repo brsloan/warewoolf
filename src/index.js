@@ -401,6 +401,12 @@ const createWindow = () => {
             mainWindow.webContents.send('convert-tabs-clicked');
           }
         },
+        {
+          label: 'Convert Straight Quotes Etc.',
+          click(item, focusWindow){
+            mainWindow.webContents.send('convert-substitutions-clicked');
+          }
+        },
         { type: 'separator' },
         {
           label: 'Break Headings Into Chapters',

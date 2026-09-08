@@ -27,7 +27,7 @@ const { renderChapterList, renameChapterInList } = require('./components/views/c
 //As of Phase 9a this is the *only* platform instance this file has. Through Phase 8 there were two:
 //this one for group A, and a second node-backed one for everything that was plain fs and therefore
 //reachable from the renderer directly. The node backing now runs in the main process, so both
-//halves are this object, and the 36 menu channels come through it as well - render.js no longer
+//halves are this object, and the 37 menu channels come through it as well - render.js no longer
 //requires 'electron' at all.
 var platform = createPlatform(createIpcBacking());
 
@@ -1306,6 +1306,12 @@ const menuCommands = {
   'convert-tabs-clicked': { run: function(){
     const showTabOptions = require('./components/views/convert-tabs-display');
     showTabOptions(project, detached(function(){
+      return displayChapterByIndex(project.activeChapterIndex);
+    }));
+  } },
+  'convert-substitutions-clicked': { run: function(){
+    const showSubstitutionOptions = require('./components/views/convert-substitutions_display');
+    showSubstitutionOptions(project, detached(function(){
       return displayChapterByIndex(project.activeChapterIndex);
     }));
   } },

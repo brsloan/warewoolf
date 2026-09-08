@@ -158,5 +158,5 @@ test('an event name outside the contract never reaches the bridge', function(){
     return err.code === CODES.INVALID_ARGUMENT;
   });
   assert.strictEqual(Object.keys(over.bridge._listeners).length, 0);
-  assert.strictEqual(EVENTS.length, 36);
+  assert.strictEqual(EVENTS.length, 37);
 });

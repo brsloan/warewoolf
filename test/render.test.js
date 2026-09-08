@@ -784,7 +784,8 @@ var ALL_MENU_CHANNELS = [
   'find-replace-clicked', 'spellcheck-clicked', 'convert-first-lines-clicked',
   'headings-to-chaps-clicked', 'convert-italics-clicked', 'split-chapter-clicked',
   'add-chapter-clicked', 'delete-chapter-clicked', 'restore-chapter-clicked', 'shortcuts-clicked',
-  'outliner-clicked', 'convert-tabs-clicked', 'about-clicked', 'exit-app-clicked',
+  'outliner-clicked', 'convert-tabs-clicked', 'convert-substitutions-clicked',
+  'about-clicked', 'exit-app-clicked',
   'save-copy-clicked', 'help-doc-clicked', 'renumber-chapters-clicked', 'send-via-email-clicked',
   'view-error-log-clicked', 'file-manager-clicked', 'wifi-manager-clicked', 'save-backup-clicked',
   'settings-clicked', 'corkboard-clicked', 'file-opened-from-outside-warewoolf',
@@ -2056,4 +2057,26 @@ test('a single rule switched off in Settings leaves the others working', async f
   typeInto(r.editorQuill, '"wait--"');
 
   assert.strictEqual(r.editorQuill.getText().trim(), '“wait--”');
+});
+
+//The conversion itself is covered in convert-substitutions.test.js, and the popup's own behaviour
+//in convert-substitutions_display.test.js. This is about the wiring between them: that the menu
+//command reaches the right module and hands it the open project. It stops short of submitting the
+//form, because the real working indicator waits on an image jsdom will never load.
+test('Convert Straight Quotes Etc. opens its popup with every substitution offered', async function(){
+  var r = await freshRender();
+  r.project.chapters = [makeChap('c0')];
+  await r.displayChapterByIndex(0);
+
+  currentBridge().handlers['convert-substitutions-clicked']();
+
+  var popup = document.querySelector('.popup');
+  assert.ok(popup, 'expected the conversion popup to open');
+  assert.strictEqual(popup.querySelector('h1').innerText, 'Convert Straight Quotes Etc.');
+
+  require('../src/components/models/autocorrect').getAutocorrectDefs().forEach(function(def){
+    var check = document.getElementById('convert-' + def.id);
+    assert.ok(check, 'expected a checkbox for ' + def.id);
+    assert.strictEqual(check.checked, true);
+  });
 });

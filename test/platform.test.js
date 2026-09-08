@@ -392,14 +392,14 @@ testOnce('every group in the inventory is represented', function(){
     ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K']);
 });
 
-//All 36 main -> renderer channels, not just the file-open one the inventory names. A typo has to
+//All 37 main -> renderer channels, not just the file-open one the inventory names. A typo has to
 //fail here rather than becoming a menu item that quietly does nothing.
 test('events are validated by name and unsubscribe cleanly', function(t){
   const built = platformIn(t);
   const seen = [];
   const handler = function(){ seen.push(1); };
 
-  assert.strictEqual(EVENTS.length, 36);
+  assert.strictEqual(EVENTS.length, 37);
   assert.ok(EVENTS.indexOf('save-clicked') > -1);
 
   const unsubscribe = built.platform.on('save-clicked', handler);

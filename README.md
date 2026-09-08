@@ -42,7 +42,7 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 * Corkboard that saves as a markdown file that doubles as an outline.
 * Adjust width of text editor and how large text is displayed.
 * Customizable keyboard shortcuts: rebind any shortcut in the Shortcut Helper (Ctrl+H), or restore the defaults, and your choices are remembered.
-* Automatic substitutions as you type: smart quotes, em dashes from two hyphens, and an ellipsis from three periods. Ctrl+Z undoes any one of them, and the whole thing can be switched off in Settings.
+* Automatic substitutions as you type: smart quotes, em dashes from two hyphens, and an ellipsis from three periods. Ctrl+Z undoes any one of them, and the whole thing can be switched off in Settings. A Tools item applies the same conversions to an existing manuscript in one pass.
 * Spellcheck, but it must be run after writing (no red squiggles or godawful grammar advice).
 * Word .docx support for import/export
 * Auto-saving and auto-backup options
@@ -79,6 +79,7 @@ Unreleased. Changes made:
 * Keyboard shortcuts are now customizable: open the Shortcut Helper (Ctrl+H, Cmd+Shift+H on Mac), choose a shortcut, and press the keys you want. Backspace clears one; Restore Defaults puts them all back. Your changes are saved between sessions.
 * Fixed bug where the Bullets/Numbered List shortcut (Ctrl/Cmd+Shift+B) never worked, because the File > Backup menu item claimed the same keys. Backup is still on the File menu, without a shortcut.
 * Automatic substitutions as you type: straight quotes become curly ones (opening or closing to suit), two hyphens become an em dash, and three periods become an ellipsis. Ctrl+Z undoes just the substitution, leaving what you typed. All of it can be switched off, in whole or rule by rule, in File > Settings.
+* New Tools > Convert Straight Quotes Etc.: applies those same substitutions to a whole manuscript at once, for work written before the feature existed or imported from elsewhere. Uncheck any you would rather not apply.
 * Spellcheck now understands contractions written with a curly apostrophe, instead of stopping on both halves of "don't".
 * A straight quote typed into Find/Replace now finds curly ones too, so searching for a line of dialogue still works. Searching for a specific curly quote still finds only that one.
 
