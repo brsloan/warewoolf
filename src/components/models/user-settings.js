@@ -1,4 +1,5 @@
 const { logError } = require('../controllers/error-log');
+const { sanitizeOverrides } = require('./shortcuts');
 
 //Set once by render.js's loadPlatformState(), the same instance error-log.js uses. As of Phase 9a
 //that is the ipc-backed one: loadUserSettings()/saveUserSettings() were plain fs reachable straight
@@ -14,6 +15,13 @@ function setPlatform(p){
 //value survives), and a key that isn't listed here - including save/load/getSettingsFilepath - can
 //never be copied onto the live object. senderPass holds an {iv, content} blob before migration (see
 //credential-store.js migrateLegacyPassword) and is null afterward, hence the 'object' type.
+//
+//A field may also carry a `sanitize` function, for the one case a type name cannot describe:
+//keyboardShortcuts is a map whose every entry has to be checked in its own right, since `object`
+//would wave through an array, or a map of bindings no key could ever produce. Where one is given
+//it replaces the type check entirely and its return value is what lands on the object, so it must
+//be total - shortcuts.js's sanitizeOverrides answers with {} (meaning "all defaults") for anything
+//it cannot make sense of, rather than throwing or handing back a partial map.
 const SETTINGS_SCHEMA = {
   editorWidth: { type: 'number' },
   fontSize: { type: 'number' },
@@ -38,7 +46,8 @@ const SETTINGS_SCHEMA = {
   autosaveIntMinutes: { type: 'number' },
   darkMode: { type: 'string' },
   showBattery: { type: 'boolean' },
-  displayChapNotes: { type: 'boolean' }
+  displayChapNotes: { type: 'boolean' },
+  keyboardShortcuts: { type: 'object', sanitize: sanitizeOverrides }
 };
 
 function getUserSettings(userSettingsFilepath){
@@ -67,6 +76,10 @@ function getUserSettings(userSettingsFilepath){
     darkMode: 'system',
     showBattery: false,
     displayChapNotes: true,
+    //Only the shortcuts a writer has actually changed, keyed by the action ids in shortcuts.js -
+    //never the whole map. An action missing from here is on its default, which is what lets a
+    //default changed in a later version reach a writer who never touched that shortcut.
+    keyboardShortcuts: {},
     save: save,
     load: load,
     getSettingsFilepath: getSettingsFilepath
@@ -97,11 +110,18 @@ function getUserSettings(userSettingsFilepath){
   //The schema is already the list of what may be persisted (see the note on it above: a key not
   //named there can never be copied back onto the live object on load), so this sends exactly that
   //and nothing else - which is also what makes the payload data rather than a live model object.
+  //A sanitized field is sanitized on the way out as well as in. Not defensiveness for its own
+  //sake: this payload has to survive a structured clone, and one unexpected value in
+  //keyboardShortcuts (a function, most obviously) would reject the save of every OTHER setting
+  //alongside it. The sanitizer only ever returns plain data, so running it here means that
+  //cannot happen whatever a caller has left on the live object.
   function persistableSettings(){
     var persistable = {};
 
     Object.keys(SETTINGS_SCHEMA).forEach(function(key){
-      persistable[key] = settings[key];
+      var schema = SETTINGS_SCHEMA[key];
+
+      persistable[key] = schema.sanitize ? schema.sanitize(settings[key]) : settings[key];
     });
 
     return persistable;
@@ -136,6 +156,14 @@ function getUserSettings(userSettingsFilepath){
 
       if(schema.nullable && value === null){
         settings[key] = null;
+        return;
+      }
+
+      //A field with its own sanitizer is checked entry by entry rather than by type, and takes
+      //whatever that returns - including for a value the type check would have rejected outright,
+      //since the sanitizer's answer for those (an empty map) is the meaningful one.
+      if(schema.sanitize){
+        settings[key] = schema.sanitize(value);
         return;
       }
 
