@@ -43,7 +43,7 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 * Adjust width of text editor and how large text is displayed.
 * Customizable keyboard shortcuts: rebind any shortcut in the Shortcut Helper (Ctrl+H), or restore the defaults, and your choices are remembered.
 * Automatic substitutions as you type: smart quotes, em dashes from two hyphens, and an ellipsis from three periods. Ctrl+Z undoes any one of them, and the whole thing can be switched off in Settings. A Tools item applies the same conversions to an existing manuscript in one pass.
-* Spellcheck, but it must be run after writing (no red squiggles or godawful grammar advice).
+* Spellcheck, but it must be run after writing (no red squiggles or godawful grammar advice). Check against any number of dictionaries at once (File > Dictionaries), import your own, and keep a personal word list alongside a per-project one for character and place names that shouldn't follow you into your next book.
 * Word .docx support for import/export
 * Auto-saving and auto-backup options
 * Saves chapters as .txt files with light Markdown-style formatting, so even if WareWoolf disappears you will always be able to read/edit the documents you create with it. This is also widely considered the most "archival" file format, so people will still be able to open your files in 100 years (if people still read then).
@@ -83,6 +83,7 @@ Unreleased. Changes made:
 * MarkdownFic now reads four spaces as a tab when nesting list items, matching how most Markdown editors indent a sub-list. Spaces only nest an item that directly follows another list item, so an indented paragraph of prose that happens to begin with a hyphen is still prose. WareWoolf still writes tabs, so a space-indented list is normalized on the first save.
 * Spellcheck now understands contractions written with a curly apostrophe, instead of stopping on both halves of "don't".
 * A straight quote typed into Find/Replace now finds curly ones too, so searching for a line of dialogue still works. Searching for a specific curly quote still finds only that one.
+* New File > Dictionaries: tick any number of dictionaries at once, import your own (a Hunspell .aff/.dic pair, or even a bare word list), and edit your personal dictionary directly instead of only adding to it from the spellcheck popup. Projects now carry their own word list too, for character and place names that shouldn't leak into other manuscripts - the spellcheck popup's Add To Dictionary button gets a companion, Add To Project, for exactly that.
 
 2026-09-07: v2.5.0. Chages made:
 * Security improvements

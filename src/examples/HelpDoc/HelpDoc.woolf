@@ -41,6 +41,12 @@
 			"summary": null
 		},
 		{
+			"title": "Dictionaries",
+			"filename": "Dictionaries.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
 			"title": "Exporting and Compiling",
 			"filename": "Exporting and Compiling.txt",
 			"filter": null,
