@@ -8,6 +8,25 @@ const { parseDelta, getOrderedListNumbers, getListMarker } = require('./quill-ut
 const ESCAPABLE_ANYWHERE = [/^\*\*/, /^\*/, /^~~/, /^__/, /^#/, /^\[>/, /^>/, /^\[\^/];
 const ESCAPABLE_AT_LINE_START = [/^-/, /^\+/, /^(?:\d+|[a-z])\. /];
 
+//Whether a backslash at `index` is at the start of its line, for the purpose of reading escapes.
+//Line-start list markers ("- ", "1. ") are only ever written with an escaping backslash right after
+//a paragraph's leading tabs (see escapeListMarkers), never after any other character - so "at line
+//start" means "nothing but tabs precedes this backslash", not literally index === 0.
+//
+//Walks backwards rather than forwards, which is what keeps it cheap: a backslash in the middle of a
+//sentence is preceded by an ordinary character, so the very first comparison settles it. Only a
+//backslash genuinely sitting in a paragraph's opening tabs reads more than one, and there are never
+//many of those. This used to ask the same question as /^\t*$/.test(text.slice(0, index)), which
+//copied the whole preceding text on every backslash - about a fifth of the parse time on a chapter
+//dense with escaped markers, such as the MarkdownFic page of the Help doc.
+function onlyTabsPrecede(text, index){
+  for(let i = index - 1; i >= 0; i--)
+    if(text[i] !== '\t')
+      return false;
+
+  return true;
+}
+
 function consumeEscape(text, i, atLineStart){
   var tail = text.slice(i + 1);
   var patterns = atLineStart ? ESCAPABLE_ANYWHERE.concat(ESCAPABLE_AT_LINE_START) : ESCAPABLE_ANYWHERE;
@@ -62,11 +81,7 @@ function tokenizeInline(text){
     var ch = text[i];
 
     if(ch === '\\'){
-      //Line-start list markers ("- ", "1. ") are only ever written with a leading backslash right
-      //after a paragraph's leading tabs (see escapeListMarkers), never after any other character -
-      //so "at line start" here means "nothing but tabs precedes this backslash", not literally i===0.
-      var atLineStart = /^\t*$/.test(text.slice(0, i));
-      var escaped = consumeEscape(text, i, atLineStart);
+      var escaped = consumeEscape(text, i, onlyTabsPrecede(text, i));
       if(escaped !== null){
         buffer += escaped;
         i += 1 + escaped.length;

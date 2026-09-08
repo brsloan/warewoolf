@@ -95,6 +95,28 @@ test('a tab indented paragraph that opens like a list marker is escaped and come
     '\t\\- Blah\r\n');
 });
 
+//The text a parse produces, for the cases below where the .mdfc side is the interesting half and a
+//full round trip would say less than the characters themselves do.
+function textOf(mdf){
+  return parseMDF(mdf).ops.map(function(op){ return op.insert; }).join('');
+}
+
+//The other half of the rule above, and the direction a wrong implementation breaks in: a backslash
+//introduces a list-marker escape only when nothing but tabs precedes it. Anywhere else it is an
+//ordinary character - the writer never puts one there, so consuming it would swallow a backslash
+//somebody typed on purpose.
+test('a backslash mid-line is not read as a list marker escape', function(){
+  assert.strictEqual(textOf('a dash \\- stays a dash\r\n'), 'a dash \\- stays a dash\n');
+});
+
+test('tabs preceded by any other character are not a line start either', function(){
+  assert.strictEqual(textOf('a\t\\- not a list\r\n'), 'a\t\\- not a list\n');
+});
+
+test('a list marker escape is still read after several leading tabs', function(){
+  assert.strictEqual(textOf('\t\t\t\\- deeply indented dash\r\n'), '\t\t\t- deeply indented dash\n');
+});
+
 test('a blockquote round trips', function(){
   assertRoundTrip({ ops: [
     {insert: 'Quoted line.'}, {insert: '\n', attributes: {blockquote: true}}
