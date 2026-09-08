@@ -61,6 +61,21 @@ const FootnoteBodyAttributor = new Parchment.Attributor.Attribute('footnoteBody'
   scope: Parchment.Scope.BLOCK
 });
 
+//Marks a body paragraph as continuing the note above it rather than starting one of its own, which
+//is the difference between the two paragraphs of a single multi-paragraph note and the last
+//paragraph of note 1 followed by the first of note 2. Only the note's opening paragraph prints its
+//number (see src/css/index.css), and that distinction cannot be made in CSS: it needs to compare
+//one paragraph's id against its neighbour's, and a sibling combinator has no way to. So the
+//document carries the answer instead, written by reconcile-footnotes.js's renumberAndReorder for
+//the live editor and by parseMDF for a chapter read off disk.
+//
+//Deliberately not written to .mdfc: a multi-paragraph note already spells every one of its
+//paragraphs "[^N]: " there, which is the same fact in the form the file format has always used,
+//so parseMDF derives this from the line above rather than the file gaining a second spelling of it.
+const FootnoteBodyContinuationAttributor = new Parchment.Attributor.Attribute('footnoteBodyCont', 'data-footnote-cont', {
+  scope: Parchment.Scope.BLOCK
+});
+
 var registered = false;
 
 function registerFootnoteBlots(){
@@ -69,7 +84,13 @@ function registerFootnoteBlots(){
 
   Quill.register(FootnoteRef);
   Quill.register(FootnoteBodyAttributor);
+  Quill.register(FootnoteBodyContinuationAttributor);
   registered = true;
 }
 
-module.exports = { FootnoteRef, FootnoteBodyAttributor, registerFootnoteBlots };
+module.exports = {
+  FootnoteRef,
+  FootnoteBodyAttributor,
+  FootnoteBodyContinuationAttributor,
+  registerFootnoteBlots
+};

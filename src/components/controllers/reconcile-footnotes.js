@@ -214,10 +214,20 @@ function renumberAndReorder(lines){
   groupOrder
     .sort(function(a, b){ return Number(idMap[a]) - Number(idMap[b]); })
     .forEach(function(oldId){
-      groupsByOldId[oldId].forEach(function(l){
-        l.line = Object.assign({}, l.line, {
-          attributes: Object.assign({}, l.line.attributes, { footnoteBody: idMap[oldId] })
-        });
+      groupsByOldId[oldId].forEach(function(l, indexInGroup){
+        var attributes = Object.assign({}, l.line.attributes, { footnoteBody: idMap[oldId] });
+
+        //Only a note's opening paragraph prints its number, so every paragraph after it in the
+        //same group is marked as continuing it - and the opening one has any stale mark cleared,
+        //since a group's paragraphs can have been reordered or its first one deleted since this
+        //last ran. See blots/footnotes.js for why the document has to carry this rather than the
+        //stylesheet working it out.
+        if(indexInGroup > 0)
+          attributes.footnoteBodyCont = true;
+        else
+          delete attributes.footnoteBodyCont;
+
+        l.line = Object.assign({}, l.line, { attributes: attributes });
         bodyLines.push(l);
       });
     });

@@ -56,7 +56,44 @@ test('body groups are reordered to follow marker order, multi-paragraph notes mo
     { insert: 'x' }, marker('1'), { insert: 'y' }, marker('2'), { insert: '\n' },
     { insert: 'two' }, { insert: '\n', attributes: { footnoteBody: '1' } },
     { insert: 'one, para one' }, { insert: '\n', attributes: { footnoteBody: '2' } },
-    { insert: 'one, para two' }, { insert: '\n', attributes: { footnoteBody: '2' } }
+    //Marked as continuing the paragraph above rather than opening a note of its own, which is what
+    //keeps the number off it - and, just as importantly, keeps the number on the note after it.
+    { insert: 'one, para two' }, { insert: '\n', attributes: { footnoteBody: '2', footnoteBodyCont: true } }
+  ]});
+});
+
+//Regression: the stylesheet used to decide this with "[data-footnote] + [data-footnote]", which
+//matches the opening paragraph of the next note exactly as readily as the second paragraph of this
+//one - so every note after the first lost its number. CSS cannot compare one paragraph's id with
+//its neighbour's, so the pass writes the answer into the document.
+test('only a note\'s opening paragraph is left unmarked, however the bodies are ordered', function(){
+  var delta = { ops: [
+    { insert: 'a' }, marker('1'), { insert: 'b' }, marker('2'), { insert: '\n' },
+    { insert: 'one' },      { insert: '\n', attributes: { footnoteBody: '1' } },
+    { insert: 'one again' },{ insert: '\n', attributes: { footnoteBody: '1' } },
+    { insert: 'two' },      { insert: '\n', attributes: { footnoteBody: '2' } }
+  ]};
+
+  var continued = reconcileFootnotes(delta).ops
+    .filter(function(op){ return op.attributes && op.attributes.footnoteBody; })
+    .map(function(op){ return Boolean(op.attributes.footnoteBodyCont); });
+
+  assert.deepStrictEqual(continued, [false, true, false]);
+});
+
+//A stale mark left on what is now a note's first paragraph would keep its number off it, so the
+//pass has to clear one as readily as it sets one - the paragraphs of a group can be reordered, or
+//its opening one deleted, between two runs.
+test('a continuation mark is cleared from a paragraph that has become a note\'s first', function(){
+  var delta = { ops: [
+    { insert: 'a' }, marker('1'), { insert: '\n' },
+    { insert: 'now the only paragraph' },
+    { insert: '\n', attributes: { footnoteBody: '1', footnoteBodyCont: true } }
+  ]};
+
+  assert.deepStrictEqual(reconcileFootnotes(delta), { ops: [
+    { insert: 'a' }, marker('1'), { insert: '\n' },
+    { insert: 'now the only paragraph' }, { insert: '\n', attributes: { footnoteBody: '1' } }
   ]});
 });
 

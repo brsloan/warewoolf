@@ -15,7 +15,7 @@ registerFootnoteBlots();
 //scroll.js's whitelist silently drops anything not named here. Mirrors render.js's editorQuill.
 const EDITOR_FORMATS = [
   'bold', 'italic', 'strike', 'underline', 'blockquote', 'header', 'align', 'list', 'indent',
-  'footnote', 'footnoteBody'
+  'footnote', 'footnoteBody', 'footnoteBodyCont'
 ];
 
 //Attached to the document rather than detached: both halves of the clipboard handling read the
@@ -176,4 +176,33 @@ test('Enter anywhere else falls through to Quill\'s own handler', function(){
 
   assert.strictEqual(pressEnterAt(quill, 4), true);
   assert.strictEqual(pressEnterAt(quill, 0), true);
+});
+
+//Not navigation, but it needs the same attached-editor harness: the stylesheet keys a note's
+//number off these two attributes reaching the DOM, and a block format only does that if it is both
+//registered and named in the editor's `formats` list - scroll.js drops anything else without a
+//word. The rendered attributes are what src/css/index.css matches on, so asserting them here is
+//asserting that a second note still gets a number in front of its body.
+test('a body paragraph renders its note id, and only a continuation is marked as one', function(){
+  var quill = makeEditor([
+    { insert: 'One' }, { insert: { footnote: { n: '1' } } },
+    { insert: ' two' }, { insert: { footnote: { n: '2' } } }, { insert: '\n' },
+    { insert: 'First note.' },     { insert: '\n', attributes: { footnoteBody: '1' } },
+    { insert: 'Still note one.' }, { insert: '\n', attributes: { footnoteBody: '1', footnoteBodyCont: true } },
+    { insert: 'Second note.' },    { insert: '\n', attributes: { footnoteBody: '2' } }
+  ]);
+
+  var bodies = [].slice.call(quill.root.querySelectorAll('[data-footnote]'));
+
+  assert.deepStrictEqual(
+    bodies.map(function(el){ return el.getAttribute('data-footnote'); }),
+    ['1', '1', '2']
+  );
+
+  //The middle paragraph is the only one the stylesheet blanks. The last one is a different note,
+  //and used to be blanked too because the rule matched any body paragraph following another.
+  assert.deepStrictEqual(
+    bodies.map(function(el){ return el.matches('[data-footnote-cont]'); }),
+    [false, true, false]
+  );
 });

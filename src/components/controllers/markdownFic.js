@@ -313,9 +313,22 @@ function parseMDF(str){
   //ends the list, which keeps the gate as narrow as it can be.
   var afterListItem = false;
 
+  //The footnote body id the line above carried, if any. A multi-paragraph note spells every one of
+  //its paragraphs "[^N]: " on disk, so a body line repeating the id directly above it is a
+  //continuation of that note rather than the start of a new one - which is the difference between
+  //a paragraph that prints the note's number and one that does not (see blots/footnotes.js). Read
+  //from the file here rather than left to the reconcile pass, because a chapter is displayed the
+  //moment it is loaded and the pass does not run until something changes.
+  var previousFootnoteBody = null;
+
   lines.forEach(function(line){
     var parsed = parseLine(line, afterListItem);
     afterListItem = parsed.attributes.list != null;
+
+    if(parsed.attributes.footnoteBody != null && parsed.attributes.footnoteBody === previousFootnoteBody)
+      parsed.attributes.footnoteBodyCont = true;
+
+    previousFootnoteBody = parsed.attributes.footnoteBody != null ? parsed.attributes.footnoteBody : null;
 
     parsed.runs.forEach(function(run){
       var op = { insert: run.text };

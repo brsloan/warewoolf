@@ -60,7 +60,7 @@ var editorQuill = new Quill('#editor-container', {
   //footnote/footnoteBody are editor-only, deliberately absent from notesQuill's own list below - a
   //footnote pasted into notes degrades to literal "[^N]" text instead (see setUpQuills), since a
   //note has no chapter of its own for the body to belong to.
-  formats: ['bold', 'italic', 'strike', 'underline', 'blockquote', 'header', 'align', 'list', 'indent', 'footnote', 'footnoteBody']
+  formats: ['bold', 'italic', 'strike', 'underline', 'blockquote', 'header', 'align', 'list', 'indent', 'footnote', 'footnoteBody', 'footnoteBodyCont']
 });
 
 //Quill's own Enter handler is added unconditionally after the named `options.bindings` loop (see

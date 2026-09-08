@@ -322,12 +322,28 @@ test('a footnote marker and its body round trip', function(){
 
 //The multi-paragraph convention documented in the Help doc: the same marker at the start of every
 //paragraph belonging to the note, rather than Markdown's own tab-indented continuation.
-test('a multi-paragraph footnote round trips', function(){
+//footnoteBodyCont marks the paragraphs of a note after its first, which is what decides whether a
+//paragraph prints the note's number (see blots/footnotes.js). It is deliberately absent from the
+//.mdfc, which already says the same thing by repeating "[^1]: " on every paragraph of the note -
+//so it survives the round trip by being derived on the way back in, not by being written out.
+test('a multi-paragraph footnote round trips, its continuation mark derived rather than stored', function(){
   assertRoundTrip({ ops: [
     {insert: 'Reference'}, {insert: {footnote: {n: '1'}}}, {insert: '\n'},
     {insert: 'First paragraph.'}, {insert: '\n', attributes: {footnoteBody: '1'}},
-    {insert: 'Second paragraph.'}, {insert: '\n', attributes: {footnoteBody: '1'}}
+    {insert: 'Second paragraph.'}, {insert: '\n', attributes: {footnoteBody: '1', footnoteBodyCont: true}}
   ]}, 'Reference[^1]\r\n[^1]: First paragraph.\r\n[^1]: Second paragraph.\r\n');
+});
+
+//Regression: two separate notes are not one multi-paragraph note. Reading the second one's body as
+//a continuation would leave it with no number in front of it - which is what the stylesheet used to
+//do to every note after the first, since a sibling combinator cannot tell the two apart.
+test('two consecutive single-paragraph notes are not read as one continued note', function(){
+  assertRoundTrip({ ops: [
+    {insert: 'One'}, {insert: {footnote: {n: '1'}}},
+    {insert: ' two'}, {insert: {footnote: {n: '2'}}}, {insert: '\n'},
+    {insert: 'First note.'}, {insert: '\n', attributes: {footnoteBody: '1'}},
+    {insert: 'Second note.'}, {insert: '\n', attributes: {footnoteBody: '2'}}
+  ]}, 'One[^1] two[^2]\r\n[^1]: First note.\r\n[^2]: Second note.\r\n');
 });
 
 //A footnote body that is also a list item: alignment > footnote > list/blockquote/header, per

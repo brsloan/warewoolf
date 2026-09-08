@@ -353,7 +353,12 @@ button, input[type=submit] {
   margin-top: 0;
 }
 
-.ql-editor [data-footnote] + [data-footnote]::before {
+/* Only a note's opening paragraph prints its number. This cannot key off "follows another body
+   paragraph" - that matches the first paragraph of the *next* note just as readily as the second
+   paragraph of this one, which is what left every note after the first with no number in front of
+   it. Which paragraphs continue a note is written into the document instead; see
+   blots/footnotes.js. */
+.ql-editor [data-footnote-cont]::before {
   content: "";
 }
 
