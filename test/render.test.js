@@ -2038,7 +2038,7 @@ function saveSettingsPopup(){
 test('dictionaries-clicked opens the Dictionaries popup', async function(){
   var r = await freshRender();
 
-  currentBridge().handlers['dictionaries-clicked']();
+  await currentBridge().handlers['dictionaries-clicked']();
 
   var popup = document.querySelector('.popup');
   assert.ok(popup, 'expected a popup to open');

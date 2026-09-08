@@ -379,6 +379,16 @@ button, input[type=submit] {
   float: left;
 }
 
+.word-list {
+  width: 100%;
+  height: 200px;
+}
+
+.dictionary-checklist {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
 .to-be-cut {
   font-style: italic;
   opacity: 0.5;
