@@ -3,6 +3,9 @@ const test = require('node:test');
 const assert = require('node:assert');
 
 const keybindingsPath = require.resolve('../src/components/controllers/keybindings');
+//A pure module with no state of its own, so unlike keybindings.js it does not need re-requiring
+//between tests.
+const shortcutsModel = require('../src/components/models/shortcuts');
 
 //keybindings.js creates its own platform instance (createPlatform(createIpcBacking())) at
 //require-time, same pattern (and same reason) as render.js itself. As of Phase 9a that backing
@@ -88,7 +91,11 @@ function recordingActions(){
   return actions;
 }
 
-function setup(projectOverrides){
+//`shortcutOverrides` is what a writer has rebound, in the shape user-settings.json stores (see
+//shortcuts.js) - omitted, every shortcut is on its default, which is what all but the rebinding
+//tests below want. The map is read through a getter on every keypress, exactly as render.js hands
+//it over, so setShortcuts() below can change it mid-test without re-registering anything.
+function setup(projectOverrides, shortcutOverrides){
   var dom = new JSDOM('<!doctype html><html><body>' + bodyShell() + '</body></html>');
   global.window = dom.window;
   global.document = dom.window.document;
@@ -98,10 +105,12 @@ function setup(projectOverrides){
   var editorQuill = stubQuill(document.getElementById('editor-container'));
   var notesQuill = stubQuill(document.getElementById('notes-editor'));
   var actions = recordingActions();
+  var bindings = shortcutsModel.resolveShortcuts(shortcutOverrides);
 
   var keybindings = freshKeybindings();
   var unregister = keybindings.registerKeybindings({
     getProject: function(){ return project; },
+    getShortcuts: function(){ return bindings; },
     userSettings: userSettings,
     editorQuill: editorQuill,
     notesQuill: notesQuill,
@@ -110,7 +119,8 @@ function setup(projectOverrides){
 
   return {
     project: project, userSettings: userSettings, editorQuill: editorQuill, notesQuill: notesQuill,
-    actions: actions, unregister: unregister
+    actions: actions, unregister: unregister,
+    setShortcuts: function(overrides){ bindings = shortcutsModel.resolveShortcuts(overrides); }
   };
 }
 
@@ -317,6 +327,94 @@ test('PageDown pages down whichever Quill instance owns the pane it was pressed 
   keydown('notes-editor', 'PageDown');
   assert.strictEqual(env.notesQuill.setSelectionCallCount, 1);
   assert.strictEqual(env.editorQuill.setSelectionCallCount, 1, 'unchanged from the first dispatch');
+
+  teardown(env);
+});
+
+//---------------------------------------------------------------------------
+// Rebound shortcuts
+//---------------------------------------------------------------------------
+
+test('a rebound shortcut fires on its new keys, and no longer on its old ones', function(){
+  var env = setup(null, { toggleChapterList: { key: 'F8', mod: true, alt: false, shift: false } });
+
+  keydown(document, 'F1');
+  assert.deepStrictEqual(env.actions.calls, [], 'the default keys should do nothing once rebound');
+
+  keydown(document, 'F8', ctrl());
+  assert.deepStrictEqual(env.actions.calls, [['togglePanelDisplay', 1]]);
+
+  teardown(env);
+});
+
+test('a rebound pane shortcut is dispatched from the pane, not the document', function(){
+  var env = setup({ activeChapterIndex: 4 }, { moveChapterUp: { key: 'U', mod: true, alt: true, shift: false } });
+
+  keydown(document, 'u', ctrl({ altKey: true }));
+  assert.deepStrictEqual(env.actions.calls, [], 'a pane shortcut should not fire from the document');
+
+  keydown('editor-container', 'u', ctrl({ altKey: true }));
+  assert.deepStrictEqual(env.actions.calls, [['moveChapUp', 4]]);
+
+  teardown(env);
+});
+
+//The bindings are read on every keypress rather than captured when the listeners were registered,
+//which is what lets a writer's change take effect the moment they save it.
+test('changing the bindings takes effect without re-registering anything', function(){
+  var env = setup();
+
+  keydown(document, 'F1');
+  assert.deepStrictEqual(env.actions.calls, [['togglePanelDisplay', 1]]);
+
+  env.setShortcuts({ toggleChapterList: { key: 'F9', mod: false, alt: false, shift: false } });
+
+  keydown(document, 'F1');
+  keydown(document, 'F9');
+
+  assert.deepStrictEqual(env.actions.calls, [['togglePanelDisplay', 1], ['togglePanelDisplay', 1]]);
+
+  teardown(env);
+});
+
+test('a shortcut a writer has unassigned does nothing at all', function(){
+  var env = setup(null, { toggleChapterList: null });
+
+  keydown(document, 'F1');
+  //A bare modifier press is not a binding, and an unassigned shortcut must not be mistaken for one.
+  keydown(document, 'Shift', { shiftKey: true });
+
+  assert.deepStrictEqual(env.actions.calls, []);
+
+  teardown(env);
+});
+
+//The old if/else chain tested the modifiers it cared about and ignored the rest, so Ctrl+Alt+= was
+//a font-size increase and Ctrl+Shift+Left was a focus change as well as a rename.
+test('a shortcut does not fire when a modifier it does not name is held', function(){
+  var env = setup();
+  document.getElementById('writing-field').classList.add('visible');
+
+  keydown(document, '=', ctrl({ altKey: true }));
+  keydown(document, 'ArrowLeft', ctrl({ shiftKey: true }));
+
+  assert.deepStrictEqual(env.actions.calls, []);
+  assert.notStrictEqual(document.activeElement, env.editorQuill.root);
+
+  teardown(env);
+});
+
+//Escape and the menu key are not in the list of what can be rebound, and a settings file that tries
+//to put a shortcut on them is refused before this ever sees it (see shortcuts.js isSafeToBind) - so
+//they keep working whatever else has been rebound.
+test('Escape still closes dialogs even when a settings file tried to bind a shortcut to it', function(){
+  var env = setup(null, { toggleChapterList: { key: 'Escape', mod: false, alt: false, shift: false } });
+  document.body.appendChild(Object.assign(document.createElement('div'), { className: 'popup' }));
+
+  keydown(document, 'Escape');
+
+  assert.strictEqual(document.querySelector('.popup'), null);
+  assert.deepStrictEqual(env.actions.calls, [['updatePanelDisplays']]);
 
   teardown(env);
 });

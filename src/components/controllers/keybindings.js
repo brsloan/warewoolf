@@ -3,17 +3,22 @@ const { enableTypewriterMode, disableTypewriterMode } = require('./typewriter-mo
 const { goPageDown } = require('./quill-utils');
 const { createPlatform } = require('./platform');
 const { createIpcBacking } = require('./platform-ipc');
+const { getShortcutDefs, bindingMatchesEvent } = require('../models/shortcuts');
 
 //A platform instance of its own rather than one threaded through `context`, matching how it already
 //requires 'electron' independently of render.js - createIpcBacking() resolves ipcRenderer at call
 //time (see platform-ipc.js), so this stays safe to re-require in tests the same way it always was.
 var platform = createPlatform(createIpcBacking());
 
-//Two listeners cover every keyboard shortcut that is not a menu item (those go through the main
-//process instead): one on `document` for shortcuts that make sense from anywhere, and one bound to
-//each of the editor, chapter list, and notes panes for shortcuts that act on "whichever of those
-//has focus". They used to live directly in render.js; moved here so they can be tested without
-//pulling in render.js's whole Electron/Quill bootstrapping.
+//The list of shortcuts lives in models/shortcuts.js; this is where the ones outside Quill are
+//actually dispatched. Two listeners cover them: one on `document` for the shortcuts that make
+//sense from anywhere ('global'), and one bound to each of the editor, chapter list and notes panes
+//for the ones that act on "whichever of those has focus" ('pane'). Menu items go through the main
+//process instead, and the formatting shortcuts through Quill's own keyboard module.
+//
+//Which key runs which action is read from context.getShortcuts() on every keypress rather than
+//captured when this is registered, so a writer rebinding a shortcut takes effect immediately -
+//there is nothing here to re-register.
 //
 //`context.project` is read through a getter, not captured directly, because render.js can replace
 //its `project` with a brand new object (creating a new project) after this module has already been
@@ -42,73 +47,180 @@ function registerKeybindings(context){
     return document.getElementById(elementId).classList.contains('visible');
   }
 
+  //What each rebindable action outside Quill actually does, keyed by the ids in shortcuts.js. The
+  //`preventDefault` flag is per action rather than blanket, and says exactly what it did when these
+  //were an if/else chain: the shortcuts that move focus, reorder chapters or toggle a pane swallow
+  //the keypress, while the ones that nudge a setting (font size, editor width) leave it alone.
+  var actions = {
+    focusEditor: {
+      preventDefault: true,
+      run: function(){
+        if(isVisible('writing-field')){
+          removeElementsByClass('popup');
+          disableSearchView();
+          context.editorQuill.focus();
+        }
+      }
+    },
+    focusNotes: {
+      preventDefault: true,
+      run: function(){
+        if(isVisible('project-notes')){
+          removeElementsByClass('popup');
+          disableSearchView();
+          context.notesQuill.focus();
+        }
+      }
+    },
+    increaseFontSize: {
+      run: function(){
+        context.actions.increaseFontSizeSetting();
+      }
+    },
+    decreaseFontSize: {
+      run: function(){
+        context.actions.decreaseFontSizeSetting();
+      }
+    },
+    typewriterMode: {
+      run: function(){
+        if(context.userSettings.typewriterMode){
+          disableTypewriterMode(context.editorQuill);
+          context.userSettings.typewriterMode = false;
+        }
+        else{
+          enableTypewriterMode(context.editorQuill);
+          context.userSettings.typewriterMode = true;
+        }
+        context.userSettings.save();
+      }
+    },
+    toggleChapterList: {
+      preventDefault: true,
+      run: function(){
+        context.actions.togglePanelDisplay(1);
+      }
+    },
+    toggleEditor: {
+      preventDefault: true,
+      run: function(){
+        context.actions.togglePanelDisplay(2);
+      }
+    },
+    toggleNotes: {
+      preventDefault: true,
+      run: function(){
+        context.actions.togglePanelDisplay(3);
+      }
+    },
+    toggleChapterNotes: {
+      preventDefault: true,
+      run: function(){
+        context.actions.toggleChapterNotes();
+      }
+    },
+
+    moveChapterUp: {
+      preventDefault: true,
+      run: function(){
+        context.actions.moveChapUp(project().activeChapterIndex);
+      }
+    },
+    moveChapterDown: {
+      preventDefault: true,
+      run: function(){
+        context.actions.moveChapDown(project().activeChapterIndex);
+      }
+    },
+    changeChapterLabel: {
+      preventDefault: true,
+      run: function(){
+        if(isVisible('chapter-list-sidebar'))
+          context.actions.changeChapterTitle(project().activeChapterIndex);
+      }
+    },
+    previousChapter: {
+      preventDefault: true,
+      run: function(e){
+        context.actions.displayPreviousChapter();
+        if(e.currentTarget.id == 'notes-editor')
+          context.notesQuill.focus();
+      }
+    },
+    nextChapter: {
+      preventDefault: true,
+      run: function(e){
+        context.actions.displayNextChapter();
+        if(e.currentTarget.id == 'notes-editor')
+          context.notesQuill.focus();
+      }
+    },
+    decreaseEditorWidth: {
+      run: function(){
+        context.actions.descreaseEditorWidthSetting();
+      }
+    },
+    increaseEditorWidth: {
+      run: function(){
+        context.actions.increaseEditorWidthSetting();
+      }
+    }
+  };
+
+  //Definition order decides which action wins if two ever share a binding. The popup will not let a
+  //writer create that, but a hand-edited settings file can, and one shortcut quietly losing is a
+  //better answer than both firing.
+  var defs = getShortcutDefs();
+
+  function dispatch(e, target){
+    var bindings = context.getShortcuts();
+
+    var def = defs.find(function(candidate){
+      return candidate.target === target && actions[candidate.id] != null &&
+        bindingMatchesEvent(bindings[candidate.id], e);
+    });
+
+    if(def == null)
+      return false;
+
+    var action = actions[def.id];
+
+    if(action.preventDefault)
+      stopDefaultPropagation(e);
+
+    action.run(e);
+    return true;
+  }
+
   function handleGlobalKeydown(e){
-    //Ctrl/Cmd+Left/Right below moves focus between the editor and notes panes. Inside a plain
-    //text field (the chapter rename box, or any dialog input) the same combo is the native
-    //word-wise cursor jump, so leave it alone there instead of hijacking it everywhere.
+    //Ctrl/Cmd+Left/Right is the native word-wise cursor jump inside a plain text field (the chapter
+    //rename box, or any dialog input), and the shortcuts that move focus between the editor and
+    //notes panes ship on exactly those keys. Leave the field to handle its own keys rather than
+    //hijacking them - checked against the keypress itself rather than against whatever those two
+    //shortcuts are currently bound to, because it is the native behaviour of THESE keys that is
+    //being protected, whether or not a writer has moved the shortcuts off them.
     if((e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") &&
         (e.ctrlKey || e.metaKey) && (e.key === "ArrowLeft" || e.key === "ArrowRight")){
       return;
     }
-    else if((e.ctrlKey || e.metaKey) && e.key === "ArrowLeft"){
-      stopDefaultPropagation(e);
-      if(isVisible('writing-field')){
-        removeElementsByClass('popup');
-        disableSearchView();
-        context.editorQuill.focus();
-      }
-    }
-    else if((e.ctrlKey || e.metaKey) && e.key === "ArrowRight"){
-      stopDefaultPropagation(e);
-      if(isVisible('project-notes')){
-        removeElementsByClass('popup');
-        disableSearchView();
-        context.notesQuill.focus();
-      }
-    }
-    else if(e.key === "Escape"){
+
+    if(dispatch(e, 'global'))
+      return;
+
+    //Not customizable, and so not in the table above: Escape and the menu key are Tool/Menu
+    //Navigation - the app's own structural keys, which the Shortcuts popup documents but does not
+    //offer to rebind. A rebindable Escape could be rebound from inside a dialog that Escape is the
+    //way out of.
+    if(e.key === "Escape"){
       removeElementsByClass('popup');
       removeElementsByClass('popup-dialog');
       disableSearchView();
       context.actions.updatePanelDisplays();
     }
-    else if((e.ctrlKey || e.metaKey) && e.key === "="){
-      context.actions.increaseFontSizeSetting();
-    }
-    else if((e.ctrlKey || e.metaKey) && e.key === "-"){
-      context.actions.decreaseFontSizeSetting();
-    }
-    else if((e.ctrlKey || e.metaKey) && e.altKey && e.key === "t"){
-      if(context.userSettings.typewriterMode){
-        disableTypewriterMode(context.editorQuill);
-        context.userSettings.typewriterMode = false;
-      }
-      else{
-        enableTypewriterMode(context.editorQuill);
-        context.userSettings.typewriterMode = true;
-      }
-      context.userSettings.save();
-    }
     else if((e.ctrlKey || e.metaKey) && e.key === "m"){
       platform.showAppMenu().catch(function(err){
         require('./error-log').logError(err);
       });
-    }
-    else if(e.key === 'F1'){
-      stopDefaultPropagation(e);
-      context.actions.togglePanelDisplay(1);
-    }
-    else if(!e.ctrlKey && e.key === "F2"){
-      stopDefaultPropagation(e);
-      context.actions.togglePanelDisplay(2);
-    }
-    else if((e.ctrlKey || e.metaKey) && e.key === "F3"){
-      stopDefaultPropagation(e);
-      context.actions.toggleChapterNotes();
-    }
-    else if(e.key === "F3"){
-      stopDefaultPropagation(e);
-      context.actions.togglePanelDisplay(3);
     }
   }
 
@@ -121,38 +233,12 @@ function registerKeybindings(context){
     if(e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")
       return;
 
-    if((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "ArrowUp"){
-      stopDefaultPropagation(e);
-      context.actions.moveChapUp(project().activeChapterIndex);
-    }
-    else if((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "ArrowDown"){
-      stopDefaultPropagation(e);
-      context.actions.moveChapDown(project().activeChapterIndex);
-    }
-    else if((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "ArrowLeft"){
-      stopDefaultPropagation(e);
-      if(isVisible('chapter-list-sidebar'))
-        context.actions.changeChapterTitle(project().activeChapterIndex);
-    }
-    else if((e.ctrlKey || e.metaKey) && e.key === "ArrowUp"){
-      stopDefaultPropagation(e);
-      context.actions.displayPreviousChapter();
-      if(e.currentTarget.id == 'notes-editor')
-        context.notesQuill.focus();
-    }
-    else if((e.ctrlKey || e.metaKey) && e.key === "ArrowDown"){
-      stopDefaultPropagation(e);
-      context.actions.displayNextChapter();
-      if(e.currentTarget.id == 'notes-editor')
-        context.notesQuill.focus();
-    }
-    else if((e.ctrlKey || e.metaKey) && e.key === ","){
-      context.actions.descreaseEditorWidthSetting();
-    }
-    else if((e.ctrlKey || e.metaKey) && e.key === "."){
-      context.actions.increaseEditorWidthSetting();
-    }
-    else if(e.key === "PageDown"){
+    if(dispatch(e, 'pane'))
+      return;
+
+    //PageDown is not in the popup's list and so is not customizable: it is the native key doing
+    //its native job in an editor that has no built-in equivalent (see goPageDown).
+    if(e.key === "PageDown"){
       stopDefaultPropagation(e);
       if(e.currentTarget.id == 'notes-editor')
         goPageDown(context.notesQuill);

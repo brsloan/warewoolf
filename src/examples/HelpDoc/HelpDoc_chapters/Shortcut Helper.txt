@@ -2,7 +2,11 @@
 
 At any time, if you press **Ctrl+H (Cmd+Shift+H on Mac)**, a popup will appear reminding you of all the shortcuts for editing text, chapters, etc. But there are not many, and you will quickly memorize the few you use often.
 
-Here is a summary (Ctrl is Cmd on Mac unless otherwise noted):
+The same popup is where you change them. Choose any shortcut in the list and press the keys you would rather use; **Escape** cancels, and **Backspace** clears a shortcut you never use. Nothing changes until you choose **Save**, and **Restore Defaults** puts the whole list back the way it started. Your changes are remembered between sessions.
+
+A few keys are not on offer, because the app itself is navigated with them: **Escape**, **Tab**, **Enter**, and the keys that open the file menu. The popup will also refuse a combination that a menu item already uses, or that another shortcut already has, and will tell you which one is in the way.
+
+Here is a summary of the defaults (Ctrl is Cmd on Mac unless otherwise noted):
 
 # Navigation
  View Previous Chapter	: **Ctrl + Up**
@@ -17,9 +21,9 @@ Here is a summary (Ctrl is Cmd on Mac unless otherwise noted):
 
 # Formatting
  Title (Heading 1, Centered)	: **Ctrl + T**
- Headings	: **Ctrl + (1-4)**
+ Heading 1 through 4	: **Ctrl + 1**, **2**, **3**, **4**
  Clear Heading	: **Ctrl + 0**
-** **Bullets/Numbered List:	**Ctrl + Shift + B** 
+ Bullets/Numbered List	: **Ctrl + Shift + B**
  Left Align	: **Ctrl + L**
  Right Align	: **Ctrl + R**
  Center Align	: **Ctrl + E**
@@ -36,9 +40,12 @@ Here is a summary (Ctrl is Cmd on Mac unless otherwise noted):
  Move Between Inputs	: **Tab**
 
 # Display
- Adjust Editor Width	: **Ctrl + < or \>**
- Adjust Font Size	: **Ctrl + - or +**
+ Decrease Editor Width	: **Ctrl + ,**
+ Increase Editor Width	: **Ctrl + .**
+ Decrease Font Size	: **Ctrl + -**
+ Increase Font Size	: **Ctrl + =**
  Toggle Chapter List Display	: **F1**
  Toggle Editor Display	: **F2**
  Toggle Notes Display	: **F3**
+ Toggle Chapter Notes	: **Ctrl + F3**
  Typewriter Mode	: **Ctrl + Alt + T**

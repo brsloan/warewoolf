@@ -8,7 +8,7 @@ WareWoolf is designed for one thing: writing fiction. It is intentionally simpli
 
 It is composed of three simple text-based panels with no icons: Chapters, Editor, and Notes.
 
-That's it. There is no toolbar with twenty buttons cluttering the screen. There isn't even a file menu unless you summon it by pressing Alt. All formatting is done with shortcuts. (But don't worry, there aren't many to memorize, and you can always press **CTRL** + **H** to show them all in the Shortcut Helper. It's not like you do a lot of formatting when writing fiction anyway.)
+That's it. There is no toolbar with twenty buttons cluttering the screen. There isn't even a file menu unless you summon it by pressing Alt. All formatting is done with shortcuts. (But don't worry, there aren't many to memorize, and you can always press **CTRL** + **H** to show them all in the Shortcut Helper--where you can also change any of them to keys you prefer. It's not like you do a lot of formatting when writing fiction anyway.)
 
 What it does have is an array of tools for importing plaintext and docx files and converting them into proper manuscript format, as well as features such as self-emailing drafts at the press of a button, a built-in file manager, a wi-fi manager, and a battery monitor for easy use in standalone writing devices ("writerDecks") without access to any other software.
 
@@ -41,6 +41,7 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 * Outliner.
 * Corkboard that saves as a markdown file that doubles as an outline.
 * Adjust width of text editor and how large text is displayed.
+* Customizable keyboard shortcuts: rebind any shortcut in the Shortcut Helper (Ctrl+H), or restore the defaults, and your choices are remembered.
 * Spellcheck, but it must be run after writing (no form of auto-correct or red squiggles or godawful grammar advice).
 * Word .docx support for import/export
 * Auto-saving and auto-backup options
@@ -72,6 +73,10 @@ This app was built using Electron Forge. To run it from source...
 For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.com/brsloan/warewoolf/wiki).
 
 ## Status
+
+Unreleased. Changes made:
+* Keyboard shortcuts are now customizable: open the Shortcut Helper (Ctrl+H, Cmd+Shift+H on Mac), choose a shortcut, and press the keys you want. Backspace clears one; Restore Defaults puts them all back. Your changes are saved between sessions.
+* Fixed bug where the Bullets/Numbered List shortcut (Ctrl/Cmd+Shift+B) never worked, because the File > Backup menu item claimed the same keys. Backup is still on the File menu, without a shortcut.
 
 2026-09-07: v2.5.0. Chages made:
 * Security improvements

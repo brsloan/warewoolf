@@ -194,6 +194,29 @@ input, textarea, select, button {
   min-width: 166px;
 }
 
+/* Every shortcut is a row now that they can be changed from here, so the list is taller than the
+   screen on a small one - a writerDeck's especially. */
+.popup-shortcuts {
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+/* Sized so a shortcut's keys do not shift the column as they change, and left-aligned to read as
+   the value it is rather than as a button caption. */
+.shortcut-key {
+  min-width: 160px;
+  text-align: left;
+}
+
+.shortcut-key.capturing {
+  font-style: italic;
+  outline: 2px solid #EF233C;
+}
+
+.shortcut-message {
+  min-height: 1.2em;
+}
+
 .popup-outliner {
   width: 100%;
   height: 100%;

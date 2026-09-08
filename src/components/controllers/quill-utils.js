@@ -1,3 +1,5 @@
+const { codeForKey } = require('../models/shortcuts');
+
 function getTempQuill(){
   const Quill = require('quill');
   return new Quill(document.createElement('div'), {
@@ -194,77 +196,154 @@ function getLineMarkerForPlaintextExport(attr, listItemNum = 0){
   return marker;
 };
 
-//The editor and the notes pane get the same formatting shortcuts. Quill's own keyboard module
-//owns these bindings, so they are attached to each instance as it is built rather than handled by
-//render.js's document-level keydown listener.
-function addBindingsToQuill(q){
+//What each of the formatting shortcuts does, keyed by the action ids in models/shortcuts.js. Quill
+//calls a handler with `this` bound to a context carrying the instance, so they reach for
+//this.quill rather than closing over one - which is what lets the same table serve both editors,
+//and lets a rebind re-attach them without rebuilding anything.
+const QUILL_HANDLERS = {
   //Title: centre it and make it a top-level heading in one keystroke.
-  q.keyboard.addBinding({
-    key: 'T',
-    shortKey: true,
-    handler: function(range, context) {
-      this.quill.format('align', 'center', 'user');
-      this.quill.format('header', 1, 'user');
-    }
-  });
-
-  for(let i = 1; i <= 4; i++){
-    q.keyboard.addBinding({
-      key: i.toString(),
-      shortKey: true,
-      handler: function(range, context) {
-        this.quill.format('header', i, 'user');
-      }
-    });
-  }
-
-  //Left/centre/right/justify differ only in the value they set, so they are built the same way the
-  //heading levels above are.
-  var alignments = { L: null, E: 'center', R: 'right', J: 'justify' };
-  Object.keys(alignments).forEach(function(key){
-    q.keyboard.addBinding({
-      key: key,
-      shortKey: true,
-      handler: function(range, context) {
-        this.quill.format('align', alignments[key], 'user');
-      }
-    });
-  });
-
-  q.keyboard.addBinding({
-    key: '0',
-    shortKey: true,
-    handler: function(range, context){
-      this.quill.format('header', null, 'user');
-    }
-  });
-
-  q.keyboard.addBinding({
-    key: 'k',
-    shortKey: true,
-    handler: function(range, context){
-      if(q.getFormat().strike)
-        q.format('strike', false, 'user');
-      else {
-        q.format('strike', true, 'user');
-      }
-    }
-  });
-
+  formatTitle: function(){
+    this.quill.format('align', 'center', 'user');
+    this.quill.format('header', 1, 'user');
+  },
+  formatHeading1: headingHandler(1),
+  formatHeading2: headingHandler(2),
+  formatHeading3: headingHandler(3),
+  formatHeading4: headingHandler(4),
+  formatClearHeading: headingHandler(null),
+  formatAlignLeft: alignmentHandler(null),
+  formatAlignCenter: alignmentHandler('center'),
+  formatAlignRight: alignmentHandler('right'),
+  formatAlignJustify: alignmentHandler('justify'),
+  formatStrikethrough: toggleHandler('strike'),
+  formatBold: toggleHandler('bold'),
+  formatItalics: toggleHandler('italic'),
+  formatUnderline: toggleHandler('underline'),
   //Cycles bullet -> numbered -> none.
-  q.keyboard.addBinding({
-    key: 'b',
-    shortKey: true,
-    shiftKey: true,
-    handler: function(range, context){
-      if(q.getFormat().list == 'bullet')
-        q.format('list', 'ordered', 'user');
-      else if(q.getFormat().list == 'ordered')
-        q.format('list', null, 'user');
-      else
-        q.format('list', 'bullet', 'user');
-    }
-  })
+  formatList: function(){
+    var current = this.quill.getFormat().list;
+
+    if(current == 'bullet')
+      this.quill.format('list', 'ordered', 'user');
+    else if(current == 'ordered')
+      this.quill.format('list', null, 'user');
+    else
+      this.quill.format('list', 'bullet', 'user');
+  }
+};
+
+function headingHandler(level){
+  return function(){
+    this.quill.format('header', level, 'user');
+  };
+}
+
+function alignmentHandler(alignment){
+  return function(){
+    this.quill.format('align', alignment, 'user');
+  };
+}
+
+function toggleHandler(format){
+  return function(){
+    this.quill.format(format, !this.quill.getFormat()[format], 'user');
+  };
+}
+
+//Quill matches a keypress on its keyCode, not on the key's name, and has no table of its own past
+//a handful of named keys - so this is that table. The physical code a binding was captured from is
+//preferred over the guess made from its key name, which is the whole reason a binding carries one:
+//on a keyboard where Shift+1 is not '!', only the code says which key was actually pressed.
+const KEY_CODES = {
+  Backspace: 8, Tab: 9, Enter: 13, Escape: 27, Space: 32,
+  PageUp: 33, PageDown: 34, End: 35, Home: 36,
+  ArrowLeft: 37, ArrowUp: 38, ArrowRight: 39, ArrowDown: 40,
+  Insert: 45, Delete: 46,
+  Semicolon: 186, Equal: 187, Comma: 188, Minus: 189, Period: 190, Slash: 191,
+  Backquote: 192, BracketLeft: 219, Backslash: 220, BracketRight: 221, Quote: 222
+};
+
+//The editor and the notes pane get the same formatting shortcuts. Quill's own keyboard module owns
+//these bindings rather than render.js's document-level listener, so they are attached to each
+//instance - and re-attached to it whenever a writer rebinds one.
+//
+//Re-attachable is the whole design here. Quill 1.x has no removeBinding(), so every binding this
+//adds is tagged, and the tagged ones are stripped from the instance before the new set goes on.
+//Only ours are touched: Quill's own bindings for Enter, Tab, Backspace and the rest are left
+//exactly where they are.
+//
+//Bold/italic/underline are in the table too, though Quill binds those itself by default. They are
+//in the popup's list, so they have to be rebindable like everything else - which means Quill's own
+//three are switched off where the editors are built (see render.js) and re-added from here.
+function applyQuillShortcuts(q, bindings){
+  removeAppliedBindings(q);
+
+  Object.keys(QUILL_HANDLERS).forEach(function(id){
+    var binding = toQuillBinding(bindings ? bindings[id] : null);
+
+    if(binding == null)
+      return;
+
+    binding.handler = QUILL_HANDLERS[id];
+    binding.warewoolfAction = id;
+
+    q.keyboard.addBinding(binding);
+  });
+}
+
+//Returns null for a shortcut a writer has unbound, and for one whose key Quill has no code for -
+//in which case leaving it unbound is the honest outcome, since a binding Quill cannot match would
+//sit in the table looking bound and never fire.
+function toQuillBinding(binding){
+  if(binding == null)
+    return null;
+
+  var keyCode = keyCodeFor(binding);
+  if(keyCode == null)
+    return null;
+
+  return {
+    key: keyCode,
+    shortKey: binding.mod,
+    altKey: binding.alt,
+    shiftKey: binding.shift
+  };
+}
+
+function keyCodeFor(binding){
+  var code = binding.code || codeForKey(binding.key);
+
+  if(code == null)
+    return null;
+
+  if(KEY_CODES[code])
+    return KEY_CODES[code];
+
+  var letter = /^Key([A-Z])$/.exec(code);
+  if(letter)
+    return letter[1].charCodeAt(0);
+
+  var digit = /^Digit([0-9])$/.exec(code);
+  if(digit)
+    return digit[1].charCodeAt(0);
+
+  var functionKey = /^F([1-9]|1[0-2])$/.exec(code);
+  if(functionKey)
+    return 111 + Number(functionKey[1]);
+
+  return null;
+}
+
+//Quill keys its bindings by keyCode, each holding an array of everything bound to that key, so
+//removing ours means filtering each of those arrays rather than deleting anything.
+function removeAppliedBindings(q){
+  var bindings = q.keyboard.bindings;
+
+  Object.keys(bindings).forEach(function(keyCode){
+    bindings[keyCode] = bindings[keyCode].filter(function(binding){
+      return binding.warewoolfAction == null;
+    });
+  });
 }
 
 
@@ -315,6 +394,6 @@ module.exports = {
   getOrderedListNumbers,
   getListLevel,
   getListMarker,
-  addBindingsToQuill,
+  applyQuillShortcuts,
   goPageDown
 }

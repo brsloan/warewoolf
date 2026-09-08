@@ -851,17 +851,57 @@ test('about-clicked forwards the app version it is sent to the About popup', asy
   assert.strictEqual(document.querySelector('.about-version').innerText, '9.9.9');
 });
 
+//The keys are buttons now, since the popup is where they are changed as well as where they are
+//listed - so the platform modifier is read off the buttons rather than the cells.
+function shortcutKeyLabels(){
+  return Array.from(document.querySelectorAll('.shortcuts-table button')).map(function(button){
+    return button.textContent;
+  });
+}
+
 test('shortcuts-clicked forwards isMac to render Mac- or Ctrl-style shortcut labels', async function(){
   await freshRender();
 
   currentBridge().handlers['shortcuts-clicked'](true);
-  var macLabels = Array.from(document.querySelectorAll('.shortcuts-table td'));
-  assert.ok(macLabels.some(function(td){ return td.innerText.includes('Cmd'); }));
+  assert.ok(shortcutKeyLabels().some(function(label){ return label.includes('Cmd'); }));
   removeAllPopups();
 
   currentBridge().handlers['shortcuts-clicked'](false);
-  var ctrlLabels = Array.from(document.querySelectorAll('.shortcuts-table td'));
-  assert.ok(ctrlLabels.some(function(td){ return td.innerText.includes('Ctrl'); }));
+  assert.ok(shortcutKeyLabels().some(function(label){ return label.includes('Ctrl'); }));
+});
+
+//The popup is opened with the bindings actually in force, not with the defaults - a writer who has
+//rebound something has to see what they rebound it to.
+test('shortcuts-clicked shows the shortcuts a writer has saved, and saving from it stores the change', async function(){
+  var r = await freshRender();
+
+  currentBridge().handlers['shortcuts-clicked'](false);
+
+  var boldRow = Array.from(document.querySelectorAll('.shortcuts-table tr')).find(function(row){
+    return row.cells[0].innerText === 'Bold';
+  });
+  var boldButton = boldRow.cells[1].querySelector('button');
+  assert.strictEqual(boldButton.textContent, 'Ctrl + B');
+
+  boldButton.onclick();
+  document.dispatchEvent(new window.KeyboardEvent('keydown', {
+    key: 'y', code: 'KeyY', ctrlKey: true, bubbles: true, cancelable: true
+  }));
+
+  Array.from(document.querySelectorAll('button')).find(function(button){
+    return button.textContent === 'Save';
+  }).onclick();
+
+  assert.deepStrictEqual(r.userSettings.keyboardShortcuts, {
+    formatBold: { key: 'Y', mod: true, alt: false, shift: false, code: 'KeyY' }
+  });
+
+  currentBridge().handlers['shortcuts-clicked'](false);
+  var reopened = Array.from(document.querySelectorAll('.shortcuts-table tr')).find(function(row){
+    return row.cells[0].innerText === 'Bold';
+  });
+  assert.strictEqual(reopened.cells[1].querySelector('button').textContent, 'Ctrl + Y');
+  removeAllPopups();
 });
 
 function removeAllPopups(){

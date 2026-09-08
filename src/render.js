@@ -7,7 +7,8 @@ const newProject = require('./components/models/project');
 const autosaver = require('./components/controllers/autosave');
 const chapterList = require('./components/controllers/chapter-list');
 const { registerKeybindings } = require('./components/controllers/keybindings');
-const { addBindingsToQuill } = require('./components/controllers/quill-utils');
+const { applyQuillShortcuts } = require('./components/controllers/quill-utils');
+const { resolveShortcuts } = require('./components/models/shortcuts');
 const { enableTypewriterMode, disableTypewriterMode } = require('./components/controllers/typewriter-mode');
 const {
   removeElementsByClass,
@@ -32,6 +33,9 @@ var editorQuill = new Quill('#editor-container', {
   modules: {
     history: {
       userOnly: true
+    },
+    keyboard: {
+      bindings: quillBindingsToDisable()
     }
   },
   placeholder: '',
@@ -42,13 +46,32 @@ var notesQuill = new Quill('#notes-editor', {
   modules: {
     history: {
       userOnly: true
+    },
+    keyboard: {
+      bindings: quillBindingsToDisable()
     }
   },
   placeholder: 'Notes...',
   formats: ['bold', 'italic', 'strike', 'underline', 'blockquote', 'header', 'align', 'list', 'indent']
 });
 
+//Quill binds Ctrl+B/I/U itself, and those three are in the Shortcuts popup's list like every other
+//formatting shortcut - so they have to be rebindable, which means Quill's own copies have to go.
+//A binding named in Quill's defaults and given a falsy value here is skipped when its keyboard
+//module is built (see Keyboard's constructor), which is the only supported way to drop one: there
+//is no removeBinding() in Quill 1.x. quill-utils.js adds all three back from the writer's own
+//bindings, along with the rest of the formatting shortcuts.
+function quillBindingsToDisable(){
+  return { bold: null, italic: null, underline: null };
+}
+
 var project = newProject();
+
+//The keyboard shortcuts in force: the defaults from models/shortcuts.js with the writer's saved
+//overrides over them. Replaced wholesale when a writer saves a change from the Shortcuts popup -
+//keybindings.js reads it through a getter on every keypress, so nothing there needs re-registering,
+//while Quill's own bindings do have to be re-applied (see applyShortcutChanges below).
+var shortcutBindings = resolveShortcuts(null);
 
 //Populated by loadPlatformState() below, once getAppPaths()/getFileRequestedOnOpen() resolve.
 //Nothing above this line needs them; everything below runs from inside functions and reads these by
@@ -130,6 +153,7 @@ async function loadPlatformState(){
   platformInfo = await platform.getPlatform();
 
   userSettings = await getUserSettings(sysDirectories.userData + "/user-settings.json").load();
+  shortcutBindings = resolveShortcuts(userSettings.keyboardShortcuts);
   await migrateLegacyCredential();
 
   await initialize();
@@ -143,6 +167,9 @@ async function loadPlatformState(){
   //does not exist yet until the two lines above it in this function have run.
   var unregisterKeybindings = registerKeybindings({
     getProject: function(){ return project; },
+    //Read on every keypress rather than captured here, for the same reason getProject is a getter:
+    //this whole object is replaced when a writer rebinds something.
+    getShortcuts: function(){ return shortcutBindings; },
     userSettings: userSettings,
     editorQuill: editorQuill,
     notesQuill: notesQuill,
@@ -297,9 +324,22 @@ async function loadInitialProject(){
 }
 
 function setUpQuills(){
-  addBindingsToQuill(editorQuill);
-  addBindingsToQuill(notesQuill);
+  applyQuillShortcuts(editorQuill, shortcutBindings);
+  applyQuillShortcuts(notesQuill, shortcutBindings);
   disableTabbingToEditors();
+}
+
+//What the Shortcuts popup calls when a writer saves a change. `overrides` is only what differs from
+//the defaults (see shortcuts.js diffFromDefaults), which is exactly what gets stored.
+//
+//The two editors need their bindings rebuilt because Quill owns those; nothing else does, since
+//keybindings.js reads the map on every keypress.
+function applyShortcutChanges(overrides){
+  userSettings.keyboardShortcuts = overrides;
+  shortcutBindings = resolveShortcuts(overrides);
+  applyQuillShortcuts(editorQuill, shortcutBindings);
+  applyQuillShortcuts(notesQuill, shortcutBindings);
+  return userSettings.save();
 }
 
 function disableTabbingToEditors(){
@@ -1225,7 +1265,11 @@ const menuCommands = {
   'restore-chapter-clicked': { requiresFocus: true, run: function(){ return restoreFromTrash(project.activeChapterIndex); } },
   'shortcuts-clicked': { run: function(isMac){
     const showShortcutsHelp = require('./components/views/shortcuts-help_display');
-    showShortcutsHelp(isMac);
+    showShortcutsHelp({
+      isMac: isMac,
+      bindings: shortcutBindings,
+      onSave: applyShortcutChanges
+    });
   } },
   'outliner-clicked': { run: function(){
     const showOutliner = require('./components/views/outliner_display');
