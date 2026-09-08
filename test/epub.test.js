@@ -163,6 +163,31 @@ test('stray "<" and ">" typed as prose are escaped without mangling generated ma
   assert.match(chapter, /<sup><a href="#fnoteRef_1">1<\/a><\/sup>/);
 });
 
+//Regression: KNOWN_TAG listed a bare <blockquote> and only the temporary ul/ol classes on <li>, so
+//once an alignment marker could combine with a block marker the resulting <blockquote class="center">
+//and <li class="center"> matched nothing and were escaped as though the writer had typed them -
+//putting literal "&lt;blockquote class=..&gt;" into the book.
+test('an aligned blockquote and list item keep their tags through angle bracket escaping', async function(t){
+  const chapterHtml =
+    '<blockquote class="center">A quote with a stray < in it.</blockquote>' +
+    '<blockquote class="justified">Another quote.</blockquote>' +
+    '<ul><li class="right">An item with a stray > in it.</li></ul>';
+
+  const { readEntry } = await buildEpub(t, 'Title', 'Author', [{ title: 'One', html: chapterHtml }], false);
+  const chapter = await readEntry('OEBPS/chapter_1.xhtml');
+
+  //the writer's own angle brackets are still escaped
+  assert.match(chapter, /A quote with a stray &lt; in it\./);
+  assert.match(chapter, /An item with a stray &gt; in it\./);
+
+  //the generated tags, alignment class and all, are not
+  assert.match(chapter, /<blockquote class="center">A quote/);
+  assert.match(chapter, /<blockquote class="justified">Another quote\.<\/blockquote>/);
+  assert.match(chapter, /<ul><li class="right">An item/);
+  assert.ok(!/&lt;blockquote/.test(chapter), 'the blockquote tag itself should not be escaped');
+  assert.ok(!/&lt;li class/.test(chapter), 'the list item tag itself should not be escaped');
+});
+
 //Regression: blockquote got white-space: pre-wrap but no margin reset, so it kept the browser
 //default 1em top/bottom margin - since each Quill line becomes its own <blockquote>, a multi-line
 //quote rendered with a visible gap between every line.

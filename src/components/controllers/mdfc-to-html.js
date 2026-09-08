@@ -25,21 +25,27 @@ function convertMdfcToHtml(str){
     let orderedListHtml = /((?:(?:<li|<ol) class="ol.*(?:<\/li>|<\/ol>)\n)+)/g
     let orderedListHtmlLvl2 = /((?:(?:<li|<ol) class="ol (?:ol-two|ol-three).*(?:<\/li>|<\/ol>)\n)+)/g;
     let orderedListHtmlLvl3 = /((?:(?:<li|<ol) class="ol ol-three".*(?:<\/li>|<\/ol>)\n)+)/g;
-    //[^"]* rather than .* so the match stops at the closing quote of the class attribute. A greedy
-    //.* runs on to the last quote on the line, which swallows the item's text whenever it contains
-    //dialogue.
-    let tempClasses = / class="(?:ol|ul)[^"]*"/g;
+    //The ul/ol classes are temporary - they exist only so the whole-list detection above can tell
+    //ordered items from unordered ones - but an alignment class written alongside them is not, so the
+    //grouping tokens are named exactly and any alignment that follows them is handed back to the
+    //replacement to keep. Spelling the tokens out also stops the match at the closing quote of the
+    //class attribute; a greedy .* ran on to the last quote on the line, which swallowed the item's
+    //text whenever it contained dialogue.
+    let tempClasses = / class="(?:ul|ol)(?: (?:ul|ol)-(?:two|three))?(?: (left|right|center|justified))?"/g;
 
-    let listUnordered = /^(?:-|\*|\+) (.*)/gm; 
-    let listUnorderedTwo = /^(\t)(?:-|\*|\+) (.*)/gm;
-    let listUnorderedThreePlus = /^(\t){2,}(?:-|\*|\+) (.*)/gm;
-    let listOrdered = /^((?:\d+|[a-z])\.) (.*)/gm;
-    let listOrderedTwo = /^(\t)((?:\d+|[a-z])\.) (.*)/gm;
-    let listOrderedThreePlus = /^(\t){2,}((?:\d+|[a-z])\.) (.*)/gm;
+    //An alignment marker is the outermost thing on a line and combines with the block marker after
+    //it (see parseLine in markdownFic.js), so every list and blockquote shape below reads an optional
+    //one off the front and renders it as the same class the aligned <p> shapes use.
+    let listUnordered = /^(?:\[>([lrcj])\] )?(?:-|\*|\+) (.*)/gm;
+    let listUnorderedTwo = /^(?:\[>([lrcj])\] )?(\t)(?:-|\*|\+) (.*)/gm;
+    let listUnorderedThreePlus = /^(?:\[>([lrcj])\] )?(\t){2,}(?:-|\*|\+) (.*)/gm;
+    let listOrdered = /^(?:\[>([lrcj])\] )?((?:\d+|[a-z])\.) (.*)/gm;
+    let listOrderedTwo = /^(?:\[>([lrcj])\] )?(\t)((?:\d+|[a-z])\.) (.*)/gm;
+    let listOrderedThreePlus = /^(?:\[>([lrcj])\] )?(\t){2,}((?:\d+|[a-z])\.) (.*)/gm;
     //(.*) rather than (.+), matching the header/alignment markers above, so a bare ">" marker with
     //no text after it (a blank blockquote line) produces an empty element instead of either leaking
     //the literal ">" into the output or capturing a stray space as its content.
-    let blockquote = /^>+ ?(.*)/gm;
+    let blockquote = /^(?:\[>([lrcj])\] )?>+ ?(.*)/gm;
     let alignLeft = /^\[>l] (.*)/gm;
     let alignRight = /^\[>r] (.*)/gm;
     let alignCenter = /^\[>c] (.*)/gm;
@@ -53,13 +59,13 @@ function convertMdfcToHtml(str){
   
 
     //Assign class to assist in discriminating between ordered and UL list items in whole list detection
-    str = str.replace(listUnorderedThreePlus, '<li class="ul ul-three">$2</li>');
-    str = str.replace(listUnorderedTwo, '<li class="ul ul-two">$2</li>');
-    str = str.replace(listUnordered, '<li class="ul">$1</li>');
-    str = str.replace(listOrderedThreePlus, '<li class="ol ol-three">$3</li>');
-    str = str.replace(listOrderedTwo, '<li class="ol ol-two">$3</li>');
-    str = str.replace(listOrdered, '<li class="ol">$2</li>');
-    
+    str = str.replace(listUnorderedThreePlus, function(match, align, tab, text){ return listItem('ul ul-three', align, text); });
+    str = str.replace(listUnorderedTwo, function(match, align, tab, text){ return listItem('ul ul-two', align, text); });
+    str = str.replace(listUnordered, function(match, align, text){ return listItem('ul', align, text); });
+    str = str.replace(listOrderedThreePlus, function(match, align, tab, marker, text){ return listItem('ol ol-three', align, text); });
+    str = str.replace(listOrderedTwo, function(match, align, tab, marker, text){ return listItem('ol ol-two', align, text); });
+    str = str.replace(listOrdered, function(match, align, marker, text){ return listItem('ol', align, text); });
+
 
     str = str.replace(centeredHeader1, '<h1 class="center">$1</h1>');
     str = str.replace(centeredHeader2, '<h2 class="center">$1</h2>');
@@ -73,11 +79,15 @@ function convertMdfcToHtml(str){
     str = str.replace(header2, '<h2>$1</h2>');
     str = str.replace(header3, '<h3>$1</h3>');
     str = str.replace(header4, '<h4>$1</h4>');
+    //Ahead of the four alignment-only shapes below, which would otherwise claim an aligned quote
+    //("[>c] > Quoted") for a centered <p> whose text began with a stray ">".
+    str = str.replace(blockquote, function(match, align, text){
+      return '<blockquote' + alignClass(align) + '>' + text + '</blockquote>';
+    });
     str = str.replace(alignLeft, '<p class="left">$1</p>');
     str = str.replace(alignRight, '<p class="right">$1</p>');
     str = str.replace(alignCenter, '<p class="center">$1</p>');
     str = str.replace(alignJustified, '<p class="justified">$1</p>');
-    str = str.replace(blockquote, '<blockquote>$1</blockquote>');
     str = str.replace(normal, '<p>$1</p>');
     str = str.replace(blankLines, '\n<br/>\n');
 
@@ -89,8 +99,10 @@ function convertMdfcToHtml(str){
     str = str.replace(orderedListHtmlLvl2, '<ol>$1</ol>\n');
     str = str.replace(orderedListHtmlLvl3, '<ol>$1</ol>\n');
 
-    //Clean up temp classes used for grouping lists
-    str = str.replace(tempClasses, '');
+    //Clean up temp classes used for grouping lists, keeping any alignment class written with them
+    str = str.replace(tempClasses, function(match, align){
+      return align ? ' class="' + align + '"' : '';
+    });
 
   
     //Bold/italic/underline/strike share tokenizeInline with the MDF writer (markdownFic.js) rather
@@ -110,6 +122,24 @@ function convertMdfcToHtml(str){
   
     return str;
   }
+
+//The class each alignment marker renders as. "justified" rather than "justify" because that is the
+//class the aligned <p> shapes have always used, and the stylesheets are written against it.
+const ALIGN_CLASSES = { l: 'left', r: 'right', c: 'center', j: 'justified' };
+
+//`marker` is the letter captured from an optional "[>x] " prefix, and is undefined when the line
+//carried no alignment - in which case the element gets no class attribute at all, exactly as before.
+function alignClass(marker){
+  return marker ? ' class="' + ALIGN_CLASSES[marker] + '"' : '';
+}
+
+//A list item's alignment rides along in the same class attribute as the temporary ul/ol grouping
+//token, since an element gets only one. tempClasses strips the grouping half back off once the
+//whole-list detection has run, leaving the alignment behind.
+function listItem(groupingClasses, alignMarker, text){
+  var alignment = alignMarker ? ' ' + ALIGN_CLASSES[alignMarker] : '';
+  return '<li class="' + groupingClasses + alignment + '">' + text + '</li>';
+}
 
 const INLINE_STYLE_TAGS = { bold: 'b', italic: 'i', underline: 'u', strike: 'del' };
 const INLINE_STYLE_ORDER = ['bold', 'italic', 'underline', 'strike'];

@@ -196,6 +196,54 @@ test('a blank blockquote line round trips without picking up a stray space', fun
   ]}, '> \r\n');
 });
 
+//Regression: getLineMarker wrote the alignment marker and then overwrote it with the block marker,
+//so a centered quote or list item - which Quill holds happily, since align is a class on the block
+//rather than a blot of its own - was written to disk as an ordinary quote or item and came back
+//left-aligned. The alignment marker now leads, the way it always has in front of a heading.
+test('a centered blockquote keeps its alignment through a round trip', function(){
+  assertRoundTrip({ ops: [
+    {insert: 'An epigraph.'}, {insert: '\n', attributes: {align: 'center', blockquote: true}}
+  ]}, '[>c] > An epigraph.\r\n');
+});
+
+test('a right aligned and a justified blockquote keep their alignment too', function(){
+  assertRoundTrip({ ops: [
+    {insert: 'Attribution.'}, {insert: '\n', attributes: {align: 'right', blockquote: true}}
+  ]}, '[>r] > Attribution.\r\n');
+
+  assertRoundTrip({ ops: [
+    {insert: 'A wide quote.'}, {insert: '\n', attributes: {align: 'justify', blockquote: true}}
+  ]}, '[>j] > A wide quote.\r\n');
+});
+
+test('a blank blockquote line keeps its alignment', function(){
+  assertRoundTrip({ ops: [
+    {insert: '\n', attributes: {align: 'center', blockquote: true}}
+  ]}, '[>c] > \r\n');
+});
+
+test('a centered list item keeps its alignment through a round trip', function(){
+  assertRoundTrip({ ops: [
+    {insert: 'A bullet.'}, {insert: '\n', attributes: {align: 'center', list: 'bullet'}}
+  ]}, '[>c] * A bullet.\r\n');
+
+  assertRoundTrip({ ops: [
+    {insert: 'A number.'}, {insert: '\n', attributes: {align: 'center', list: 'ordered'}}
+  ]}, '[>c] 1. A number.\r\n');
+});
+
+//The alignment marker leads the line, so the item's nesting indent sits between it and the list
+//marker rather than at the very start of the line.
+test('a nested list item carries its alignment in front of its indent', function(){
+  assertRoundTrip({ ops: [
+    {insert: 'Nested.'}, {insert: '\n', attributes: {align: 'center', list: 'bullet', indent: 1}}
+  ]}, '[>c] \t* Nested.\r\n');
+
+  assertRoundTrip({ ops: [
+    {insert: 'Deeper.'}, {insert: '\n', attributes: {align: 'right', list: 'ordered', indent: 2}}
+  ]}, '[>r] \t\t1. Deeper.\r\n');
+});
+
 test('parseMDF reads a blank blockquote line whether or not the marker keeps its trailing space', function(){
   var expected = { ops: [ {insert: '\n', attributes: {blockquote: true}} ] };
 

@@ -29,6 +29,7 @@ But here are some differences:
 	* ‘\[>j] This line is justified.’
 	* no marker leaves the default, which is aligned left.
 	* note that these can be used in addition to Heading markers to create centered chapter titles. But they must be used **before** the heading marker. So a centered heading would be ‘\[>c] \# Heading’, not ‘\# \[>c] Heading’.
+	* the same goes for blockquotes and list items, so an alignment marker always comes first on the line: ‘\[>c] \> a centered quotation’, ‘\[>c] \* a centered bullet’. Where a list item is nested, its indent sits between the two markers, as in ‘\[>c] 	\* a centered, nested bullet’.
 * Multi-paragraph footnotes. In Markdown, this is done using tabs beneath the original footnote marker, but here you just use the same footnote marker at the beginning of each paragraph.
 * Note that if you want to apply multiple styles to one string of text, you can do so, but should always add them in the order **bold italic underline strikethrough**. So if you want one word to have all of those styles, it is written \**\*\__\~~word\~~\__\**\*.  Any other order will introduce errors, so this is wrong: \__\~~\**\*bad word\**\*\~~\__. It is not often that you need to style text with multiple styles, but just remember that when you do, you need to run the order* by us: **b i u s**: **__b__**old **__i__**talic **__u__**nderline **__s__**trikethrough*. I think that’s memorable, but then I am biased.
  

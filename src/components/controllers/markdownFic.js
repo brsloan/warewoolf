@@ -185,11 +185,16 @@ const BLOCKQUOTE_MARKER = /^>+ ?(.*)$/;
 const ALIGN_MARKER = /^\[>([lrcj])\] (.*)$/;
 const HEADER_MARKER = /^(#{1,4}) (.*)$/;
 
-//A line's block-level markers (list, blockquote, alignment, heading) only ever appear at the very
-//start of the line, in that order of precedence, so they're read off with a handful of anchored
-//regexes - only the inline styling in the remaining text needs tokenizeInline's character-by-
-//character scan. Alignment and heading markers combine (in that order); list and blockquote don't
-//combine with anything else, matching what convertDeltaToMDF below ever actually writes.
+//A line's block-level markers (alignment, then list/blockquote/heading) only ever appear at the very
+//start of the line, in that order, so they're read off with a handful of anchored regexes - only the
+//inline styling in the remaining text needs tokenizeInline's character-by-character scan.
+//
+//Alignment is the outermost marker and combines with every block marker below it, which is why it is
+//stripped first and the rest are matched against what's left. It used to be read *after* the list and
+//blockquote markers, which meant a centered list item or a centered quote could not be spelled at all:
+//convertDeltaToMDF's getLineMarker overwrote the alignment marker with the block one, so the
+//alignment was dropped on save and gone on the next read. List, blockquote and heading still do not
+//combine with each other - Quill's own blots are mutually exclusive - and keep their old precedence.
 //`afterListItem` says whether the line immediately above this one was a list item, and it gates one
 //thing only: whether a SPACE-indented marker opens a list.
 //
@@ -202,8 +207,15 @@ const HEADER_MARKER = /^(#{1,4}) (.*)$/;
 //own rule - an indented item nests under something - and it keeps a lone indented paragraph prose.
 function parseLine(line, afterListItem){
   var attributes = {};
+  var rest = line;
 
-  var list = LIST_MARKER.exec(line);
+  var align = ALIGN_MARKER.exec(rest);
+  if(align){
+    attributes.align = ALIGNMENTS[align[1]];
+    rest = align[2];
+  }
+
+  var list = LIST_MARKER.exec(rest);
   if(list && (afterListItem || list[1].indexOf(' ') === -1)){
     attributes.list = /^[-*+]$/.test(list[2]) ? 'bullet' : 'ordered';
 
@@ -214,18 +226,10 @@ function parseLine(line, afterListItem){
     return { attributes: attributes, runs: tokenizeInline(list[3]) };
   }
 
-  var blockquote = BLOCKQUOTE_MARKER.exec(line);
+  var blockquote = BLOCKQUOTE_MARKER.exec(rest);
   if(blockquote){
     attributes.blockquote = true;
     return { attributes: attributes, runs: tokenizeInline(blockquote[1]) };
-  }
-
-  var rest = line;
-
-  var align = ALIGN_MARKER.exec(rest);
-  if(align){
-    attributes.align = ALIGNMENTS[align[1]];
-    rest = align[2];
   }
 
   var header = HEADER_MARKER.exec(rest);
@@ -337,6 +341,13 @@ function convertDeltaToMDF(delt){
   return mdf;
 }
 
+//The alignment marker is written first and kept whatever follows it, matching the order parseLine
+//reads them back in. It used to be overwritten by a list or blockquote marker, so a centered quote or
+//list item - which Quill happily holds, since align is a class on the block rather than a blot of its
+//own - lost its alignment the moment the chapter was saved.
+//
+//List, blockquote and heading remain mutually exclusive, in that order of precedence. Quill cannot
+//produce a line carrying two of them, so the order only decides what a hand-edited delta does.
 function getLineMarker(attr, listItemNum = 0){
   var marker = '';
 
@@ -349,18 +360,19 @@ function getLineMarker(attr, listItemNum = 0){
       else if(attr.align == 'justify')
         marker = '[>j] '
     }
-    if(attr.header){
+
+    var listMarker = getListMarker(attr, listItemNum);
+
+    if(listMarker)
+      marker += listMarker;
+    else if(attr.blockquote)
+      marker += '> ';
+    else if(attr.header){
       for(let i=0; i < attr.header; i++){
         marker+= '#';
       }
       marker += ' ';
     }
-    if(attr.blockquote)
-      marker = '> ';
-
-    var listMarker = getListMarker(attr, listItemNum);
-    if(listMarker)
-      marker = listMarker;
   }
 
   return marker;

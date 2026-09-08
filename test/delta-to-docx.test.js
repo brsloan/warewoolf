@@ -197,6 +197,24 @@ test('a blockquote paragraph exports with left and right indentation', async fun
   assert.match(indents[0], /w:right="720"/);
 });
 
+//Alignment and the blockquote indent are separate paragraph properties in Word, so a centered quote
+//should carry both rather than one displacing the other the way it used to in the .mdfc writer.
+test('a centered blockquote keeps both its alignment and its indentation', async function(){
+  const delta = { ops: [
+    {insert: 'An epigraph.'}, {insert: '\n', attributes: {align: 'center', blockquote: true}}
+  ]};
+
+  const doc = convertDeltaToDocx(delta, {}, project, null);
+  const buffer = await docx.Packer.toBuffer(doc);
+  const dir = await unzipper.Open.buffer(buffer);
+  const documentXml = (await dir.files.find(f => f.path === 'word/document.xml').buffer()).toString();
+
+  const paragraph = /<w:p>(?:(?!<\/w:p>)[\s\S])*An epigraph\.[\s\S]*?<\/w:p>/.exec(documentXml);
+  assert.ok(paragraph, 'could not find the quoted paragraph: ' + documentXml);
+  assert.match(paragraph[0], /<w:jc w:val="center"\/>/);
+  assert.match(paragraph[0], /<w:ind [^\/]*w:left="720"/);
+});
+
 //Regression: the loop building the footnotes object assigned its counter with a bare `i = 0`, leaking
 //it as an implicit global - the same bug class already fixed (and regression-tested) in compile.js.
 test('convertDeltaToDocx does not leak an implicit global "i"', function(){

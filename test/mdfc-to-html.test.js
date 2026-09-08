@@ -187,6 +187,47 @@ test('a bare blockquote marker produces an empty element, not literal text', fun
   assert.strictEqual(convertMdfcToHtml('> \n'), '<blockquote></blockquote>\n');
 });
 
+//An alignment marker now combines with a list or blockquote marker (see markdownFic.js's parseLine),
+//so both shapes have to render it rather than leaving the literal "[>c] " in the output or claiming
+//the line for an aligned <p>.
+test('an aligned blockquote renders with its alignment class', function(){
+  assert.strictEqual(convertMdfcToHtml('[>c] > Quoted.\n'), '<blockquote class="center">Quoted.</blockquote>\n');
+  assert.strictEqual(convertMdfcToHtml('[>r] > Quoted.\n'), '<blockquote class="right">Quoted.</blockquote>\n');
+  assert.strictEqual(convertMdfcToHtml('[>j] > Quoted.\n'), '<blockquote class="justified">Quoted.</blockquote>\n');
+  assert.strictEqual(convertMdfcToHtml('[>c] > \n'), '<blockquote class="center"></blockquote>\n');
+});
+
+test('an unaligned blockquote still renders without a class attribute', function(){
+  assert.strictEqual(convertMdfcToHtml('> Quoted.\n'), '<blockquote>Quoted.</blockquote>\n');
+});
+
+//The alignment class shares the class attribute with the temporary ul/ol grouping token, so this
+//also covers tempClasses stripping the grouping half without taking the alignment with it.
+test('aligned list items keep their alignment and are still grouped into one list', function(){
+  assert.strictEqual(
+    convertMdfcToHtml('[>c] * One\n[>c] * Two\n'),
+    '<ul><li class="center">One</li>\n<li class="center">Two</li>\n</ul>\n'
+  );
+  assert.strictEqual(
+    convertMdfcToHtml('[>c] 1. One\n[>c] 2. Two\n'),
+    '<ol><li class="center">One</li>\n<li class="center">Two</li>\n</ol>\n'
+  );
+});
+
+test('a list mixing aligned and unaligned items groups as one list', function(){
+  assert.strictEqual(
+    convertMdfcToHtml('* One\n[>r] * Two\n'),
+    '<ul><li>One</li>\n<li class="right">Two</li>\n</ul>\n'
+  );
+});
+
+test('a nested aligned list item is still nested', function(){
+  assert.strictEqual(
+    convertMdfcToHtml('* One\n[>c] \t* Two\n'),
+    '<ul><li>One</li>\n<ul><li class="center">Two</li>\n</ul>\n</ul>\n'
+  );
+});
+
 //Regression: blockquote got white-space: pre-wrap but no margin reset, so it kept the browser
 //default 1em top/bottom margin - since each Quill line becomes its own <blockquote>, a multi-line
 //quote rendered with a visible gap between every line.

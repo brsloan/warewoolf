@@ -9,6 +9,14 @@ test('alignment markers are dropped, since markdown has no alignment', function(
   assert.strictEqual(convertMdfcToMd('[>j] Just\n'), 'Just\n');
 });
 
+//An alignment marker can now sit in front of a list or blockquote marker, and markdown still has no
+//way to express alignment - so it is dropped there too, leaving a plain quote or list item behind.
+test('alignment markers are dropped from quotes and list items as well', function(){
+  assert.strictEqual(convertMdfcToMd('[>c] > Quoted.\n\nAfter.\n'), '> Quoted.\n\nAfter.\n');
+  assert.strictEqual(convertMdfcToMd('[>c] * An item.\n'), '* An item.\n');
+  assert.strictEqual(convertMdfcToMd('[>r] \t1. Nested.\n'), '\t1. Nested.\n');
+});
+
 test('tab indented paragraphs become blank line separated ones', function(){
   assert.strictEqual(
     convertMdfcToMd('First para.\n\tSecond para.\n\tThird para.\n'),
