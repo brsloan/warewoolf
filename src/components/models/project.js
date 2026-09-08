@@ -23,6 +23,14 @@ function newProject(){
         notesChap: {}, //notesChap is a chapter file for which we never use chapter content but only chapter notes (in order to save project-wide notes)
         chapters: [],
         reference: [],
+        //A manuscript's own character/place names, travelling with the .woolf rather than leaking
+        //into every other project the way the personal dictionary would. Written out by
+        //stringifyProject like any other field (it is a denylist, not an allowlist) and restored by
+        //the Object.assign below - an older WareWoolf build that opens a .woolf carrying this field
+        //copies the unknown key onto the project and writes it back out untouched, so a project
+        //moved between versions does not lose its word list even though the older build cannot use
+        //it. See docs/dictionaries-plan.md.
+        projectDictionary: [],
         filters: [],
         trash: [],
         activeChapterIndex: 0,
@@ -61,6 +69,12 @@ function newProject(){
         var opened = await platform.openProject({ path: projPath });
 
         Object.assign(this, opened.project);
+
+        //Object.assign copies whatever was in the file and nothing validates it - the same hole the
+        //isReadOnly comment above documents for a hand-edited .woolf. A `.woolf` with
+        //"projectDictionary": "Aurelion" must not turn into a spellchecker that accepts every single
+        //letter of it.
+        this.projectDictionary = sanitizeWordList(this.projectDictionary);
 
         this.filename = opened.filename;
         this.directory = opened.directory;
@@ -332,6 +346,15 @@ function newProject(){
         return [];
       }
     }
+}
+
+//Same discipline SETTINGS_SCHEMA's sanitize functions apply to user-settings.json - a value that is
+//not an array of non-empty strings becomes an empty list rather than being trusted as-is.
+function sanitizeWordList(raw){
+  if(!Array.isArray(raw))
+    return [];
+
+  return raw.filter(function(word){ return typeof word === 'string' && word !== ''; });
 }
 
 //Louder than a silent no-op, which for a save would be data loss behind a clean-looking return.

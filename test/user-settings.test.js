@@ -302,6 +302,50 @@ test('a substitutions field that is not a map of overrides falls back to no over
   }
 });
 
+//Empty means "whatever the app ships as default" (see loadDictionaries' own fallback, platform.js
+//group I) - a fresh install, or a writer who never opens the Dictionaries dialog, has to keep
+//spellchecking rather than starting from a selection nothing describes.
+test('spellcheckDictionaries starts empty', function(t){
+  const dir = configurePlatform(t);
+  const settings = getUserSettings(settingsPath(dir));
+
+  assert.deepStrictEqual(settings.spellcheckDictionaries, []);
+});
+
+test('the dictionary selection round-trips through the file', async function(t){
+  const dir = configurePlatform(t);
+  const settings = getUserSettings(settingsPath(dir));
+
+  settings.spellcheckDictionaries = ['en_US-large', 'fr_FR'];
+  await settings.save();
+
+  const reloaded = await getUserSettings(settingsPath(dir)).load();
+
+  assert.deepStrictEqual(reloaded.spellcheckDictionaries, ['en_US-large', 'fr_FR']);
+});
+
+//A plain `type: 'object'` check would wave through anything - the sanitizer is what enforces "an
+//array of non-empty strings" entry by entry.
+test('a dictionary selection that is not an array of non-empty strings is sanitized on load', async function(t){
+  const dir = configurePlatform(t);
+  fs.writeFileSync(settingsPath(dir),
+    JSON.stringify({ spellcheckDictionaries: ['en_US-large', '', 42, null, 'fr_FR'] }), 'utf8');
+
+  const settings = await getUserSettings(settingsPath(dir)).load();
+
+  assert.deepStrictEqual(settings.spellcheckDictionaries, ['en_US-large', 'fr_FR']);
+});
+
+test('a spellcheckDictionaries field that is not an array falls back to an empty selection', async function(t){
+  const dir = configurePlatform(t);
+
+  for(const value of ['en_US-large', 42, {}, null]){
+    fs.writeFileSync(settingsPath(dir), JSON.stringify({ spellcheckDictionaries: value }), 'utf8');
+    const settings = await getUserSettings(settingsPath(dir)).load();
+    assert.deepStrictEqual(settings.spellcheckDictionaries, [], JSON.stringify(value));
+  }
+});
+
 test('getSettingsFilepath returns the path the settings were constructed with', function(t){
   const dir = configurePlatform(t);
   const settings = getUserSettings(settingsPath(dir));

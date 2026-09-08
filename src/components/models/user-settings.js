@@ -2,6 +2,18 @@ const { logError } = require('../controllers/error-log');
 const { sanitizeOverrides } = require('./shortcuts');
 const { sanitizeAutocorrect } = require('./autocorrect');
 
+//Unlike sanitizeOverrides/sanitizeAutocorrect, there is no fixed id list to check entries against -
+//a valid id is whatever listDictionaries() (group I) finds on disk, which this module has no way to
+//ask. So this only enforces the shape (an array of non-empty strings) and leaves an id that no
+//longer exists to loadDictionaries' own skip-and-fall-back behavior rather than trying to catch it
+//here.
+function sanitizeDictionaryIds(raw){
+  if(!Array.isArray(raw))
+    return [];
+
+  return raw.filter(function(id){ return typeof id === 'string' && id !== ''; });
+}
+
 //Set once by render.js's loadPlatformState(), the same instance error-log.js uses. As of Phase 9a
 //that is the ipc-backed one: loadUserSettings()/saveUserSettings() were plain fs reachable straight
 //through nodeIntegration, and are now a round trip to the main process like everything else.
@@ -51,7 +63,8 @@ const SETTINGS_SCHEMA = {
   displayChapNotes: { type: 'boolean' },
   keyboardShortcuts: { type: 'object', sanitize: sanitizeOverrides },
   autocorrectEnabled: { type: 'boolean' },
-  autocorrect: { type: 'object', sanitize: sanitizeAutocorrect }
+  autocorrect: { type: 'object', sanitize: sanitizeAutocorrect },
+  spellcheckDictionaries: { type: 'object', sanitize: sanitizeDictionaryIds }
 };
 
 function getUserSettings(userSettingsFilepath){
@@ -91,6 +104,10 @@ function getUserSettings(userSettingsFilepath){
     //And, exactly like keyboardShortcuts above, only the individual rules a writer has actually
     //changed, keyed by the ids in autocorrect.js. A rule missing from here is on its default.
     autocorrect: {},
+    //Ids of the dictionaries a writer ticked in the Dictionaries dialog. Empty means "whatever the
+    //app ships as default" - see loadDictionaries' own fallback (platform.js, group I) - so a writer
+    //who never opens that dialog keeps working after an update that changes the bundled default.
+    spellcheckDictionaries: [],
     save: save,
     load: load,
     getSettingsFilepath: getSettingsFilepath
@@ -191,3 +208,4 @@ function getUserSettings(userSettingsFilepath){
 
 module.exports = getUserSettings;
 module.exports.setPlatform = setPlatform;
+module.exports.sanitizeDictionaryIds = sanitizeDictionaryIds;

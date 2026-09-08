@@ -22,6 +22,7 @@ const {
 } = require('./components/controllers/footnote-navigation');
 const { resolveShortcuts } = require('./components/models/shortcuts');
 const { resolveAutocorrect } = require('./components/models/autocorrect');
+const { setSelectedDictionaries, setProjectWords } = require('./components/controllers/spellcheck');
 const { enableTypewriterMode, disableTypewriterMode } = require('./components/controllers/typewriter-mode');
 const {
   removeElementsByClass,
@@ -201,6 +202,10 @@ async function loadPlatformState(){
   userSettings = await getUserSettings(sysDirectories.userData + "/user-settings.json").load();
   shortcutBindings = resolveShortcuts(userSettings.keyboardShortcuts);
   autocorrectRules = resolveAutocorrectSetting();
+  //Whatever a writer ticked in the Dictionaries dialog last time - an empty array means "whatever
+  //the app ships as default", which is exactly what an empty selectedDictionaries already falls back
+  //to inside getSpellchecker().
+  setSelectedDictionaries(userSettings.spellcheckDictionaries);
   await migrateLegacyCredential();
 
   await initialize();
@@ -532,6 +537,9 @@ async function convertLegacyProject(){
 }
 
 async function displayProject(){
+  //The one place that already knows the project changed, whether it was opened (setProject) or
+  //created fresh (createNewProject) - both funnel through here.
+  setProjectWords(project.projectDictionary);
   updateFileList();
   updateTitleBar();
   await refreshNotesDisplay();
