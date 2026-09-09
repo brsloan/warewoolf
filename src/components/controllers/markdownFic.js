@@ -4,17 +4,37 @@ const { parseDelta, getOrderedListNumbers, getListMarker, isFootnoteMarker } = r
 //exactly where parseLine could otherwise read the marker itself. A backslash anywhere else is a
 //backslash: "a \> b" is text with a backslash in it, not an escaped blockquote marker.
 //
-//Within each group the two-char markers come before their one-char prefixes, so "\*\*" reads as an
-//escaped "**" rather than an escaped "*" followed by a literal "*".
+//An escape covers ONE character. It used to cover the whole two-character marker - "\**" was an
+//escaped "**" - and that made the format ambiguous with itself: a writer's own "*" at the end of an
+//italic span was written "\*" with the closing "*" right behind it, which is the same "\**", and it
+//came back as a literal "**" with the span's marker eaten. No reader could tell those apart, and
+//neither could a person. One character per escape has one reading: a literal "**" is "\*\*", and
+//"\*" followed by a marker is exactly that. The same goes for "~~", "__" and a footnote reference,
+//whose "[" is what carries the escape now.
 //
 //Inline styles and a footnote reference are read anywhere in a line by tokenizeInline, so an escape
-//for one is honoured anywhere.
-const ESCAPABLE_ANYWHERE = [/^\*\*/, /^\*/, /^~~/, /^__/, /^\[\^/];
+//for one is honoured anywhere - and so is an escaped backslash, which is how a writer whose own
+//backslash lands where an escape would be read gets it back instead of having it eaten.
+//The "[" is conditional where the others are not, and for the same reason "#" is conditional on the
+//writer's side: a bracket is only ever a marker as the head of a reference, so "a \[b] c" keeps its
+//backslash the way "a \> b" does. The lookahead only decides whether this is an escape at all - the
+//escape still covers the one character.
+const ESCAPABLE_ANYWHERE = [/^\\/, /^\*/, /^~/, /^_/, /^\[(?=\^)/];
 
 //ALIGN_MARKER, HEADER_MARKER and BLOCKQUOTE_MARKER are ^-anchored and tolerate no indent, so these
 //three are only ever markers at the very start of the text tokenizeInline is handed - which is the
 //text left after parseLine has stripped whatever block markers the line did carry.
-const ESCAPABLE_AT_TEXT_START = [/^\[>/, /^#/, /^>/];
+//
+//Matched on the opening character alone, which is wider than the markers themselves: "\#hashtag" is
+//read as an escape though it could not have been a heading. That is deliberate - a writer hand-
+//editing a file should not have to know that a heading needs its space before the escape becomes
+//load-bearing - and it is why escapeAnyMarkers no longer writes that one (see HEADER_MARKER_START)
+//while backslashIsRead still asks the question from this side.
+//
+//The "[" here is the alignment marker's, and is unconditional the way "#" and ">" are - at the
+//start of the text any of the three may open a marker. ESCAPABLE_ANYWHERE's own "[" is narrower,
+//covering only a footnote reference's, so the two do not overlap anywhere it matters.
+const ESCAPABLE_AT_TEXT_START = [/^\[/, /^#/, /^>/];
 
 //LIST_MARKER reads its marker after any indent, so a list escape is honoured after indent too. It
 //has to be: escapeListMarkers writes the backslash after whatever indent it finds, and spaces count
@@ -43,14 +63,23 @@ function onlyIndentPrecedes(text, index){
   return true;
 }
 
+//The sequences a backslash at `index` is able to escape, which is decided by where the backslash
+//sits. escapeBackslashes asks the same question from the writer's side, and the run it is looking at
+//need not begin the line's text - that is what `atTextStart` is for. tokenizeInline is always handed
+//text that does begin it, so the reader below leaves the flag at its default.
+function escapePatternsAt(text, index, atTextStart = true){
+  if(atTextStart){
+    if(index === 0)
+      return ESCAPABLE_LIST_AND_BLOCK;
+    if(onlyIndentPrecedes(text, index))
+      return ESCAPABLE_LIST_ONLY;
+  }
+
+  return ESCAPABLE_ANYWHERE;
+}
+
 function consumeEscape(text, i){
-  var patterns = ESCAPABLE_ANYWHERE;
-
-  if(i === 0)
-    patterns = ESCAPABLE_LIST_AND_BLOCK;
-  else if(onlyIndentPrecedes(text, i))
-    patterns = ESCAPABLE_LIST_ONLY;
-
+  var patterns = escapePatternsAt(text, i);
   var tail = text.slice(i + 1);
 
   for(let p = 0; p < patterns.length; p++){
@@ -403,9 +432,10 @@ function convertDeltaToMDF(delt){
   var listNumbers = getOrderedListNumbers(parsedQuill.paragraphs);
 
   parsedQuill.paragraphs.forEach((para, i) => {
+    var textRuns = para.textRuns;
     var lineMarker = '';
 
-    if(para.textRuns.length > 0)
+    if(textRuns.length > 0)
       lineMarker = getLineMarker(para.attributes, listNumbers[i]);
 
     mdf += lineMarker;
@@ -422,13 +452,58 @@ function convertDeltaToMDF(delt){
     //from the run index.
     var atStartOfText = true;
 
-    para.textRuns.forEach((run, i) => {
+    //Everything written to this line after its marker is whitespace - which is still a list
+    //marker's position, since LIST_MARKER reads one after any indent. A quotation or heading marker
+    //is not read there, so the two positions are tracked apart: escaping ">" or "#" behind indent
+    //writes a backslash the reader will not take off again.
+    var onlyIndentSoFar = true;
+
+    //The last run text actually written to this line, which is what a "_" or "~" opening the next
+    //run could pair with when no style marker separates the two.
+    var lastTextWritten = '';
+
+    textRuns.forEach((run, i) => {
       var styles = activeStyles(run.attributes);
       var styleMarkers = markersBetween(openStyles, styles);
+      var text = run.text;
+
+      //A style marker must not be left sitting against a space at the position parseLine reads a
+      //list marker from: "*" and a space is a bullet, so an italic run whose text opened with one
+      //turned its whole paragraph into a list item and lost both the italics and the space. There
+      //is no escape for it - the asterisk really is the marker - so the space moves in front of the
+      //marker instead, where LIST_MARKER's own indent absorbs it harmlessly.
+      //
+      //Only ever at the head of a line, and only whitespace that already sat at the head of the
+      //styled text, so no style span is ever broken in two: a space in the middle of a bold span
+      //stays exactly where it is. The space keeps its place in the text and loses only a style flag
+      //it had no way of showing.
+      if(styleMarkers !== '' && onlyIndentSoFar && !blockMarkerWritten && typeof text === 'string'){
+        var leadingWhitespace = (/^[ \t]+/.exec(text) || [''])[0];
+
+        if(leadingWhitespace !== ''){
+          mdf += leadingWhitespace;
+          text = text.slice(leadingWhitespace.length);
+          atStartOfText = false;
+        }
+      }
+
+      //Nothing left to mark up - either the run was empty to begin with, or it was nothing but the
+      //whitespace just moved out. Its markers would be a pair with nothing between them, so it is
+      //skipped without touching openStyles, and the next run carrying text writes the transition
+      //from wherever the last one that did left it.
+      if(typeof text === 'string' && text.length === 0)
+        return;
+
       mdf += styleMarkers;
 
-      if(styleMarkers !== '')
+      //Whatever this run's text will run up against on the line, which is what a "_" or "~" at its
+      //end could pair with, and whether anything follows it at all.
+      var following = emissionAfter(textRuns, i, styles);
+
+      if(styleMarkers !== ''){
         atStartOfText = false;
+        onlyIndentSoFar = false;
+      }
 
       //A footnote marker embed rather than a string run (parseDelta hands one through with
       //flattenInserts's Phase 0 fix, unchanged) - written out as the literal, unescaped reference
@@ -437,15 +512,25 @@ function convertDeltaToMDF(delt){
       if(isFootnoteMarker(run.text)){
         mdf += '[^' + run.text.footnote.n + ']';
         atStartOfText = false;
+        onlyIndentSoFar = false;
+        lastTextWritten = ']';
       }
       else{
-        mdf += escapeAnyMarkers(run.text, {
+        mdf += escapeAnyMarkers(text, {
           atLineStart: atStartOfText && lineMarker === '',
-          atBlockPosition: atStartOfText && !blockMarkerWritten
+          atBlockPosition: atStartOfText && !blockMarkerWritten,
+          atListPosition: onlyIndentSoFar && !blockMarkerWritten,
+          //Indent is still a position an escape is read at, so the wider table applies behind one.
+          atTextStart: onlyIndentSoFar,
+          somethingFollows: following !== '',
+          precededBy: styleMarkers !== '' ? styleMarkers : lastTextWritten,
+          followedBy: following
         });
 
-        if(run.text.length > 0)
-          atStartOfText = false;
+        atStartOfText = false;
+        if(/[^\t ]/.test(text))
+          onlyIndentSoFar = false;
+        lastTextWritten = text;
       }
 
       openStyles = styles;
@@ -501,17 +586,39 @@ function getLineMarker(attr, listItemNum = 0){
   return marker;
 };
 
-//Bold, italic, underline and strikethrough mean what they mean wherever they fall, and so does a
-//footnote reference - tokenizeInline reads all five anywhere in a line. They are escaped anywhere.
-const INLINE_MARKERS = /(\*\*|\*|~~|__|\[\^)/g;
+//Every asterisk is a marker wherever it falls - tokenizeInline toggles italic on a run of one, bold
+//on two and both on three - so there is no position where a bare one is ordinary text. Escaped one
+//character at a time, like every escape now; see the note on ESCAPABLE_ANYWHERE.
+const INLINE_ASTERISK = /\*/g;
+
+//"_" and "~" are markers only in pairs, so a lone one is ordinary text and keeps "snake_case" and
+//"~1900" spelled as themselves. One is escaped only where it would land in a run of two or more
+//once the line is assembled - beside another in the run's own text, or against the "__" or "~~" of
+//a style marker written directly before or after it, which is what turned an underlined "_" into a
+//plain one and moved "file_" into the underline beside it.
+const PAIRED_MARKER_CHARS = ['_', '~'];
+
+//A footnote reference is read anywhere too, but only in the one shape FOOTNOTE_REF_MARKER accepts:
+//"[^", digits, "]". A bare "[^" is ordinary prose, so escaping the two characters wherever they
+//appeared put a backslash in front of "[^note]" and every other bracket that happened to be
+//followed by a caret. The lookahead keeps the escape on the marker itself.
+const FOOTNOTE_REF_START = /\[\^(?=\d+\])/g;
 
 //These three are not inline. parseLine reads alignment, blockquote and heading with ^-anchored
 //regexes, so "#", ">" and "[>" are ordinary characters everywhere except the one position each is
 //read at - and escaping them everywhere put a backslash into the file for nothing, which is what
 //"File \> Dictionaries" was. Only the first character of a run needs it: a marker is recognised by
 //its opening character, so "\## head" and "\>> quote" both read back whole.
-const ALIGN_MARKER_START = /^\[>/;
-const BLOCK_MARKER_START = /^(#|>)/;
+//
+//Position is not the whole of it either. BLOCKQUOTE_MARKER takes any run of ">" with or without a
+//space after it, so a leading ">" is always a marker and always needs the escape. The other two are
+//narrower than the character they open with: ALIGN_MARKER needs one of the four letters and "] ",
+//HEADER_MARKER needs one to four "#" and a space. Matching only the opening character escaped
+//"#hashtag", "##### deep" and "[>x] " for nothing, each of which parseLine reads straight back as
+//the prose it is.
+const ALIGN_MARKER_START = /^\[>(?=[lrcj]\] )/;
+const BLOCKQUOTE_MARKER_START = /^>/;
+const HEADER_MARKER_START = /^#(?=#{0,3} )/;
 
 //`position` says where in the line parseLine will be looking when it reaches this run, which is what
 //decides whether a leading marker character has to be escaped:
@@ -522,18 +629,159 @@ const BLOCK_MARKER_START = /^(#|>)/;
 //  which parseLine strips before it looks for a list, blockquote or heading. A block marker of the
 //  line's own means there is nothing left to look for - parseLine has already consumed it, and
 //  returns early for a list or a quotation - so text behind one needs no escaping at all.
+//- atTextStart: nothing precedes this text in what tokenizeInline will be handed. That is a wider
+//  position than atBlockPosition - a line carrying a block marker of its own still has a first
+//  character, and consumeEscape reads an escape there - so it is what the backslash pass goes by.
+//- somethingFollows: whether anything at all comes after this text on the line. See backslashIsRead.
+//- precededBy, followedBy: the style markers written immediately before and after this text, which
+//  is what an "_" or "~" at either edge could pair with. See escapePairedMarkerChars.
+//
+//The passes run in this order because each one reads the text the one before it produced: the
+//backslash pass has to see the writer's own text, and the paired-character pass has to see the
+//escapes already inserted, since a backslash between two underscores is what keeps them apart.
 function escapeAnyMarkers(text, position){
-  text = text.replace(INLINE_MARKERS, '\\$1');
+  text = escapeBackslashes(text, position);
+
+  text = text.replace(INLINE_ASTERISK, '\\$&');
+  text = escapePairedMarkerChars(text, position);
+  text = text.replace(FOOTNOTE_REF_START, '\\$&');
 
   if(position.atLineStart)
-    text = text.replace(ALIGN_MARKER_START, '\\$&');
+    text = escapeBlockMarker(text, position.followedBy, ALIGN_MARKER_START);
 
   if(position.atBlockPosition){
-    text = text.replace(BLOCK_MARKER_START, '\\$1');
-    text = escapeListMarkers(text);
+    text = escapeBlockMarker(text, position.followedBy, BLOCKQUOTE_MARKER_START);
+    text = escapeBlockMarker(text, position.followedBy, HEADER_MARKER_START);
   }
 
+  //Separate from atBlockPosition because LIST_MARKER reads its marker after indent while
+  //BLOCKQUOTE_MARKER and HEADER_MARKER tolerate none - so where a line opens with whitespace, a
+  //list escape is still needed and the other two are not.
+  if(position.atListPosition)
+    text = escapeListMarkers(text, position.followedBy);
+
   return text;
+}
+
+//A marker does not have to sit inside one run. parseLine reads the assembled line, so "[>c]" and
+//" 1." - two runs, neither a marker on its own - are an alignment marker once they are written out
+//next to each other, and a paragraph beginning that way came back centered with its text eaten.
+//Each of these is matched against this run's text plus whatever follows it on the line, while the
+//backslash still goes in front of the marker's own first character, which is in this text: all
+//three patterns are anchored at the start of the probe, and that is this text's start.
+function escapeBlockMarker(text, following, pattern){
+  return pattern.test(text + following) ? '\\' + text : text;
+}
+
+//The string this run's text will sit directly against on the line: the style markers opening the
+//next run, or where those are empty the next run's own text, looked past any run that writes
+//nothing. Returns '' only at the end of a line, where nothing follows but the terminator.
+//
+//Raw text rather than escaped, which can only ever make a caller escape one character it need not
+//have - a "~" answering to a "~" that turns out to have been escaped itself. That costs a backslash
+//and reads back the same; missing a pair would cost the text.
+function emissionAfter(textRuns, i, styles){
+  var from = styles;
+
+  for(let n = i + 1; n < textRuns.length; n++){
+    var next = activeStyles(textRuns[n].attributes);
+    var markers = markersBetween(from, next);
+
+    if(markers !== '')
+      return markers;
+
+    if(isFootnoteMarker(textRuns[n].text))
+      return '[^';
+
+    if(typeof textRuns[n].text === 'string' && textRuns[n].text.length > 0)
+      return textRuns[n].text;
+
+    from = next;
+  }
+
+  return markersBetween(from, activeStyles(null));
+}
+
+//An "_" or "~" of the writer's own, escaped only where the assembled line would put it in a run of
+//two and so make it a marker. Reads the text the passes above have already escaped, so a backslash
+//sitting between two of them is seen for what it is - "_\*_" leaves both underscores alone, because
+//in the file they are not next to each other.
+function escapePairedMarkerChars(text, position){
+  var out = '';
+
+  for(let i = 0; i < text.length; i++){
+    if(PAIRED_MARKER_CHARS.indexOf(text[i]) !== -1 && joinsAMarkerRun(text, i, position))
+      out += '\\';
+
+    out += text[i];
+  }
+
+  return out;
+}
+
+function joinsAMarkerRun(text, i, position){
+  var ch = text[i];
+
+  if(text[i - 1] === ch || text[i + 1] === ch)
+    return true;
+
+  if(i === 0 && position.precededBy.slice(-1) === ch)
+    return true;
+
+  if(i === text.length - 1 && position.followedBy.charAt(0) === ch)
+    return true;
+
+  return false;
+}
+
+//A backslash of the writer's own, doubled wherever consumeEscape would otherwise read it as an
+//escape and take it off - which is what happened to a paragraph opening "\#head" or ending in a
+//backslash right before a style marker. Everywhere else it is left exactly as typed, so a Windows
+//path or a lone backslash mid-sentence still reads back as one character and still spells as one
+//on disk.
+//
+//Runs before the marker escaping above rather than after it, so it sees the text the writer typed
+//instead of the backslashes that pass inserts - it has to double its own backslash in front of one
+//of those too, since a backslash is itself escapable now.
+function escapeBackslashes(text, position){
+  if(text.indexOf('\\') === -1)
+    return text;
+
+  var out = '';
+
+  for(let i = 0; i < text.length; i++){
+    if(text[i] === '\\' && backslashIsRead(text, i, position))
+      out += '\\';
+
+    out += text[i];
+  }
+
+  return out;
+}
+
+//Asking the reader's question rather than the writer's, which is what makes this cover both the
+//markers escapeAnyMarkers is about to escape and the ones it deliberately leaves alone: every
+//sequence the writer escapes is one of the patterns escapePatternsAt returns, but not the other way
+//round - "\[^note]" carries no marker for the writer, and consumeEscape still reads the backslash
+//off it.
+//
+//A backslash at the very end of the text is judged on whether anything follows it on the line at
+//all. What can follow is a style marker, a footnote reference, or the escape in front of the next
+//run's text, and consumeEscape reads a backslash off every one of those; only a line ending is
+//safe. Being the last run with no style left to close is the one case that needs no backslash.
+function backslashIsRead(text, i, position){
+  if(i === text.length - 1)
+    return position.somethingFollows;
+
+  //Probed against what follows on the line, not just the rest of this run: the longest of these
+  //patterns is three characters, so a backslash near the end of a run can be sitting in front of a
+  //marker that the next run finishes - "\1" and ". item" is an escaped list marker between them,
+  //and the backslash was being left single and eaten on the way back.
+  var tail = text.slice(i + 1) + position.followedBy;
+
+  return escapePatternsAt(text, i, position.atTextStart).some(function(pattern){
+    return pattern.test(tail);
+  });
 }
 
 //Escaped after any indent, tabs or spaces, and without regard to what the paragraph above was.
@@ -541,14 +789,24 @@ function escapeAnyMarkers(text, position){
 //only in that case would mean a paragraph's spelling on disk depended on its neighbour - so a
 //paragraph edited above it could change how this one reads. Escaping always costs a backslash and
 //makes the line mean the same thing wherever it lands.
-function escapeListMarkers(text){
-  const listUnordered = /^([\t ]*)(-|\*|\+) /gm;
-  text = text.replace(listUnordered, '$1\\$2 ');
+//Matched against this text plus what follows it on the line, for the same reason escapeBlockMarker
+//is: "1." and " item" are two runs and one list marker between them.
+const LIST_MARKER_START = /^([\t ]*)(-|\*|\+|(?:\d+|[a-z])\.) /;
 
-  const listOrdered = /^([\t ]*)((?:\d+|[a-z])\.) /gm;
-  text = text.replace(listOrdered, '$1\\$2 ');
+function escapeListMarkers(text, following){
+  var marker = LIST_MARKER_START.exec(text + following);
 
-  return text;
+  if(!marker)
+    return text;
+
+  var at = marker[1].length;
+
+  //Only the indent is in this run and the marker itself begins in the next one, which will put the
+  //backslash in front of it when its own turn comes - there is nothing of it here to escape.
+  if(at >= text.length)
+    return text;
+
+  return text.slice(0, at) + '\\' + text.slice(at);
 }
 
 module.exports = {

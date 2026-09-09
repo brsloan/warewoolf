@@ -17,6 +17,21 @@ function assertRoundTrip(delta, expectedMdf){
   );
 }
 
+//For the cases where the writer deliberately does not preserve the delta: a space moved out from
+//in front of a style marker carries no style on the way back. The .mdfc is asserted along with the
+//property that still has to hold, which is that every character of the text survives.
+function assertTextRoundTrip(delta, expectedMdf){
+  var mdf = convertDeltaToMDF(delta);
+  assert.strictEqual(mdf, expectedMdf, 'delta did not serialise to the expected .mdfc');
+  assert.strictEqual(textContent(parseMDF(mdf)), textContent(delta), 'text did not survive the round trip');
+}
+
+function textContent(delta){
+  return (delta.ops || []).map(function(op){
+    return typeof op.insert === 'string' ? op.insert : '￼';
+  }).join('');
+}
+
 test('a plain paragraph round trips', function(){
   assertRoundTrip({ ops: [ {insert: 'Hello world'}, {insert: '\n'} ] }, 'Hello world\r\n');
 });
@@ -272,6 +287,175 @@ test('an inline style or footnote escape is still read anywhere in the line', fu
   assert.strictEqual(textOf('not a footnote \\[^1] here\r\n'), 'not a footnote [^1] here\n');
 });
 
+//Position is not the whole of it: two of the three markers are narrower than the character they
+//open with. HEADER_MARKER needs one to four "#" and a space, ALIGN_MARKER one of four letters and
+//"] ", so prose that merely starts with the character is not a marker and needs no escape. Only
+//BLOCKQUOTE_MARKER takes any leading ">" at all, which is why that one is always escaped.
+test('an opening block marker character that could not be read as a marker is left unescaped', function(){
+  assertRoundTrip({ ops: [
+    {insert: '#hashtag, with no space'},   {insert: '\n'},
+    {insert: '##### five is too many'},    {insert: '\n'},
+    {insert: '[>x] is not an alignment'},  {insert: '\n'},
+    {insert: '[>c]with no space either'},  {insert: '\n'}
+  ]}, '#hashtag, with no space\r\n##### five is too many\r\n[>x] is not an alignment\r\n[>c]with no space either\r\n');
+});
+
+//A backslash is the escape character, so one the writer typed has to be doubled wherever
+//consumeEscape would otherwise read it as an escape and take it off - which is what silently
+//happened to a paragraph opening "\#". ESCAPABLE_ANYWHERE's own "\\" pattern hands it back.
+test('a writer\'s backslash where an escape would be read is doubled and comes back whole', function(){
+  assertRoundTrip({ ops: [
+    {insert: '\\# not a heading'},   {insert: '\n'},
+    {insert: '\\> not a quotation'}, {insert: '\n'},
+    {insert: '\\- not a list item'}, {insert: '\n'},
+    {insert: '\\*not italics*'},     {insert: '\n'}
+  ]}, '\\\\# not a heading\r\n\\\\> not a quotation\r\n\\\\- not a list item\r\n\\\\\\*not italics\\*\r\n');
+});
+
+//Everywhere else it is left exactly as typed, which is the same narrowing the block markers got:
+//a backslash that no escape could be read from is one character in the editor and one on disk.
+test('a backslash no escape could be read from is written as itself', function(){
+  assertRoundTrip({ ops: [
+    {insert: 'a \\ b, and C:\\Users\\me'}, {insert: '\n'}
+  ]}, 'a \\ b, and C:\\Users\\me\r\n');
+});
+
+//A backslash at the very end of a run is judged on what follows it on the line. A style marker is
+//something consumeEscape reads a backslash off; a line ending is not, so the last run of a line
+//with no style left to close needs nothing.
+test('a backslash against a style marker is doubled, and one ending the line is not', function(){
+  assertRoundTrip({ ops: [
+    {insert: 'ends in a backslash \\'}, {insert: 'underlined', attributes: {underline: true}}, {insert: '\n'},
+    {insert: 'and this one ends the line \\'}, {insert: '\n'}
+  ]}, 'ends in a backslash \\\\__underlined__\r\nand this one ends the line \\\r\n');
+});
+
+test('parseMDF reads an escaped backslash as one backslash', function(){
+  assert.strictEqual(textOf('\\\\# not a heading\r\n'), '\\# not a heading\n');
+  assert.strictEqual(textOf('a \\\\ b\r\n'), 'a \\ b\n');
+});
+
+//An escape covers one character. It used to cover a whole two-character marker, which made "\**"
+//mean two different things: an escaped "**", and an escaped "*" with a style marker behind it. The
+//writer produced both spellings and the reader could only pick one, so a writer's own asterisk at
+//the edge of a styled span came back doubled with the span's marker eaten.
+test('an asterisk beside a style marker keeps its place on both sides', function(){
+  assertRoundTrip({ ops: [
+    {insert: 'see note*', attributes: {italic: true}}, {insert: '\n'}
+  ]}, '*see note\\**\r\n');
+
+  assertRoundTrip({ ops: [
+    {insert: 'end', attributes: {italic: true}}, {insert: '*'}, {insert: 'start', attributes: {italic: true}},
+    {insert: '\n'}
+  ]}, '*end*\\**start*\r\n');
+});
+
+test('a literal two character marker is written as two escapes', function(){
+  assertRoundTrip({ ops: [
+    {insert: 'a **pair**, __one__ and ~~another~~'}, {insert: '\n'}
+  ]}, 'a \\*\\*pair\\*\\*, \\_\\_one\\_\\_ and \\~\\~another\\~\\~\r\n');
+});
+
+//"_" and "~" are markers only in pairs, so one is escaped where the line would put it beside
+//another - and left alone everywhere else, which is what keeps "snake_case" spelled as itself even
+//inside an underlined run.
+test('a lone underscore or tilde is escaped only where it would pair with a marker', function(){
+  assertRoundTrip({ ops: [
+    {insert: 'file_'}, {insert: 'name', attributes: {underline: true}}, {insert: '\n'}
+  ]}, 'file\\___name__\r\n');
+
+  assertRoundTrip({ ops: [
+    {insert: '_', attributes: {underline: true}}, {insert: '\n'}
+  ]}, '__\\___\r\n');
+
+  assertRoundTrip({ ops: [
+    {insert: 'snake_case', attributes: {underline: true}}, {insert: '\n'}
+  ]}, '__snake_case__\r\n');
+
+  assertRoundTrip({ ops: [
+    {insert: 'the snake_case variable, approx~1900'}, {insert: '\n'}
+  ]}, 'the snake_case variable, approx~1900\r\n');
+});
+
+//A marker does not have to sit inside one run - parseLine reads the assembled line - so the escape
+//has to be decided against this run's text plus what follows it. Each case below is two runs that
+//spell a marker between them though neither is one on its own. A delta straight from the editor
+//merges runs that carry the same styles, but an imported or programmatically built one need not,
+//and "1." followed by " item" was coming back a numbered list with its first characters eaten.
+test('a marker completed across a run boundary is still escaped', function(){
+  assertRoundTrip({ ops: [
+    {insert: '1.'}, {insert: ' item'}, {insert: '\n'}
+  ]}, '\\1. item\r\n');
+
+  assertRoundTrip({ ops: [
+    {insert: '[>c]'}, {insert: ' centered?'}, {insert: '\n'}
+  ]}, '\\[>c] centered?\r\n');
+
+  assertRoundTrip({ ops: [
+    {insert: '##'}, {insert: ' heading?'}, {insert: '\n'}
+  ]}, '\\## heading?\r\n');
+
+  assertRoundTrip({ ops: [
+    {insert: '~'}, {insert: '~tilde'}, {insert: '\n'}
+  ]}, '\\~\\~tilde\r\n');
+
+  assertRoundTrip({ ops: [
+    {insert: 'a'}, {insert: '_'}, {insert: '_b'}, {insert: '\n'}
+  ]}, 'a\\_\\_b\r\n');
+});
+
+//The backslash pass reads across the boundary for the same reason: the longest escapable sequence
+//is three characters, so a backslash near the end of a run can be sitting in front of a marker the
+//next run finishes, and it has to be doubled there too or the reader eats it.
+test('a backslash in front of a marker completed by the next run is doubled', function(){
+  assertRoundTrip({ ops: [
+    {insert: '\\1'}, {insert: '. item'}, {insert: '\n'}
+  ]}, '\\\\1. item\r\n');
+
+  assertRoundTrip({ ops: [
+    {insert: '\\'}, {insert: '- item'}, {insert: '\n'}
+  ]}, '\\\\- item\r\n');
+});
+
+//A style marker cannot be escaped - the asterisk really is the marker - so where one would land at
+//a list marker's position with a space behind it, the space moves in front of it instead. Without
+//this the paragraph came back a bullet, having lost its italics and its space with it.
+test('an italic run opening with a space does not become a bullet', function(){
+  assertTextRoundTrip({ ops: [
+    {insert: ' whispered the man', attributes: {italic: true}}, {insert: '\n'}
+  ]}, ' *whispered the man*\r\n');
+
+  assertRoundTrip({ ops: [
+    {insert: ' '}, {insert: 'whispered the man', attributes: {italic: true}}, {insert: '\n'}
+  ]}, ' *whispered the man*\r\n');
+});
+
+//The same at the head of an indented paragraph, where LIST_MARKER reads its marker after the tab.
+test('an italic run opening with a space is safe behind indent too', function(){
+  assertTextRoundTrip({ ops: [
+    {insert: '\t'}, {insert: ' whispered the man', attributes: {italic: true}}, {insert: '\n'}
+  ]}, '\t *whispered the man*\r\n');
+});
+
+//A run that is nothing but a space keeps the space and loses only a style flag it had no way of
+//showing - it used to be written "* *", which came back an empty bullet.
+test('an italic run that is only a space keeps the space', function(){
+  assertTextRoundTrip({ ops: [
+    {insert: ' ', attributes: {italic: true}}, {insert: '\n'}
+  ]}, ' \r\n');
+});
+
+//The other half: a space inside a style span is not at either edge, so it stays where it is and the
+//span is never broken into two.
+test('a space inside a styled span does not move', function(){
+  assertRoundTrip({ ops: [
+    {insert: 'bold and ', attributes: {bold: true}},
+    {insert: 'underlined', attributes: {bold: true, underline: true}},
+    {insert: ' within', attributes: {bold: true}},
+    {insert: '\n'}
+  ]}, '**bold and __underlined__ within**\r\n');
+});
+
 test('a blockquote round trips', function(){
   assertRoundTrip({ ops: [
     {insert: 'Quoted line.'}, {insert: '\n', attributes: {blockquote: true}}
@@ -467,13 +651,22 @@ test('a blank footnote body paragraph keeps its marker', function(){
 
 //Regression: escapeAnyMarkers used to escape every "[^" unconditionally, including a real marker's
 //own rendering, which is what corrupted every footnote WareWoolf ever wrote (see the top of
-//docs/footnotes-plan.md). A literal "[^" a writer actually types as prose still has to come back
-//escaped - it is not a marker, and tokenizeInline only recognises the unescaped form.
-test('a literal "[^" typed as prose round trips escaped, distinct from a real marker', function(){
+//docs/footnotes-plan.md).
+//
+//A reference is "[^", digits and "]", and nothing less, so that is the only shape needing an escape
+//when a writer types it as prose. A bare "[^" is not a marker in any position - tokenizeInline hands
+//the bracket straight to the buffer - and escaping it wrote a backslash into the file for nothing.
+test('a literal footnote reference typed as prose round trips escaped, distinct from a real marker', function(){
   assertRoundTrip({ ops: [
-    {insert: 'a literal [^ in prose, and a real'}, {insert: {footnote: {n: '2'}}}, {insert: ' marker'},
+    {insert: 'a literal [^2] in prose, and a real'}, {insert: {footnote: {n: '2'}}}, {insert: ' marker'},
     {insert: '\n'}
-  ]}, 'a literal \\[^ in prose, and a real[^2] marker\r\n');
+  ]}, 'a literal \\[^2] in prose, and a real[^2] marker\r\n');
+});
+
+test('a "[^" that could never be read as a reference is written unescaped', function(){
+  assertRoundTrip({ ops: [
+    {insert: 'a literal [^ in prose, and a [^note] beside it'}, {insert: '\n'}
+  ]}, 'a literal [^ in prose, and a [^note] beside it\r\n');
 });
 
 //A footnote reference keeps whatever inline style was active around it.

@@ -105,22 +105,20 @@ function convertMdfcToHtml(str){
     });
 
   
-    //Bold/italic/underline/strike share tokenizeInline with the MDF writer (markdownFic.js) rather
-    //than being matched as four independent regexes. Independent regexes can't correctly handle
-    //markers nested inside a *different* style that reuses the same character (e.g. italic inside
-    //bold, since both use "*"): the outer marker's exclusion class can't span the inner marker, so
-    //the whole outer span fails to match and its asterisks leak into the output as literal text.
-    str = convertInlineStyles(str);
-
-    //Bold/italic/underline/strike escapes (\**, \*, \~~, \__) are already stripped by
-    //convertInlineStyles above, via tokenizeInline. This handles what's left: headings, alignment/
-    //blockquote markers and list markers.
+    //Heading, alignment/blockquote and list escapes, stripped here rather than by tokenizeInline
+    //below: consumeEscape (markdownFic.js) only reads those three at the start of the text it is
+    //handed, and by this point in the conversion the start of a line has become the start of an
+    //element's text, which is not where tokenizeInline is looking. An escape only means anything
+    //where the marker itself would have been read - "a \> b" is a backslash followed by a
+    //greater-than sign, not an escaped quotation marker - so element start is where these are
+    //honoured, and a list marker after indent as well, since LIST_MARKER reads one there.
     //
-    //An escape only means anything where the marker itself would have been read, exactly as in
-    //consumeEscape (markdownFic.js) - "a \> b" is a backslash followed by a greater-than sign, not
-    //an escaped quotation marker. By this point in the conversion, the start of a line has become
-    //the start of an element's text, so that is where the escape is honoured. A list marker is
-    //honoured after indent as well, since LIST_MARKER reads one there.
+    //Ahead of convertInlineStyles, not after it, because an escaped backslash ("\\", the writer's
+    //own backslash where the reader would otherwise take it for an escape) is one of the sequences
+    //tokenizeInline unwraps. Running that first would turn "\\#head" into "\#head" and leave this
+    //pass unable to tell it from an escaped heading marker, stripping a backslash the writer typed.
+    //A real "\\" in front of one of these markers fails to match here for the same reason
+    //consumeEscape passes it over: the character after the backslash is another backslash.
     const elementStart = '(<(?:p|h[1-4]|li|blockquote)(?:\\s[^>]*)?>';
 
     let escapedBlockMarkers = new RegExp(elementStart + ')\\\\(#|\\[>|>)', 'g');
@@ -128,7 +126,15 @@ function convertMdfcToHtml(str){
 
     let escapedListMarkers = new RegExp(elementStart + '[\\t ]*)\\\\(-|\\+|(?:\\d+|[a-z])\\. )', 'g');
     str = str.replace(escapedListMarkers, '$1$2');
-  
+
+    //Bold/italic/underline/strike share tokenizeInline with the MDF writer (markdownFic.js) rather
+    //than being matched as four independent regexes. Independent regexes can't correctly handle
+    //markers nested inside a *different* style that reuses the same character (e.g. italic inside
+    //bold, since both use "*"): the outer marker's exclusion class can't span the inner marker, so
+    //the whole outer span fails to match and its asterisks leak into the output as literal text.
+    //It takes the remaining escapes off as it goes - \**, \*, \~~, \__, \[^ and \\.
+    str = convertInlineStyles(str);
+
     return str;
   }
 
