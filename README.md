@@ -25,6 +25,7 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 
 * All-keyboard navigation designed for pleasant use without a mouse.
 * Distraction-free writing: Each of the three panels can be toggled on/off at the press of a button. Write with only your manuscript visible.
+* The formatting fiction actually needs, all of it on a shortcut and none of it on a toolbar: bold, italics, underline, strikethrough, four levels of heading, left/right/center/justified alignment, bulleted and numbered lists, and blockquotes as well as footnotes.
 * Plain text import/conversion tools
    * Options to parse a simplified version of Markdown (MarkdownFic) or interpret custom markers for detecting italics, headings, etc.
    * Detect custom strings marking chapter breaks or break text into chapters at each heading, etc.
@@ -48,6 +49,7 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 * Auto-saving and auto-backup options
 * Saves chapters as .txt files with light Markdown-style formatting, so even if WareWoolf disappears you will always be able to read/edit the documents you create with it. This is also widely considered the most "archival" file format, so people will still be able to open your files in 100 years (if people still read then).
 * Export as plain text, markdownFic, standard markdown, docx, HTML, or .epub 
+* Import HTML files and EPUB ebooks, splitting a whole book into chapters as it reads - at headings or horizontal rules for HTML, and by the ebook's own table of contents for EPUB.
 
 ## Installation
 
@@ -84,6 +86,10 @@ Unreleased. Changes made:
 * Spellcheck now understands contractions written with a curly apostrophe, instead of stopping on both halves of "don't".
 * A straight quote typed into Find/Replace now finds curly ones too, so searching for a line of dialogue still works. Searching for a specific curly quote still finds only that one.
 * New File > Dictionaries: tick any number of dictionaries at once, import your own (a Hunspell .aff/.dic pair, or even a bare word list), and edit your personal dictionary directly instead of only adding to it from the spellcheck popup. Projects now carry their own word list too, for character and place names that shouldn't leak into other manuscripts - the spellcheck popup's Add To Dictionary button gets a companion, Add To Project, for exactly that.
+* Blockquotes: Ctrl/Cmd+Shift+Q in the editor, the '>' marker in MarkdownFic, and a real Word blockquote style on .docx export. An alignment marker can now be combined with a blockquote or list marker, so a centered quotation or bullet round-trips.
+* First-class footnotes: Ctrl/Cmd+Alt+F inserts a numbered marker and opens its note at the foot of the chapter, and the same keys jump between the two afterwards. Numbering is automatic and renumbers as you add, delete or reorder; deleting a marker takes its note with it; copying one carries its note along. Notes come out as real Word footnotes in .docx, linked notes in HTML and EPUB, and [^1] markers in Markdown - and compiling a whole project numbers every chapter's notes into one sequence.
+* Import HTML files (.html, .htm, .xhtml) and EPUB ebooks (.epub). Both can be split into chapters as they are read: HTML at a chosen heading level and/or at horizontal rules, EPUB by the book's own table of contents, so Moby-Dick arrives as 141 chapters rather than the eleven files it is packed into. Italics marked by a stylesheet rather than a tag are still read as italics, tables come in as Markdown-style pipe rows, and Project Gutenberg's license header and footer can be stripped on the way in.
+* Fixed bug where a project shipped with the app - the Help doc, or the bundled example - could be opened writable and edited in place. Anything inside the install directory now opens read-only, and Ctrl/Cmd+S on it offers Save As so your annotated copy gets a home of its own.
 
 2026-09-07: v2.5.0. Chages made:
 * Security improvements

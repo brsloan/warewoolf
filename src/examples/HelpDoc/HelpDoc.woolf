@@ -65,6 +65,12 @@
 			"summary": null
 		},
 		{
+			"title": "Footnotes",
+			"filename": "Footnotes.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
 			"title": "Importing Plaintext Files",
 			"filename": "Importing Plaintext Files.txt",
 			"filter": null,

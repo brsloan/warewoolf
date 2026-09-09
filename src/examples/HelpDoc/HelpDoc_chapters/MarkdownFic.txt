@@ -16,11 +16,10 @@ The core supported syntax is all the same as Markdown:
 	* Ordered: ‘1. item’
 	* Indent a list item with a tab (two tabs for a second level) to nest it under the item above. Four spaces count as one tab and eight as two, so a list written the way most Markdown editors write one nests correctly here as well. Spaces only nest an item that comes directly after another list item, so an indented paragraph of ordinary prose is never mistaken for one.
 	* WareWoolf always writes ‘\*’ for unordered items and numerals for ordered items when it saves/exports, but it will read any of the markers above back in just fine.
-* Footnotes: press Ctrl+Alt+F (Cmd+Alt+F on Mac) with the caret where you want the note to go. This drops in a numbered marker and jumps you straight into an empty note at the bottom of the chapter, ready to type.
-	* Press Ctrl+Alt+F again with the caret just before a marker to jump to that note; press it again from inside the note to jump back to the marker. Enter does the same forward jump when the caret sits just before a marker.
-	* Numbers are renumbered automatically as you add, delete and reorder notes - you never type the number yourself.
-	* Deleting a marker deletes its note along with it, as one undo step.
-	* On disk, and in the exported Markdown, a footnote still looks like ordinary MarkdownFic markers: ‘Text with a footnote.[^1]’ and, in a paragraph of its own, ‘[^1]: The footnote.’ - so a hand-edited file using this same syntax reads back in as a real footnote, and pasting one from another chapter carries its note along with it.
+* Footnotes:
+	* ‘Text with a footnote. \[^1]’
+	* ‘\[^1]: The footnote.’
+	* You do not have to type either marker yourself - see the Footnotes chapter for the editor’s own footnote tools. But a file hand-written with this syntax reads back in as real footnotes.
 
 But here are some differences:
 * Tabs/Indentation. MarkdownFic ignores all tabs, so they can be used as normal for writing conventional pargraphs in fiction.
@@ -32,7 +31,7 @@ But here are some differences:
 	* no marker leaves the default, which is aligned left.
 	* note that these can be used in addition to Heading markers to create centered chapter titles. But they must be used **before** the heading marker. So a centered heading would be ‘\[>c] \# Heading’, not ‘\# \[>c] Heading’.
 	* the same goes for blockquotes and list items, so an alignment marker always comes first on the line: ‘\[>c] \> a centered quotation’, ‘\[>c] \* a centered bullet’. Where a list item is nested, its indent sits between the two markers, as in ‘\[>c] 	\* a centered, nested bullet’.
-* Multi-paragraph footnotes. Just keep typing - pressing Enter inside a note starts a new paragraph of the same note, rather than ending it. In Markdown this is done with tabs beneath the original footnote marker; on disk here, WareWoolf instead repeats the same marker at the beginning of every paragraph belonging to the note.
+* Multi-paragraph footnotes. In Markdown, this is done using tabs beneath the original footnote marker, but here you just use the same footnote marker at the beginning of each paragraph.
 * Note that if you want to apply multiple styles to one string of text, you can do so, but should always add them in the order **bold italic underline strikethrough**. So if you want one word to have all of those styles, it is written \**\*\__\~~word\~~\__\**\*.  Any other order will introduce errors, so this is wrong: \__\~~\**\*bad word\**\*\~~\__. It is not often that you need to style text with multiple styles, but just remember that when you do, you need to run the order* by us: **b i u s**: **__b__**old **__i__**talic **__u__**nderline **__s__**trikethrough*. I think that’s memorable, but then I am biased.
  
 That’s it! You don’t need much formatting to write fiction. And since it is mostly the same as Markdown, anything exported as MarkdownFic should be usable in any Markdown editor with a few tweaks, most of which could probably be done by find/replacing your tabs to newlines.

@@ -7,6 +7,8 @@ To toggle between ***Chapter Notes*** and ***Project Notes*** in the** **right p
 
 Speaking of room—the editor panel can be contracted or expanded using **CMD/CTRL** + **<** or **\>** so you can see your paragraphs as they will look in a narrow paperback or a wide manuscript page. Similarly, you can adjust the font display size with **CMD/CTRL** + **-** or **+**.
 
+**CMD/CTRL + ALT + T** switches on ***Typewriter Mode***. Ordinarily the line you are writing creeps down the screen until it is sitting on the bottom edge, and you spend the next paragraph typing at your own shoes. In Typewriter Mode the text scrolls up to meet you instead, holding the line you are on about three-quarters of the way down the editor, so your eyes stay in one place. The same keys switch it off again, and WareWoolf remembers which way you left it.
+
 ## Navigating Chapters
 To cycle through chapters, press **CMD/CTRL** + **Up** or **Down**. **CMD/CTRL** + **Right** and **Left** will jump between the notes and main editor. These are the *Navigation Keys*.
 
@@ -42,3 +44,5 @@ Please note that the chapter files must be kept either in a subdirectory or the 
 
 ## Help
 And of course, if you ever need help remembering a shortcut, simply remember the shortcut **CTRL **+ **H (CMD + Shift + H on Mac)**, or use the file menu to open the Help menu, and all will be revealed.
+
+This help document, and any other project that ships with WareWoolf, opens **read-only**—the title bar says so. You can still type in it, and you are welcome to: **Ctrl+S** simply offers **Save As** instead of saving in place, so your annotated copy gets a home you chose rather than being written back into the program folder, where the next update would overwrite it.
