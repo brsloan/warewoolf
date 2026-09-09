@@ -8,12 +8,13 @@ The core supported syntax is all the same as Markdown:
 * Headings: ‘# My Heading 1’, ‘## My Heading 2’ 
 	* WareWoolf supports up to 4 heading levels.
 * Italics: ‘\*italicized text\*’
-* Bold: ‘\**bold text\**’
-* Blockquote: ‘> blockquoted text’
-* Strikethrough: ‘\~~struck through text\~~’
+* Bold: ‘\*\*bold text\*\*’
+* Underline: ‘\_\_underlined text\_\_’
+* Blockquote: ‘> blockquoted text’. WareWoolf writes a space after the marker, but it will read one without.
+* Strikethrough: ‘\~\~struck through text\~\~’
 * Lists:
 	* Unordered: ‘- item’, ‘\* item’, or ‘+ item’
-	* Ordered: ‘1. item’
+	* Ordered: ‘1. item’, or ‘a. item’ for a lettered list
 	* Indent a list item with a tab (two tabs for a second level) to nest it under the item above. Four spaces count as one tab and eight as two, so a list written the way most Markdown editors write one nests correctly here as well. Spaces only nest an item that comes directly after another list item, so an indented paragraph of ordinary prose is never mistaken for one.
 	* WareWoolf always writes ‘\*’ for unordered items and numerals for ordered items when it saves/exports, but it will read any of the markers above back in just fine.
 * Footnotes:
@@ -22,7 +23,7 @@ The core supported syntax is all the same as Markdown:
 	* You do not have to type either marker yourself - see the Footnotes chapter for the editor’s own footnote tools. But a file hand-written with this syntax reads back in as real footnotes.
 
 But here are some differences:
-* Tabs/Indentation. MarkdownFic ignores all tabs, so they can be used as normal for writing conventional pargraphs in fiction.
+* Tabs/Indentation. MarkdownFic ignores tabs in ordinary prose, so they can be used as normal for writing conventional pargraphs in fiction. The one place a tab means something is in front of a list marker, where it nests the item, as above.
 * Paragraph breaks. Unlike in conventional Markdown, you do not have to put blank lines between paragraphs. This goes along with the indentation feature in allowing you to write fiction in a normal way. But you are allowed to add blank lines wherever you want them, as is often done between scenes, chapters, etc.
 * Text alignment. These are used at the beginning of a line to designate alignment for that paragraph.
 	* ‘[>c] This line is centered.’
@@ -32,7 +33,8 @@ But here are some differences:
 	* note that these can be used in addition to Heading markers to create centered chapter titles. But they must be used **before** the heading marker. So a centered heading would be ‘[>c] # Heading’, not ‘# [>c] Heading’.
 	* the same goes for blockquotes and list items, so an alignment marker always comes first on the line: ‘[>c] > a centered quotation’, ‘[>c] \* a centered bullet’. Where a list item is nested, its indent sits between the two markers, as in ‘[>c] 	\* a centered, nested bullet’.
 * Multi-paragraph footnotes. In Markdown, this is done using tabs beneath the original footnote marker, but here you just use the same footnote marker at the beginning of each paragraph.
-* Note that if you want to apply multiple styles to one string of text, you can do so, but should always add them in the order **bold italic underline strikethrough**. So if you want one word to have all of those styles, it is written \**\*\__\~~word\~~\__\**\*.  Any other order will introduce errors, so this is wrong: \__\~~\**\*bad word\**\*\~~\__. It is not often that you need to style text with multiple styles, but just remember that when you do, you need to run the order* by us: **b i u s**: **__b__**old **__i__**talic **__u__**nderline **__s__**trikethrough*. I think that’s memorable, but then I am biased.
+* Escaping. A backslash in front of a marker writes the marker as ordinary text: ‘\\\*’ shows an asterisk instead of starting italics, and a line beginning ‘\# ’ stays a paragraph instead of becoming a heading. An escape covers one character, so a marker written with two takes two: a literal pair of asterisks is ‘\\\*\\\*’, and the same goes for ‘\\_\\_’ and ‘\\~\\~’. It only means anything where the marker itself would have been read, so ‘File > Dictionaries’ and ‘C#’ mid-sentence need no backslash and never get one. A backslash of your own that lands in front of a marker is doubled, so a line reading ‘\# not a heading’ is kept in the file as ‘\\\# not a heading’.
+* Note that if you want to apply multiple styles to one string of text, you can do so. WareWoolf always writes them in the order **bold italic underline strikethrough**, so a word carrying all four is saved as \*\*\*\_\_\~\~word\~\~\_\_\*\*\*. Reading them back is not fussy about the order, so \_\_\~\~\*\*\*this\*\*\*\~\~\_\_ comes out with the same four styles, but it will be rewritten into the order above the next time you save. It is not often that you need to style text with multiple styles, but just remember that when you do, you need to run the order *by us: **b i u s**: **__b__**old **__i__**talic **__u__**nderline **__s__**trikethrough*. I think that’s memorable, but then I am biased.
  
 That’s it! You don’t need much formatting to write fiction. And since it is mostly the same as Markdown, anything exported as MarkdownFic should be usable in any Markdown editor with a few tweaks, most of which could probably be done by find/replacing your tabs to newlines.
 
