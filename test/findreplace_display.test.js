@@ -5,10 +5,15 @@ const { JSDOM } = require('jsdom');
 const findReplaceDisplayPath = require.resolve('../src/components/views/findreplace_display');
 const findReplaceControllerPath = require.resolve('../src/components/controllers/findreplace');
 
-//findreplace_display.js destructures find/replace/replaceAllInChapter/replaceAllInAllChapters from
-//the findreplace controller at require-time, so mocking them only takes effect if the cache is
-//primed before findreplace_display.js is (re-)required - same pattern as corkboard_display.test.js's
-//freshCorkboardDisplay().
+//Held on to before the cache is clobbered below, so that the mock can still hand the display the
+//real matchEntireText: whether Replace fires is a question about the search, and mocking it away
+//would leave the Case Sensitive assertions below testing nothing.
+const realFindReplace = require('../src/components/controllers/findreplace');
+
+//findreplace_display.js destructures compileSearch/find/matchEntireText/replace/replaceAllInChapter/
+//replaceAllInAllChapters from the findreplace controller at require-time, so mocking them only
+//takes effect if the cache is primed before findreplace_display.js is (re-)required - same pattern
+//as corkboard_display.test.js's freshCorkboardDisplay().
 function freshFindReplaceDisplay(mocks){
   delete require.cache[findReplaceDisplayPath];
   require.cache[findReplaceControllerPath] = {
@@ -16,7 +21,9 @@ function freshFindReplaceDisplay(mocks){
     filename: findReplaceControllerPath,
     loaded: true,
     exports: {
+      compileSearch: mocks.compileSearch || realFindReplace.compileSearch,
       find: mocks.find || function(){ return 0; },
+      matchEntireText: mocks.matchEntireText || realFindReplace.matchEntireText,
       replace: mocks.replace || function(){},
       replaceAllInChapter: mocks.replaceAllInChapter || function(){ return 0; },
       replaceAllInAllChapters: mocks.replaceAllInAllChapters || function(){ return 0; }
@@ -206,4 +213,163 @@ test('displaying find/replace replaces any existing popup and focuses the Find f
   var popups = document.querySelectorAll('.popup');
   assert.strictEqual(popups.length, 1, 'the stale popup should be removed');
   assert.strictEqual(document.activeElement, document.getElementById('find-input'));
+});
+
+//Regression: Find highlights the curly-quoted "don’t" when a writer types the straight-quoted
+//"don't", but Replace compared the selection with what was typed and so refused to replace the very
+//match Find had just made. Replace All was never affected, which is what hid it.
+test('Replace runs on a selection Find reached through a folded quote', function(){
+  var replaceCalls = 0;
+  var editorQuill = makeEditorQuill('don’t');
+  var showFindReplace = freshFindReplaceDisplay({
+    replace: function(){ replaceCalls++; },
+    find: function(){ return 0; }
+  });
+
+  showFindReplace({}, editorQuill, function(){});
+  document.getElementById('find-input').value = "don't";
+
+  getButtonByAccessKey('r').onclick();
+
+  assert.strictEqual(replaceCalls, 1);
+});
+
+//The match, not just the fact of one: it carries the capture groups a $1 in the Replace box is
+//expanded from.
+test('Replace hands the match itself to the controller', function(){
+  var passedMatch;
+  var passedOptions;
+  var editorQuill = makeEditorQuill('cat');
+  var showFindReplace = freshFindReplaceDisplay({
+    replace: function(quill, newStr, match, options){ passedMatch = match; passedOptions = options; },
+    find: function(){ return 0; }
+  });
+
+  showFindReplace({}, editorQuill, function(){});
+  document.getElementById('find-input').value = 'cat';
+
+  getButtonByAccessKey('r').onclick();
+
+  assert.strictEqual(passedMatch.index, 0);
+  assert.strictEqual(passedMatch.length, 3);
+  assert.strictEqual(passedOptions.caseSensitive, false);
+  assert.strictEqual(passedOptions.wholeWordOnly, false);
+});
+
+//---------------------------------------------------------------------------
+// Use Regex
+//---------------------------------------------------------------------------
+
+test('Use Regex checkbox is toggled by clicking its label', function(){
+  var showFindReplace = freshFindReplaceDisplay({});
+  showFindReplace({}, makeEditorQuill(''), function(){});
+
+  var checkbox = document.getElementById('use-regex-check');
+  var label = document.querySelector('label[for="use-regex-check"]');
+
+  assert.strictEqual(label.innerText, 'Use Regex');
+  assert.strictEqual(checkbox.checked, false);
+  label.click();
+  assert.strictEqual(checkbox.checked, true);
+});
+
+test('the Use Regex checkbox reaches the controller', function(){
+  var passedOptions;
+  var showFindReplace = freshFindReplaceDisplay({
+    find: function(quill, project, str, startingIndex, all, display, options){ passedOptions = options; return 0; }
+  });
+
+  showFindReplace({}, makeEditorQuill(''), function(){});
+  document.getElementById('find-input').value = 'c.t';
+  document.getElementById('use-regex-check').click();
+
+  getButtonByAccessKey('f').onclick();
+
+  assert.strictEqual(passedOptions.useRegex, true);
+});
+
+test('Replace All is told to use regex too', function(){
+  var passedOptions;
+  var showFindReplace = freshFindReplaceDisplay({
+    replaceAllInChapter: function(oldStr, newStr, chap, options){ passedOptions = options; return 0; }
+  });
+
+  showFindReplace({ activeChapterIndex: 0, getActiveChapter: function(){ return {}; } }, makeEditorQuill(''), function(){});
+  document.getElementById('find-input').value = 'c.t';
+  document.getElementById('use-regex-check').click();
+
+  return getButtonByAccessKey('a').onclick().then(function(){
+    assert.strictEqual(passedOptions.useRegex, true);
+  });
+});
+
+//Half a regular expression is what the Find box holds for most of the time a writer is typing one.
+test('a pattern that will not compile is reported rather than searched for', function(){
+  var findCalls = 0;
+  var showFindReplace = freshFindReplaceDisplay({
+    find: function(){ findCalls++; return 0; }
+  });
+
+  showFindReplace({}, makeEditorQuill(''), function(){});
+  document.getElementById('find-input').value = '(unclosed';
+  document.getElementById('use-regex-check').click();
+
+  getButtonByAccessKey('f').onclick();
+
+  assert.strictEqual(findCalls, 0, 'a pattern that cannot compile should not be searched for');
+  var message = document.querySelector('.popup label:not([for])').innerText;
+  assert.strictEqual(message.indexOf('Invalid pattern: '), 0, 'got: ' + message);
+});
+
+test('the same pattern is ordinary text when Use Regex is off', function(){
+  var findCalls = 0;
+  var showFindReplace = freshFindReplaceDisplay({
+    find: function(){ findCalls++; return 0; }
+  });
+
+  showFindReplace({}, makeEditorQuill(''), function(){});
+  document.getElementById('find-input').value = '(unclosed';
+
+  getButtonByAccessKey('f').onclick();
+
+  assert.strictEqual(findCalls, 1);
+  assert.strictEqual(document.querySelector('.popup label:not([for])').innerText, '');
+});
+
+//Replace All rewrites every chapter in the project, so it must not start on a pattern that cannot
+//match - and the count it prints at the end must not paper over the reason.
+test('Replace All refuses a pattern that will not compile', function(){
+  var replaceAllCalls = 0;
+  var showFindReplace = freshFindReplaceDisplay({
+    replaceAllInChapter: function(){ replaceAllCalls++; return 0; },
+    replaceAllInAllChapters: function(){ replaceAllCalls++; return 0; }
+  });
+
+  showFindReplace({ activeChapterIndex: 0, getActiveChapter: function(){ return {}; } }, makeEditorQuill(''), function(){});
+  document.getElementById('find-input').value = '[a-';
+  document.getElementById('use-regex-check').click();
+
+  return getButtonByAccessKey('a').onclick().then(function(){
+    assert.strictEqual(replaceAllCalls, 0);
+    var message = document.querySelector('.popup label:not([for])').innerText;
+    assert.strictEqual(message.indexOf('Invalid pattern: '), 0, 'got: ' + message);
+  });
+});
+
+test('Replace refuses a pattern that will not compile', function(){
+  var replaceCalls = 0;
+  var findCalls = 0;
+  var showFindReplace = freshFindReplaceDisplay({
+    replace: function(){ replaceCalls++; },
+    find: function(){ findCalls++; return 0; }
+  });
+
+  showFindReplace({}, makeEditorQuill('cat'), function(){});
+  document.getElementById('find-input').value = '(';
+  document.getElementById('use-regex-check').click();
+
+  getButtonByAccessKey('r').onclick();
+
+  assert.strictEqual(replaceCalls, 0);
+  assert.strictEqual(findCalls, 0, 'and it should not fall through to a Find that cannot work either');
 });

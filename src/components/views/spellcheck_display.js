@@ -116,9 +116,7 @@ async function showSpellcheck(editorQuill, project, displayChapterByIndex, start
         selectedReplacement = customInput;
 
       if(invalidWord && selectedReplacement != null){
-        const caseSensitive = true;
-        const wholeWordOnly = true;
-        await replaceAllInAllChapters(project, invalidWord.word, selectedReplacement.value, caseSensitive, wholeWordOnly);
+        await replaceAllInAllChapters(project, invalidWord.word, selectedReplacement.value, { caseSensitive: true, wholeWordOnly: true });
         displayChapterByIndex(project.activeChapterIndex);
         return ignoreBtn.onclick();
       }
