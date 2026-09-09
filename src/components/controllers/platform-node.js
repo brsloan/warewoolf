@@ -287,6 +287,7 @@ function createNodeBacking(deps){
     wifiEnable: wifiEnable,
     wifiDisable: wifiDisable,
     getBatteryCapacity: getBatteryCapacity,
+    rebootSystem: rebootSystem,
 
     on: on,
     off: off
@@ -2392,6 +2393,75 @@ function createNodeBacking(deps){
           resolve(parsed);
       });
     });
+  }
+
+  //File > Reboot, which index.js only puts on the menu on Linux - a writerDeck that boots straight
+  //into WareWoolf has no other way to restart itself. The platform check is repeated here anyway:
+  //the menu is where the item is *shown*, this is where the command is *answered*, and a bridge is
+  //not a UI. UNAVAILABLE rather than NOT_IMPLEMENTED for both the wrong platform and a missing
+  //systemctl, the distinction requireWindowsUpdatePlatform already draws - the command exists, the
+  //facility it needs does not.
+  //
+  //`systemctl reboot` rather than `sudo reboot`: it asks logind, which grants a local active
+  //session the reboot without a password, so nothing here has to hold or prompt for one. Where
+  //polkit refuses, systemctl says so on stderr and exits non-zero, and that message is what comes
+  //back as IO_ERROR - a writer who is told "Interactive authentication required" can act on it,
+  //where a bare "reboot failed" leaves them nowhere.
+  //
+  //Success is best-effort by nature. systemctl returns as soon as logind accepts the request, so
+  //this usually resolves a moment before the machine goes down, and on a fast enough shutdown the
+  //'close' event never arrives at all. Nothing is scheduled after it either way.
+  function rebootSystem(){
+    return new Promise(function(resolve, reject){
+      if(currentPlatform() !== 'linux'){
+        reject(PlatformError(CODES.UNAVAILABLE,
+          'Reboot is only available on Linux.', { command: 'rebootSystem' }));
+        return;
+      }
+
+      var systemctl;
+      try{
+        systemctl = spawnProcess('systemctl', ['reboot']);
+      }
+      catch(spawnErr){
+        reject(rebootUnavailableOrIoError(spawnErr));
+        return;
+      }
+
+      var chunks = [];
+      var spawnFailed = false;
+
+      systemctl.stdout.on('data', function(data){ chunks.push(data); });
+      systemctl.stderr.on('data', function(data){ chunks.push(data); });
+
+      systemctl.on('error', function(err){
+        spawnFailed = true;
+        reject(rebootUnavailableOrIoError(err));
+      });
+
+      systemctl.on('close', function(exitCode){
+        if(spawnFailed) return;
+
+        if(exitCode === 0){
+          resolve(undefined);
+          return;
+        }
+
+        var output = Buffer.concat(chunks).toString().trim();
+        reject(PlatformError(CODES.IO_ERROR,
+          output || ('systemctl reboot exited with code ' + exitCode),
+          { command: 'rebootSystem', exitCode: exitCode }));
+      });
+    });
+  }
+
+  //unavailableOrIoError above names nmcli in its message, which would be the wrong binary to blame
+  //here. Same ENOENT rule, different missing thing.
+  function rebootUnavailableOrIoError(err){
+    return err != null && err.code === 'ENOENT'
+      ? PlatformError(CODES.UNAVAILABLE,
+        'Reboot needs systemctl, which is not installed on this machine.', { command: 'rebootSystem' })
+      : fromNodeError(err, { command: 'rebootSystem' });
   }
 
   // ------------------------------------------------------------------------------------------

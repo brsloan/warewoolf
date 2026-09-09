@@ -400,7 +400,7 @@ test('events are validated by name and unsubscribe cleanly', function(t){
   const seen = [];
   const handler = function(){ seen.push(1); };
 
-  assert.strictEqual(EVENTS.length, 40);
+  assert.strictEqual(EVENTS.length, 41);
   assert.ok(EVENTS.indexOf('save-clicked') > -1);
 
   const unsubscribe = built.platform.on('save-clicked', handler);
@@ -3503,6 +3503,58 @@ test('getBatteryCapacity rejects IO_ERROR when the kernel read produces non-nume
 
   const err = await rejection(platform.getBatteryCapacity());
   assert.strictEqual(err.code, CODES.IO_ERROR);
+});
+
+//File > Reboot, which index.js only shows on Linux. Every one of these injects the platform rather
+//than reading the real one, so they say the same thing on the Windows and macOS machines this suite
+//also runs on - and so that the linux branch, the one that ends in a spawn, is exercised there too.
+test('rebootSystem spawns "systemctl reboot" on Linux and resolves once it is accepted', async function(t){
+  const spawnFake = fakeSpawn([{ code: 0 }]);
+  const platform = wrap(createNodeBacking({ platform: 'linux', spawnProcess: spawnFake }));
+
+  await platform.rebootSystem();
+
+  assert.strictEqual(spawnFake.calls[0].command, 'systemctl');
+  assert.deepStrictEqual(spawnFake.calls[0].args, ['reboot']);
+});
+
+//The menu item is Linux-only, but the menu is not the boundary - this is. A bridge that answered it
+//anywhere would be a command the contract declares and no platform check stands behind.
+test('rebootSystem rejects UNAVAILABLE off Linux, without spawning anything', async function(t){
+  const spawnFake = fakeSpawn([{ code: 0 }]);
+  const platform = wrap(createNodeBacking({ platform: 'win32', spawnProcess: spawnFake }));
+
+  const err = await rejection(platform.rebootSystem());
+
+  assert.strictEqual(err.code, CODES.UNAVAILABLE);
+  assert.strictEqual(spawnFake.calls.length, 0);
+});
+
+test('rebootSystem rejects UNAVAILABLE when systemctl is not installed', async function(t){
+  const platform = wrap(createNodeBacking({
+    platform: 'linux',
+    spawnProcess: fakeSpawn([{ error: enoent('systemctl') }])
+  }));
+
+  const err = await rejection(platform.rebootSystem());
+
+  assert.strictEqual(err.code, CODES.UNAVAILABLE);
+  assert.match(err.message, /systemctl/);
+});
+
+//The case a writer can actually do something about: systemctl ran and logind refused the session.
+//IO_ERROR rather than UNAVAILABLE, and carrying systemctl's own words, since "reboot failed" on its
+//own tells them nothing about why.
+test("rebootSystem rejects IO_ERROR with systemctl's own output when the reboot is refused", async function(t){
+  const platform = wrap(createNodeBacking({
+    platform: 'linux',
+    spawnProcess: fakeSpawn([{ stderrChunks: ['Interactive authentication required.'], code: 1 }])
+  }));
+
+  const err = await rejection(platform.rebootSystem());
+
+  assert.strictEqual(err.code, CODES.IO_ERROR);
+  assert.match(err.message, /Interactive authentication required/);
 });
 
 test('the network/hardware commands refuse arguments they cannot act on', async function(t){

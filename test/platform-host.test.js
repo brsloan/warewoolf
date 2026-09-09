@@ -131,7 +131,7 @@ test('the main process registers a handler for every declared command, from the 
   const handled = Array.from(main.matchAll(/ipcMain\.handle\(['"]([^'"]+)['"]/g), function(m){ return m[1]; });
   assert.deepStrictEqual(handled, [], 'no command should get its own hand-written ipcMain.handle');
 
-  assert.strictEqual(Object.keys(COMMANDS).length, 72);
+  assert.strictEqual(Object.keys(COMMANDS).length, 73);
 });
 
 //The window has to be told where the bridge is, and the bundle is what ships - pointing at

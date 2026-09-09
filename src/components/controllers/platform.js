@@ -138,7 +138,8 @@ var EVENTS = [
   'corkboard-clicked', 'delete-chapter-clicked', 'dictionaries-clicked', 'exit-app-clicked', 'export-clicked',
   'file-manager-clicked', 'find-replace-clicked', 'headings-to-chaps-clicked', 'help-doc-clicked',
   'import-clicked', 'new-project-clicked', 'open-clicked',
-  'outliner-clicked', 'properties-clicked', 'renumber-chapters-clicked', 'restore-chapter-clicked',
+  'outliner-clicked', 'properties-clicked', 'reboot-clicked', 'renumber-chapters-clicked',
+  'restore-chapter-clicked',
   'save-as-clicked', 'save-backup-clicked', 'save-clicked', 'save-copy-clicked',
   'send-via-email-clicked', 'settings-clicked', 'shortcuts-clicked', 'spellcheck-clicked',
   'split-chapter-clicked', 'tab-indent-paragraphs-clicked', 'view-error-log-clicked',
@@ -508,7 +509,18 @@ var COMMANDS = {
   //the everyday result on every machine that is not a writerDeck. A battery that exists but cannot
   //be read (a spawn failure, non-numeric sysfs output) is IO_ERROR instead, so a caller can still
   //tell "there is nothing to report" apart from "something is actually wrong."
-  getBatteryCapacity: { group: 'K', params: [], returns: 'number' }
+  getBatteryCapacity: { group: 'K', params: [], returns: 'number' },
+  //Reboots the machine, not the app - the File > Reboot item index.js shows on Linux only. Group K
+  //rather than group A even though it ends the session the way confirmExit does: group A is the
+  //main-process-API group (app.getPath, nativeTheme, the menu, app.quit), and this is a spawn of a
+  //system binary, the same shape as its neighbours here.
+  //
+  //Rejects UNAVAILABLE off Linux and when systemctl is not installed, the same distinction
+  //startSquirrelUpdate draws off Windows: the facility is absent on this machine, which is not the
+  //same as the command not existing. A systemctl that runs and refuses (no polkit authorization for
+  //the session, say) is IO_ERROR carrying its own output, so "this build cannot reboot here" and
+  //"the machine would not let me" stay tellable apart.
+  rebootSystem: { group: 'K', params: [], returns: 'void (the machine goes down; nothing resolves after it)' }
 };
 
 //Wraps a backing in the contract: one async method per COMMANDS entry, every rejection a

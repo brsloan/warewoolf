@@ -10,6 +10,7 @@ const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { EventEmitter } = require('events');
 
 const { createPlatform } = require('../src/components/controllers/platform');
 const { createNodeBacking } = require('../src/components/controllers/platform-node');
@@ -68,10 +69,29 @@ var bootFailure = null;
 //`invoked` records every command name so a test can assert one was called without caring what it
 //resolved with. `handlers` is what render.js subscribed to per event channel - one handler each,
 //since render.js subscribes exactly once per channel.
+//Every process the renderer can reach is spawned through platform-node.js's one injectable seam,
+//so replacing it here covers the whole file at once - and it has to be replaced. rebootSystem runs
+//`systemctl reboot`, and the tests below drive the menu channel that reaches it: on a Linux machine,
+//CI included, a real spawn there would take the machine down in the middle of the run. What is
+//spawned is platform-node.js's business and is asserted in platform.test.js against its own
+//injected seam; here every child just exits cleanly.
+function fakeSpawn(){
+  var child = new EventEmitter();
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+  child.stdin = { write: function(){}, end: function(){} };
+  setImmediate(function(){
+    child.emit('close', 0);
+    child.stdout.emit('close', 0);
+  });
+  return child;
+}
+
 function makeBridge(){
   var handlers = {};
   var invoked = [];
   var inner = createFakeBridge(createPlatform(createNodeBacking({
+    spawnProcess: fakeSpawn,
     paths: {
       app: appDir,
       userData: userDataDir,
@@ -785,7 +805,7 @@ var ALL_MENU_CHANNELS = [
   'headings-to-chaps-clicked', 'convert-italics-clicked', 'split-chapter-clicked',
   'add-chapter-clicked', 'delete-chapter-clicked', 'restore-chapter-clicked', 'shortcuts-clicked',
   'outliner-clicked', 'convert-tabs-clicked', 'convert-substitutions-clicked',
-  'about-clicked', 'exit-app-clicked',
+  'about-clicked', 'exit-app-clicked', 'reboot-clicked',
   'save-copy-clicked', 'help-doc-clicked', 'renumber-chapters-clicked', 'send-via-email-clicked',
   'view-error-log-clicked', 'file-manager-clicked', 'wifi-manager-clicked', 'save-backup-clicked',
   'settings-clicked', 'corkboard-clicked', 'file-opened-from-outside-warewoolf',
@@ -965,6 +985,37 @@ test('exit-app-clicked refreshes the sidebar and asks to save first when there a
   findButton('Continue Without Saving').onclick();
   await flushMicrotasks();
   assert.ok(currentBridge().invoked.includes('confirmExit'));
+});
+
+//reboot-clicked is only ever sent on Linux (index.js gates the menu item), but render.js subscribes
+//to it everywhere, so these run on any machine: what they check is that the channel routes through
+//the same unsaved-work prompt Exit does before anything reaches the platform. Whether the command
+//then finds a systemctl is platform-node.js's business, covered in platform.test.js.
+test('reboot-clicked reboots directly when there are no unsaved changes', async function(){
+  var r = await freshRender();
+  r.project.hasUnsavedChanges = false;
+  r.project.filename = ''; //no autoBackup path to route through
+
+  currentBridge().handlers['reboot-clicked']();
+  await flushMicrotasks();
+
+  assert.ok(currentBridge().invoked.includes('rebootSystem'));
+});
+
+test('reboot-clicked asks to save first when there are unsaved changes', async function(){
+  var r = await freshRender();
+  r.project.chapters = [makeChap('Unsaved', { hasUnsavedChanges: true })];
+  r.project.hasUnsavedChanges = true;
+
+  currentBridge().handlers['reboot-clicked']();
+
+  assert.ok(findButton('Continue Without Saving'));
+  assert.ok(!currentBridge().invoked.includes('rebootSystem'),
+    'should not take the machine down before the prompt is answered');
+
+  findButton('Continue Without Saving').onclick();
+  await flushMicrotasks();
+  assert.ok(currentBridge().invoked.includes('rebootSystem'));
 });
 
 //---------------------------------------------------------------------------

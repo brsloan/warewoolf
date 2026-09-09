@@ -1353,16 +1353,33 @@ async function openHelpDoc(){
 }
 
 function exitApp(){
+  backupThenFinish(confirmExit, 'Exit Without Backup');
+}
+
+//File > Reboot, Linux only (see index.js). It takes the same route out as Exit rather than a
+//shorter one, and that is the whole point of it existing in the menu at all: unsaved work is
+//prompted for first (proceedOrConfirmSave, below), the auto-backup still has to finish before the
+//machine goes down, and only then does anything reach systemctl. A reboot from a terminal - the
+//only other way to get one on a writerDeck that boots straight into WareWoolf - skips all three.
+function rebootMachine(){
+  backupThenFinish(rebootSystem, 'Reboot Without Backup');
+}
+
+//Exit and Reboot differ only in what ends the session, so the part before that is shared: run the
+//auto-backup if one is configured and the project has somewhere to be backed up to, report its
+//progress, and hand over once it is done. `finish` is also what the alert's skip button calls, so
+//a backup that stalls does not strand a writer who wanted the machine off.
+function backupThenFinish(finish, skipLabel){
   if(userSettings.autoBackup == true && project.filename != ''){
-    alertBackupResult('Loading backup tools...', true);
+    alertBackupResult('Loading backup tools...', finish, skipLabel);
     const { backupProject, BACKUP_FINISHED } = require('./components/controllers/backup-project');
     backupProject(project, userSettings, sysDirectories.docs, function(update){
-      alertBackupResult(update, true);
+      alertBackupResult(update, finish, skipLabel);
       if(update == BACKUP_FINISHED)
-        confirmExit();
+        finish();
     });
   } else {
-      confirmExit();
+      finish();
   }
 }
 
@@ -1372,9 +1389,26 @@ function confirmExit(){
   });
 }
 
+//Nothing follows a successful call: the machine is on its way down. A rejection is the case worth
+//handling - no systemctl, or polkit refusing the session - and it is reported rather than only
+//logged, since the writer asked for a reboot and would otherwise be left watching a menu item that
+//did nothing at all.
+function rebootSystem(){
+  platform.rebootSystem().catch(function(err){
+    require('./components/controllers/error-log').logError(err);
+    const showBlockedActionAlert = require('./components/views/blocked-action_display');
+    showBlockedActionAlert('Could not reboot: ' + err.message);
+  });
+}
+
 //Adapts backup-project.js's stream of progress messages onto the alert popup: every message is
 //shown, and the one that means the run is over takes the popup down with it.
-function alertBackupResult(msg, allowExitWithoutBackup = false){
+//
+//`skipBackup` used to be a boolean meaning "and offer a button that quits anyway", with confirmExit
+//wired in here. It is the function itself now, because Reboot needs the same button to do something
+//else - a backup started from the menu still passes nothing and still gets no button at all
+//(backupProject calls this with the message alone), which is the case the flag existed to draw.
+function alertBackupResult(msg, skipBackup = null, skipLabel){
   const { showBackupAlert, hideBackupAlert } = require('./components/views/working_display');
   const { BACKUP_FINISHED } = require('./components/controllers/backup-project');
 
@@ -1383,7 +1417,7 @@ function alertBackupResult(msg, allowExitWithoutBackup = false){
     return;
   }
 
-  showBackupAlert(msg, allowExitWithoutBackup ? confirmExit : null);
+  showBackupAlert(msg, skipBackup, skipLabel);
 }
 
 async function addImportedChapter(chapDelta, title){
@@ -1546,6 +1580,9 @@ const menuCommands = {
     return showAbout(appVersion, platformInfo, proceedOrConfirmSave);
   } },
   'exit-app-clicked': { run: function(){ proceedOrConfirmSave(exitApp, true); } },
+  //Only ever sent on Linux - index.js does not put the menu item anywhere else. Same shape as Exit
+  //because it has the same consequence for unsaved work.
+  'reboot-clicked': { run: function(){ proceedOrConfirmSave(rebootMachine, true); } },
   'save-copy-clicked': { run: function(){ saveProjectCopy(); } },
   'help-doc-clicked': { run: function(){ return openHelpDoc(); } },
   'renumber-chapters-clicked': { run: function(){

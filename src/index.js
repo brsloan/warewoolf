@@ -270,6 +270,24 @@ const createWindow = () => {
           },
           accelerator: 'CmdOrCtrl+Shift+F'
         },
+        ...(isLinux ? [
+          {type: 'separator'},
+          {
+            //A writerDeck item, not a desktop one, which is why it is gated the same way the
+            //Wi-Fi Manager is: on a Pi that boots straight into WareWoolf with no desktop behind
+            //it, this menu is the whole machine's interface, and there is no panel, launcher or
+            //terminal to reach a reboot from. On a machine that has all three it would only be a
+            //worse copy of them.
+            //
+            //No accelerator, deliberately, and for a stronger version of the reason Backup and
+            //Dictionaries do without one: every other item on this menu can be undone or
+            //answered, and a chord that takes the machine down cannot.
+            label: 'Reboot',
+            click(item, focusWindow){
+              mainWindow.webContents.send('reboot-clicked');
+            }
+          }
+        ] : []),
         {type: 'separator'},
         {
           label: 'Exit',

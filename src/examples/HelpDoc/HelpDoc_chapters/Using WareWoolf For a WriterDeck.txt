@@ -66,3 +66,8 @@ Save and reboot. Your app should open! Close the app to get back to the command 
 If you’d like the computer to shut down when you exit the app instead of going back to command line, open up ~/.xinitrc like you did in step 6 and add one more line below “kill pid”:
 		shutdown -h 0
 Save and reboot. Your app will load! Exit the app. The computer shuts down! You’ve done it! (Maybe. Maybe some weird error popped up somewhere along the way and you can’t for the love of god figure it out. Welcome to tinkering with Linux.)  
+
+# Rebooting From Inside WareWoolf
+On Linux, the File menu ends with a **Reboot** item (it isn’t there on Windows or Mac, where you already have a desktop to do it from). On a writerDeck that boots straight into WareWoolf, this is usually the only way to restart the machine without leaving your manuscript for a terminal.
+It behaves exactly like Exit, except that the machine comes back: if you have unsaved changes you are asked about them first, and if you have auto-backup switched on, the backup runs before anything shuts down. There is no keyboard shortcut for it, on purpose.
+If your system refuses the reboot — some setups only allow it for an administrator — WareWoolf will tell you what it said rather than appearing to do nothing.

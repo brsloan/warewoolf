@@ -37,6 +37,7 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 * Built In File Manager: Rename, delete, copy, move, and organize files within WareWoolf (for use in a writerDeck).
 * Built In Wi-Fi Manager: turn wi-fi on/off, connect to new networks, etc. (Linux only, for use in a writerDeck).
 * Built In Battery Monitor: display battery percentage (Linux only, for use in a writerDeck)
+* File > Reboot: restart the machine from inside the app, after the usual save prompt and auto-backup (Linux only, for use in a writerDeck).
 * Word Counts / Goal: See total count, chapter count, session count, and set a goal to see a progress bar showing how close you are to completion.
 * Each chapter is saved as an individual file only loaded when you are working on that chapter. This keeps very long novels from slowing the application at all, even with low-memory computers such as a Raspberry Pi.
 * Outliner.
@@ -78,6 +79,7 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 ## Status
 
 Unreleased. Changes made:
+* New File > Reboot, on Linux only: restarts the machine from inside WareWoolf, which on a writerDeck that boots straight into the app is otherwise a trip to a terminal. It goes out the same way Exit does - you are asked about unsaved changes first, and an auto-backup still runs before the machine goes down - so it is a safer restart than the command line one, not just a quicker one. It uses systemctl, and if the system refuses the reboot it says so rather than doing nothing.
 * Keyboard shortcuts are now customizable: open the Shortcut Helper (Ctrl+H, Cmd+Shift+H on Mac), choose a shortcut, and press the keys you want. Backspace clears one; Restore Defaults puts them all back. Your changes are saved between sessions.
 * Fixed bug where the Bullets/Numbered List shortcut (Ctrl/Cmd+Shift+B) never worked, because the File > Backup menu item claimed the same keys. Backup is still on the File menu, without a shortcut.
 * Automatic substitutions as you type: straight quotes become curly ones (opening or closing to suit), two hyphens become an em dash, and three periods become an ellipsis. Ctrl+Z undoes just the substitution, leaving what you typed. All of it can be switched off, in whole or rule by rule, in File > Settings.
