@@ -6,9 +6,9 @@ Each backup file is saved with the project filename as a base and then a 14-digi
 
 Should you ever need to revert to a backup, you can use the File Manger to navigate to your Backups folder, find the desired backup, and use the Unzip button to decompress it. Then you can open it and save it wherever you want to.
 
-In addition to Auto-Backup, you can manually create a backup file at any time using the File \> Backup tool. It will follow the same rules of deletion as are set up for Auto-Backup.
+In addition to Auto-Backup, you can manually create a backup file at any time using the File > Backup tool. It will follow the same rules of deletion as are set up for Auto-Backup.
 
 # Save Copy
-**File \> Save Copy** is the third way to put your work somewhere else, and it is worth knowing how it differs from the other two. It writes a complete copy of the project—the .woolf file and every chapter—wherever you choose, and then leaves you working in the original, exactly where you were. **Save As**, by contrast, moves you: the new copy becomes the project you are editing, and the old files stay behind untouched.
+**File > Save Copy** is the third way to put your work somewhere else, and it is worth knowing how it differs from the other two. It writes a complete copy of the project—the .woolf file and every chapter—wherever you choose, and then leaves you working in the original, exactly where you were. **Save As**, by contrast, moves you: the new copy becomes the project you are editing, and the old files stay behind untouched.
 
 So Save Copy is what you want for striking off a version before a big revision—“Novel before cutting chapter nine”—without interrupting yourself. Unlike a backup, the copy is an ordinary project you can open straight away rather than a zipped archive, and it is not counted among the backups WareWoolf keeps, so it will never be deleted to make room for a newer one.

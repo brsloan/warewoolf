@@ -14,8 +14,8 @@ If you untick every dictionary, or the one you had selected has gone missing, Wa
 
 These two lists look identical—one field that doubles as filter and new-word box, the list itself, and Add, Edit and Delete beside it—but they mean different things:
 
-- The **Personal Dictionary** belongs to you. Every word in it is accepted in every project you open, on this machine, forever. It is the right place for words you will use again and again across everything you write: your own invented spellings, technical terms, and the like.
-- The **Project Dictionary** belongs to this manuscript. It travels with the .woolf file itself, so opening the project on another machine brings the words with it—and, just as importantly, a character named “Aurelion” in this novel does not turn up as “correctly spelled” in the next one you start.
+* The **Personal Dictionary** belongs to you. Every word in it is accepted in every project you open, on this machine, forever. It is the right place for words you will use again and again across everything you write: your own invented spellings, technical terms, and the like.
+* The **Project Dictionary** belongs to this manuscript. It travels with the .woolf file itself, so opening the project on another machine brings the words with it—and, just as importantly, a character named “Aurelion” in this novel does not turn up as “correctly spelled” in the next one you start.
 
 Which list a word should go in is really the same question **Add To Dictionary** and **Add To Project** ask you in the spellcheck popup: is this a word you will want everywhere, or a word that belongs to this story? Add To Dictionary keeps its accelerator key (**Alt+A**), since that is the more familiar path; the newer **Add To Project** answers to **Alt+P**, and is greyed out whenever there is no project open to hold the word.
 

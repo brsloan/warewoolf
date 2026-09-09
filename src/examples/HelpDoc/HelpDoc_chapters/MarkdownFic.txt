@@ -5,11 +5,11 @@ MarkdownFic is a Revised/Simplified Version of Markdown Designed For Fiction, wh
 Unlike Markdown, MarkdownFic allows you to use regular indented paragraphs without space between them. It will keep your manual tabs and your white space. You are freed from writing fiction like it’s a blog!
 
 The core supported syntax is all the same as Markdown:
-* Headings: ‘\# My Heading 1’, ‘\#\# My Heading 2’ 
+* Headings: ‘# My Heading 1’, ‘## My Heading 2’ 
 	* WareWoolf supports up to 4 heading levels.
 * Italics: ‘\*italicized text\*’
 * Bold: ‘\**bold text\**’
-* Blockquote: ‘\> blockquoted text’
+* Blockquote: ‘> blockquoted text’
 * Strikethrough: ‘\~~struck through text\~~’
 * Lists:
 	* Unordered: ‘- item’, ‘\* item’, or ‘+ item’
@@ -25,12 +25,12 @@ But here are some differences:
 * Tabs/Indentation. MarkdownFic ignores all tabs, so they can be used as normal for writing conventional pargraphs in fiction.
 * Paragraph breaks. Unlike in conventional Markdown, you do not have to put blank lines between paragraphs. This goes along with the indentation feature in allowing you to write fiction in a normal way. But you are allowed to add blank lines wherever you want them, as is often done between scenes, chapters, etc.
 * Text alignment. These are used at the beginning of a line to designate alignment for that paragraph.
-	* ‘\[>c] This line is centered.’
-	* ‘\[>r] This line is aligned right.’
-	* ‘\[>j] This line is justified.’
+	* ‘[>c] This line is centered.’
+	* ‘[>r] This line is aligned right.’
+	* ‘[>j] This line is justified.’
 	* no marker leaves the default, which is aligned left.
-	* note that these can be used in addition to Heading markers to create centered chapter titles. But they must be used **before** the heading marker. So a centered heading would be ‘\[>c] \# Heading’, not ‘\# \[>c] Heading’.
-	* the same goes for blockquotes and list items, so an alignment marker always comes first on the line: ‘\[>c] \> a centered quotation’, ‘\[>c] \* a centered bullet’. Where a list item is nested, its indent sits between the two markers, as in ‘\[>c] 	\* a centered, nested bullet’.
+	* note that these can be used in addition to Heading markers to create centered chapter titles. But they must be used **before** the heading marker. So a centered heading would be ‘[>c] # Heading’, not ‘# [>c] Heading’.
+	* the same goes for blockquotes and list items, so an alignment marker always comes first on the line: ‘[>c] > a centered quotation’, ‘[>c] \* a centered bullet’. Where a list item is nested, its indent sits between the two markers, as in ‘[>c] 	\* a centered, nested bullet’.
 * Multi-paragraph footnotes. In Markdown, this is done using tabs beneath the original footnote marker, but here you just use the same footnote marker at the beginning of each paragraph.
 * Note that if you want to apply multiple styles to one string of text, you can do so, but should always add them in the order **bold italic underline strikethrough**. So if you want one word to have all of those styles, it is written \**\*\__\~~word\~~\__\**\*.  Any other order will introduce errors, so this is wrong: \__\~~\**\*bad word\**\*\~~\__. It is not often that you need to style text with multiple styles, but just remember that when you do, you need to run the order* by us: **b i u s**: **__b__**old **__i__**talic **__u__**nderline **__s__**trikethrough*. I think that’s memorable, but then I am biased.
  

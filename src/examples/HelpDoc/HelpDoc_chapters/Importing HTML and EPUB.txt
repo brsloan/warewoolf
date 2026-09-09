@@ -20,8 +20,8 @@ Horizontal rules become a centred "\* \* \*", the usual manuscript scene break.
 # HTML Options
 Because one HTML file is often an entire book, the Import tool can split it into chapters as it reads:
 
-- "Split Into Chapters At Headings" with a heading level. This defaults to level 2, not level 1, because a book written as a single web page usually puts its *title* in the level 1 heading and its chapter titles in level 2. If you get one enormous chapter, try a different level.
-- "Split At Horizontal Rules", if the file separates its sections that way instead. This can be used on its own or together with the heading split.
+* "Split Into Chapters At Headings" with a heading level. This defaults to level 2, not level 1, because a book written as a single web page usually puts its *title* in the level 1 heading and its chapter titles in level 2. If you get one enormous chapter, try a different level.
+* "Split At Horizontal Rules", if the file separates its sections that way instead. This can be used on its own or together with the heading split.
 
 # EPUB Options
 An EPUB needs no split options, because it already knows where its chapters are: the ebook's own table of contents says so, and WareWoolf follows it. Each entry becomes a chapter, named the way the book names it.

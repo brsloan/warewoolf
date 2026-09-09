@@ -2,10 +2,10 @@
 
 As you type, WareWoolf quietly replaces a few things with what you almost certainly meant:
 
-- A straight double quote becomes a curly one, opening or closing to suit where it falls: “Get out,” she said.
-- A straight single quote does the same, and an apostrophe inside a word curls the right way round, so “don’t” and “it’s” come out properly.
-- Two hyphens in a row become an em dash: “wait” followed by two hyphens gives you “wait—”.
-- Three periods in a row become a single ellipsis: “well…”.
+* A straight double quote becomes a curly one, opening or closing to suit where it falls: “Get out,” she said.
+* A straight single quote does the same, and an apostrophe inside a word curls the right way round, so “don’t” and “it’s” come out properly.
+* Two hyphens in a row become an em dash: “wait” followed by two hyphens gives you “wait—”.
+* Three periods in a row become a single ellipsis: “well…”.
 
 If a substitution is not the one you wanted, press **Ctrl+Z** once. That puts back exactly what you typed and leaves the rest of the sentence alone. Press it again and you undo the typing itself, as usual.
 

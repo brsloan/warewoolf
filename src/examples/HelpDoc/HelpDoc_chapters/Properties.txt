@@ -1,6 +1,6 @@
 [>c] # Properties
 
-You can set project properties under File \> Properties. Here you can enter the Title and Author for the project, which are used for the metadata when you export .docx files, etc.
+You can set project properties under File > Properties. Here you can enter the Title and Author for the project, which are used for the metadata when you export .docx files, etc.
 
 This screen will also show you the current project’s filename and directory.
 
