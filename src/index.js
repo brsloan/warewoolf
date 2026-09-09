@@ -423,9 +423,9 @@ const createWindow = () => {
           }
         },
         {
-          label: 'Indent All Paragraphs',
+          label: 'Tab-Indent Paragraphs',
           click(item, focusWindow){
-            mainWindow.webContents.send('indent-all-clicked');
+            mainWindow.webContents.send('tab-indent-paragraphs-clicked');
           }
         },
         {

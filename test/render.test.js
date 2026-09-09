@@ -789,7 +789,7 @@ var ALL_MENU_CHANNELS = [
   'save-copy-clicked', 'help-doc-clicked', 'renumber-chapters-clicked', 'send-via-email-clicked',
   'view-error-log-clicked', 'file-manager-clicked', 'wifi-manager-clicked', 'save-backup-clicked',
   'settings-clicked', 'corkboard-clicked', 'file-opened-from-outside-warewoolf',
-  'indent-all-clicked', 'center-all-heads-clicked', 'dictionaries-clicked'
+  'tab-indent-paragraphs-clicked', 'center-all-heads-clicked', 'dictionaries-clicked'
 ];
 
 //The bridge set up for the current freshRender() call - the same object render.js subscribed its
@@ -824,8 +824,8 @@ test('a focus-gated command does nothing while the editor lacks focus, and runs 
 });
 
 //convert-tabs-clicked is project-wide, exactly like convert-first-lines-clicked and
-//convert-italics-clicked, but (like renumber-chapters/indent-all/center-all-heads) was never
-//focus-gated - preserved as-is per the comment above the table in render.js.
+//convert-italics-clicked, but (like renumber-chapters/tab-indent-paragraphs/center-all-heads) was
+//never focus-gated - preserved as-is per the comment above the table in render.js.
 test('a command with no focus guard runs regardless of where focus is', async function(){
   var r = await freshRender();
   //Empty project: showOutliner()'s project.chapters.forEach() then has nothing to iterate, so this

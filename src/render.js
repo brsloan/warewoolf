@@ -1443,7 +1443,7 @@ function proceedOrConfirmSave(continueFunc, refreshFileListFirst){
 //focus. Collecting them here means the focus guard - previously an ad-hoc `if(editorHasFocus())`
 //repeated at some call sites and not others, with no way to see the whole set at a glance - is now
 //one flag per entry, visible in one place. It does NOT change which channels currently have it:
-//convert-tabs/renumber-chapters/indent-all/center-all-heads all edit chapter content project-wide
+//convert-tabs/renumber-chapters/tab-indent-paragraphs/center-all-heads all edit chapter content
 //without requiring editor focus, exactly as before, even though convert-first-lines and
 //convert-italics (equally project-wide) do require it - a real inconsistency, left exactly as it
 //was rather than resolved here, since which behaviour is correct is a product decision.
@@ -1594,10 +1594,11 @@ const menuCommands = {
     const showCorkboard = require('./components/views/corkboard_display');
     return showCorkboard(project, platformInfo);
   } },
-  'indent-all-clicked': { run: async function(){
-    const { indentAllParasInAllChaps } = require('./components/controllers/indent-all');
-    await indentAllParasInAllChaps(project);
-    await displayChapterByIndex(project.activeChapterIndex);
+  'tab-indent-paragraphs-clicked': { run: function(){
+    const showTabIndentParagraphs = require('./components/views/tab-indent-paragraphs_display');
+    showTabIndentParagraphs(project, detached(function(){
+      return displayChapterByIndex(project.activeChapterIndex);
+    }));
   } },
   'center-all-heads-clicked': { run: async function(){
     const { centerAllHeadingsInAllChaps } = require('./components/controllers/center-all-heads');

@@ -137,11 +137,12 @@ var EVENTS = [
   'convert-tabs-clicked',
   'corkboard-clicked', 'delete-chapter-clicked', 'dictionaries-clicked', 'exit-app-clicked', 'export-clicked',
   'file-manager-clicked', 'find-replace-clicked', 'headings-to-chaps-clicked', 'help-doc-clicked',
-  'import-clicked', 'indent-all-clicked', 'new-project-clicked', 'open-clicked',
+  'import-clicked', 'new-project-clicked', 'open-clicked',
   'outliner-clicked', 'properties-clicked', 'renumber-chapters-clicked', 'restore-chapter-clicked',
   'save-as-clicked', 'save-backup-clicked', 'save-clicked', 'save-copy-clicked',
   'send-via-email-clicked', 'settings-clicked', 'shortcuts-clicked', 'spellcheck-clicked',
-  'split-chapter-clicked', 'view-error-log-clicked', 'wifi-manager-clicked', 'word-count-clicked'
+  'split-chapter-clicked', 'tab-indent-paragraphs-clicked', 'view-error-log-clicked',
+  'wifi-manager-clicked', 'word-count-clicked'
 ];
 
 //Every command that may cross the boundary. A backing that does not implement one rejects with
