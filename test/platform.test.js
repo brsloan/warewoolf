@@ -400,7 +400,7 @@ test('events are validated by name and unsubscribe cleanly', function(t){
   const seen = [];
   const handler = function(){ seen.push(1); };
 
-  assert.strictEqual(EVENTS.length, 38);
+  assert.strictEqual(EVENTS.length, 40);
   assert.ok(EVENTS.indexOf('save-clicked') > -1);
 
   const unsubscribe = built.platform.on('save-clicked', handler);
@@ -2909,6 +2909,98 @@ test('installUpdate resolves once apt closes with exit code 0', async function(t
   const installerPath = await vouchedInstaller(fixture, 'pkg.deb');
 
   await assert.doesNotReject(fixture.platform.installUpdate({ path: installerPath, password: 'secret' }));
+});
+
+// ---------------------------------------------------------------------------------------------
+// Group K - startSquirrelUpdate / quitAndInstallUpdate
+// ---------------------------------------------------------------------------------------------
+
+//Every test below constructs its own backing rather than reusing updatePlatform() (which is shaped
+//around downloadUpdate's httpsGet/paths seams) - what these two commands need is the `platform`
+//test seam and, for the happy path, the injected onStartSquirrelUpdate/onQuitAndInstallUpdate
+//hooks, the same shape platform.test.js already uses for onSetTheme/onShowAppMenu/onConfirmExit.
+function squirrelPlatform(t, deps){
+  return wrap(createNodeBacking(Object.assign({}, deps)));
+}
+
+test('startSquirrelUpdate rejects UNAVAILABLE off win32, without calling the hook', async function(t){
+  const seen = [];
+  const platform = squirrelPlatform(t, {
+    platform: 'linux',
+    onStartSquirrelUpdate: function(feedUrl){ seen.push(feedUrl); }
+  });
+
+  const err = await rejection(platform.startSquirrelUpdate({ tag: 'v2.6.0' }));
+
+  assert.strictEqual(err.code, CODES.UNAVAILABLE);
+  assert.deepStrictEqual(seen, []);
+});
+
+test('quitAndInstallUpdate rejects UNAVAILABLE off win32, without calling the hook', async function(t){
+  let called = 0;
+  const platform = squirrelPlatform(t, {
+    platform: 'darwin',
+    onQuitAndInstallUpdate: function(){ called++; }
+  });
+
+  const err = await rejection(platform.quitAndInstallUpdate());
+
+  assert.strictEqual(err.code, CODES.UNAVAILABLE);
+  assert.strictEqual(called, 0);
+});
+
+test('startSquirrelUpdate rejects INVALID_ARGUMENT for a tag that is not a plain vX.Y.Z, without calling the hook', async function(t){
+  const seen = [];
+  const platform = squirrelPlatform(t, {
+    platform: 'win32',
+    onStartSquirrelUpdate: function(feedUrl){ seen.push(feedUrl); }
+  });
+
+  const badTags = ['2.6.0', 'v2.6', 'v2.6.0-beta', 'v2.6.0/../../etc', '', undefined, null];
+
+  for(const tag of badTags){
+    const err = await rejection(platform.startSquirrelUpdate({ tag: tag }));
+    assert.strictEqual(err.code, CODES.INVALID_ARGUMENT, JSON.stringify(tag) + ' should be refused');
+  }
+
+  assert.deepStrictEqual(seen, [], 'a rejected tag must never reach the hook');
+});
+
+//The composed URL has to match what downloadUpdate's own allowlist is spelled from exactly, so the
+//two cannot drift - see the note on this command in platform.js.
+test('startSquirrelUpdate composes the feed URL from the tag and hands it to the hook', async function(t){
+  const seen = [];
+  const platform = squirrelPlatform(t, {
+    platform: 'win32',
+    onStartSquirrelUpdate: function(feedUrl){ seen.push(feedUrl); }
+  });
+
+  await platform.startSquirrelUpdate({ tag: 'v2.6.0' });
+
+  assert.deepStrictEqual(seen, ['https://github.com/brsloan/warewoolf/releases/download/v2.6.0']);
+});
+
+//startSquirrelUpdate resolves once the check is started, not once Squirrel has an answer - there is
+//nothing else for this call to wait on, since the outcome arrives later as an event.
+test('startSquirrelUpdate resolves as soon as the hook has been called', async function(t){
+  const platform = squirrelPlatform(t, {
+    platform: 'win32',
+    onStartSquirrelUpdate: function(){}
+  });
+
+  await assert.doesNotReject(platform.startSquirrelUpdate({ tag: 'v2.6.0' }));
+});
+
+test('quitAndInstallUpdate calls its injected hook on win32', async function(t){
+  let called = 0;
+  const platform = squirrelPlatform(t, {
+    platform: 'win32',
+    onQuitAndInstallUpdate: function(){ called++; }
+  });
+
+  await platform.quitAndInstallUpdate();
+
+  assert.strictEqual(called, 1);
 });
 
 // ---------------------------------------------------------------------------------------------

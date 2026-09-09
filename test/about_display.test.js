@@ -22,7 +22,9 @@ function freshAboutDisplay(mocks){
     loaded: true,
     exports: {
       getUpdates: mocks.getUpdates || function(){},
-      downloadUpdate: mocks.downloadUpdate || function(){}
+      downloadUpdate: mocks.downloadUpdate || function(){},
+      startWindowsUpdate: mocks.startWindowsUpdate || function(){},
+      finishWindowsUpdate: mocks.finishWindowsUpdate || function(){}
     }
   };
   require.cache[installUpdateDisplayPath] = {
@@ -46,6 +48,13 @@ function bodyShell(){
 //the shape showAbout expects rather than patching a global.
 function platformInfo(platform){
   return { platform: platform, arch: 'x64' };
+}
+
+//Stands in for render.js's own proceedOrConfirmSave: runs the continuation straight through, as if
+//there were never any unsaved work to ask about. Tests that care whether the check ran at all pass
+//their own spy instead.
+function immediateConfirm(continueFunc){
+  continueFunc();
 }
 
 function findButton(text){
@@ -143,6 +152,8 @@ test('no update available re-enables the button and reports no updates', functio
   assert.strictEqual(checkBtn.disabled, false);
 });
 
+//darwin here (not win32): win32 grows its own "Install Update" label below, so this asserts the
+//shared "found an update" rendering on the platform that still uses it unchanged.
 test('an available update shows the updates panel with the tag/date/description and focuses Download', function(t){
   t.mock.method(fs, 'existsSync', function(){ return false; });
   var latest = {
@@ -155,7 +166,7 @@ test('an available update shows the updates panel with the tag/date/description 
     getUpdates: function(version, cb){ cb(latest); }
   });
 
-  showAbout('2.3.1', platformInfo('win32'));
+  showAbout('2.3.1', platformInfo('darwin'));
   var checkBtn = findButton('Check For Updates');
   checkBtn.onclick();
 
@@ -166,7 +177,9 @@ test('an available update shows the updates panel with the tag/date/description 
   assert.strictEqual(document.activeElement, findButton('Download'));
 });
 
-test('on non-Linux, clicking Download passes a callback that reports the file was saved to the downloads folder', function(t){
+//darwin here too, for the same reason: this is the manual-download path win32 still falls back to
+//on failure, but which is otherwise not win32's own happy path any more.
+test('on macOS, clicking Download passes a callback that reports the file was saved to the downloads folder', function(t){
   t.mock.method(fs, 'existsSync', function(){ return false; });
   var downloadCalls = [];
   var latest = {
@@ -178,7 +191,7 @@ test('on non-Linux, clicking Download passes a callback that reports the file wa
     downloadUpdate: function(downloadInfo, cb){ downloadCalls.push({ downloadInfo, cb }); }
   });
 
-  showAbout('2.3.1', platformInfo('win32'));
+  showAbout('2.3.1', platformInfo('darwin'));
   findButton('Check For Updates').onclick();
   var downloadBtn = findButton('Download');
   downloadBtn.onclick();
@@ -216,6 +229,118 @@ test('on Linux, clicking Download hands off to showInstallUpdate instead of the 
   //downloadUpdate was handed showInstallUpdate itself as its completion callback
   downloadCalls[0]('/tmp/warewoolf_2.4.0_amd64.deb');
   assert.deepStrictEqual(showInstallUpdateCalls, ['/tmp/warewoolf_2.4.0_amd64.deb']);
+});
+
+//---------------------------------------------------------------------------
+// win32: Install Update / Restart To Finish / Download Installer
+//---------------------------------------------------------------------------
+
+function win32Latest(){
+  return {
+    tag: 'v2.4.0', date: '2026-01-15T00:00:00Z', description: 'desc',
+    downloadInfo: { name: 'warewoolf_2.4.0_Windows_x64.exe', url: 'https://example.com/x.exe' }
+  };
+}
+
+//The updates-panel button relabels itself via .innerText as the flow progresses, the same as
+//checkUpdatesBtn already does elsewhere in this file - and jsdom's innerText does not update
+//textContent (see the file-level comment on innerText above), so these grab the one button in the
+//panel by its container rather than by findButton()'s textContent match, exactly as the existing
+//"clicking Download..." tests capture their button reference once and read .innerText off it
+//afterward instead of re-querying by name.
+function updatesButton(){
+  return document.querySelector('.updates-panel button');
+}
+
+test('on win32, an available update shows Install Update rather than Download', function(t){
+  t.mock.method(fs, 'existsSync', function(){ return false; });
+  var showAbout = freshAboutDisplay({
+    getUpdates: function(version, cb){ cb(win32Latest()); }
+  });
+
+  showAbout('2.3.1', platformInfo('win32'), immediateConfirm);
+  findButton('Check For Updates').onclick();
+
+  assert.strictEqual(updatesButton().innerText, 'Install Update');
+});
+
+test('on win32, clicking Install Update disables the button, shows the wait message, and starts the Squirrel update with the release tag', function(t){
+  t.mock.method(fs, 'existsSync', function(){ return false; });
+  var startCalls = [];
+  var showAbout = freshAboutDisplay({
+    getUpdates: function(version, cb){ cb(win32Latest()); },
+    startWindowsUpdate: function(tag, onDownloaded, onFailed){ startCalls.push(tag); }
+  });
+
+  showAbout('2.3.1', platformInfo('win32'), immediateConfirm);
+  findButton('Check For Updates').onclick();
+  var installBtn = updatesButton();
+  installBtn.onclick();
+
+  assert.deepStrictEqual(startCalls, ['v2.4.0']);
+  assert.strictEqual(installBtn.disabled, true);
+  assert.match(installBtn.innerText, /Downloading update/);
+});
+
+test('on win32, the downloaded event swaps in Restart To Finish, which runs the unsaved-work check before finishing the update', function(t){
+  t.mock.method(fs, 'existsSync', function(){ return false; });
+  var finishCalls = 0;
+  var confirmCalls = 0;
+  var onDownloaded;
+  var showAbout = freshAboutDisplay({
+    getUpdates: function(version, cb){ cb(win32Latest()); },
+    startWindowsUpdate: function(tag, downloaded, failed){ onDownloaded = downloaded; },
+    finishWindowsUpdate: function(){ finishCalls++; }
+  });
+
+  //Not immediateConfirm: this test needs to see that Restart went *through* the check, not just
+  //that finishWindowsUpdate eventually ran - a direct quitAndInstallUpdate call from the button
+  //handler would also leave finishCalls at 1, which is exactly the bug this check exists to prevent.
+  var confirmBeforeContinuing = function(continueFunc){
+    confirmCalls++;
+    continueFunc();
+  };
+
+  showAbout('2.3.1', platformInfo('win32'), confirmBeforeContinuing);
+  findButton('Check For Updates').onclick();
+  updatesButton().onclick();
+  onDownloaded();
+
+  var restartBtn = updatesButton();
+  assert.strictEqual(restartBtn.innerText, 'Restart To Finish');
+  assert.strictEqual(document.querySelector('.updates-text').innerText, 'Update ready.');
+
+  restartBtn.onclick();
+
+  assert.strictEqual(confirmCalls, 1, 'Restart must run the same unsaved-work check exit-app-clicked uses');
+  assert.strictEqual(finishCalls, 1);
+});
+
+test('on win32, the failed event falls back to Download Installer and the manual download path', function(t){
+  t.mock.method(fs, 'existsSync', function(){ return false; });
+  var latest = win32Latest();
+  var downloadCalls = [];
+  var onFailed;
+  var showAbout = freshAboutDisplay({
+    getUpdates: function(version, cb){ cb(latest); },
+    startWindowsUpdate: function(tag, downloaded, failed){ onFailed = failed; },
+    downloadUpdate: function(downloadInfo, cb){ downloadCalls.push(downloadInfo); }
+  });
+
+  showAbout('2.3.1', platformInfo('win32'), immediateConfirm);
+  findButton('Check For Updates').onclick();
+  updatesButton().onclick();
+  onFailed('Squirrel could not reach the feed.');
+
+  var fallbackBtn = updatesButton();
+  assert.strictEqual(fallbackBtn.innerText, 'Download Installer');
+  assert.match(document.querySelector('.updates-text').innerText, /Squirrel could not reach the feed\./);
+  assert.match(document.querySelector('.updates-text').innerText, /install it yourself instead/);
+
+  fallbackBtn.onclick();
+
+  assert.strictEqual(downloadCalls.length, 1);
+  assert.strictEqual(downloadCalls[0], latest.downloadInfo);
 });
 
 test('View License loads and displays the license text from sysDirectories.app and focuses it', async function(t){

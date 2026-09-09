@@ -30,10 +30,10 @@ function platformOver(invokeImpl){
 
 //The subset list this file used to carry is gone: through Phase 8 the main process only handled
 //group A, so the backing declared what it had reached so far. Phase 9a registers a handler for all
-//70 at once, and a hand-maintained list here would only be a second place to forget one.
+//72 at once, and a hand-maintained list here would only be a second place to forget one.
 test('the backing implements every command the contract declares', function(){
   assert.deepStrictEqual(IMPLEMENTED.slice().sort(), Object.keys(COMMANDS).sort());
-  assert.strictEqual(IMPLEMENTED.length, 70);
+  assert.strictEqual(IMPLEMENTED.length, 72);
 });
 
 test('every command invokes the bridge under its own name, with the args passed through', async function(){
@@ -158,5 +158,5 @@ test('an event name outside the contract never reaches the bridge', function(){
     return err.code === CODES.INVALID_ARGUMENT;
   });
   assert.strictEqual(Object.keys(over.bridge._listeners).length, 0);
-  assert.strictEqual(EVENTS.length, 38);
+  assert.strictEqual(EVENTS.length, 40);
 });

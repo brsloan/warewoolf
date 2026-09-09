@@ -6,8 +6,8 @@ before Phase 4, for groups D/E/I before Phase 5, for groups F/G/H before
 Phase 6, and for group J before Phase 7.
 
 **Phase 1 has since turned this into executable form.**
-`src/components/controllers/platform.js` is now the authoritative contract — 70
-commands and 38 events, with the shapes below — and this document is its prose
+`src/components/controllers/platform.js` is now the authoritative contract — 72
+commands and 40 events, with the shapes below — and this document is its prose
 companion. Where the two disagree, the file wins; the three places they disagreed
 at the end of Phase 1 are corrected here and marked **(corrected in Phase 1)**,
 the two Phase 4 found in group B are marked **(corrected in Phase 4)**, the one
@@ -670,6 +670,7 @@ phase's own work, the first time that was true since Phase 1 itself.
 | `checkForUpdate()` | `https.request` (`updates.js:40`) | `tauri-plugin-updater`, or `reqwest` |
 | `downloadUpdate(url)` | `updates.js:185-252` | same |
 | `installUpdate(path, password)` | `spawn('sudo', ['-S','apt','install'])` (`updates.js:259`) | same |
+| `startSquirrelUpdate(tag)` / `quitAndInstallUpdate()` | Electron's built-in `autoUpdater`, driven from `index.js` (the Windows in-app update plan) | no Tauri target — Squirrel.Windows is an Electron-era mechanism; a Tauri port would use `tauri-plugin-updater`'s own Windows path instead |
 | `sendEmail({service, sender, secret, receiver, attachments})` | `nodemailer` (`email-doc.js:190`) | `lettre` |
 | `wifiListNetworks()` / `wifiConnect(ssid, psk)` / `wifiGetAddress()` | `nmcli` and `hostname -I` spawns (`wifi-manager.js:13,62,91`) | `Command` or D-Bus |
 | `wifiGetConnectionState()` / `wifiGetStatus()` / `wifiEnable()` / `wifiDisable()` | `nmcli` spawns kept in `wifi-manager.js` itself until now (`getConnectionState`/`getWifiStatus`/`disableWifi`/`enableWifi`) — added after Phase 8, closing the gap that phase recorded rather than converted | `Command` or D-Bus, same as the three above |
@@ -882,6 +883,28 @@ shape here; the cancellation itself is mutation-tested in
 `isCurrent()` check or the one right after its `await` fails a test written
 for exactly that line, and nothing else.
 
+**`startSquirrelUpdate(tag)` / `quitAndInstallUpdate()` are Windows' own
+counterpart to `downloadUpdate`/`installUpdate`, added by the Windows in-app
+update plan rather than by Phase 8.** Squirrel.Windows applies an update in
+place through `Update.exe`, already installed beside the app, so there is no
+installer for the writer to run and no privileged process for this backing to
+spawn — only Electron's built-in `autoUpdater` to drive, which is a
+main-process API and lives in `index.js` alongside `nativeTheme`/the
+application menu/`app.quit()` rather than in `platform-node.js` itself, the
+same split group A already draws. `startSquirrelUpdate` takes `tag`, not a
+URL, for the same reason `downloadUpdate` takes only `url` and not the
+`destPath` the Phase 9c correction above removed: the renderer already has the
+tag from `checkForUpdate`'s own response, and the backing composes the
+Squirrel feed URL from it against the same `RELEASE_ASSET_HOSTNAME`/
+`RELEASE_ASSET_PATH_PREFIX` constants `downloadUpdate`'s allowlist is spelled
+from, so the two cannot drift apart. Both commands reject `UNAVAILABLE` off
+win32 — the same distinction `getBatteryCapacity` below draws for "the
+facility itself is absent" — and `startSquirrelUpdate` resolves as soon as the
+check is *started*, not once an update is ready: Squirrel's own download has
+no synchronous completion for this call to await and no progress to report, so
+the outcome arrives later as one of two new events, `app-update-downloaded` or
+`app-update-failed` (carrying a message string).
+
 `getBatteryCapacity()` folds `battery-monitor.js`'s old two-step
 `getBatteryName()` + `queryKernel()` into one native call, and both functions
 — along with `getBatteryPercent` — are gone from that file entirely; nothing
@@ -900,11 +923,11 @@ but not the ordinary absence of `nmcli`/a battery off a Pi.
 
 ## Summary
 
-**70 commands and 38 events**, as declared in `platform.js`. This document
+**72 commands and 40 events**, as declared in `platform.js`. This document
 originally estimated "~47" from its own tables; the real count came out of writing
 the contract down, mostly from group J growing and from load/save pairs listed on
 one row being two commands each. Per group: A 7, B 5, C 6, D 8, E 7, F 4, G 4,
-H 3, I 7, J 7, K 12.
+H 3, I 7, J 7, K 14.
 
 This tally read "65 commands and 36 events" until the HTML/EPUB import work, and
 was stale by two features rather than one: group I grew from 3 to 7 when the
@@ -917,7 +940,10 @@ drift and those are what actually catch a missed registration. K grew from 8 to 
 `wifi-manager.js` gap that phase's own write-up recorded rather than converted
 (`wifiGetConnectionState`, `wifiGetStatus`, `wifiEnable`, `wifiDisable`) —
 recorded in group K above, not folded into the Phase 8 write-up itself since it
-was done as a separate step ahead of Phase 9.
+was done as a separate step ahead of Phase 9. It grew again, from 12 to 14, with
+the Windows in-app update pair below (`startSquirrelUpdate`, `quitAndInstallUpdate`),
+and the same two events they added (`app-update-downloaded`, `app-update-failed`)
+took EVENTS from 38 to 40.
 
 By disposition:
 

@@ -35,6 +35,15 @@ function freshUpdates(deps){
   return require(updatesPath);
 }
 
+//startWindowsUpdate/finishWindowsUpdate need the bridge itself, not just the module exports - the
+//events they subscribe to only exist as something a test can fire (bridge.emit) or count
+//(bridge.listenerCount) on that fake bridge, the same one platform.on/off talk to underneath.
+function freshUpdatesWithBridge(deps){
+  delete require.cache[updatesPath];
+  const bridge = installBridge(deps);
+  return { updates: require(updatesPath), bridge: bridge };
+}
+
 function tempDir(){
   return fs.mkdtempSync(path.join(os.tmpdir(), 'warewoolf-updates-'));
 }
@@ -478,6 +487,27 @@ test('a legacy mac build finds no binary in a release that has no legacy asset',
   assert.strictEqual(latest.downloadInfo, undefined);
 });
 
+//Regression: Step 1 of the Windows autoupdate plan adds RELEASES and warewoolf-<version>-full.nupkg
+//to the assets a Windows release actually carries alongside the .exe. extractUpdateDownloadInfo
+//matches by bin.name.includes(binType) over a find(), so a release listing that includes them must
+//still hand win32 the .exe and not accidentally match one of the two new files (neither one
+//contains "Windows_x64", but this is the regression that would show it if a future rename broke
+//that).
+test('getUpdates regression: matches the Windows installer even when RELEASES and the .nupkg feed file are also listed as assets', async function(t){
+  mockReleaseResponse(t, { body: releaseJson('v2.0.0', { assets: [
+    { name: 'warewoolf_2.0.0_amd64.deb', browser_download_url: 'https://example.com/2.0.0/amd64.deb' },
+    { name: 'warewoolf_2.0.0_Windows_x64.exe', browser_download_url: 'https://example.com/2.0.0/win.exe' },
+    { name: 'RELEASES', browser_download_url: 'https://example.com/2.0.0/RELEASES' },
+    { name: 'warewoolf-2.0.0-full.nupkg', browser_download_url: 'https://example.com/2.0.0/warewoolf-2.0.0-full.nupkg' }
+  ] }) });
+  asPlatform(t, { platform: 'win32', arch: 'x64' });
+  const { getUpdates } = freshUpdates();
+
+  const latest = await new Promise(function(resolve){ getUpdates('1.0.0', resolve); });
+
+  assert.strictEqual(latest.downloadInfo.name, 'warewoolf_2.0.0_Windows_x64.exe');
+});
+
 test('getUpdates regression: leaves downloadInfo undefined instead of throwing on an unsupported platform/arch combo', async function(t){
   mockReleaseResponse(t, { body: releaseJson('v2.0.0') });
   const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
@@ -863,4 +893,91 @@ test('installUpdate regression: invokes the onDone callback with the process exi
   await new Promise(function(resolve){ setImmediate(resolve); });
 
   assert.deepStrictEqual(calls, [1]);
+});
+
+//---------------------------------------------------------------------------
+// startWindowsUpdate / finishWindowsUpdate
+//---------------------------------------------------------------------------
+
+test('startWindowsUpdate calls startSquirrelUpdate with the tag and subscribes to both outcome events', async function(t){
+  const seenTags = [];
+  const { updates, bridge } = freshUpdatesWithBridge({
+    platform: 'win32',
+    onStartSquirrelUpdate: function(feedUrl){ seenTags.push(feedUrl); }
+  });
+
+  updates.startWindowsUpdate('v2.6.0', function(){}, function(){});
+  await flushMicrotask();
+
+  assert.deepStrictEqual(seenTags, ['https://github.com/brsloan/warewoolf/releases/download/v2.6.0']);
+  assert.strictEqual(bridge.listenerCount('app-update-downloaded'), 1);
+  assert.strictEqual(bridge.listenerCount('app-update-failed'), 1);
+});
+
+test('startWindowsUpdate fires onDownloaded and unsubscribes both listeners when the download finishes', async function(t){
+  const { updates, bridge } = freshUpdatesWithBridge({
+    platform: 'win32',
+    onStartSquirrelUpdate: function(){}
+  });
+
+  let downloadedCalls = 0;
+  let failedCalls = 0;
+  updates.startWindowsUpdate('v2.6.0', function(){ downloadedCalls++; }, function(){ failedCalls++; });
+  await flushMicrotask();
+
+  bridge.emit('app-update-downloaded');
+
+  assert.strictEqual(downloadedCalls, 1);
+  assert.strictEqual(failedCalls, 0);
+  assert.strictEqual(bridge.listenerCount('app-update-downloaded'), 0,
+    'the downloaded listener must not be left behind');
+  assert.strictEqual(bridge.listenerCount('app-update-failed'), 0,
+    'the failed listener must not be left behind either, once either event has fired');
+});
+
+test('startWindowsUpdate fires onFailed with the message and unsubscribes both listeners when the update fails', async function(t){
+  const { updates, bridge } = freshUpdatesWithBridge({
+    platform: 'win32',
+    onStartSquirrelUpdate: function(){}
+  });
+
+  let downloadedCalls = 0;
+  const failedMessages = [];
+  updates.startWindowsUpdate('v2.6.0', function(){ downloadedCalls++; }, function(message){ failedMessages.push(message); });
+  await flushMicrotask();
+
+  bridge.emit('app-update-failed', 'Update failed: network is unreachable.');
+
+  assert.strictEqual(downloadedCalls, 0);
+  assert.deepStrictEqual(failedMessages, ['Update failed: network is unreachable.']);
+  assert.strictEqual(bridge.listenerCount('app-update-downloaded'), 0);
+  assert.strictEqual(bridge.listenerCount('app-update-failed'), 0);
+});
+
+//Regression coverage for the seam test/fake-bridge.js's listenerCount exists to catch: a writer who
+//clicks Install, hits an immediate rejection (a bad tag, or this off win32), and clicks again must
+//not accumulate listeners across attempts.
+test('startWindowsUpdate reports onFailed and leaves zero listeners behind when startSquirrelUpdate itself rejects', async function(t){
+  const { updates, bridge } = freshUpdatesWithBridge({ platform: 'linux' });
+
+  const failedMessages = [];
+  updates.startWindowsUpdate('v2.6.0', function(){}, function(message){ failedMessages.push(message); });
+  await flushMicrotask();
+
+  assert.strictEqual(failedMessages.length, 1);
+  assert.strictEqual(bridge.listenerCount('app-update-downloaded'), 0);
+  assert.strictEqual(bridge.listenerCount('app-update-failed'), 0);
+});
+
+test('finishWindowsUpdate calls quitAndInstallUpdate', async function(t){
+  let called = 0;
+  const { updates } = freshUpdatesWithBridge({
+    platform: 'win32',
+    onQuitAndInstallUpdate: function(){ called++; }
+  });
+
+  updates.finishWindowsUpdate();
+  await flushMicrotask();
+
+  assert.strictEqual(called, 1);
 });

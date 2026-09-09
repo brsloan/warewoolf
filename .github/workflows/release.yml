@@ -217,22 +217,58 @@ jobs:
       # maker-zip's packaged app folder under a name that had always meant an installer, and
       # nothing in the pipeline noticed for four releases. An installer is a PE binary and comes
       # with Squirrel's feed files beside it; a zipped app folder is neither.
+      #
+      # Also asserts the RELEASES line names the exact .nupkg being uploaded beside it - that file
+      # must not be renamed (RELEASES references it by exact filename, and Squirrel looks for
+      # whatever the line says), and this is the one place that would otherwise only fail on a
+      # writer's machine, applying an update.
       - name: Verify the Windows asset is an installer
         shell: bash
         run: |
           set -euo pipefail
-          exe="out/make/squirrel.windows/x64/warewoolf_${{ needs.check-version.outputs.version }}_Windows_x64.exe"
+          dir="out/make/squirrel.windows/x64"
+          exe="$dir/warewoolf_${{ needs.check-version.outputs.version }}_Windows_x64.exe"
+          nupkg="$dir/warewoolf-${{ needs.check-version.outputs.version }}-full.nupkg"
           test -f "$exe"
-          test -f out/make/squirrel.windows/x64/RELEASES
+          test -f "$dir/RELEASES"
+          test -f "$nupkg"
           if [ "$(head -c 2 "$exe")" != "MZ" ]; then
             echo "::error::$exe is not a Windows executable - the Squirrel maker did not run"
             exit 1
           fi
-          echo "$exe is a PE binary, with RELEASES beside it"
+          if ! grep -q " $(basename "$nupkg") " "$dir/RELEASES"; then
+            echo "::error::RELEASES does not name $(basename "$nupkg") - Squirrel would look for a file that isn't there"
+            exit 1
+          fi
+          echo "$exe is a PE binary, with RELEASES naming $(basename "$nupkg") beside it"
+      # Neither warewoolf-<version>-full.nupkg nor RELEASES may contain amd64/arm64/Windows_x64/
+      # MacOS_Intel/MacOS_AppleSilicon/MacOS_Legacy - extractUpdateDownloadInfo
+      # (src/components/controllers/updates.js) matches a release asset to this platform/arch by
+      # bin.name.includes(binType) over a find(), so an asset whose name happened to contain one of
+      # those substrings could be handed to the wrong platform, or shadow the real installer,
+      # depending on asset ordering. This is the same hazard the macOS job's AppleSilicon/
+      # MacOS_Legacy naming already avoids; checked here so a future asset name is caught before it
+      # ships rather than discovered on a writer's machine.
+      - name: Verify the Squirrel feed files don't collide with an updater bin-type match
+        shell: bash
+        run: |
+          set -euo pipefail
+          dir="out/make/squirrel.windows/x64"
+          for name in RELEASES "warewoolf-${{ needs.check-version.outputs.version }}-full.nupkg"; do
+            for binType in amd64 arm64 Windows_x64 MacOS_Intel MacOS_AppleSilicon MacOS_Legacy; do
+              if [[ "$name" == *"$binType"* ]]; then
+                echo "::error::$name contains \"$binType\", which the in-app updater matches on - rename it"
+                exit 1
+              fi
+            done
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: release-asset-windows-x64
-          path: out/make/squirrel.windows/x64/warewoolf_*_Windows_x64.exe
+          path: |
+            out/make/squirrel.windows/x64/warewoolf_*_Windows_x64.exe
+            out/make/squirrel.windows/x64/warewoolf-*-full.nupkg
+            out/make/squirrel.windows/x64/RELEASES
           if-no-files-found: error
 
   release:

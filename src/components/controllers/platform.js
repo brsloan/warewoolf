@@ -142,7 +142,8 @@ var EVENTS = [
   'save-as-clicked', 'save-backup-clicked', 'save-clicked', 'save-copy-clicked',
   'send-via-email-clicked', 'settings-clicked', 'shortcuts-clicked', 'spellcheck-clicked',
   'split-chapter-clicked', 'tab-indent-paragraphs-clicked', 'view-error-log-clicked',
-  'wifi-manager-clicked', 'word-count-clicked'
+  'wifi-manager-clicked', 'word-count-clicked',
+  'app-update-downloaded', 'app-update-failed'
 ];
 
 //Every command that may cross the boundary. A backing that does not implement one rejects with
@@ -427,6 +428,31 @@ var COMMANDS = {
   //additional shell commands (there is no shell: this is spawn(), not exec()) and behind a `--`
   //terminator so a path could not be read as an apt option either.
   installUpdate: { group: 'K', params: ['path', 'password'], returns: 'void' },
+  //Windows' own counterpart to downloadUpdate/installUpdate. Squirrel.Windows applies an update in
+  //place through Update.exe, already installed beside this app, so there is no installer for the
+  //writer to run and no privileged process for this backing to spawn - only Electron's built-in
+  //autoUpdater to drive, which is a main-process API and lives in index.js the way onSetTheme/
+  //onShowAppMenu/onConfirmExit already do (see the decisions at the top of the plan this pair
+  //implements).
+  //
+  //`tag` and not a URL, for the same reason downloadUpdate takes only `url` and not the `destPath`
+  //Phase 9c removed: the renderer does not get to name where this backing fetches from. It already
+  //has the tag from checkForUpdate's own response, and the backing composes the Squirrel feed URL
+  //from it against the same RELEASE_ASSET_HOSTNAME/RELEASE_ASSET_PATH_PREFIX constants
+  //downloadUpdate's allowlist is spelled from, so the two cannot drift apart. A tag that is not a
+  //plain vX.Y.Z is rejected INVALID_ARGUMENT before it can walk the composed URL out of that prefix.
+  //
+  //Both are win32-only and reject UNAVAILABLE everywhere else - the same distinction
+  //getBatteryCapacity already draws for "the facility itself is absent" (Squirrel.Windows is a
+  //Windows mechanism) rather than NOT_IMPLEMENTED, which would say the command itself does not
+  //exist on this backing.
+  //
+  //startSquirrelUpdate resolves as soon as the check is *started*, not once an update is ready -
+  //Squirrel's own download has no synchronous completion for this call to await and no progress to
+  //report, so the outcome arrives later as one of two events: 'app-update-downloaded', or
+  //'app-update-failed' carrying a message string.
+  startSquirrelUpdate: { group: 'K', params: ['tag'], returns: 'void' },
+  quitAndInstallUpdate: { group: 'K', params: [], returns: 'void' },
   //Takes SAVED_SECRET or a literal the writer just typed. This command is why getCredential does
   //not exist: the password never needed to reach the renderer, because the thing that consumes it
   //is also native.

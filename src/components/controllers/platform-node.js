@@ -102,6 +102,11 @@ const RELEASE_ASSET_PATH_PREFIX = '/' + RELEASE_REPO + '/releases/download/';
 //climb out of the directory it allocated.
 const RELEASE_ASSET_NAME_PATTERN = /^[A-Za-z0-9_][A-Za-z0-9._+-]*$/;
 const UPDATE_DIR_PREFIX = 'warewoolf-update-';
+//What startSquirrelUpdate accepts for a tag before composing a feed URL out of it - a plain
+//"vX.Y.Z", exactly the shape checkForUpdate's own tag_name is in. Refused rather than encoded, the
+//same discipline RELEASE_ASSET_NAME_PATTERN follows: nothing that fails this can walk the composed
+//URL out of RELEASE_ASSET_PATH_PREFIX.
+const SQUIRREL_UPDATE_TAG_PATTERN = /^v\d+\.\d+\.\d+$/;
 //Linux-only sysfs path for battery state - absent by construction on Windows/macOS, which is what
 //makes getBatteryCapacity's UNAVAILABLE path exercisable in this test suite without a real Pi.
 const POWER_SUPPLY_PATH = '/sys/class/power_supply';
@@ -169,6 +174,12 @@ function createNodeBacking(deps){
   var onShowAppMenu = options.onShowAppMenu || function(){};
   var onConfirmExit = options.onConfirmExit || function(){};
   var onNotifyRendererReady = options.onNotifyRendererReady || function(){};
+  //Group K's Windows update pair. Not group A, despite living beside its neighbours here in the
+  //options destructuring - autoUpdater is a main-process API exactly like nativeTheme/the
+  //application menu/app.quit, so the same "inject the hook, default to a no-op for the test suite"
+  //shape applies, even though the commands themselves are declared in group K.
+  var onStartSquirrelUpdate = options.onStartSquirrelUpdate || function(){};
+  var onQuitAndInstallUpdate = options.onQuitAndInstallUpdate || function(){};
 
   //Stores are cached rather than rebuilt per call because a passphrase-derived session key lives in
   //the store's closure. Discarding the instance is therefore how lockCredential locks: the key has
@@ -265,6 +276,8 @@ function createNodeBacking(deps){
     checkForUpdate: checkForUpdate,
     downloadUpdate: downloadUpdate,
     installUpdate: installUpdate,
+    startSquirrelUpdate: startSquirrelUpdate,
+    quitAndInstallUpdate: quitAndInstallUpdate,
     sendEmail: sendEmail,
     wifiListNetworks: wifiListNetworks,
     wifiConnect: wifiConnect,
@@ -1852,6 +1865,41 @@ function createNodeBacking(deps){
           { command: 'installUpdate', exitCode: exitCode }));
       });
     });
+  }
+
+  //Shared guard for the pair below: Squirrel.Windows is a Windows mechanism, so off win32 the
+  //facility itself is absent - UNAVAILABLE, the same distinction getBatteryCapacity draws for "no
+  //battery present" rather than NOT_IMPLEMENTED, which would say the command does not exist here.
+  function requireWindowsUpdatePlatform(command){
+    if(currentPlatform() !== 'win32')
+      throw PlatformError(CODES.UNAVAILABLE,
+        'Squirrel updates are only available on Windows.', { command: command });
+  }
+
+  //Validates and composes, then hands off to the injected hook - the same division downloadUpdate
+  //draws between checking a URL and fetching it. Nothing about the composed feed URL is
+  //renderer-supplied beyond the tag, and the tag has to be a plain vX.Y.Z before it can become part
+  //of one, so nothing here can walk the result out of RELEASE_ASSET_PATH_PREFIX.
+  //
+  //Resolves once the hook has been called, not once an update is ready - see the comment on this
+  //command in platform.js for why there is nothing else for this call to wait on.
+  function startSquirrelUpdate(args){
+    requireWindowsUpdatePlatform('startSquirrelUpdate');
+
+    var tag = args == null ? undefined : args.tag;
+    if(typeof tag !== 'string' || !SQUIRREL_UPDATE_TAG_PATTERN.test(tag))
+      throw PlatformError(CODES.INVALID_ARGUMENT,
+        'Refusing to start a Squirrel update for tag "' + tag + '": expected a plain vX.Y.Z release tag.',
+        { command: 'startSquirrelUpdate' });
+
+    onStartSquirrelUpdate('https://' + RELEASE_ASSET_HOSTNAME + RELEASE_ASSET_PATH_PREFIX + tag);
+  }
+
+  //Nothing left to validate by the time a writer clicks Restart - the hook (index.js) is the one
+  //that sets closeConfirmed and calls autoUpdater.quitAndInstall(), which closes every window.
+  function quitAndInstallUpdate(){
+    requireWindowsUpdatePlatform('quitAndInstallUpdate');
+    onQuitAndInstallUpdate();
   }
 
   // ------------------------------------------------------------------------------------------

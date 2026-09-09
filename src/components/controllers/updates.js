@@ -197,8 +197,45 @@ function installUpdate(pass, filePath, statusElement, onDone){
     });
 }
 
+//Windows' happy path: subscribe to both outcome events, start the Squirrel check, and unsubscribe
+//as soon as either one fires - a writer who clicks Install, hits an error, and clicks again must
+//not end up with two live listeners. test/fake-bridge.js's listenerCount exists to catch exactly
+//that leak.
+function startWindowsUpdate(tag, onDownloaded, onFailed){
+    var unsubscribeDownloaded, unsubscribeFailed;
+
+    function cleanUp(){
+        unsubscribeDownloaded();
+        unsubscribeFailed();
+    }
+
+    unsubscribeDownloaded = platform.on('app-update-downloaded', function(){
+        cleanUp();
+        onDownloaded();
+    });
+    unsubscribeFailed = platform.on('app-update-failed', function(message){
+        cleanUp();
+        onFailed(message);
+    });
+
+    platform.startSquirrelUpdate({ tag: tag }).catch(function(err){
+        cleanUp();
+        logError(err);
+        onFailed(err.message);
+    });
+}
+
+//The Restart button's other half, once the caller's own unsaved-work check has run.
+function finishWindowsUpdate(){
+    platform.quitAndInstallUpdate().catch(function(err){
+        logError(err);
+    });
+}
+
 module.exports = {
     getUpdates,
     downloadUpdate,
-    installUpdate
+    installUpdate,
+    startWindowsUpdate,
+    finishWindowsUpdate
 };
