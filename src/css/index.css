@@ -531,6 +531,18 @@ button, input[type=submit] {
   font-size: var(--dialog-font-size);
 }
 
+.updates-status {
+  font-size: var(--dialog-font-size);
+}
+
+/* Carries the "still working" line while a Windows update downloads, and is empty every other
+   moment on every other platform - where an empty <p> would still take a paragraph's worth of
+   blank space in the panel. Hidden by :empty rather than by toggling a style from the view, so
+   there is no display state for the two outcome handlers to have to put back. */
+.updates-status:empty {
+  display: none;
+}
+
 #missing-file-list, #subdirs-list { 
   font-size: var(--dialog-font-size);
   margin: 12px;

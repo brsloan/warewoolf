@@ -62,6 +62,13 @@ function showAbout(appVersion, platformInfo, confirmBeforeContinuing){
   updatesText.classList.add('updates-text');
   updatesPanel.appendChild(updatesText);
 
+  //Its own line rather than more text in updatesText, so the release notes stay readable while the
+  //writer waits - waiting is exactly when someone is most likely to read them. Empty except while
+  //a Windows download is in flight.
+  var updatesStatus = document.createElement('p');
+  updatesStatus.classList.add('updates-status');
+  updatesPanel.appendChild(updatesStatus);
+
   popup.appendChild(updatesPanel);
 
   checkUpdatesBtn.onclick = function(){
@@ -104,9 +111,14 @@ function showAbout(appVersion, platformInfo, confirmBeforeContinuing){
             downloadBtn.disabled = true;
             //No download-progress event exists on Electron's built-in autoUpdater, so there is
             //nothing to put in a progress bar - be honest about the wait rather than pretend one.
-            downloadBtn.innerText = 'Downloading update... this may take several minutes.';
+            downloadBtn.innerText = 'Downloading update...';
+            updatesStatus.innerText = 'This can take several minutes on a slow connection. WareWoolf will say when it is ready.';
+
+            var stopTicker = startStillWorkingTicker(updatesStatus);
 
             startWindowsUpdate(latest.tag, function(){
+              stopTicker();
+              updatesStatus.innerText = '';
               downloadBtn.disabled = false;
               downloadBtn.innerText = 'Restart To Finish';
               updatesText.innerText = 'Update ready.';
@@ -114,6 +126,8 @@ function showAbout(appVersion, platformInfo, confirmBeforeContinuing){
                 confirmBeforeContinuing(finishWindowsUpdate);
               };
             }, function(message){
+              stopTicker();
+              updatesStatus.innerText = '';
               downloadBtn.disabled = false;
               downloadBtn.innerText = 'Download Installer';
               updatesText.innerText = message + '\nYou can install it yourself instead.';
@@ -159,6 +173,54 @@ function showAbout(appVersion, platformInfo, confirmBeforeContinuing){
 
   document.body.appendChild(popup);
   close.focus();
+}
+
+//How often the "still working" line updates while a Windows update downloads. Short enough that a
+//writer who glances up sees it move, long enough not to be a flicker they have to sit next to.
+var STILL_WORKING_TICK_MS = 15000;
+
+//The one thing that can tell a writer the app has not frozen, given there is no progress to show:
+//something on screen that keeps changing. Elapsed time is the honest version of that - it claims
+//nothing about how far along a 163MB download is, only that WareWoolf is still waiting on it.
+//
+//Stops itself once its element leaves the document. A writer who closes About mid-download would
+//otherwise leave this interval writing to a node nobody can see, forever; there is no close hook
+//here to hang a clearInterval on, and checking isConnected covers closePopups(), Escape and every
+//other route out of the popup at once, rather than one of them.
+function startStillWorkingTicker(element){
+  var startedAt = Date.now();
+
+  var ticker = setInterval(function(){
+    if(!element.isConnected){
+      clearInterval(ticker);
+      return;
+    }
+
+    element.innerText = 'Still downloading - ' + describeElapsed(Date.now() - startedAt) + ' so far.';
+  }, STILL_WORKING_TICK_MS);
+
+  return function(){
+    clearInterval(ticker);
+  };
+}
+
+//Minutes *and* seconds past the first minute, deliberately: rounded to whole minutes the line would
+//stop changing for four ticks at a stretch, which is the one thing it exists not to do.
+function describeElapsed(ms){
+  var seconds = Math.floor(ms / 1000);
+  var minutes = Math.floor(seconds / 60);
+  var remainder = seconds % 60;
+
+  if(minutes === 0)
+    return countOf(seconds, 'second');
+  if(remainder === 0)
+    return countOf(minutes, 'minute');
+
+  return countOf(minutes, 'minute') + ' ' + countOf(remainder, 'second');
+}
+
+function countOf(count, noun){
+  return count + ' ' + noun + (count === 1 ? '' : 's');
 }
 
 //readLicenses used to need paths.app wired in, which is why this took sysDirectories. The main

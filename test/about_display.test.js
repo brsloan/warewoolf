@@ -264,7 +264,13 @@ test('on win32, an available update shows Install Update rather than Download', 
   assert.strictEqual(updatesButton().innerText, 'Install Update');
 });
 
+//Mock timers here even though nothing in this test ticks: it leaves a download in flight (neither
+//outcome callback is ever fired), and a download in flight owns a live 15-second "still working"
+//interval that nothing will stop. Left real, that interval holds the node process open after every
+//assertion has passed, and the file hangs rather than fails - so any test that clicks Install and
+//does not finish the download has to mock setInterval, the same as the ticker tests below do.
 test('on win32, clicking Install Update disables the button, shows the wait message, and starts the Squirrel update with the release tag', function(t){
+  t.mock.timers.enable({ apis: ['setInterval'] });
   t.mock.method(fs, 'existsSync', function(){ return false; });
   var startCalls = [];
   var showAbout = freshAboutDisplay({
@@ -341,6 +347,114 @@ test('on win32, the failed event falls back to Download Installer and the manual
 
   assert.strictEqual(downloadCalls.length, 1);
   assert.strictEqual(downloadCalls[0], latest.downloadInfo);
+});
+
+//The Windows download reports no progress - Electron's built-in autoUpdater has no
+//download-progress event - so a line that keeps changing is the only thing standing between a slow
+//download and a writer who concludes the app has hung. These four cover that it starts, that it
+//stops on each of the two outcomes, and that it stops on its own if the popup is closed under it.
+function statusLine(){
+  return document.querySelector('.updates-status').innerText;
+}
+
+test('on win32, the downloading status keeps reporting elapsed time so a long wait does not look frozen', function(t){
+  t.mock.timers.enable({ apis: ['setInterval', 'Date'] });
+  t.mock.method(fs, 'existsSync', function(){ return false; });
+  var showAbout = freshAboutDisplay({
+    getUpdates: function(version, cb){ cb(win32Latest()); },
+    startWindowsUpdate: function(){}
+  });
+
+  showAbout('2.3.1', platformInfo('win32'), immediateConfirm);
+  findButton('Check For Updates').onclick();
+  updatesButton().onclick();
+
+  assert.match(statusLine(), /several minutes/, 'the wait is explained before the first tick');
+
+  t.mock.timers.tick(15000);
+  assert.strictEqual(statusLine(), 'Still downloading - 15 seconds so far.');
+
+  t.mock.timers.tick(45000);
+  assert.strictEqual(statusLine(), 'Still downloading - 1 minute so far.');
+
+  //Past the first minute it still counts seconds. Rounded to whole minutes the line would sit
+  //unchanged for four ticks at a time, which is the one thing it exists not to do.
+  t.mock.timers.tick(15000);
+  assert.strictEqual(statusLine(), 'Still downloading - 1 minute 15 seconds so far.');
+
+  t.mock.timers.tick(105000);
+  assert.strictEqual(statusLine(), 'Still downloading - 3 minutes so far.');
+});
+
+test('on win32, the downloaded event clears the status and stops the ticker', function(t){
+  t.mock.timers.enable({ apis: ['setInterval', 'Date'] });
+  t.mock.method(fs, 'existsSync', function(){ return false; });
+  var onDownloaded;
+  var showAbout = freshAboutDisplay({
+    getUpdates: function(version, cb){ cb(win32Latest()); },
+    startWindowsUpdate: function(tag, downloaded){ onDownloaded = downloaded; }
+  });
+
+  showAbout('2.3.1', platformInfo('win32'), immediateConfirm);
+  findButton('Check For Updates').onclick();
+  updatesButton().onclick();
+  t.mock.timers.tick(15000);
+  onDownloaded();
+
+  assert.strictEqual(statusLine(), '');
+
+  t.mock.timers.tick(60000);
+  assert.strictEqual(statusLine(), '', 'a stopped ticker must not write over "Update ready."');
+  assert.strictEqual(document.querySelector('.updates-text').innerText, 'Update ready.');
+});
+
+test('on win32, the failed event clears the status and stops the ticker', function(t){
+  t.mock.timers.enable({ apis: ['setInterval', 'Date'] });
+  t.mock.method(fs, 'existsSync', function(){ return false; });
+  var onFailed;
+  var showAbout = freshAboutDisplay({
+    getUpdates: function(version, cb){ cb(win32Latest()); },
+    startWindowsUpdate: function(tag, downloaded, failed){ onFailed = failed; }
+  });
+
+  showAbout('2.3.1', platformInfo('win32'), immediateConfirm);
+  findButton('Check For Updates').onclick();
+  updatesButton().onclick();
+  t.mock.timers.tick(15000);
+  onFailed('Squirrel could not reach the feed.');
+
+  assert.strictEqual(statusLine(), '');
+
+  t.mock.timers.tick(60000);
+  assert.strictEqual(statusLine(), '');
+  assert.match(document.querySelector('.updates-text').innerText, /could not reach the feed/);
+});
+
+//A writer who closes About while the download runs leaves an interval with nothing to write to.
+//There is no close hook in this view to hang a clearInterval on, so the tick checks whether its own
+//element is still in the document - which covers closePopups(), Escape, and any other way out at
+//once. Mutation-checked: dropping the isConnected guard fails this and nothing else.
+test('on win32, closing the popup mid-download stops the ticker instead of leaving it running', function(t){
+  t.mock.timers.enable({ apis: ['setInterval', 'Date'] });
+  t.mock.method(fs, 'existsSync', function(){ return false; });
+  var showAbout = freshAboutDisplay({
+    getUpdates: function(version, cb){ cb(win32Latest()); },
+    startWindowsUpdate: function(){}
+  });
+
+  showAbout('2.3.1', platformInfo('win32'), immediateConfirm);
+  findButton('Check For Updates').onclick();
+  updatesButton().onclick();
+
+  var status = document.querySelector('.updates-status');
+  t.mock.timers.tick(15000);
+  var lastSeen = status.innerText;
+
+  findButton('Close').onclick();
+  assert.strictEqual(document.querySelector('.updates-status'), null, 'the popup is gone');
+
+  t.mock.timers.tick(60000);
+  assert.strictEqual(status.innerText, lastSeen, 'the detached line must not still be being written to');
 });
 
 test('View License loads and displays the license text from sysDirectories.app and focuses it', async function(t){
