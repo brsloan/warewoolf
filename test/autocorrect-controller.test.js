@@ -40,6 +40,38 @@ function type(quill, text, formats){
   });
 }
 
+//Typing the way a browser does it, which is the other way around from insertText(): the character
+//goes into the DOM text node, the native caret moves past it, and Quill is told to catch up
+//afterwards. Worth the extra work for the caret tests below - insertText() never touches the DOM
+//selection, so Quill has no stale native offset to put the caret back to and the mid-sentence bug
+//cannot show at all.
+function typeNatively(quill, index, text){
+  text.split('').forEach(function(character, offset){
+    var at = index + offset;
+    var leaf = quill.getLeaf(at)[0];
+    var node = leaf.domNode;
+    var into = at - quill.getIndex(leaf);
+
+    node.data = node.data.slice(0, into) + character + node.data.slice(into);
+
+    var range = document.createRange();
+    range.setStart(node, into + 1);
+    range.collapse(true);
+
+    var selection = document.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+
+    quill.update('user');
+  });
+}
+
+//The substitution puts the caret right in a microtask (see the controller's keepCaret), so a test
+//that wants to see where it ended up has to let the queue drain first.
+function settled(){
+  return new Promise(function(resolve){ setTimeout(resolve, 0); });
+}
+
 //Without the trailing newline, which is Quill's own and not something a test wrote.
 function textOf(quill){
   return quill.getText().slice(0, -1);
@@ -106,6 +138,49 @@ test('a substitution leaves the cursor after the character it inserted', functio
 
   assert.strictEqual(selection.index, 5);
   assert.strictEqual(selection.length, 0);
+});
+
+//Quill restores the caret from an offset it measured before the substitution shortened the line,
+//and an offset into a text node does not move with the text. At the end of a line the stale offset
+//is past the end of the text and the restore quietly fails, which is why these two are worth
+//having: mid-sentence is the only place it lands anywhere at all.
+test('an em dash typed mid-sentence leaves the cursor on the dash, not past it', async function(){
+  var editor = editorWith();
+
+  editor.quill.setContents({ ops: [{ insert: 'wait no\n' }] });
+  editor.quill.setSelection(4, 0);
+  typeNatively(editor.quill, 4, '--');
+  await settled();
+
+  assert.strictEqual(textOf(editor.quill), 'wait— no');
+  assert.strictEqual(editor.quill.getSelection().index, 5);
+  assert.strictEqual(editor.quill.getSelection().length, 0);
+});
+
+test('an ellipsis typed mid-sentence leaves the cursor on it, not two characters past', async function(){
+  var editor = editorWith();
+
+  editor.quill.setContents({ ops: [{ insert: 'well then\n' }] });
+  editor.quill.setSelection(4, 0);
+  typeNatively(editor.quill, 4, '...');
+  await settled();
+
+  assert.strictEqual(textOf(editor.quill), 'well… then');
+  assert.strictEqual(editor.quill.getSelection().index, 5);
+  assert.strictEqual(editor.quill.getSelection().length, 0);
+});
+
+test('an em dash typed at the end of a line still leaves the cursor after it', async function(){
+  var editor = editorWith();
+
+  editor.quill.setContents({ ops: [{ insert: 'wait\n' }] });
+  editor.quill.setSelection(4, 0);
+  typeNatively(editor.quill, 4, '--');
+  await settled();
+
+  assert.strictEqual(textOf(editor.quill), 'wait—');
+  assert.strictEqual(editor.quill.getSelection().index, 5);
+  assert.strictEqual(editor.quill.getSelection().length, 0);
 });
 
 test('the substituted character keeps the formatting it was typed in', function(){

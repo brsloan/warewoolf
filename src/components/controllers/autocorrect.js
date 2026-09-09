@@ -95,16 +95,20 @@ function attachAutocorrect(quill, getRules){
     ops.push(formatted({ insert: substitution.insert }, formats));
     ops.push({ delete: substitution.deleteBack });
 
+    var caret = start + substitution.insert.length;
+
     applying = true;
     try{
       quill.history.cutoff();
       quill.updateContents({ ops: ops }, 'user');
-      quill.setSelection(start + substitution.insert.length, 0, 'user');
+      quill.setSelection(caret, 0, 'user');
       quill.history.cutoff();
     }
     finally{
       applying = false;
     }
+
+    keepCaret(quill, caret, caret + substitution.deleteBack - substitution.insert.length);
   }
 
   quill.on('text-change', onTextChange);
@@ -116,6 +120,44 @@ function attachAutocorrect(quill, getRules){
     quill.root.removeEventListener('compositionstart', onCompositionStart);
     quill.root.removeEventListener('compositionend', onCompositionEnd);
   };
+}
+
+//Setting the selection above is not the last word on where the caret ends up, because a keystroke
+//reaches Quill the other way around from everything else: the browser has already put the
+//character in the DOM and moved the caret past it, and Quill catches up afterwards. To keep the
+//caret across that catching-up, Selection snapshots the native range before the update and
+//re-applies the snapshot once the update is done - see the SCROLL_BEFORE_UPDATE handler in Quill's
+//core/selection.js, which queues its restore on SCROLL_UPDATE. Our substitution happens in the
+//middle of that pair, so the offset restored afterwards is one measured before the substitution
+//shortened the line, and it wins.
+//
+//A snapshot is an offset into a DOM text node, so it does not move with the text: after '--'
+//became an em dash the caret landed one character past it, and after '...' became an ellipsis, two
+//past. At the END of a line the stale offset was past the end of the text node, the restore threw,
+//Quill swallowed the error, and the caret stayed where it belonged - which is why this only ever
+//showed up mid-sentence.
+//
+//Put right in a microtask rather than fought synchronously: it runs once the update has finished
+//unwinding, and still before the browser paints, so the caret is never drawn in the wrong place.
+//Nothing else can have moved it in between either - keystrokes, clicks and timers all arrive as
+//tasks, and a task cannot interleave with the microtask queue.
+//
+//`stale` is where the restore leaves the caret if it happens: the position the typed character was
+//at, which the substitution has since pulled back by the number of characters it removed. Checking
+//for exactly that rather than for 'anywhere but `caret`' is what keeps this from fighting a
+//deliberate move - render.js's footnote pass runs off the same text-change and is entitled to
+//shift the caret from under us. A substitution that changes nothing about the length of the line -
+//every smart quote - has stale === caret and nothing to do.
+function keepCaret(quill, caret, stale){
+  if(stale === caret)
+    return;
+
+  Promise.resolve().then(function(){
+    var range = quill.getSelection();
+
+    if(range && range.length === 0 && range.index === stale)
+      quill.setSelection(caret, 0, 'user');
+  });
 }
 
 //The single character a keystroke inserted and where it landed, or null for every other change:
