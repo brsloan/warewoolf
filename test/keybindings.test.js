@@ -67,9 +67,9 @@ function bodyShell(){
 //getSelection()/setSelection()/root/container/selection.getBounds() for PageDown (see
 //quill-utils.test.js's own goPageDown tests for the geometry those cover), and on()/off() for
 //typewriter-mode.js's editor-change binding. `root` is the real DOM node a shortcut moves focus to.
-//getBounds() always reporting "past the end" makes goPageDown() a same-value round trip
-//(setSelection ends up called with the index it started from) - enough to prove goPageDown ran
-//against THIS instance (setSelectionCallCount) without re-testing its own geometry here.
+//A one-position document makes goPageDown() a same-value round trip (setSelection ends up called
+//with the index it started from) - enough to prove goPageDown ran against THIS instance
+//(setSelectionCallCount) without re-testing its own geometry here.
 function stubQuill(root){
   //A real Quill root is contenteditable, which is always focusable regardless of tabindex; a
   //plain <div> is not focusable at all without one, so .focus() would silently no-op on it here.
@@ -82,6 +82,7 @@ function stubQuill(root){
     hasFocus: function(){ return document.activeElement === root; },
     getSelection: function(){ return selection; },
     setSelection: function(index){ selection = { index: index, length: 0 }; setSelectionCallCount++; },
+    getLength: function(){ return 1; },
     get setSelectionCallCount(){ return setSelectionCallCount; },
     container: { getBoundingClientRect: function(){ return { top: 0 }; } },
     selection: { getBounds: function(){ return null; } },

@@ -376,20 +376,32 @@ test('a binding Quill could not match is left off rather than added dead', funct
 //A fully synthetic stand-in for the pieces goPageDown actually touches, rather than a real Quill
 //instance - real layout metrics (clientHeight, getBoundingClientRect) are always zero under jsdom
 //since it has no layout engine, which would leave every geometric branch below untestable.
+//
+//`length` is the Quill document length, and `clampsBounds` is the difference between the two
+//getBounds() behaviours that matter here: real Quill (core/selection.js) clamps the index it is
+//given to the content's length and so never returns null for an index past the end, which is the
+//behaviour that used to hang the app. The default stays uncalmped so the older tests below can go
+//on using a missing boundsByIndex entry to mean "no such position".
 function stubQuill(opts){
   opts = opts || {};
   var selection = { index: opts.selectionIndex || 0, length: 0 };
   var boundsByIndex = opts.boundsByIndex || {};
+  var length = opts.length != null ? opts.length : 1000;
 
   return {
     getSelection: function(){ return selection; },
     setSelection: function(index){ selection = { index: index, length: 0 }; },
+    getLength: function(){ return length; },
     root: { scrollTop: opts.scrollTop || 0, clientHeight: opts.clientHeight || 100 },
     container: { getBoundingClientRect: function(){ return { top: opts.containerTop || 0 }; } },
     selection: {
-      //Real Quill returns a viewport-relative DOMRect for a found position, or null once the
-      //lookup runs past the end of the content - boundsByIndex models both with plain objects.
-      getBounds: function(index){ return boundsByIndex[index] || null; }
+      //Real Quill returns a viewport-relative DOMRect for a found position - boundsByIndex models
+      //those with plain objects.
+      getBounds: function(index){
+        if(opts.clampsBounds)
+          index = Math.min(index, length - 1);
+        return boundsByIndex[index] || null;
+      }
     }
   };
 }
@@ -426,6 +438,44 @@ test('goPageDown converts viewport-relative bounds to container-relative before 
   //Not yet past the bottom (container-relative top 50 < clientHeight 100), so the loop keeps
   //walking forward and (nothing at index 2) lands one short of it.
   assert.deepStrictEqual(q.getSelection(), { index: 1, length: 0 });
+});
+
+test('goPageDown terminates on the last page, where real Quill clamps getBounds rather than returning null', function(){
+  //The reader has paged down to the bottom of a chapter: every remaining position sits above the
+  //bottom of the editor, and asking for one past the end gets the last position's bounds back
+  //instead of null. The walk used to have no other stop condition and spun here forever, freezing
+  //the whole app with nothing written to the error log.
+  var q = stubQuill({
+    selectionIndex: 3,
+    length: 6,
+    clampsBounds: true,
+    clientHeight: 100,
+    boundsByIndex: {
+      3: { top: 20, height: 20 },
+      4: { top: 40, height: 20 },
+      5: { top: 60, height: 20 }
+    }
+  });
+
+  goPageDown(q);
+
+  //Lands on the final position rather than hanging, and leaves the scroll alone - there is
+  //nothing below to scroll to.
+  assert.deepStrictEqual(q.getSelection(), { index: 5, length: 0 });
+  assert.strictEqual(q.root.scrollTop, 0);
+});
+
+test('goPageDown does not move when the caret is already at the last position', function(){
+  var q = stubQuill({
+    selectionIndex: 5,
+    length: 6,
+    clampsBounds: true,
+    boundsByIndex: { 5: { top: 60, height: 20 } }
+  });
+
+  goPageDown(q);
+
+  assert.deepStrictEqual(q.getSelection(), { index: 5, length: 0 });
 });
 
 test('goPageDown selects the first position that reaches the bottom of the editor and scrolls by its container-relative offset', function(){

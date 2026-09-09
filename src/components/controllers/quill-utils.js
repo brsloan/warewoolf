@@ -396,36 +396,47 @@ function removeAppliedBindings(q){
 function goPageDown(quillObj){
   var selectedRange = quillObj.getSelection();
 
-  if(selectedRange){
-    var startingScrolltop = 0 + quillObj.root.scrollTop;
-    var destinationY = quillObj.root.clientHeight;
-    var textIndex = selectedRange.index + 1;
-    //quillObj.selection.getBounds() returns viewport-relative coordinates, but destinationY and
-    //scrollTop above are relative to the editor's own container - convert before comparing, the
-    //same subtraction Quill's own public getBounds() does (see typewriter-mode.js's use of it).
-    var containerTop = quillObj.container.getBoundingClientRect().top;
+  if(!selectedRange)
+    return;
 
-    var found = false;
+  var startingScrolltop = 0 + quillObj.root.scrollTop;
+  var destinationY = quillObj.root.clientHeight;
+  var containerTop = quillObj.container.getBoundingClientRect().top;
 
-    while(!found){
-      var rawBounds = quillObj.selection.getBounds(textIndex, 1);
-      var bounds = rawBounds ? { top: rawBounds.top - containerTop, height: rawBounds.height } : null;
+  //The last index the caret can sit at. The walk below used to have no bound of its own and stop
+  //only when getBounds() returned null, on the assumption that it does so once the index runs past
+  //the end of the content. It does not: Quill clamps the index to the content's length first
+  //(core/selection.js), so past the end it keeps handing back the *last* position's bounds
+  //forever. A PageDown with less than a screenful of text below the caret - i.e. every PageDown
+  //once the reader has reached the bottom of a chapter - therefore never found a position past
+  //destinationY, never found a null, and spun here with the renderer thread held, which looks from
+  //the outside like the whole app freezing with no error logged.
+  var lastIndex = quillObj.getLength() - 1;
+  var textIndex = selectedRange.index + 1;
 
-      //Checked before reading any property of bounds: getBounds() returns null once textIndex
-      //runs past the end of the content, which this loop always eventually reaches.
-      if(bounds == null){
-        found = true;
-        quillObj.setSelection(textIndex - 1);
-      }
-      else if(bounds.top >= destinationY){
-        found = true;
-        quillObj.setSelection(textIndex);
-        quillObj.root.scrollTop = startingScrolltop + bounds.top - bounds.height;
-      }
-      textIndex += 1;
+  while(textIndex <= lastIndex){
+    var rawBounds = quillObj.selection.getBounds(textIndex, 1);
+    //Still checked before reading any property: getBounds() does return null for a position with
+    //no leaf behind it, which is not the same thing as being past the end.
+    if(rawBounds == null)
+      break;
+
+    var bounds = { top: rawBounds.top - containerTop, height: rawBounds.height };
+
+    if(bounds.top >= destinationY){
+      quillObj.setSelection(textIndex);
+      quillObj.root.scrollTop = startingScrolltop + bounds.top - bounds.height;
+      return;
     }
+
+    textIndex += 1;
   }
+
+  //Nothing a screenful below the caret, so this is the last page: land on the final position
+  //rather than staying put, which is where a native PageDown ends up too.
+  quillObj.setSelection(textIndex - 1);
 }
+
 
 module.exports = {
   getTempQuill,
