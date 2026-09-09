@@ -9,7 +9,7 @@ name: Release
 #   warewoolf_<version>_MacOS_Intel.dmg
 #   warewoolf_<version>_MacOS_AppleSilicon.dmg
 #   warewoolf_<version>_MacOS_Legacy.dmg
-#   warewoolf_<version>_Windows_x64.zip
+#   warewoolf_<version>_Windows_x64.exe
 #
 # The amd64/arm64/Windows_x64 substrings are load-bearing: the in-app updater
 # (src/components/controllers/updates.js) picks the right asset by matching
@@ -28,6 +28,16 @@ name: Release
 # run on an old mac - electron-forge only downloads a prebuilt Electron for
 # the target and copies the app in, and this project has no native modules -
 # so the minimum-OS floor comes from the pinned Electron, not the runner.
+#
+# The Windows asset is a Squirrel installer, which is what every manual release
+# from v0.9.0 to v2.2.1 shipped: `npm run make` uses the maker-squirrel entry in
+# package.json, and the resulting "Setup.exe" went up inside a .zip only because
+# those uploads were done by hand. This workflow's first version read that .zip
+# extension off the release page and reached for maker-zip, which produces
+# something else entirely - the packaged app folder, no installer, no entry in
+# Add/Remove Programs - under the same asset name. v2.3.0 through v2.5.0 shipped
+# that way. The zip wrapper is gone with the manual upload that needed it, so the
+# installer is now the asset itself.
 
 on:
   push:
@@ -192,15 +202,37 @@ jobs:
           node-version: 20
       - run: npm ci
       - run: npm run build
-      - run: npx electron-forge make --platform=win32 --arch=x64 --targets=@electron-forge/maker-zip
+      - run: npx electron-forge make --platform=win32 --arch=x64 --targets=@electron-forge/maker-squirrel
+      # Squirrel names it "warewoolf-<version> Setup.exe" - a space in the middle and the version
+      # in a different shape from every other asset here. Renamed rather than configured through
+      # the maker's own setupExe option, because that option would have to spell the version out
+      # literally in package.json and there would then be two places to bump on every release.
       - shell: bash
         run: |
-          f=$(ls out/make/zip/win32/x64/*.zip)
-          mv "$f" "out/make/zip/win32/x64/warewoolf_${{ needs.check-version.outputs.version }}_Windows_x64.zip"
+          f=$(ls out/make/squirrel.windows/x64/*Setup.exe)
+          mv "$f" "out/make/squirrel.windows/x64/warewoolf_${{ needs.check-version.outputs.version }}_Windows_x64.exe"
+      # Checks the artifact rather than trusting the --targets flag, the same way the Linux job
+      # checks the deb's compression and the macOS job checks the legacy build's minimum OS. This
+      # one exists because the failure it catches already happened: v2.3.0 through v2.5.0 shipped
+      # maker-zip's packaged app folder under a name that had always meant an installer, and
+      # nothing in the pipeline noticed for four releases. An installer is a PE binary and comes
+      # with Squirrel's feed files beside it; a zipped app folder is neither.
+      - name: Verify the Windows asset is an installer
+        shell: bash
+        run: |
+          set -euo pipefail
+          exe="out/make/squirrel.windows/x64/warewoolf_${{ needs.check-version.outputs.version }}_Windows_x64.exe"
+          test -f "$exe"
+          test -f out/make/squirrel.windows/x64/RELEASES
+          if [ "$(head -c 2 "$exe")" != "MZ" ]; then
+            echo "::error::$exe is not a Windows executable - the Squirrel maker did not run"
+            exit 1
+          fi
+          echo "$exe is a PE binary, with RELEASES beside it"
       - uses: actions/upload-artifact@v4
         with:
           name: release-asset-windows-x64
-          path: out/make/zip/win32/x64/warewoolf_*_Windows_x64.zip
+          path: out/make/squirrel.windows/x64/warewoolf_*_Windows_x64.exe
           if-no-files-found: error
 
   release:
