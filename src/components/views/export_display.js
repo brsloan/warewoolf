@@ -60,6 +60,19 @@ function showExportOptions(project, userSettings, sysDirectories){
 
     exportForm.appendChild(document.createElement('br'));
 
+    var sceneBreakLabel = document.createElement('label');
+    sceneBreakLabel.innerText = 'Mark scene breaks with a centered #: ';
+    sceneBreakLabel.htmlFor = 'scene-break-check';
+    exportForm.appendChild(sceneBreakLabel);
+
+    var sceneBreakCheck = document.createElement('input');
+    sceneBreakCheck.type = 'checkbox';
+    sceneBreakCheck.id = 'scene-break-check';
+    sceneBreakCheck.checked = userSettings.markSceneBreaks;
+    exportForm.appendChild(sceneBreakCheck);
+
+    exportForm.appendChild(document.createElement('br'));
+
   /*
     var insertHeadLabel = document.createElement("label");
     insertHeadLabel.innerText = "Insert chapter titles as headings: ";
@@ -87,11 +100,17 @@ function showExportOptions(project, userSettings, sysDirectories){
     exportForm.onsubmit = function(e){
       e.preventDefault();
 
+      //The only thing this dialog has ever had worth remembering, and the same setting the Compile
+      //dialog writes - see user-settings.js.
+      userSettings.markSceneBreaks = sceneBreakCheck.checked;
+      userSettings.save();
+
       var options = {
         type: typeSelect.value,
         what: expProjOp.checked ? 'project' : 'chapter',
         styleHeadingAsChapter: true,
-        generateTitlePage: false
+        generateTitlePage: false,
+        markSceneBreaks: sceneBreakCheck.checked
         //insertHead: insertHeadCheck.checked
       }
       getExportFilePath(project, userSettings, options, sysDirectories, function(){

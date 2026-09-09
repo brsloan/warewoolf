@@ -8,6 +8,7 @@ const { htmlChaptersToEpub } = require('./epub');
 const { getCorkboardForExport } = require('./corkboard');
 const { convertToPlainText } = require('./quill-utils');
 const { getTotalWordCount } = require('./wordcount');
+const { markSceneBreaks } = require('./mark-scene-breaks');
 const { createPlatform } = require('./platform');
 const { createIpcBacking } = require('./platform-ipc');
 const notesNamePrepend = '-notes_';
@@ -65,6 +66,13 @@ async function exportProject(project, userSettings, options, filepath, cback = f
       try{
         var chap = chapsToExport[i];
         var chapFile = await chap.getContentsOrFile();
+
+        //Only the chapter's own text. Notes, the project notes and the corkboard go out through the
+        //same exportChapter below, but none of them is manuscript - a hash dropped into the gap
+        //between two notes would be marking a scene break that isn't there.
+        if(options.markSceneBreaks)
+          chapFile = markSceneBreaks(chapFile);
+
         var chapNumber = i < project.chapters.length ? i : i - project.chapters.length;
         var outName = generateChapterFilename(chapNumber, chap.title, options.what);
 

@@ -54,6 +54,7 @@ const SETTINGS_SCHEMA = {
   compileChapMark: { type: 'string' },
   compileInsertHeaders: { type: 'boolean' },
   compileGenTitlePage: { type: 'boolean' },
+  markSceneBreaks: { type: 'boolean' },
   backupDirectory: { type: 'string', nullable: true },
   autoBackup: { type: 'boolean' },
   backupsToKeep: { type: 'number' },
@@ -87,6 +88,10 @@ function getUserSettings(userSettingsFilepath){
     compileChapMark: '',
     compileInsertHeaders: false,
     compileGenTitlePage: true,
+    //Shared by Compile and Export rather than named after either, since it is the same manuscript
+    //convention whichever way the book leaves WareWoolf - a writer who marks their scene breaks
+    //wants them marked in both. Off by default: a hash on a blank line is a change to the text.
+    markSceneBreaks: false,
     backupDirectory: null,
     autoBackup: true,
     backupsToKeep: 10,
