@@ -181,6 +181,81 @@ test('a list marker escape is still read after several leading tabs', function()
   assert.strictEqual(textOf('\t\t\t\\- deeply indented dash\r\n'), '\t\t\t- deeply indented dash\n');
 });
 
+//"#", ">" and "[>" are block markers, read by ^-anchored regexes in parseLine, so they are only
+//escaped where one could actually be read. escapeAnyMarkers used to escape all three everywhere,
+//which put a backslash in the file for every "File > Dictionaries" and every "C#" a writer typed.
+
+test('a block marker character mid-sentence is written unescaped and stays prose', function(){
+  assertRoundTrip({ ops: [
+    {insert: 'Use File > Dictionaries for that.'}, {insert: '\n'},
+    {insert: 'The C# language, and the # sign.'}, {insert: '\n'},
+    {insert: 'An [>c] marker mid-sentence.'}, {insert: '\n'}
+  ]}, 'Use File > Dictionaries for that.\r\nThe C# language, and the # sign.\r\nAn [>c] marker mid-sentence.\r\n');
+});
+
+//The other half: at the position parseLine reads them from, the escape is load-bearing - without it
+//each of these paragraphs would come back as a quotation, a heading or a centered line.
+test('prose that opens with a block marker is escaped and comes back as prose', function(){
+  assertRoundTrip({ ops: [
+    {insert: '> not a quotation'}, {insert: '\n'},
+    {insert: '# not a heading'},   {insert: '\n'},
+    {insert: '[>c] not centered'}, {insert: '\n'}
+  ]}, '\\> not a quotation\r\n\\# not a heading\r\n\\[>c] not centered\r\n');
+});
+
+//Only the marker's opening character needs the backslash - parseLine recognises a marker by it, so
+//the rest of the run is left as typed.
+test('only the first character of a repeated block marker is escaped', function(){
+  assertRoundTrip({ ops: [
+    {insert: '## not a heading either'}, {insert: '\n'},
+    {insert: '>> not a quotation either'}, {insert: '\n'}
+  ]}, '\\## not a heading either\r\n\\>> not a quotation either\r\n');
+});
+
+//parseLine strips the alignment and footnote-body markers before it looks for a list, blockquote or
+//heading, so text sitting behind either of those is still at the position one would be read from.
+test('prose behind an alignment or footnote body marker is still escaped', function(){
+  assertRoundTrip({ ops: [
+    {insert: '# not a heading'}, {insert: '\n', attributes: {align: 'center'}},
+    {insert: '# not a heading'}, {insert: '\n', attributes: {footnoteBody: '1'}}
+  ]}, '[>c] \\# not a heading\r\n[^1]: \\# not a heading\r\n');
+});
+
+//A line that carries a block marker of its own needs no escape behind it: parseLine has consumed
+//that marker by then, and returns early for a list item or a quotation.
+test('text behind a block marker of the line\'s own is not escaped', function(){
+  assertRoundTrip({ ops: [
+    {insert: '# hash in a heading'},    {insert: '\n', attributes: {header: 1}},
+    {insert: '> arrow in a quotation'}, {insert: '\n', attributes: {blockquote: true}},
+    {insert: '- dash in an item'},      {insert: '\n', attributes: {list: 'bullet'}}
+  ]}, '# # hash in a heading\r\n> > arrow in a quotation\r\n* - dash in an item\r\n');
+});
+
+//A style marker moves the text off the position a block marker is read from, so it needs no escape
+//there either.
+test('a styled opening run is not escaped', function(){
+  assertRoundTrip({ ops: [
+    {insert: '> bold, not a quotation', attributes: {bold: true}}, {insert: '\n'}
+  ]}, '**> bold, not a quotation**\r\n');
+});
+
+//Regression: the escape used to be gated on the run's index, so a paragraph whose first run was
+//empty - which parseDelta does produce - had its marker written unescaped and came back a
+//quotation. The gate is on what has actually been written to the line instead.
+test('an empty opening run does not move the text off the line start', function(){
+  assertRoundTrip({ ops: [
+    {insert: ''}, {insert: '> not a quotation'}, {insert: '\n'}
+  ]}, '\\> not a quotation\r\n');
+});
+
+//Files written before the escaping was narrowed carry these escaped everywhere, so the reader still
+//has to accept one anywhere or every old backslash becomes a literal character.
+test('a block marker escape written by an older version is still read anywhere in the line', function(){
+  assert.strictEqual(textOf('Use File \\> Dictionaries.\r\n'), 'Use File > Dictionaries.\n');
+  assert.strictEqual(textOf('The C\\# language.\r\n'), 'The C# language.\n');
+  assert.strictEqual(textOf('An \\[>c] marker.\r\n'), 'An [>c] marker.\n');
+});
+
 test('a blockquote round trips', function(){
   assertRoundTrip({ ops: [
     {insert: 'Quoted line.'}, {insert: '\n', attributes: {blockquote: true}}

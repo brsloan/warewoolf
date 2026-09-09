@@ -5,6 +5,11 @@ const { parseDelta, getOrderedListNumbers, getListMarker, isFootnoteMarker } = r
 //"*". List/ordered markers ("-", "+", "1. ") are only ever written with an escaping backslash at
 //the very start of a paragraph's text (see escapeListMarkers below), so they're only recognised
 //there - a stray "\-" in the middle of a sentence is just a literal backslash followed by a dash.
+//
+//This list is deliberately wider than what escapeAnyMarkers now writes. "#", ">" and "[>" are only
+//written escaped where parseLine could read them as a marker, but every file saved before that was
+//narrowed carries them escaped throughout, so the reader goes on accepting one anywhere. Taking
+//them out of this list would turn every one of those backslashes into a literal character.
 const ESCAPABLE_ANYWHERE = [/^\*\*/, /^\*/, /^~~/, /^__/, /^#/, /^\[>/, /^>/, /^\[\^/];
 const ESCAPABLE_AT_LINE_START = [/^-/, /^\+/, /^(?:\d+|[a-z])\. /];
 
@@ -385,21 +390,51 @@ function convertDeltaToMDF(delt){
   var listNumbers = getOrderedListNumbers(parsedQuill.paragraphs);
 
   parsedQuill.paragraphs.forEach((para, i) => {
+    var lineMarker = '';
 
     if(para.textRuns.length > 0)
-      mdf += getLineMarker(para.attributes, listNumbers[i]);
+      lineMarker = getLineMarker(para.attributes, listNumbers[i]);
+
+    mdf += lineMarker;
+
+    //Whether this line already carries a list, blockquote or heading marker of its own - the three
+    //parseLine stops looking for once it has found one. See escapeAnyMarkers.
+    var blockMarkerWritten = Boolean(getListMarker(para.attributes, listNumbers[i]) ||
+      (para.attributes && (para.attributes.blockquote || para.attributes.header)));
 
     var openStyles = activeStyles(null);
+    //Nothing on this line so far but the line marker, so the next character written is the one
+    //parseLine will read a block marker from. A style marker, or any run text at all, ends that -
+    //including a run the caller had to skip past, which is why this is tracked rather than taken
+    //from the run index.
+    var atStartOfText = true;
 
     para.textRuns.forEach((run, i) => {
       var styles = activeStyles(run.attributes);
-      mdf += markersBetween(openStyles, styles);
+      var styleMarkers = markersBetween(openStyles, styles);
+      mdf += styleMarkers;
+
+      if(styleMarkers !== '')
+        atStartOfText = false;
 
       //A footnote marker embed rather than a string run (parseDelta hands one through with
       //flattenInserts's Phase 0 fix, unchanged) - written out as the literal, unescaped reference
       //it represents rather than run through escapeAnyMarkers, which would either throw on a
       //non-string or, if it accepted one, wrongly treat a real marker as prose to escape.
-      mdf += isFootnoteMarker(run.text) ? '[^' + run.text.footnote.n + ']' : escapeAnyMarkers(run.text, i);
+      if(isFootnoteMarker(run.text)){
+        mdf += '[^' + run.text.footnote.n + ']';
+        atStartOfText = false;
+      }
+      else{
+        mdf += escapeAnyMarkers(run.text, {
+          atLineStart: atStartOfText && lineMarker === '',
+          atBlockPosition: atStartOfText && !blockMarkerWritten
+        });
+
+        if(run.text.length > 0)
+          atStartOfText = false;
+      }
+
       openStyles = styles;
     });
 
@@ -453,17 +488,37 @@ function getLineMarker(attr, listItemNum = 0){
   return marker;
 };
 
-function escapeAnyMarkers(text, runIndex){
-  var escapedMarkersRegx = /(\*\*|\*|~~|__|#|\[>|>|\[\^)/g;
-  text = text.replace(escapedMarkersRegx, '\\$1')
+//Bold, italic, underline and strikethrough mean what they mean wherever they fall, and so does a
+//footnote reference - tokenizeInline reads all five anywhere in a line. They are escaped anywhere.
+const INLINE_MARKERS = /(\*\*|\*|~~|__|\[\^)/g;
 
-  //Because escapeAnyMarkers is applied to every run in every paragraph
-  //individually, in some circumstances (formatting within a line breaking it up into multiple runs)
-  //escapeListMarkers would escape markers inside of a line instead of at the beginning. 
-  //So we only apply escapeListMarkers to the first run, since any valid list marker would reside
-  //entirely within the first run of any given paragraph
-  if(runIndex == 0)
+//These three are not inline. parseLine reads alignment, blockquote and heading with ^-anchored
+//regexes, so "#", ">" and "[>" are ordinary characters everywhere except the one position each is
+//read at - and escaping them everywhere put a backslash into the file for nothing, which is what
+//"File \> Dictionaries" was. Only the first character of a run needs it: a marker is recognised by
+//its opening character, so "\## head" and "\>> quote" both read back whole.
+const ALIGN_MARKER_START = /^\[>/;
+const BLOCK_MARKER_START = /^(#|>)/;
+
+//`position` says where in the line parseLine will be looking when it reaches this run, which is what
+//decides whether a leading marker character has to be escaped:
+//
+//- atLineStart: nothing at all precedes this text on the line. ALIGN_MARKER is matched against the
+//  raw line, so that is the only place a "[>" can be read as one.
+//- atBlockPosition: nothing precedes this text except an alignment or footnote-body marker, both of
+//  which parseLine strips before it looks for a list, blockquote or heading. A block marker of the
+//  line's own means there is nothing left to look for - parseLine has already consumed it, and
+//  returns early for a list or a quotation - so text behind one needs no escaping at all.
+function escapeAnyMarkers(text, position){
+  text = text.replace(INLINE_MARKERS, '\\$1');
+
+  if(position.atLineStart)
+    text = text.replace(ALIGN_MARKER_START, '\\$&');
+
+  if(position.atBlockPosition){
+    text = text.replace(BLOCK_MARKER_START, '\\$1');
     text = escapeListMarkers(text);
+  }
 
   return text;
 }
