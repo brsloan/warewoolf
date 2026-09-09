@@ -506,7 +506,8 @@ button, input[type=submit] {
   width: 3em;
 }
 
-#word-goal-input {
+#word-goal-input,
+#words-per-page-input {
   width: 6em;
 }
 

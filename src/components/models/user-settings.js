@@ -64,7 +64,8 @@ const SETTINGS_SCHEMA = {
   keyboardShortcuts: { type: 'object', sanitize: sanitizeOverrides },
   autocorrectEnabled: { type: 'boolean' },
   autocorrect: { type: 'object', sanitize: sanitizeAutocorrect },
-  spellcheckDictionaries: { type: 'object', sanitize: sanitizeDictionaryIds }
+  spellcheckDictionaries: { type: 'object', sanitize: sanitizeDictionaryIds },
+  wordsPerPage: { type: 'number' }
 };
 
 function getUserSettings(userSettingsFilepath){
@@ -108,6 +109,10 @@ function getUserSettings(userSettingsFilepath){
     //app ships as default" - see loadDictionaries' own fallback (platform.js, group I) - so a writer
     //who never opens that dialog keeps working after an update that changes the bundled default.
     spellcheckDictionaries: [],
+    //The divisor behind the Word Count dialog's page estimates. A writer's own manuscript format
+    //decides this - 300 is the standard double-spaced manuscript page - so it lives here rather
+    //than on the project, and follows the writer from one book to the next.
+    wordsPerPage: 300,
     save: save,
     load: load,
     getSettingsFilepath: getSettingsFilepath

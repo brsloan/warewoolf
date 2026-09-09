@@ -3,7 +3,7 @@ const { countWords, getTotalWordCount } = require('../controllers/wordcount');
 
 //Async because the project-wide total needs every chapter's text, which for a chapter not already
 //in memory is now an asynchronous read through the platform facade.
-async function showWordCount(project, editorQuill){
+async function showWordCount(project, editorQuill, userSettings){
     removeElementsByClass('popup');
     var popup = document.createElement("div");
     popup.classList.add("popup");
@@ -50,6 +50,20 @@ async function showWordCount(project, editorQuill){
 
     cntTbl.appendChild(generateRow(goalLabel, goalInput));
 
+    var perPageLabel = document.createElement('label');
+    perPageLabel.innerText = "Words per page: ";
+    perPageLabel.htmlFor = "words-per-page-input";
+
+    var perPageInput = document.createElement('input');
+    perPageInput.type = "number";
+    //A page of no words is not a page, so the estimate needs at least 1 here - unlike the goal
+    //field, where 0 is the meaningful "no goal set" value.
+    perPageInput.min = "1";
+    perPageInput.value = userSettings.wordsPerPage;
+    perPageInput.id = "words-per-page-input";
+
+    cntTbl.appendChild(generateRow(perPageLabel, perPageInput));
+
     popup.appendChild(cntTbl);
 
     var progressBarLabel = document.createElement('label');
@@ -81,10 +95,37 @@ async function showWordCount(project, editorQuill){
       updateProgressBar();
     };
 
-    chapTotalDisplay.innerText = activeTotal;
-    totalDisplay.innerText = total;
-    sessionTotalDisplay.innerText = total - project.wordCountOnLoad;
+    //Written straight through to the settings file rather than waiting on a Save button, since this
+    //dialog has none - Close is the only way out of it.
+    perPageInput.oninput = function(){
+      var parsedPerPage = Number(perPageInput.value);
+      userSettings.wordsPerPage = Number.isFinite(parsedPerPage) ? parsedPerPage : 0;
+      updateCounts();
+      userSettings.save();
+    };
+
+    updateCounts();
     closeBtn.focus();
+
+    function updateCounts(){
+      chapTotalDisplay.innerText = describeCount(activeTotal);
+      totalDisplay.innerText = describeCount(total);
+      sessionTotalDisplay.innerText = describeCount(total - project.wordCountOnLoad);
+    }
+
+    //"1000 wds / ~4 pgs" - a partly filled page still counts as a page, so the estimate rounds up.
+    //A words-per-page value of 0 (or a cleared field) has no page estimate to give rather than an
+    //infinite one, so those fall back to the bare count.
+    function describeCount(words){
+      var perPage = userSettings.wordsPerPage;
+
+      if(!(perPage > 0))
+        return words + " wds";
+
+      //|| 0 for the -0 that Math.ceil answers with for a session count gone negative, which would
+      //otherwise print as "-0 pgs".
+      return words + " wds / ~" + (Math.ceil(words / perPage) || 0) + " pgs";
+    }
 
     function updateProgressBar(){
       var percentOfGoal = project.wordGoal > 0 ? (total / project.wordGoal) * 100 : 100;

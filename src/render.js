@@ -1483,7 +1483,7 @@ const menuCommands = {
   } },
   'word-count-clicked': { run: function(){
     const showWordCount = require('./components/views/wordcount_display');
-    return showWordCount(project, editorQuill);
+    return showWordCount(project, editorQuill, userSettings);
   } },
   'find-replace-clicked': { requiresFocus: true, run: function(){
     const showFindReplace = require('./components/views/findreplace_display');

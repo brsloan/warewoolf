@@ -428,3 +428,24 @@ test('an unclonable value inside the shortcuts map does not sink the whole save'
     formatBold: { key: 'W', mod: true, alt: false, shift: false }
   });
 });
+
+//300 is the standard double-spaced manuscript page, and the Word Count dialog divides by this to
+//estimate pages - a fresh install has to open on something usable rather than on 0 (no estimate).
+test('wordsPerPage starts at 300', function(t){
+  const dir = configurePlatform(t);
+  const settings = getUserSettings(settingsPath(dir));
+
+  assert.strictEqual(settings.wordsPerPage, 300);
+});
+
+test('the words-per-page value round-trips through the file', async function(t){
+  const dir = configurePlatform(t);
+  const settings = getUserSettings(settingsPath(dir));
+
+  settings.wordsPerPage = 250;
+  await settings.save();
+
+  const reloaded = await getUserSettings(settingsPath(dir)).load();
+
+  assert.strictEqual(reloaded.wordsPerPage, 250);
+});
