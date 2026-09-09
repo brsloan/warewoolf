@@ -18,6 +18,7 @@ const errorLog = require('../src/components/controllers/error-log');
 //against real files in real temp directories, and now also prove the arguments and results survive
 //being sent somewhere.
 const { installBridge, uninstallBridge } = require('./fake-bridge');
+const { scopedTmpdir } = require('./helpers');
 
 test.before(function(){ installBridge(); });
 test.after(uninstallBridge);
@@ -99,12 +100,11 @@ test('does not leave its temp extraction directory behind', async function(t){
   const { importDocx } = freshDocxImport();
   const filepath = await buildDocxFixture(t, '<w:p><w:r><w:t>Hi</w:t></w:r></w:p>');
 
-  const before = fs.readdirSync(os.tmpdir()).filter(function(name){ return name.startsWith('warewoolf-docx-'); });
+  const tmp = scopedTmpdir(t);
 
   await runImport(importDocx, filepath);
 
-  const after = fs.readdirSync(os.tmpdir()).filter(function(name){ return name.startsWith('warewoolf-docx-'); });
-  assert.deepStrictEqual(after, before, 'importDocx left its temp extraction directory behind');
+  assert.deepStrictEqual(fs.readdirSync(tmp), [], 'importDocx left its temp extraction directory behind');
 });
 
 //Regression: getElementsByTagName('w:p') recursed into the whole document, including paragraphs

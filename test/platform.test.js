@@ -15,6 +15,7 @@ const {
 const { createNodeBacking, NOTES_PREPEND, OLD_VERSION_FLAG } = require('../src/components/controllers/platform-node');
 const { createIpcBacking } = require('../src/components/controllers/platform-ipc');
 const { createFakeBridge } = require('./fake-bridge');
+const { scopedTmpdir } = require('./helpers');
 
 //Real temp directories, like every other test here - the facade exists so the suite can keep doing
 //this rather than growing a filesystem mock.
@@ -1673,11 +1674,11 @@ test('importDocx does not leave its temp extraction directory behind', async fun
   const zipPath = built.dir + 'cleanup.docx';
   await buildDocxZip(zipPath, '<w:p><w:r><w:t>Hi</w:t></w:r></w:p>');
 
-  const before = fs.readdirSync(os.tmpdir()).filter(function(name){ return name.startsWith('warewoolf-docx-'); });
-  await built.platform.importDocx({ path: zipPath });
-  const after = fs.readdirSync(os.tmpdir()).filter(function(name){ return name.startsWith('warewoolf-docx-'); });
+  const tmp = scopedTmpdir(t);
 
-  assert.deepStrictEqual(after, before);
+  await built.platform.importDocx({ path: zipPath });
+
+  assert.deepStrictEqual(fs.readdirSync(tmp), [], 'importDocx left its temp extraction directory behind');
 });
 
 test('importDocx rejects NOT_FOUND for a file that is not there', async function(t){
@@ -1775,12 +1776,12 @@ test('importEpub leaves nothing on disk, not even a temp directory', async funct
   const epubPath = built.dir + 'clean.epub';
   await buildZip(epubPath, epubEntries());
 
-  const tmpBefore = fs.readdirSync(os.tmpdir()).length;
+  const tmp = scopedTmpdir(t);
   const dirBefore = fs.readdirSync(built.dir).sort();
 
   await built.platform.importEpub({ path: epubPath });
 
-  assert.strictEqual(fs.readdirSync(os.tmpdir()).length, tmpBefore);
+  assert.deepStrictEqual(fs.readdirSync(tmp), [], 'importEpub put something in the temp directory');
   assert.deepStrictEqual(fs.readdirSync(built.dir).sort(), dirBefore);
 });
 
