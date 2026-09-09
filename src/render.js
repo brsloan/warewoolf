@@ -635,7 +635,11 @@ async function displayChapterByIndex(ind){
     notes = correctNotesChap.notes;
   }
   else {
-    let savedNotes = await correctNotesChap.getNotesFile();
+    //getNotesContentOrFile() rather than getNotesFile(), because a chapter that has just been
+    //added and not yet saved has no filename to derive a notes filename from. Asking for the file
+    //anyway threw inside the platform layer and logged an error on every Ctrl+N, and again on
+    //every chapter change afterwards while the new chapter stayed unsaved.
+    let savedNotes = await correctNotesChap.getNotesContentOrFile();
     notes = savedNotes ? savedNotes : getEmptyDelta();
   }
 
