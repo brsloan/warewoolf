@@ -281,3 +281,23 @@ test('a footnote reference and its body convert without a leaked backslash', fun
       + '<div class="footnote" id="fnote_1"><p><sup><a href="#fnoteRef_1">1</a></sup>The note.\n</p></div>\n'
   );
 });
+
+//Regression: convertFootnoteReferences matched the marker whether or not a backslash escaped it, so
+//"\[^1]" typed as prose came out a real footnote link with the backslash still in front of it,
+//while the editor showed the literal "[^1]" it was written to mean. A reference is read anywhere in
+//a line, so its escape is honoured anywhere - unlike the block markers above.
+test('an escaped footnote reference stays literal instead of becoming a link', function(){
+  assert.strictEqual(convertMdfcToHtml('See note\\[^1] here.\n'), '<p>See note[^1] here.</p>\n');
+});
+
+test('an escaped footnote body marker stays an ordinary paragraph', function(){
+  assert.strictEqual(convertMdfcToHtml('\\[^1]: Not a note.\n'), '<p>[^1]: Not a note.</p>\n');
+});
+
+test('an escaped reference does not stop a real one in the same paragraph', function(){
+  assert.strictEqual(
+    convertMdfcToHtml('A real[^1] and a literal \\[^2] one.\n[^1]: The note.\n'),
+    '<p>A real<sup><a href="#fnote_1" id="fnoteRef_1">1</a></sup> and a literal [^2] one.</p>\n'
+      + '<div class="footnote" id="fnote_1"><p><sup><a href="#fnoteRef_1">1</a></sup>The note.\n</p></div>\n'
+  );
+});

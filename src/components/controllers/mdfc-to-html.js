@@ -205,9 +205,24 @@ function convertInlineStyles(str){
   return out;
 }
 
+//A backslash before the marker escapes it, the same as anywhere else a marker is read - and a
+//footnote reference is read anywhere in a line, so its escape is honoured anywhere (consumeEscape
+//in markdownFic.js). Without the guard the marker was converted regardless, so "\[^1]" typed as
+//prose came out as a real footnote link with the backslash still sitting in front of it, while the
+//editor showed the literal "[^1]" it was written to mean.
+//
+//The escaped marker is left as it stands. convertInlineStyles runs tokenizeInline over the result
+//further down, and that takes the backslash off, exactly as it does for an escaped "*" or "~~".
 function convertFootnoteReferences(text){
-    const footnoteRefMarker = /\[\^(\d+)\]/gm;
-    text = text.replace(footnoteRefMarker, '<sup><a href="#fnote_$1" id="fnoteRef_$1">$1</a></sup>');
+    const footnoteRefMarker = /(\\)?\[\^(\d+)\]/gm;
+
+    text = text.replace(footnoteRefMarker, function(match, escape, number){
+      if(escape)
+        return match;
+
+      return '<sup><a href="#fnote_' + number + '" id="fnoteRef_' + number + '">' + number + '</a></sup>';
+    });
+
     return text;
 }
 
