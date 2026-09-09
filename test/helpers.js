@@ -81,7 +81,30 @@ function normalizeDelta(delta){
       return normalized;
     });
 
-  return { ops: ops };
+  return { ops: mergeAdjacentRuns(ops) };
+}
+
+//Quill's delta model does not distinguish two adjacent inserts carrying the same attributes from
+//the one insert holding both - the editor writes the merged form and merges them again on load - so
+//neither does a comparison here. Without this an assertion on a split-run delta fails against its
+//own document, which is a difference in the input rather than in what the code under test did.
+function mergeAdjacentRuns(ops){
+  var merged = [];
+
+  ops.forEach(function(op){
+    var last = merged[merged.length - 1];
+
+    if(last && typeof last.insert === 'string' && typeof op.insert === 'string' &&
+        last.insert !== '\n' && op.insert !== '\n' &&
+        JSON.stringify(last.attributes) === JSON.stringify(op.attributes)){
+      last.insert += op.insert;
+      return;
+    }
+
+    merged.push(op);
+  });
+
+  return merged;
 }
 
 function normalizeAttributes(attributes){
