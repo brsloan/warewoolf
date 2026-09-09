@@ -4,6 +4,7 @@ const assert = require('node:assert');
 const {
   reconcileFootnotes,
   applyStructuralFootnoteChanges,
+  containsFootnotes,
   renumberFootnotes,
   namespaceFootnotes,
   redistributeFootnotes
@@ -365,5 +366,101 @@ test('a materialized note does not take the id of an orphaned body still to be p
   assert.deepStrictEqual(result, { ops: [
     { insert: 'a' }, marker('5'), { insert: '\n' },
     ...body('pasted note', '5')
+  ]});
+});
+
+//---------------------------------------------------------------------------
+// containsFootnotes / the structural pass's early-out
+//---------------------------------------------------------------------------
+
+//The guard render.js leans on to skip the whole structural pass (and, more expensively, diffing
+//its result against the document) on every keystroke in a chapter that has no footnotes in it -
+//which is most chapters. These assert the two shapes it has to recognise and the one it must not
+//confuse for them, since a false negative silently stops footnotes working at all.
+test('containsFootnotes finds a marker embed', function(){
+  assert.strictEqual(containsFootnotes({ ops: [ { insert: 'a' }, marker('1'), { insert: '\n' } ] }), true);
+});
+
+test('containsFootnotes finds a body line', function(){
+  assert.strictEqual(containsFootnotes({ ops: body('orphan', '1') }), true);
+});
+
+test('containsFootnotes finds a marker carrying only a pasted payload', function(){
+  //A pasted note's body rides on its marker rather than existing as a line of its own, so a
+  //document can need the structural pass while containing no body line at all.
+  var delta = { ops: [
+    { insert: { footnote: { n: '1', payload: body('pasted', '1') } } },
+    { insert: '\n' }
+  ]};
+
+  assert.strictEqual(containsFootnotes(delta), true);
+});
+
+test('containsFootnotes finds a body attribute on a multi-line insert', function(){
+  //A line attribute applies to every newline inside the string it sits on, and the guard reads raw
+  //ops without flattening them first - so this shape has to be caught where it is.
+  var delta = { ops: [ { insert: 'one\ntwo\n', attributes: { footnoteBody: '1' } } ] };
+
+  assert.strictEqual(containsFootnotes(delta), true);
+});
+
+test('containsFootnotes says no to ordinary formatted prose', function(){
+  var delta = { ops: [
+    { insert: 'Chapter One' }, { insert: '\n', attributes: { header: 1 } },
+    { insert: 'Some ' }, { insert: 'italic', attributes: { italic: true } }, { insert: ' text.' },
+    { insert: '\n', attributes: { align: 'center' } }
+  ]};
+
+  assert.strictEqual(containsFootnotes(delta), false);
+});
+
+test('containsFootnotes tolerates an absent or empty delta', function(){
+  assert.strictEqual(containsFootnotes(null), false);
+  assert.strictEqual(containsFootnotes({}), false);
+  assert.strictEqual(containsFootnotes({ ops: [] }), false);
+});
+
+test('applyStructuralFootnoteChanges returns a footnote-free document unchanged', function(){
+  //Not merely equivalent: identical ops, so render.js's diff against the original is empty and
+  //nothing is applied to the editor. The rebuilt path splits multi-line inserts apart on the way
+  //through, a difference the diff absorbs but there is no reason to pay for.
+  var ops = [
+    { insert: 'Two lines\nin one op.\n' },
+    { insert: 'Then more.' }, { insert: '\n', attributes: { align: 'center' } }
+  ];
+
+  var result = applyStructuralFootnoteChanges({ ops: ops });
+
+  assert.deepStrictEqual(result, { ops: ops });
+});
+
+test('applyStructuralFootnoteChanges hands back its own array, not the caller\'s', function(){
+  var delta = { ops: [ { insert: 'no notes here\n' } ] };
+
+  var result = applyStructuralFootnoteChanges(delta);
+
+  assert.notStrictEqual(result.ops, delta.ops, 'the caller keeps sole ownership of its own array');
+  assert.deepStrictEqual(result.ops, delta.ops);
+});
+
+test('an empty document still comes back as a single newline', function(){
+  //finalizeDelta's floor, which the early-out has to honour the same way the rebuilt path does.
+  assert.deepStrictEqual(applyStructuralFootnoteChanges({ ops: [] }), { ops: [ { insert: '\n' } ] });
+});
+
+test('the early-out does not change what the structural pass does to a document with footnotes', function(){
+  //The guard is a shortcut, never a behaviour change: a document it says yes to takes exactly the
+  //path it always did, orphan pruning and payload materializing included.
+  var delta = { ops: [
+    { insert: 'See' }, marker('1'), { insert: '\n' },
+    ...body('kept, its marker is still there', '1'),
+    ...body('pruned, nothing points at it', '7')
+  ]};
+
+  var result = applyStructuralFootnoteChanges(delta);
+
+  assert.deepStrictEqual(result, { ops: [
+    { insert: 'See' }, marker('1'), { insert: '\n' },
+    ...body('kept, its marker is still there', '1')
   ]});
 });

@@ -12,6 +12,7 @@ const { attachAutocorrect } = require('./components/controllers/autocorrect');
 const { registerFootnoteBlots } = require('./components/blots/footnotes');
 const {
   applyStructuralFootnoteChanges,
+  containsFootnotes,
   renumberFootnotes,
   redistributeFootnotes
 } = require('./components/controllers/reconcile-footnotes');
@@ -1011,6 +1012,16 @@ editorQuill.on('text-change', function(delta, oldDelta, source) {
 function applyFootnoteStructuralChanges(){
   var Delta = Quill.import('delta');
   var current = editorQuill.getContents();
+
+  //Checked here as well as inside applyStructuralFootnoteChanges, because the pass is only half
+  //the per-keystroke cost: diffing its result against the whole document is the other half, and a
+  //chapter with no footnotes in it pays that to be told nothing changed. Measured on a
+  //90k-character chapter, the two together are about a millisecond of every keystroke on a desktop
+  //- which is why this matters on the Pi the app is built for, where the same work costs several
+  //times that. containsFootnotes walks the ops once and allocates nothing.
+  if(!containsFootnotes(current))
+    return;
+
   var structural = applyStructuralFootnoteChanges(current);
   var diff = new Delta(current).diff(new Delta(structural));
 

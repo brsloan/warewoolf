@@ -241,7 +241,41 @@ function renumberAndReorder(lines){
 //edit and belongs in the same undo entry as whatever triggered it (source 'user', applied
 //synchronously); renumbering/reordering is cosmetic and must not itself become undoable (source
 //'silent').
+//True when the delta holds anything either structural step could act on. materializePayloads only
+//touches marker embeds carrying a payload, and pruneOrphanBodies only lines carrying a
+//footnoteBody attribute - so on a delta with neither, both are provably no-ops and the rebuild
+//below is pure cost. A pasted note's payload always rides on its marker rather than standing on
+//its own, which is what makes these two checks exhaustive rather than merely likely.
+//
+//Worth the special case because of where this runs: render.js calls it from the editor's
+//text-change handler, so the walk it guards happens on every keystroke, and the overwhelming
+//majority of chapters contain no footnotes at all. One allocation-free pass over the ops replaces
+//rebuilding every op and line in the document.
+function containsFootnotes(delta){
+  var ops = (delta && delta.ops) || [];
+
+  for(var i = 0; i < ops.length; i++){
+    if(isFootnoteMarker(ops[i].insert))
+      return true;
+
+    //Read off the raw op rather than a flattened one: a line attribute sits on the newline that
+    //terminates the line, and a multi-line string insert carries it for every newline inside
+    //itself, so either shape is caught here without splitting anything first.
+    if(ops[i].attributes && ops[i].attributes.footnoteBody != null)
+      return true;
+  }
+
+  return false;
+}
+
 function applyStructuralFootnoteChanges(delta){
+  //Returned as its own array so the result is still the caller's to keep or discard, matching what
+  //the rebuilt path hands back. The op objects inside are shared rather than copied, which is safe
+  //precisely because this branch ran: nothing was rewritten, and every pass that would rewrite one
+  //goes through toLines() and copies first.
+  if(!containsFootnotes(delta))
+    return finalizeDelta(((delta && delta.ops) || []).slice());
+
   var lines = toLines((delta && delta.ops) || []);
   materializePayloads(lines);
   lines = pruneOrphanBodies(lines);
@@ -349,6 +383,7 @@ function redistributeFootnotes(deltas){
 module.exports = {
   reconcileFootnotes,
   applyStructuralFootnoteChanges,
+  containsFootnotes,
   renumberFootnotes,
   namespaceFootnotes,
   redistributeFootnotes,
