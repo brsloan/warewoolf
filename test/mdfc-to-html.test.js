@@ -88,6 +88,35 @@ test('escaped markers lose their backslash and stay out of their markup', functi
   assert.strictEqual(convertMdfcToHtml('\\# not a heading\n'), '<p># not a heading</p>\n');
 });
 
+//The other half of that rule, and the half the editor now agrees with: an escape means something
+//only where the marker would have been read, so a backslash mid-sentence is a backslash and has to
+//survive into the export exactly as it survives into the editor.
+test('a backslash mid-sentence is not read as an escape', function(){
+  assert.strictEqual(convertMdfcToHtml('Use File \\> Dictionaries.\n'), '<p>Use File \\> Dictionaries.</p>\n');
+  assert.strictEqual(convertMdfcToHtml('The C\\# language.\n'), '<p>The C\\# language.</p>\n');
+  assert.strictEqual(convertMdfcToHtml('An \\[>c] marker.\n'), '<p>An \\[>c] marker.</p>\n');
+});
+
+//A heading and a quotation are read with no tolerance for indent, so there is no marker to escape
+//behind one. A list marker is read after indent, so there is.
+test('indent puts a backslash at a list marker\'s position but not a heading\'s', function(){
+  assert.strictEqual(convertMdfcToHtml('\t\\> not an escape\n'), '<p>\t\\> not an escape</p>\n');
+  assert.strictEqual(convertMdfcToHtml('\t\\- an escaped dash\n'), '<p>\t- an escaped dash</p>\n');
+});
+
+//parseLine strips an alignment marker before it looks for a heading, so the escape is still at a
+//marker's position behind one.
+test('an escape behind an alignment marker is still honoured', function(){
+  assert.strictEqual(convertMdfcToHtml('[>c] \\# not a heading\n'), '<p class="center"># not a heading</p>\n');
+});
+
+//A heading's or a quotation's own text starts where parseLine has finished reading markers, so an
+//escape there is honoured too - which in the converted HTML is the start of the element's text.
+test('an escape at the start of a heading or quotation text is honoured', function(){
+  assert.strictEqual(convertMdfcToHtml('# \\# hash in a heading\n'), '<h1># hash in a heading</h1>\n');
+  assert.strictEqual(convertMdfcToHtml('> \\> arrow in a quotation\n'), '<blockquote>> arrow in a quotation</blockquote>\n');
+});
+
 test('windows line endings produce the same output as unix ones', function(){
   assert.strictEqual(
     convertMdfcToHtml('* one\r\n* two\r\n'),

@@ -16,6 +16,6 @@ For navigating within a chapter, your **Home / End / Page Up / Page Down** butto
 
 Within tool menus, you mostly navigate using the **Tan **button to jump between inputs/buttons--a red outline will show which one is selected. Then **Enter **will click the selected button (or **Space **will check a checkbox). This is all normal website keyboard navigation.
 
-For a more in-depth help document, please use the File Menu to go **Help \> Open Help Document**.
+For a more in-depth help document, please use the File Menu to go **Help > Open Help Document**.
 
 The rest of this file is the novel Frankenstein by Mary Shelley, so feel free to practice navigating through its chapters, editing them, etc. Why does a writing program named after Virginia Woolf feature a novel by Mary Shelley instead? Good question, my friend. Good question.

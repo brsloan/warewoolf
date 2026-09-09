@@ -248,12 +248,28 @@ test('an empty opening run does not move the text off the line start', function(
   ]}, '\\> not a quotation\r\n');
 });
 
-//Files written before the escaping was narrowed carry these escaped everywhere, so the reader still
-//has to accept one anywhere or every old backslash becomes a literal character.
-test('a block marker escape written by an older version is still read anywhere in the line', function(){
-  assert.strictEqual(textOf('Use File \\> Dictionaries.\r\n'), 'Use File > Dictionaries.\n');
-  assert.strictEqual(textOf('The C\\# language.\r\n'), 'The C# language.\n');
-  assert.strictEqual(textOf('An \\[>c] marker.\r\n'), 'An [>c] marker.\n');
+//The reader is narrowed to match: an escape means something only where the marker would have, so a
+//backslash in the middle of a sentence is a backslash. Files written before the escaping was
+//narrowed show that backslash where they used to hide it, which is the accepted cost of "a \> b"
+//meaning what it says.
+test('a block marker escape mid-sentence is a literal backslash', function(){
+  assert.strictEqual(textOf('Use File \\> Dictionaries.\r\n'), 'Use File \\> Dictionaries.\n');
+  assert.strictEqual(textOf('The C\\# language.\r\n'), 'The C\\# language.\n');
+  assert.strictEqual(textOf('An \\[>c] marker.\r\n'), 'An \\[>c] marker.\n');
+});
+
+//Indent puts a backslash at a list marker's position, but not at a heading's or a quotation's -
+//HEADER_MARKER and BLOCKQUOTE_MARKER tolerate no indent, so there is no marker there to escape.
+test('a block marker escape after indent is a literal backslash, though a list escape is not', function(){
+  assert.strictEqual(textOf('\t\\> not an escape\r\n'), '\t\\> not an escape\n');
+  assert.strictEqual(textOf('\t\\- an escaped list marker\r\n'), '\t- an escaped list marker\n');
+});
+
+//Inline escapes are unaffected: tokenizeInline reads those markers anywhere, so it honours an
+//escape for one anywhere.
+test('an inline style or footnote escape is still read anywhere in the line', function(){
+  assert.strictEqual(textOf('not \\*italics\\* here\r\n'), 'not *italics* here\n');
+  assert.strictEqual(textOf('not a footnote \\[^1] here\r\n'), 'not a footnote [^1] here\n');
 });
 
 test('a blockquote round trips', function(){

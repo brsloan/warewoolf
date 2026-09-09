@@ -1,26 +1,33 @@
 const { parseDelta, getOrderedListNumbers, getListMarker, isFootnoteMarker } = require('./quill-utils');
 
-//Sequences a leading backslash can escape. The two-char markers are listed before their one-char
-//prefixes so "\*\*" is read as an escaped "**" rather than an escaped "*" followed by a literal
-//"*". List/ordered markers ("-", "+", "1. ") are only ever written with an escaping backslash at
-//the very start of a paragraph's text (see escapeListMarkers below), so they're only recognised
-//there - a stray "\-" in the middle of a sentence is just a literal backslash followed by a dash.
+//Sequences a leading backslash can escape, grouped by where the escape means anything - which is
+//exactly where parseLine could otherwise read the marker itself. A backslash anywhere else is a
+//backslash: "a \> b" is text with a backslash in it, not an escaped blockquote marker.
 //
-//This list is deliberately wider than what escapeAnyMarkers now writes. "#", ">" and "[>" are only
-//written escaped where parseLine could read them as a marker, but every file saved before that was
-//narrowed carries them escaped throughout, so the reader goes on accepting one anywhere. Taking
-//them out of this list would turn every one of those backslashes into a literal character.
-const ESCAPABLE_ANYWHERE = [/^\*\*/, /^\*/, /^~~/, /^__/, /^#/, /^\[>/, /^>/, /^\[\^/];
-const ESCAPABLE_AT_LINE_START = [/^-/, /^\+/, /^(?:\d+|[a-z])\. /];
+//Within each group the two-char markers come before their one-char prefixes, so "\*\*" reads as an
+//escaped "**" rather than an escaped "*" followed by a literal "*".
+//
+//Inline styles and a footnote reference are read anywhere in a line by tokenizeInline, so an escape
+//for one is honoured anywhere.
+const ESCAPABLE_ANYWHERE = [/^\*\*/, /^\*/, /^~~/, /^__/, /^\[\^/];
 
-//Whether a backslash at `index` is at the start of its line, for the purpose of reading escapes.
-//Line-start list markers ("- ", "1. ") are only ever written with an escaping backslash right after
-//a paragraph's indent (see escapeListMarkers), never after any other character - so "at line start"
-//means "nothing but indent precedes this backslash", not literally index === 0.
-//
-//Spaces count as indent alongside tabs, and have to: escapeListMarkers writes the backslash after
-//whatever indent it finds, so refusing spaces here would leave the backslash it wrote sitting in
-//the text as a literal character.
+//ALIGN_MARKER, HEADER_MARKER and BLOCKQUOTE_MARKER are ^-anchored and tolerate no indent, so these
+//three are only ever markers at the very start of the text tokenizeInline is handed - which is the
+//text left after parseLine has stripped whatever block markers the line did carry.
+const ESCAPABLE_AT_TEXT_START = [/^\[>/, /^#/, /^>/];
+
+//LIST_MARKER reads its marker after any indent, so a list escape is honoured after indent too. It
+//has to be: escapeListMarkers writes the backslash after whatever indent it finds, and spaces count
+//as indent alongside tabs, so refusing spaces here would leave that backslash in the text.
+const ESCAPABLE_AFTER_INDENT = [/^-/, /^\+/, /^(?:\d+|[a-z])\. /];
+
+//Joined once here rather than per backslash, since consumeEscape is the hot path on a chapter dense
+//with escaped markers.
+const ESCAPABLE_LIST_AND_BLOCK = ESCAPABLE_ANYWHERE.concat(ESCAPABLE_AT_TEXT_START, ESCAPABLE_AFTER_INDENT);
+const ESCAPABLE_LIST_ONLY = ESCAPABLE_ANYWHERE.concat(ESCAPABLE_AFTER_INDENT);
+
+//Whether nothing but indent precedes the backslash at `index`, which is what puts it at a list
+//marker's position.
 //
 //Walks backwards rather than forwards, which is what keeps it cheap: a backslash in the middle of a
 //sentence is preceded by an ordinary character, so the very first comparison settles it. Only a
@@ -36,9 +43,15 @@ function onlyIndentPrecedes(text, index){
   return true;
 }
 
-function consumeEscape(text, i, atLineStart){
+function consumeEscape(text, i){
+  var patterns = ESCAPABLE_ANYWHERE;
+
+  if(i === 0)
+    patterns = ESCAPABLE_LIST_AND_BLOCK;
+  else if(onlyIndentPrecedes(text, i))
+    patterns = ESCAPABLE_LIST_ONLY;
+
   var tail = text.slice(i + 1);
-  var patterns = atLineStart ? ESCAPABLE_ANYWHERE.concat(ESCAPABLE_AT_LINE_START) : ESCAPABLE_ANYWHERE;
 
   for(let p = 0; p < patterns.length; p++){
     var m = patterns[p].exec(tail);
@@ -90,7 +103,7 @@ function tokenizeInline(text){
     var ch = text[i];
 
     if(ch === '\\'){
-      var escaped = consumeEscape(text, i, onlyIndentPrecedes(text, i));
+      var escaped = consumeEscape(text, i);
       if(escaped !== null){
         buffer += escaped;
         i += 1 + escaped.length;

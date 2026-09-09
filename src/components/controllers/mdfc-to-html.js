@@ -114,11 +114,20 @@ function convertMdfcToHtml(str){
 
     //Bold/italic/underline/strike escapes (\**, \*, \~~, \__) are already stripped by
     //convertInlineStyles above, via tokenizeInline. This handles what's left: headings, alignment/
-    //blockquote markers, footnote refs, and list markers. List markers are in this set to match
-    //markdownFic.js - without them a line of prose that happens to open with "- " or "1984. " keeps
-    //the backslash it was escaped with.
-    let escapedMarkers = /\\(#|\[>|>|\[\^|-|\+|(?:\d+|[a-z])\. )/g;
-    str = str.replace(escapedMarkers, '$1');
+    //blockquote markers and list markers.
+    //
+    //An escape only means anything where the marker itself would have been read, exactly as in
+    //consumeEscape (markdownFic.js) - "a \> b" is a backslash followed by a greater-than sign, not
+    //an escaped quotation marker. By this point in the conversion, the start of a line has become
+    //the start of an element's text, so that is where the escape is honoured. A list marker is
+    //honoured after indent as well, since LIST_MARKER reads one there.
+    const elementStart = '(<(?:p|h[1-4]|li|blockquote)(?:\\s[^>]*)?>';
+
+    let escapedBlockMarkers = new RegExp(elementStart + ')\\\\(#|\\[>|>)', 'g');
+    str = str.replace(escapedBlockMarkers, '$1$2');
+
+    let escapedListMarkers = new RegExp(elementStart + '[\\t ]*)\\\\(-|\\+|(?:\\d+|[a-z])\\. )', 'g');
+    str = str.replace(escapedListMarkers, '$1$2');
   
     return str;
   }
