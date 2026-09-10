@@ -12,9 +12,9 @@
 //
 //A BINDING is { key, mod, alt, shift } plus an optional `code`:
 //
-//  key   - a normalized key name: a single uppercase character ('T', '1', ','), or one of the
-//          named keys in KNOWN_NAMED_KEYS ('ArrowUp', 'F3', 'Space'). This is what dispatch
-//          matches on, against a KeyboardEvent's own `key`.
+//  key   - a normalized key name: a single uppercase PRINTABLE character ('T', '1', ','), or one
+//          of the named keys in KNOWN_NAMED_KEYS ('ArrowUp', 'F3', 'AudioVolumeUp'). This is what
+//          dispatch matches on, against a KeyboardEvent's own `key`.
 //  mod   - Ctrl on Windows/Linux, Cmd on Mac. One flag rather than two, because every shortcut
 //          this app has ever shipped is a CmdOrCtrl one, and it keeps a settings file written on
 //          one machine meaningful on another.
@@ -28,15 +28,55 @@
 //A binding of `null` means the action is deliberately unbound - distinct from an action with no
 //override at all, which falls back to its default.
 
-//Named keys that may appear in a binding. Anything else with a name longer than one character
-//(dead keys, IME keys, 'Unidentified') is rejected rather than stored, so a shortcut can never be
-//saved in a shape that could not fire again.
-const KNOWN_NAMED_KEYS = [
+//Function keys. F13 and up are on no ordinary keyboard, but a programmable one (QMK and the like)
+//is free to emit them, and they are the natural home for a writerdeck's extra keys: they type
+//nothing, so a writer gives up nothing by spending one on a shortcut.
+const FUNCTION_KEYS = Array.from({ length: 24 }, function(unused, index){
+  return 'F' + (index + 1);
+});
+
+//The media, browser and launch keys a keyboard sends when its F-row is on its default layer instead
+//of acting as function keys - the two layers a compact board's Fn (often the Menu key) toggles
+//between. Which of these actually reach the page is the OS's business: a desktop environment may
+//keep the volume keys for itself, and a board's firmware may keep its own Fn key. The ones that do
+//arrive are bindable, and like the function keys they type nothing.
+const MEDIA_KEYS = [
+  'AudioVolumeUp', 'AudioVolumeDown', 'AudioVolumeMute',
+  'MediaPlayPause', 'MediaStop', 'MediaTrackNext', 'MediaTrackPrevious',
+  'BrowserBack', 'BrowserForward', 'BrowserRefresh', 'BrowserHome',
+  'BrowserSearch', 'BrowserFavorites',
+  'LaunchMail', 'LaunchApplication1', 'LaunchApplication2'
+];
+
+//Every named key that types nothing AND that the app has no other use for - which is exactly the
+//set that may be a shortcut on its own, with no Ctrl or Alt held (see canBindAlone). ContextMenu is
+//the Menu key; nothing in this app opens a context menu from it, so it is as free as the rest.
+const STANDALONE_NAMED_KEYS = FUNCTION_KEYS.concat(MEDIA_KEYS,
+  ['ContextMenu', 'Pause', 'ScrollLock']);
+
+//The named keys the app is navigated and edited by. These type nothing either, but a shortcut on a
+//bare one would take the editor's own cursor movement away - so unlike the keys above, they are
+//only bindable with a modifier held.
+const NAVIGATION_NAMED_KEYS = [
   'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
-  'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12',
   'PageUp', 'PageDown', 'Home', 'End', 'Insert',
   'Space', 'Enter', 'Tab', 'Escape', 'Backspace', 'Delete'
 ];
+
+//Named keys that may appear in a binding. Anything else with a name longer than one character
+//(dead keys, IME keys, 'Unidentified') is rejected rather than stored, so a shortcut can never be
+//saved in a shape that could not fire again.
+const KNOWN_NAMED_KEYS = NAVIGATION_NAMED_KEYS.concat(STANDALONE_NAMED_KEYS);
+
+//Text with a glyph to print for every character of it - letters, numbers, punctuation, symbols and
+//spaces, and nothing from the control, private-use or unassigned ranges.
+//
+//A single character is only a key name if it passes this. Chromium hands over a character for a key
+//it has no name of its own for, and an unusual keyboard - a programmable board's media layer on a
+//Pi, say - can land on a control or private-use codepoint with no glyph in any font, which the popup
+//would print as an empty rectangle. Refused, so that the capture UI can say what actually arrived
+//instead (see describeKeyEvent), which is the one thing an empty rectangle cannot tell a writer.
+const PRINTABLE_TEXT = /^[\p{L}\p{N}\p{P}\p{S}\p{Zs}]+$/u;
 
 //How a key is written in the popup's table, where it differs from the name stored. Everything not
 //listed prints as-is: 'T', 'F3', ','.
@@ -46,7 +86,32 @@ const KEY_DISPLAY_NAMES = {
   ArrowLeft: 'Left',
   ArrowRight: 'Right',
   PageUp: 'Page Up',
-  PageDown: 'Page Down'
+  PageDown: 'Page Down',
+  ContextMenu: 'Menu',
+  ScrollLock: 'Scroll Lock',
+  AudioVolumeUp: 'Volume Up',
+  AudioVolumeDown: 'Volume Down',
+  AudioVolumeMute: 'Mute',
+  MediaPlayPause: 'Play/Pause',
+  MediaStop: 'Stop',
+  MediaTrackNext: 'Next Track',
+  MediaTrackPrevious: 'Previous Track',
+  BrowserBack: 'Browser Back',
+  BrowserForward: 'Browser Forward',
+  BrowserRefresh: 'Browser Refresh',
+  BrowserHome: 'Browser Home',
+  BrowserSearch: 'Browser Search',
+  BrowserFavorites: 'Browser Favorites',
+  LaunchMail: 'Mail',
+  LaunchApplication1: 'Launch App 1',
+  LaunchApplication2: 'Launch App 2'
+};
+
+//The named keys whose physical `code` is not simply their key name. Only these two: the UI Events
+//spec spells the key 'LaunchApplication1' and the code 'LaunchApp1'.
+const NAMED_KEY_CODES = {
+  LaunchApplication1: 'LaunchApp1',
+  LaunchApplication2: 'LaunchApp2'
 };
 
 //Punctuation whose physical code is not derivable from the character itself. Only the ones a
@@ -81,8 +146,6 @@ const RESERVED_KEYS = {
 //are never a shortcut by themselves - the capture UI waits for a real key instead of assigning
 //"Shift".
 const MODIFIER_KEY_NAMES = ['Control', 'Shift', 'Alt', 'Meta', 'AltGraph', 'CapsLock', 'OS'];
-
-const FUNCTION_KEY = /^F([1-9]|1[0-2])$/;
 
 const SECTIONS = ['Navigation', 'Alteration', 'Formatting', 'Display'];
 
@@ -225,7 +288,7 @@ function normalizeKeyName(key){
     return 'Space';
 
   if(key.length === 1)
-    return key.toUpperCase();
+    return PRINTABLE_TEXT.test(key) ? key.toUpperCase() : null;
 
   var known = KNOWN_NAMED_KEYS.find(function(named){
     return named.toLowerCase() === key.toLowerCase();
@@ -253,7 +316,7 @@ function codeForKey(key){
   if(/^[0-9]$/.test(normalized))
     return 'Digit' + normalized;
 
-  return normalized;
+  return NAMED_KEY_CODES[normalized] || normalized;
 }
 
 //The binding a keydown represents, or null when the event is not one a shortcut could ever be: a
@@ -262,7 +325,7 @@ function codeForKey(key){
 //pressing Cmd and a Windows one pressing Ctrl produce the same binding, which is what lets one
 //settings file mean the same thing on both.
 function bindingFromEvent(e){
-  if(e == null || MODIFIER_KEY_NAMES.indexOf(e.key) !== -1)
+  if(e == null || isModifierKeyEvent(e))
     return null;
 
   var key = normalizeKeyName(e.key);
@@ -275,6 +338,46 @@ function bindingFromEvent(e){
     shift: e.shiftKey,
     code: typeof e.code === 'string' ? e.code : null
   });
+}
+
+//Whether a keydown is a modifier being held rather than a key being pressed - a writer part-way
+//through a combination. The capture UI needs this apart from bindingFromEvent's null, because the
+//two nulls mean opposite things: one is worth waiting through in silence, the other is a key this
+//app could not name and is worth saying something about.
+function isModifierKeyEvent(e){
+  return e != null && MODIFIER_KEY_NAMES.indexOf(e.key) !== -1;
+}
+
+//What a keypress actually arrived as, for the capture UI to show when the key is one this app cannot
+//name. This is the whole answer to "why did my key come out as a blank rectangle": an unrenderable
+//character is printed as its codepoint rather than as itself, and the physical `code` is named
+//alongside it, that being often the only readable thing about a key from an unusual keyboard - and
+//the thing worth quoting in a bug report about one.
+function describeKeyEvent(e){
+  if(e == null)
+    return '';
+
+  var parts = ['key ' + describeKeyValue(e.key)];
+
+  if(typeof e.code === 'string' && e.code !== '')
+    parts.push('code ' + describeKeyValue(e.code));
+
+  return 'Your keyboard reported ' + parts.join(', ') + '.';
+}
+
+function describeKeyValue(value){
+  if(typeof value !== 'string' || value === '')
+    return '(none)';
+
+  //The point of the readout is to be legible, so the one thing it must not do is reprint the
+  //rectangle the writer came here about. A key name is printable and is quoted as it stands;
+  //anything with a character that has no glyph is written out as codepoints instead.
+  if(PRINTABLE_TEXT.test(value))
+    return '"' + value + '"';
+
+  return Array.from(value).map(function(char){
+    return 'U+' + char.codePointAt(0).toString(16).toUpperCase().padStart(4, '0');
+  }).join(' ');
 }
 
 //`code` is deliberately not compared: it is a hint for Quill, not part of what a binding means,
@@ -455,7 +558,16 @@ function isSafeToBind(binding){
   if(bindingsEqual(binding, MENU_KEY_BINDING))
     return false;
 
-  return binding.mod || binding.alt || FUNCTION_KEY.test(binding.key);
+  return binding.mod || binding.alt || canBindAlone(binding.key);
+}
+
+//Whether a key may be a shortcut on its own, with nothing held down. The rule is that the key types
+//nothing: giving up a letter would make it untypeable in the editor, while giving up F5 or Volume Up
+//costs a writer nothing at all. Shift does not qualify a typing key either - Shift+B is still a
+//character. The navigation keys are the awkward middle case and are excluded: they type nothing, but
+//the editor moves its own cursor by them (see NAVIGATION_NAMED_KEYS).
+function canBindAlone(key){
+  return STANDALONE_NAMED_KEYS.indexOf(key) !== -1;
 }
 
 //Whether `binding` may be assigned to `actionId`, given every binding currently in force. Returns
@@ -486,10 +598,10 @@ function validateBinding(binding, actionId, bindings){
       return { valid: false, message: 'That shortcut opens the menu bar.' };
 
     //Without Ctrl/Cmd or Alt, an ordinary key is just typing - binding one would make that key
-    //unusable in the editor. Function keys type nothing, so they stand alone.
+    //unusable in the editor. The keys that type nothing stand alone (see canBindAlone).
     return {
       valid: false,
-      message: 'A shortcut needs Ctrl (Cmd on Mac) or Alt, unless it uses a function key.'
+      message: 'A shortcut needs Ctrl (Cmd on Mac) or Alt, unless it uses a function or media key.'
     };
   }
 
@@ -548,6 +660,9 @@ module.exports = {
   codeForKey,
   makeBinding,
   bindingFromEvent,
+  isModifierKeyEvent,
+  describeKeyEvent,
+  canBindAlone,
   bindingsEqual,
   bindingMatchesEvent,
   formatBinding,

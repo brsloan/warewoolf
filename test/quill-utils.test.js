@@ -355,6 +355,27 @@ test('a binding is matched by the physical key it was captured from', function()
   assert.strictEqual(q.find('formatBold').shiftKey, true);
 });
 
+//These are bindable now, so Quill has to be able to match them - otherwise a writer moving Bold onto
+//their board's F13 or Volume Up key would get a shortcut that looked bound and did nothing. F1 is
+//keyCode 112, so the row carries on to 135 at F24; the media keys have legacy codes of their own.
+test('a formatting shortcut on a programmable keyboard\'s key is matched, not dropped', function(){
+  [
+    ['F13', 124],
+    ['F24', 135],
+    ['AudioVolumeUp', 175],
+    ['MediaPlayPause', 179],
+    ['ContextMenu', 93],
+    ['LaunchApplication1', 182]
+  ].forEach(function(pair){
+    var q = recordingQuill({}, { formatBold: { key: pair[0], mod: false, alt: false, shift: false } });
+    var bound = q.find('formatBold');
+
+    assert.ok(bound != null, pair[0] + ' should be bound');
+    assert.strictEqual(bound.key, pair[1], pair[0] + ' should carry its keyCode');
+    assert.strictEqual(bound.shortKey, false, pair[0] + ' should be bound with nothing held');
+  });
+});
+
 //A binding whose key Quill has no code for could never be matched against a keypress, so it is left
 //off rather than sitting in the table looking like it works. Applied directly rather than through
 //resolveShortcuts, which drops a binding like this long before it could get here.

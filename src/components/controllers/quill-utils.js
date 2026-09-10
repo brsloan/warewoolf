@@ -302,7 +302,17 @@ const KEY_CODES = {
   ArrowLeft: 37, ArrowUp: 38, ArrowRight: 39, ArrowDown: 40,
   Insert: 45, Delete: 46,
   Semicolon: 186, Equal: 187, Comma: 188, Minus: 189, Period: 190, Slash: 191,
-  Backquote: 192, BracketLeft: 219, Backslash: 220, BracketRight: 221, Quote: 222
+  Backquote: 192, BracketLeft: 219, Backslash: 220, BracketRight: 221, Quote: 222,
+  //The keys an unusual keyboard reaches for - a programmable board's media layer, a writerdeck's
+  //extra keys. Here for the same reason as the rest: without a keyCode, toQuillBinding drops the
+  //binding, and a formatting shortcut moved onto one of these would sit in the popup looking bound
+  //and never fire.
+  Pause: 19, ContextMenu: 93, ScrollLock: 145,
+  BrowserBack: 166, BrowserForward: 167, BrowserRefresh: 168, BrowserStop: 169,
+  BrowserSearch: 170, BrowserFavorites: 171, BrowserHome: 172,
+  AudioVolumeMute: 173, AudioVolumeDown: 174, AudioVolumeUp: 175,
+  MediaTrackNext: 176, MediaTrackPrevious: 177, MediaStop: 178, MediaPlayPause: 179,
+  LaunchMail: 180, LaunchApp1: 182, LaunchApp2: 183
 };
 
 //The editor and the notes pane get the same formatting shortcuts. Quill's own keyboard module owns
@@ -369,7 +379,8 @@ function keyCodeFor(binding){
   if(digit)
     return digit[1].charCodeAt(0);
 
-  var functionKey = /^F([1-9]|1[0-2])$/.exec(code);
+  //F1 is 112, so the F-row runs 112-123 and F13-F24 carry straight on from there to 135.
+  var functionKey = /^F([1-9]|1[0-9]|2[0-4])$/.exec(code);
   if(functionKey)
     return 111 + Number(functionKey[1]);
 

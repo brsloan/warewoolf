@@ -217,6 +217,51 @@ test('a modifier held on its own does not end the capture', function(t){
   assert.strictEqual(button.textContent, 'Press keys...');
 });
 
+//The reported symptom, from a writer whose keyboard sends something Chromium has no name for: the
+//capture said nothing at all, so there was no telling a refused key from one the app had not seen.
+//The readout is the diagnostic - and it names the codepoint rather than reprinting the glyphless
+//character that started the whole question.
+test('a key the app cannot name says so, and says what arrived', function(t){
+  showEditable(t);
+  var button = keyButtonFor('Bold');
+
+  button.onclick();
+  keydown(document, 'Unidentified', { ctrlKey: true, code: 'F25' });
+
+  assert.match(messageFor('Bold'), /cannot be used in a shortcut/);
+  assert.match(messageFor('Bold'), /key "Unidentified", code "F25"/);
+  assert.strictEqual(button.textContent, 'Press keys...', 'still capturing, so another key can be tried');
+});
+
+test('an unrenderable character is reported as its codepoint, not reprinted', function(t){
+  showEditable(t);
+  var button = keyButtonFor('Bold');
+
+  button.onclick();
+  keydown(document, '\ue011', { ctrlKey: true, code: 'Unidentified' });
+
+  assert.match(messageFor('Bold'), /key U\+E011/);
+  assert.ok(messageFor('Bold').indexOf('\ue011') === -1, 'the glyphless character must not be echoed');
+  assert.strictEqual(button.textContent, 'Press keys...');
+});
+
+//Now bindable, and with nothing held: these type nothing, so a writer whose F-row sits on its media
+//layer can bind the keys their board actually sends.
+test('a key that types nothing is bound bare, under a readable name', function(t){
+  var saved = showEditable(t);
+  var button = keyButtonFor('Bold');
+
+  button.onclick();
+  keydown(document, 'AudioVolumeUp', { code: 'AudioVolumeUp' });
+
+  assert.strictEqual(button.textContent, 'Volume Up');
+
+  buttonLabelled('Save').onclick();
+  assert.deepStrictEqual(saved, [{
+    formatBold: { key: 'AudioVolumeUp', mod: false, alt: false, shift: false, code: 'AudioVolumeUp' }
+  }]);
+});
+
 test('Escape cancels a rebind and leaves the shortcut as it was', function(t){
   var saved = showEditable(t);
   var button = keyButtonFor('Bold');

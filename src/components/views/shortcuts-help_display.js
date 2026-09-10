@@ -5,6 +5,8 @@ const {
   getDefaultBindings,
   diffFromDefaults,
   bindingFromEvent,
+  isModifierKeyEvent,
+  describeKeyEvent,
   formatBinding,
   validateBinding
 } = require('../models/shortcuts');
@@ -237,10 +239,20 @@ function showShortcutsHelp(options){
     e.preventDefault();
     e.stopImmediatePropagation();
 
-    //A modifier held on its own is the writer part-way through a combination, not a shortcut.
     var pressed = bindingFromEvent(e);
-    if(pressed == null)
+
+    if(pressed == null){
+      //Two different nulls. A modifier held on its own is the writer part-way through a combination,
+      //and waiting in silence is the right answer. A key this app cannot name is not - saying
+      //nothing is what left a writer on an unusual keyboard with no way to tell a key that had been
+      //refused from one the app had not noticed at all, so the readout says what did arrive.
+      if(!isModifierKeyEvent(e)){
+        showMessage('That key cannot be used in a shortcut. ' + describeKeyEvent(e),
+          true, capturing.def.id);
+      }
+
       return;
+    }
 
     if(pressed.key === 'Escape'){
       cancelCapture();

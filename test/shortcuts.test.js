@@ -90,9 +90,53 @@ test('normalizeKeyName uppercases single characters and canonicalizes named keys
 });
 
 test('normalizeKeyName rejects anything that could not be dispatched again', function(){
-  [null, undefined, '', 42, {}, 'Unidentified', 'F13', 'Meta'].forEach(function(value){
+  [null, undefined, '', 42, {}, 'Unidentified', 'F25', 'Meta'].forEach(function(value){
     assert.strictEqual(shortcuts.normalizeKeyName(value), null, String(value) + ' should not normalize');
   });
+});
+
+//A programmable keyboard's extra keys, and the media layer a compact board's F-row sits on until its
+//Fn key is held. Refusing these left a writer on such a board unable to bind their F-row at all.
+test('normalizeKeyName accepts the keys an unusual keyboard sends', function(){
+  ['F13', 'F24', 'AudioVolumeUp', 'MediaPlayPause', 'BrowserSearch', 'ContextMenu', 'ScrollLock']
+    .forEach(function(key){
+      assert.strictEqual(shortcuts.normalizeKeyName(key), key, key + ' should be storable');
+    });
+
+  assert.strictEqual(shortcuts.normalizeKeyName('audiovolumeup'), 'AudioVolumeUp');
+});
+
+//The reported symptom: a key Chromium had no name for arrived as a character with no glyph, and the
+//popup stored it and printed it as an empty rectangle - a shortcut a writer could neither read nor
+//describe. Refused, so it comes back through describeKeyEvent as something legible instead.
+test('normalizeKeyName rejects a character with no glyph to print', function(){
+  ['\u0000', '\u001b', '\u007f', '\ue011', '\uf8ff'].forEach(function(char){
+    assert.strictEqual(shortcuts.normalizeKeyName(char), null,
+      'U+' + char.codePointAt(0).toString(16) + ' should not normalize');
+  });
+
+  //Ordinary printable keys are untouched by that check.
+  ['b', '1', ',', '=', '-', '`', '/', '\\', ';', "'", '[', ']'].forEach(function(char){
+    assert.strictEqual(shortcuts.normalizeKeyName(char), char.toUpperCase(),
+      char + ' should still normalize');
+  });
+});
+
+test('describeKeyEvent says what arrived, without reprinting an unrenderable character', function(){
+  assert.strictEqual(shortcuts.describeKeyEvent(keyEvent('Unidentified', { code: 'F13' })),
+    'Your keyboard reported key "Unidentified", code "F13".');
+
+  assert.strictEqual(shortcuts.describeKeyEvent(keyEvent('\ue011', { code: '' })),
+    'Your keyboard reported key U+E011.');
+
+  assert.strictEqual(shortcuts.describeKeyEvent(keyEvent(undefined, { code: 'Unidentified' })),
+    'Your keyboard reported key (none), code "Unidentified".');
+});
+
+test('isModifierKeyEvent tells a held modifier from a key with no usable name', function(){
+  assert.strictEqual(shortcuts.isModifierKeyEvent(keyEvent('Shift', { shiftKey: true })), true);
+  assert.strictEqual(shortcuts.isModifierKeyEvent(keyEvent('Unidentified')), false);
+  assert.strictEqual(shortcuts.isModifierKeyEvent(null), false);
 });
 
 test('codeForKey guesses the physical key behind a key name', function(){
@@ -102,6 +146,10 @@ test('codeForKey guesses the physical key behind a key name', function(){
   assert.strictEqual(shortcuts.codeForKey('='), 'Equal');
   assert.strictEqual(shortcuts.codeForKey('ArrowUp'), 'ArrowUp');
   assert.strictEqual(shortcuts.codeForKey('F3'), 'F3');
+  assert.strictEqual(shortcuts.codeForKey('F13'), 'F13');
+  assert.strictEqual(shortcuts.codeForKey('AudioVolumeUp'), 'AudioVolumeUp');
+  //The one pair the spec spells differently for key and code.
+  assert.strictEqual(shortcuts.codeForKey('LaunchApplication1'), 'LaunchApp1');
   assert.strictEqual(shortcuts.codeForKey('nonsense'), null);
 });
 
@@ -187,6 +235,16 @@ test('formatBinding writes a binding the way the popup prints it', function(){
   assert.strictEqual(shortcuts.formatBinding(shortcuts.makeBinding(' ', { mod: true }), false), 'Ctrl + Space');
 });
 
+test('formatBinding gives the exotic keys a readable name', function(){
+  assert.strictEqual(shortcuts.formatBinding(shortcuts.makeBinding('AudioVolumeUp'), false), 'Volume Up');
+  assert.strictEqual(shortcuts.formatBinding(shortcuts.makeBinding('ContextMenu'), false), 'Menu');
+  assert.strictEqual(shortcuts.formatBinding(shortcuts.makeBinding('MediaTrackPrevious', { mod: true }), false),
+    'Ctrl + Previous Track');
+  //Anything without a display name of its own prints as stored, which for these is already readable.
+  assert.strictEqual(shortcuts.formatBinding(shortcuts.makeBinding('F13'), false), 'F13');
+  assert.strictEqual(shortcuts.formatBinding(shortcuts.makeBinding('Pause'), false), 'Pause');
+});
+
 test('an unbound shortcut prints as None', function(){
   assert.strictEqual(shortcuts.formatBinding(null, false), 'None');
 });
@@ -246,7 +304,7 @@ test('sanitizeOverrides drops unknown actions and unusable bindings', function()
     madeUpAction: { key: 'W', mod: true },
     formatItalics: { key: 'Unidentified', mod: true },
     formatUnderline: 'Ctrl+U',
-    formatTitle: { key: 'F13' },
+    formatTitle: { key: 'F25' },
     formatList: null
   });
 
@@ -309,7 +367,7 @@ test('clearing a shortcut is always allowed', function(){
 });
 
 //An unmodified letter would stop being typeable in the editor the moment it became a shortcut.
-test('a key with no Ctrl or Alt is refused unless it is a function key', function(){
+test('a key with no Ctrl or Alt is refused unless it types nothing', function(){
   var bindings = shortcuts.getDefaultBindings();
 
   var letter = shortcuts.validateBinding(shortcuts.makeBinding('Q'), 'formatBold', bindings);
@@ -321,6 +379,31 @@ test('a key with no Ctrl or Alt is refused unless it is a function key', functio
 
   assert.strictEqual(shortcuts.validateBinding(shortcuts.makeBinding('F5'), 'formatBold', bindings).valid, true);
   assert.strictEqual(shortcuts.validateBinding(shortcuts.makeBinding('F5', { shift: true }), 'formatBold', bindings).valid, true);
+});
+
+//The rule is "types nothing", not "is a function key" - which is what lets a writer whose F-row sits
+//on its media layer bind the keys their board actually sends.
+test('a key that types nothing may be bound on its own', function(){
+  var bindings = shortcuts.getDefaultBindings();
+
+  ['F13', 'F24', 'AudioVolumeUp', 'MediaPlayPause', 'ContextMenu', 'ScrollLock'].forEach(function(key){
+    assert.strictEqual(shortcuts.canBindAlone(key), true, key + ' should stand alone');
+    assert.strictEqual(shortcuts.validateBinding(shortcuts.makeBinding(key), 'formatBold', bindings).valid,
+      true, key + ' should be bindable bare');
+  });
+});
+
+//The awkward middle case: these type nothing either, but the editor moves its own cursor by them, so
+//a bare shortcut on one would take that away.
+test('a navigation key still needs a modifier, though it types nothing', function(){
+  var bindings = shortcuts.getDefaultBindings();
+
+  ['ArrowUp', 'PageDown', 'Home', 'End', 'Insert', 'Space'].forEach(function(key){
+    assert.strictEqual(shortcuts.canBindAlone(key), false, key + ' should not stand alone');
+
+    var result = shortcuts.validateBinding(shortcuts.makeBinding(key), 'formatBold', bindings);
+    assert.strictEqual(result.valid, false, key + ' should be refused bare');
+  });
 });
 
 test('the keys the app itself needs cannot be bound', function(){

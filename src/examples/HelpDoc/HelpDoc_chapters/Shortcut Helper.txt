@@ -6,6 +6,10 @@ The same popup is where you change them. Choose any shortcut in the list and pre
 
 A few keys are not on offer, because the app itself is navigated with them: **Escape**, **Tab**, **Enter**, and the keys that open the file menu. The popup will also refuse a combination that a menu item already uses, or that another shortcut already has, and will tell you which one is in the way.
 
+Otherwise a shortcut needs **Ctrl** (or **Cmd**) or **Alt** held with it, because a plain letter would stop being typeable in the editor the moment it became a shortcut. The exception is any key that types nothing at all: the function keys, and the volume, playback and browser keys a keyboard sends when its F-row is on its default layer. Those can be a shortcut on their own.
+
+That last point matters on a programmable or custom keyboard, of the sort a writerdeck is often built from. If your F-row only acts as **F1**-**F12** while you hold an **Fn** key, then without it your board is sending entirely different keys - and the keyboard decides that before the computer ever sees it, so no program can tell what you meant. You can simply bind whichever keys it does send. Most boards also have an Fn-lock that flips the two around for good. If the popup says a key cannot be used, it will print what your keyboard reported it as, which is worth quoting if you would like it supported.
+
 Here is a summary of the defaults (Ctrl is Cmd on Mac unless otherwise noted):
 
 # Navigation
