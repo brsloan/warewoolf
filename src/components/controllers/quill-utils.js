@@ -363,6 +363,13 @@ function toQuillBinding(binding){
 }
 
 function keyCodeFor(binding){
+  //The keyCode the binding was actually captured from, where there is one, beats anything derivable
+  //from its name. For a key this app could not name it is the only thing Quill could match on - no
+  //table will ever hold a code like 'ShowAllWindows' - and for the rest it is the physical truth
+  //where KEY_CODES below is a guess.
+  if(typeof binding.keyCode === 'number')
+    return binding.keyCode;
+
   var code = binding.code || codeForKey(binding.key);
 
   if(code == null)

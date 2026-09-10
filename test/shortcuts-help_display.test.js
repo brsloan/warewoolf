@@ -221,16 +221,48 @@ test('a modifier held on its own does not end the capture', function(t){
 //capture said nothing at all, so there was no telling a refused key from one the app had not seen.
 //The readout is the diagnostic - and it names the codepoint rather than reprinting the glyphless
 //character that started the whole question.
-test('a key the app cannot name says so, and says what arrived', function(t){
+//
+//A key with no NAME is bindable by its code now, so being refused outright takes a key with neither:
+//the three keys on the reporting writer's top row that arrived with an empty code.
+test('a key with neither a name nor a code says so, and says what arrived', function(t){
   showEditable(t);
   var button = keyButtonFor('Bold');
 
   button.onclick();
-  keydown(document, 'Unidentified', { ctrlKey: true, code: 'F25' });
+  keydown(document, 'Unidentified', { ctrlKey: true, code: '' });
 
   assert.match(messageFor('Bold'), /cannot be used in a shortcut/);
-  assert.match(messageFor('Bold'), /key "Unidentified", code "F25"/);
+  assert.match(messageFor('Bold'), /key "Unidentified"/);
   assert.strictEqual(button.textContent, 'Press keys...', 'still capturing, so another key can be tried');
+});
+
+//'Unidentified' is a placeholder rather than an identity - two unrelated keys both arrive under it -
+//so it is refused as a code for the same reason it is refused as a key name.
+test('a code of Unidentified is no more bindable than a key of one', function(t){
+  showEditable(t);
+  var button = keyButtonFor('Bold');
+
+  button.onclick();
+  keydown(document, 'Unidentified', { code: 'Unidentified' });
+
+  assert.match(messageFor('Bold'), /cannot be used in a shortcut/);
+  assert.strictEqual(button.textContent, 'Press keys...');
+});
+
+//The key the whole thing was reported over: no name at all, but a perfectly good physical code.
+test('a key with only a code is bound by it, under a name spaced out of the code', function(t){
+  var saved = showEditable(t);
+  var button = keyButtonFor('Bold');
+
+  button.onclick();
+  keydown(document, '\u0000', { code: 'ShowAllWindows' });
+
+  assert.strictEqual(button.textContent, 'Show All Windows');
+
+  buttonLabelled('Save').onclick();
+  assert.deepStrictEqual(saved, [{
+    formatBold: { key: null, code: 'ShowAllWindows', mod: false, alt: false, shift: false }
+  }]);
 });
 
 test('an unrenderable character is reported as its codepoint, not reprinted', function(t){

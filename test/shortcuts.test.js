@@ -122,6 +122,108 @@ test('normalizeKeyName rejects a character with no glyph to print', function(){
   });
 });
 
+//The keys that report a name of their own bind by it, as any key does. Brightness was missing from
+//the list purely because it was written from the standard media keys and these sit beside them.
+test('the screen keys are bindable by name like the rest of a top row', function(){
+  ['BrightnessUp', 'BrightnessDown', 'ZoomToggle'].forEach(function(key){
+    assert.strictEqual(shortcuts.normalizeKeyName(key), key);
+    assert.strictEqual(shortcuts.canBindAlone(key), true);
+  });
+});
+
+//---------------------------------------------------------------------------
+// bindings identified by their code
+//---------------------------------------------------------------------------
+
+//A keyboard is free to report no key name at all - U+0000, on the top row this was reported from -
+//while still reporting a good physical code. The code is enough to bind by, and the alternative is
+//telling a writer their key is unusable when it plainly is not.
+test('a key with no name is bound by its code instead', function(){
+  var binding = shortcuts.bindingFromEvent(keyEvent('\u0000', { code: 'ShowAllWindows', keyCode: 182 }));
+
+  assert.deepStrictEqual(binding,
+    { key: null, code: 'ShowAllWindows', mod: false, alt: false, shift: false, keyCode: 182 });
+  assert.strictEqual(shortcuts.formatBinding(binding, false), 'Show All Windows');
+});
+
+//A code-identified binding dispatches on its code, so it has to match the key it came from and
+//nothing else.
+test('a code-identified binding matches its own key and no other', function(){
+  var binding = shortcuts.makeCodeBinding('ShowAllWindows', {});
+
+  assert.ok(shortcuts.bindingMatchesEvent(binding, keyEvent('\u0000', { code: 'ShowAllWindows' })));
+  assert.ok(!shortcuts.bindingMatchesEvent(binding, keyEvent('\u0000', { code: 'BrightnessUp' })));
+  assert.ok(!shortcuts.bindingMatchesEvent(binding, keyEvent('\u0000', { code: 'ShowAllWindows', ctrlKey: true })));
+});
+
+//Both keys would fire, and the popup would have shown no conflict to explain it.
+test('a code-identified binding conflicts with a named one on the same physical key', function(){
+  var named = shortcuts.makeBinding('T', { mod: true, code: 'KeyT' });
+  var byCode = shortcuts.makeCodeBinding('KeyT', { mod: true });
+
+  assert.ok(shortcuts.bindingsEqual(named, byCode));
+  assert.ok(!shortcuts.bindingsEqual(named, shortcuts.makeCodeBinding('KeyW', { mod: true })));
+});
+
+//Two named bindings are still compared on their names alone - a writer on another layout reaches the
+//same key from a different code, and that has to keep meaning the same shortcut.
+test('two named bindings are still compared without their codes', function(){
+  assert.ok(shortcuts.bindingsEqual(
+    shortcuts.makeBinding('T', { mod: true, code: 'KeyT' }),
+    shortcuts.makeBinding('T', { mod: true, code: 'KeyY' })));
+});
+
+test('a key with neither a name nor a usable code is no binding at all', function(){
+  assert.strictEqual(shortcuts.bindingFromEvent(keyEvent('\u0000', { code: '' })), null);
+  assert.strictEqual(shortcuts.bindingFromEvent(keyEvent('Unidentified', { code: 'Unidentified' })), null);
+  assert.strictEqual(shortcuts.makeCodeBinding('not a code!', {}), null);
+  assert.strictEqual(shortcuts.makeCodeBinding(undefined, {}), null);
+});
+
+//A code long enough for the ones a Chromebook top row sends: the old 20-character cap would have
+//dropped this one out of the settings file without a word.
+test('a code is stored up to the length the longest real one needs', function(){
+  var binding = shortcuts.sanitizeBinding({ key: null, code: 'KeyboardBacklightToggle' });
+
+  assert.strictEqual(binding.code, 'KeyboardBacklightToggle');
+  assert.strictEqual(shortcuts.sanitizeBinding({ key: null, code: 'x'.repeat(33) }), null);
+});
+
+test('a code-identified binding survives the settings file round trip', function(){
+  var overrides = shortcuts.sanitizeOverrides({
+    formatBold: { key: null, code: 'ShowAllWindows', mod: false, alt: false, shift: false }
+  });
+
+  assert.deepStrictEqual(overrides.formatBold,
+    { key: null, code: 'ShowAllWindows', mod: false, alt: false, shift: false });
+  assert.deepStrictEqual(shortcuts.resolveShortcuts(overrides).formatBold, overrides.formatBold);
+});
+
+//The keys the app cannot give up are refused however they are spelled - a hand-edited file naming
+//them by code would otherwise get in through the door the code path opened.
+test('a code-identified binding cannot take a key the app needs', function(){
+  ['Escape', 'Tab', 'Enter'].forEach(function(code){
+    assert.strictEqual(shortcuts.sanitizeBinding({ key: null, code: code }), null, code);
+  });
+
+  assert.strictEqual(shortcuts.sanitizeBinding({ key: null, code: 'KeyM', mod: true }), null,
+    'the menu bar shortcut, reached by its code');
+});
+
+test('a code-identified binding says why when it is refused', function(){
+  var bindings = shortcuts.getDefaultBindings();
+
+  var menu = shortcuts.validateBinding({ key: null, code: 'KeyM', mod: true }, 'formatBold', bindings);
+  assert.strictEqual(menu.valid, false);
+  assert.match(menu.message, /menu bar/);
+
+  var reserved = shortcuts.validateBinding({ key: null, code: 'Escape' }, 'formatBold', bindings);
+  assert.strictEqual(reserved.valid, false);
+  assert.match(reserved.message, /Escape closes dialogs/);
+});
+
+//---------------------------------------------------------------------------
+
 test('describeKeyEvent says what arrived, without reprinting an unrenderable character', function(){
   assert.strictEqual(shortcuts.describeKeyEvent(keyEvent('Unidentified', { code: 'F13' })),
     'Your keyboard reported key "Unidentified", code "F13".');
@@ -131,6 +233,21 @@ test('describeKeyEvent says what arrived, without reprinting an unrenderable cha
 
   assert.strictEqual(shortcuts.describeKeyEvent(keyEvent(undefined, { code: 'Unidentified' })),
     'Your keyboard reported key (none), code "Unidentified".');
+});
+
+//With neither a name nor a code the keyCode is the last thing that could tell one such key from
+//another, so the readout has to carry it - including when it is 0, which is the answer that they
+//cannot be told apart at all.
+test('describeKeyEvent falls back to the keyCode when there is nothing else', function(){
+  assert.strictEqual(shortcuts.describeKeyEvent(keyEvent('\u0000', { code: '', keyCode: 182 })),
+    'Your keyboard reported key U+0000, keyCode 182.');
+
+  assert.strictEqual(shortcuts.describeKeyEvent(keyEvent('\u0000', { code: '', keyCode: 0 })),
+    'Your keyboard reported key U+0000, keyCode 0.');
+
+  //A key with a usable code is identified by it, so the keyCode adds nothing worth printing.
+  assert.strictEqual(shortcuts.describeKeyEvent(keyEvent('\u0000', { code: 'ShowAllWindows', keyCode: 182 })),
+    'Your keyboard reported key U+0000, code "ShowAllWindows".');
 });
 
 test('isModifierKeyEvent tells a held modifier from a key with no usable name', function(){

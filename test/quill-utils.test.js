@@ -376,6 +376,27 @@ test('a formatting shortcut on a programmable keyboard\'s key is matched, not dr
   });
 });
 
+//No table will ever hold a code like 'ShowAllWindows', so the keyCode the binding was captured from
+//is the only thing Quill could match it on - and without it a formatting shortcut on such a key would
+//sit in the popup looking bound and never fire.
+test('a formatting shortcut on a code-identified key is matched by its captured keyCode', function(){
+  var q = recordingQuill({}, {
+    formatBold: { key: null, code: 'ShowAllWindows', keyCode: 182, mod: false, alt: false, shift: false }
+  });
+
+  assert.strictEqual(q.find('formatBold').key, 182);
+});
+
+//The captured keyCode is the physical truth where KEY_CODES is a guess, so it wins for a named
+//binding too - which is what carries the keys that report a name this app has no keyCode for.
+test('a captured keyCode is preferred to the one guessed from the name', function(){
+  var q = recordingQuill({}, {
+    formatBold: { key: 'BrightnessUp', keyCode: 216, mod: false, alt: false, shift: false }
+  });
+
+  assert.strictEqual(q.find('formatBold').key, 216);
+});
+
 //A binding whose key Quill has no code for could never be matched against a keypress, so it is left
 //off rather than sitting in the table looking like it works. Applied directly rather than through
 //resolveShortcuts, which drops a binding like this long before it could get here.
