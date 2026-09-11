@@ -15,21 +15,45 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-//Neither has a browser build (see the inventory's group F/G/H notes), which is why extractZip,
-//importDocx, buildEpub and archiveProject are native by necessity rather than by convenience.
-const unzipper = require('unzipper');
-const archiver = require('archiver');
-//Group K's own out-of-process dependencies. Required here, at module scope, rather than
-//destructured - createNodeBacking() below resolves `.request`/`.get`/`.spawn`/`.createTransport`
-//off these same module objects fresh on every call (options.X || httpsModule.X, not a captured
-//copy), so a test that mocks e.g. https.request via node:test's t.mock.method is seen by any
-//backing constructed afterward, and platform.test.js's own injected fakes (httpsRequest,
-//httpsGet, spawnProcess, createMailTransport) can override the same seam without either backing
-//behaving differently depending on which came first.
+//Deferred to first use, and that is a startup change rather than a tidy-up. index.js requires this
+//file at its own top level, so every require in it runs before app.whenReady(), and therefore before
+//there is a window to look at. These three pull in about 325 files between them and measured ~285ms
+//on a warm cache - a quarter second of empty screen spent loading a zip reader, a zip writer and an
+//SMTP client, on a launch that in the overwhelming majority of cases goes on to use none of them.
+//It costs most on the hardware that can least afford it: a writerDeck reading those files off an SD
+//card pays far more per file than a desktop does.
+//
+//Safe to defer because each is reachable only from a deliberate user action - importing an .epub or
+//.docx, exporting, backing up, emailing a document - so the load lands inside an operation that is
+//already doing real work and already slower than the load is. Nothing on the launch path touches
+//them, and nothing here changes what any of them do once loaded.
+//
+//unzipper and archiver still have no browser build (see the inventory's group F/G/H notes), which is
+//why extractZip, importDocx, buildEpub and archiveProject are native by necessity rather than by
+//convenience. That has not changed; only when the module arrives has.
+function lazyRequire(id){
+  var mod = null;
+  return function(){
+    if(mod === null)
+      mod = require(id);
+    return mod;
+  };
+}
+
+const loadUnzipper = lazyRequire('unzipper');
+const loadArchiver = lazyRequire('archiver');
+const loadNodemailer = lazyRequire('nodemailer');
+//Group K's own out-of-process dependencies. These three are required here, at module scope, rather
+//than destructured - createNodeBacking() below resolves `.request`/`.get`/`.spawn` off these same
+//module objects fresh on every call (options.X || httpsModule.X, not a captured copy), so a test
+//that mocks e.g. https.request via node:test's t.mock.method is seen by any backing constructed
+//afterward, and platform.test.js's own injected fakes (httpsRequest, httpsGet, spawnProcess,
+//createMailTransport) can override the same seam without either backing behaving differently
+//depending on which came first. They stay eager where the three above did not, because they are
+//built into node: requiring them opens no files and costs nothing measurable at startup.
 const httpsModule = require('https');
 const nodeCrypto = require('crypto');
 const childProcessModule = require('child_process');
-const nodemailer = require('nodemailer');
 const { CODES, PlatformError, fromNodeError, SAVED_SECRET } = require('./platform');
 const { sanitizeFilename } = require('./utils');
 //Only the legacy-format pair is needed here. Everything else about key handling - derivation,
@@ -139,7 +163,16 @@ function createNodeBacking(deps){
   var httpsRequest = options.httpsRequest || httpsModule.request;
   var httpsGet = options.httpsGet || httpsModule.get;
   var spawnProcess = options.spawnProcess || childProcessModule.spawn;
-  var createMailTransport = options.createMailTransport || nodemailer.createTransport;
+  //The one of these four that is not a plain module-object read, because nodemailer is no longer
+  //loaded by the time this runs. Wrapped rather than resolved: an injected fake still wins outright
+  //and the module is then never loaded at all - which is every test, since all of them pass
+  //createMailTransport - while the real path resolves `.createTransport` off nodemailer at the
+  //moment a mail is actually sent. That is the same read as before, only later, so t.mock.method on
+  //the module is still honoured, and now even if the mock is installed after this backing was
+  //constructed. Called unbound, exactly as the bare property reference was.
+  var createMailTransport = options.createMailTransport || function(){
+    return loadNodemailer().createTransport.apply(null, arguments);
+  };
   //installUpdate's one guard: sudo apt install must never run against a path the renderer merely
   //asserts is an installer. This backing only trusts a path it produced itself, via a downloadUpdate
   //call against this same instance (session-scoped - the state disappears once the app or a test
@@ -867,7 +900,7 @@ function createNodeBacking(deps){
 
       fs.createReadStream(zipPath)
         .on('error', function(err){ reject(fromNodeError(err, { command: 'extractZip' })); })
-        .pipe(unzipper.Extract({ path: destPath }))
+        .pipe(loadUnzipper().Extract({ path: destPath }))
         .on('error', function(err){ reject(fromNodeError(err, { command: 'extractZip' })); })
         .on('close', function(){ resolve({ path: destPath }); });
     });
@@ -895,7 +928,7 @@ function createNodeBacking(deps){
 
       fs.createReadStream(filepath)
         .on('error', function(err){ cleanup(); reject(fromNodeError(err, { command: 'importDocx' })); })
-        .pipe(unzipper.Extract({ path: unzipDestination }))
+        .pipe(loadUnzipper().Extract({ path: unzipDestination }))
         .on('error', function(err){ cleanup(); reject(fromNodeError(err, { command: 'importDocx' })); })
         .on('close', function(){
           try{
@@ -930,7 +963,7 @@ function createNodeBacking(deps){
   function importEpub(args){
     var filepath = normalizePath(args == null ? undefined : args.path, 'path');
 
-    return unzipper.Open.file(filepath).then(function(directory){
+    return loadUnzipper().Open.file(filepath).then(function(directory){
       var entries = {};
 
       var reads = directory.files.filter(function(entry){
@@ -1017,7 +1050,7 @@ function createNodeBacking(deps){
       var entries = args.entries == null ? [] : args.entries;
 
       var output = createWriteStream(filepath);
-      var archive = archiver('zip', { zlib: { level: 9 } });
+      var archive = loadArchiver()('zip', { zlib: { level: 9 } });
       var settled = false;
 
       //An output-stream failure and archiver's own 'error' can both fire for the same underlying
@@ -1091,7 +1124,7 @@ function createNodeBacking(deps){
       var destPath = path.join(args.destDir, archiveName);
 
       var output = createWriteStream(destPath);
-      var archive = archiver('zip', { zlib: { level: 9 } });
+      var archive = loadArchiver()('zip', { zlib: { level: 9 } });
       var settled = false;
 
       function settle(action, value){
