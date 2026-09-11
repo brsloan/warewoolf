@@ -174,10 +174,70 @@ test('two named bindings are still compared without their codes', function(){
 });
 
 test('a key with neither a name nor a usable code is no binding at all', function(){
-  assert.strictEqual(shortcuts.bindingFromEvent(keyEvent('\u0000', { code: '' })), null);
-  assert.strictEqual(shortcuts.bindingFromEvent(keyEvent('Unidentified', { code: 'Unidentified' })), null);
+  assert.strictEqual(shortcuts.bindingFromEvent(keyEvent('\u0000', { code: '', keyCode: 0 })), null);
+  assert.strictEqual(shortcuts.bindingFromEvent(keyEvent('Unidentified', { code: 'Unidentified', keyCode: 0 })), null);
   assert.strictEqual(shortcuts.makeCodeBinding('not a code!', {}), null);
   assert.strictEqual(shortcuts.makeCodeBinding(undefined, {}), null);
+});
+
+//The last three keys of the reporting writer's top row: no name, no code, and keyCodes of 183, 218
+//and 232. Little to go on, but three DIFFERENT things to go on, so they can be told apart - and a
+//key that can be told apart is a key there is no honest reason to refuse.
+test('a key with only a keyCode is bound by that', function(){
+  var binding = shortcuts.bindingFromEvent(keyEvent('\u0000', { code: '', keyCode: 183 }));
+
+  assert.deepStrictEqual(binding,
+    { key: null, code: null, keyCode: 183, mod: false, alt: false, shift: false });
+  assert.strictEqual(shortcuts.formatBinding(binding, false), 'Key 183');
+});
+
+test('keys that differ only by keyCode stay different shortcuts', function(){
+  var bindings = {};
+
+  [183, 218, 232].forEach(function(keyCode){
+    bindings['key' + keyCode] = shortcuts.makeKeyCodeBinding(keyCode, {});
+  });
+
+  //Each matches its own key and none of the others - which is the whole question for these three.
+  [183, 218, 232].forEach(function(keyCode){
+    var event = keyEvent('\u0000', { code: '', keyCode: keyCode });
+
+    [183, 218, 232].forEach(function(other){
+      assert.strictEqual(shortcuts.bindingMatchesEvent(bindings['key' + other], event),
+        keyCode === other, keyCode + ' against ' + other);
+    });
+  });
+});
+
+//A keyCode of 0 is the absence of one rather than a key, so two keys reporting it are the same key
+//as far as anything here could tell - which is exactly why it cannot be bound.
+test('a keyCode of zero is not something to bind to', function(){
+  assert.strictEqual(shortcuts.makeKeyCodeBinding(0, {}), null);
+  assert.strictEqual(shortcuts.makeKeyCodeBinding(-1, {}), null);
+  assert.strictEqual(shortcuts.makeKeyCodeBinding(1.5, {}), null);
+  assert.strictEqual(shortcuts.makeKeyCodeBinding(256, {}), null);
+  assert.strictEqual(shortcuts.makeKeyCodeBinding('183', {}), null);
+});
+
+test('a keyCode-identified binding survives the settings file round trip', function(){
+  var overrides = shortcuts.sanitizeOverrides({
+    formatBold: { key: null, code: null, keyCode: 232, mod: false, alt: false, shift: false }
+  });
+
+  assert.deepStrictEqual(overrides.formatBold,
+    { key: null, code: null, keyCode: 232, mod: false, alt: false, shift: false });
+  assert.deepStrictEqual(shortcuts.resolveShortcuts(overrides).formatBold, overrides.formatBold);
+});
+
+//The cascade is driven by what two bindings have in common, not by what either one is - so the same
+//physical key is recognised however much or little each side happens to carry about it.
+test('the same physical key is one shortcut however it is identified', function(){
+  var byCode = shortcuts.makeCodeBinding('ShowAllWindows', { keyCode: 182 });
+  var byKeyCode = shortcuts.makeKeyCodeBinding(182, {});
+
+  //One knows a code and the other does not, so the comparison falls to what both have.
+  assert.ok(shortcuts.bindingsEqual(byCode, byKeyCode));
+  assert.ok(!shortcuts.bindingsEqual(byCode, shortcuts.makeKeyCodeBinding(183, {})));
 });
 
 //A code long enough for the ones a Chromebook top row sends: the old 20-character cap would have

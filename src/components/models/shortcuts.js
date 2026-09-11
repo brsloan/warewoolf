@@ -29,12 +29,20 @@
 //          Optional, ignored by equality, and there for Quill alone - which matches on nothing else
 //          and has no table that could ever cover an unusual keyboard.
 //
-//Almost every binding is identified by its key name. The exception is a key this app cannot name at
-//all: a keyboard is free to report a key of U+0000 - no name whatsoever - while still reporting a
-//perfectly good physical code, and there is no reason a writer should not be able to use such a key.
-//Those carry `key: null` and are identified by their `code` instead. Equality compares two named
-//bindings on their names, as it always has, and falls back to codes the moment either side has no
-//name (see bindingsEqual).
+//A binding is identified by the first of these its keyboard actually gave it, which is a cascade
+//rather than a choice - see sameKey:
+//
+//  its key name  - almost everything.
+//  its code      - a keyboard is free to report a key of U+0000, no name whatsoever, while still
+//                  reporting a perfectly good physical code. Those carry `key: null`.
+//  its keyCode   - and some report no code either. Three keys on the top row this was written for
+//                  arrive with no name, no code, and keyCodes of 183, 218 and 232 - which is little
+//                  to go on, but it is three DIFFERENT things to go on, so the keys can be told
+//                  apart and there is no honest reason to refuse them. Those carry `key: null` and
+//                  `code: null`.
+//
+//Only a key that gives none of the three is refused, that being a key nothing could tell from any
+//other. Equality still compares two named bindings on their names, as it always has.
 //
 //A binding of `null` means the action is deliberately unbound - distinct from an action with no
 //override at all, which falls back to its default.
@@ -210,6 +218,25 @@ function makeCodeBinding(code, flags){
     binding.keyCode = flags.keyCode;
 
   return binding;
+}
+
+//The last resort: a binding for a key that reported neither a name nor a code. There is nothing to
+//call it but its number, and nothing to match it on either - but a keyCode of its own is enough to
+//tell it from the key beside it, which is all binding one requires.
+function makeKeyCodeBinding(keyCode, flags){
+  flags = flags || {};
+
+  if(!isRealKeyCode(keyCode))
+    return null;
+
+  return {
+    key: null,
+    code: null,
+    keyCode: keyCode,
+    mod: Boolean(flags.mod),
+    alt: Boolean(flags.alt),
+    shift: Boolean(flags.shift)
+  };
 }
 
 function usableCode(code){
@@ -392,15 +419,19 @@ function bindingFromEvent(e){
 
   //A key this app cannot name is not necessarily a key it cannot use. An unusual keyboard can report
   //no name at all - a NUL character, on the Chromebook-style top row this was written for - while
-  //still reporting a good physical code, and that code is enough to bind by. Null still comes back
-  //when there is neither, which is a key nothing could tell apart from any other.
-  if(key == null)
-    return makeCodeBinding(e.code, {
+  //still reporting a good physical code, and that code is enough to bind by. Failing even that, the
+  //keyCode is. Null still comes back when there is none of the three, which is a key nothing could
+  //tell apart from any other.
+  if(key == null){
+    var flags = {
       mod: e.ctrlKey || e.metaKey,
       alt: e.altKey,
       shift: e.shiftKey,
       keyCode: e.keyCode
-    });
+    };
+
+    return makeCodeBinding(e.code, flags) || makeKeyCodeBinding(e.keyCode, flags);
+  }
 
   return makeBinding(key, {
     mod: e.ctrlKey || e.metaKey,
@@ -433,9 +464,9 @@ function describeKeyEvent(e){
   if(typeof e.code === 'string' && e.code !== '')
     parts.push('code ' + describeKeyValue(e.code));
 
-  //With neither a name nor a code, the keyCode is the last thing that could tell this key from
-  //another - so it is worth printing, and worth printing even when it is 0, since 0 is itself the
-  //answer to whether two such keys could ever be told apart.
+  //With neither a name nor a code the keyCode is the last thing that could tell this key from
+  //another - and a real one is now bound rather than reported, so anything that reaches here has a
+  //keyCode of 0. Printed anyway, since 0 is itself the answer to why the key was refused.
   if(normalizeKeyName(e.key) == null && !usableCode(e.code) && typeof e.keyCode === 'number')
     parts.push('keyCode ' + e.keyCode);
 
@@ -469,16 +500,23 @@ function bindingsEqual(a, b){
 //of what a binding means, and two writers on different keyboard layouts can reach the same key from
 //different codes.
 //
-//A binding with no name has nothing but its code to be identified by, so any comparison involving
-//one is made on codes - against a named binding too, which is what stops a code-identified shortcut
-//from silently sharing a physical key with a named one and leaving both to fire.
+//A binding with no name falls back to what it does have, and so does anything being compared with
+//it - against a named binding too, which is what stops a code- or keyCode-identified shortcut from
+//silently sharing a physical key with a named one and leaving both to fire.
+//
+//The cascade has to be driven by what the two bindings have in COMMON rather than by what either one
+//is, or a binding carrying a code would never be found equal to the same key arriving without one.
 function sameKey(a, b){
   if(a.key != null && b.key != null)
     return a.key === b.key;
 
   var codeA = effectiveCode(a);
+  var codeB = effectiveCode(b);
 
-  return codeA != null && codeA === effectiveCode(b);
+  if(codeA != null && codeB != null)
+    return codeA === codeB;
+
+  return isRealKeyCode(a.keyCode) && a.keyCode === b.keyCode;
 }
 
 function effectiveCode(binding){
@@ -510,11 +548,21 @@ function formatBinding(binding, isMac){
   if(binding.shift)
     parts.push('Shift');
 
-  parts.push(binding.key == null
-    ? describeCode(binding.code)
-    : (KEY_DISPLAY_NAMES[binding.key] || binding.key));
+  parts.push(describeBoundKey(binding));
 
   return parts.join(' + ');
+}
+
+function describeBoundKey(binding){
+  if(binding.key != null)
+    return KEY_DISPLAY_NAMES[binding.key] || binding.key;
+
+  if(binding.code != null)
+    return describeCode(binding.code);
+
+  //Nothing to call it by but its number. Printed plainly rather than dressed up, so that a writer
+  //can match it against the readout the popup gave them when the key was first pressed.
+  return 'Key ' + binding.keyCode;
 }
 
 //A code is a spec identifier rather than a name meant for a writer, so it is spaced out into words
@@ -624,7 +672,7 @@ function sanitizeBinding(raw){
   //With no name, the binding has to be one identified by its code, and makeCodeBinding answers
   //whether it is a usable one. Something with neither is not a binding at all.
   var binding = key == null
-    ? makeCodeBinding(raw.code, raw)
+    ? (makeCodeBinding(raw.code, raw) || makeKeyCodeBinding(raw.keyCode, raw))
     : makeBinding(key, { mod: raw.mod, alt: raw.alt, shift: raw.shift, keyCode: raw.keyCode });
 
   if(binding == null || !isSafeToBind(binding))
@@ -782,6 +830,7 @@ module.exports = {
   codeForKey,
   makeBinding,
   makeCodeBinding,
+  makeKeyCodeBinding,
   bindingFromEvent,
   isModifierKeyEvent,
   describeKeyEvent,

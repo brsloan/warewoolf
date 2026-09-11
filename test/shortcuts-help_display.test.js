@@ -249,6 +249,24 @@ test('a code of Unidentified is no more bindable than a key of one', function(t)
   assert.strictEqual(button.textContent, 'Press keys...');
 });
 
+//The last three keys of the reported top row, which give nothing but a number. Bound anyway, and
+//named by that number so a writer can match the row against what the popup told them when they
+//pressed it.
+test('a key with only a keyCode is bound, and named by it', function(t){
+  var saved = showEditable(t);
+  var button = keyButtonFor('Bold');
+
+  button.onclick();
+  keydown(document, '\u0000', { code: '', keyCode: 183 });
+
+  assert.strictEqual(button.textContent, 'Key 183');
+
+  buttonLabelled('Save').onclick();
+  assert.deepStrictEqual(saved, [{
+    formatBold: { key: null, code: null, keyCode: 183, mod: false, alt: false, shift: false }
+  }]);
+});
+
 //The key the whole thing was reported over: no name at all, but a perfectly good physical code.
 test('a key with only a code is bound by it, under a name spaced out of the code', function(t){
   var saved = showEditable(t);

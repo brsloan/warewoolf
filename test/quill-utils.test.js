@@ -387,6 +387,16 @@ test('a formatting shortcut on a code-identified key is matched by its captured 
   assert.strictEqual(q.find('formatBold').key, 182);
 });
 
+//Quill matches on keyCode alone, so a binding that is nothing BUT a keyCode is the one case it needs
+//no help with at all.
+test('a formatting shortcut on a key with only a keyCode is matched by it', function(){
+  var q = recordingQuill({}, {
+    formatBold: { key: null, code: null, keyCode: 232, mod: false, alt: false, shift: false }
+  });
+
+  assert.strictEqual(q.find('formatBold').key, 232);
+});
+
 //The captured keyCode is the physical truth where KEY_CODES is a guess, so it wins for a named
 //binding too - which is what carries the keys that report a name this app has no keyCode for.
 test('a captured keyCode is preferred to the one guessed from the name', function(){
