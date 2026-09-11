@@ -1,4 +1,4 @@
-const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
+const { closePopups, createButton, removeElementsByClass, describeDialog } = require('../controllers/utils');
 
 function requestProjectTitle(callback){
   removeElementsByClass('popup');
@@ -8,6 +8,7 @@ function requestProjectTitle(callback){
   var popupTitle = document.createElement('h1');
   popupTitle.innerText = 'New Project';
   popup.appendChild(popupTitle);
+  describeDialog(popup, popupTitle);
 
   var titleForm = document.createElement("form");
 

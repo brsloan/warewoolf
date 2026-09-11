@@ -1,4 +1,4 @@
-const { closePopups, createButton, removeElementsByClass, enableSearchView } = require('../controllers/utils');
+const { closePopups, createButton, removeElementsByClass, enableSearchView, describeDialog } = require('../controllers/utils');
 const { compileSearch, find, matchEntireText, replace, replaceAllInChapter, replaceAllInAllChapters } = require('../controllers/findreplace');
 
 function showFindReplace(project, editorQuill, displayChapterByIndex){
@@ -11,6 +11,7 @@ function showFindReplace(project, editorQuill, displayChapterByIndex){
     var popupTitle = document.createElement('h1');
     popupTitle.innerText = 'Find / Replace';
     popup.appendChild(popupTitle);
+    describeDialog(popup, popupTitle);
 
     var findForm = document.createElement("form");
 
@@ -18,6 +19,7 @@ function showFindReplace(project, editorQuill, displayChapterByIndex){
     findIn.type = "text";
     findIn.placeholder = "Find...";
     findIn.id = "find-input";
+    findIn.setAttribute('aria-label', 'Find');
     findForm.appendChild(findIn);
 
     findForm.appendChild(document.createElement('br'));
@@ -74,6 +76,7 @@ function showFindReplace(project, editorQuill, displayChapterByIndex){
     replaceIn.type = "text";
     replaceIn.placeholder = "Replace...";
     replaceIn.id = "replace-input";
+    replaceIn.setAttribute('aria-label', 'Replace with');
     findForm.appendChild(replaceIn);
 
     findForm.appendChild(document.createElement('br'));

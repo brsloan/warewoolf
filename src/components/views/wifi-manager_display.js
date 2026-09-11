@@ -1,4 +1,4 @@
-const { closePopups, createButton, removeElementsByClass, generateRow, removeOptions } = require('../controllers/utils');
+const { closePopups, createButton, removeElementsByClass, generateRow, removeOptions, describeDialog } = require('../controllers/utils');
 const { enableWifi, disableWifi, getWifiStatus, getWifiNetworks, getConnectionState, connectToNewWifi, getIpAddress } = require('../controllers/wifi-manager');
 
 //Bumped on every showWifiManager() call and again when the popup is closed. wifi-manager.js's own
@@ -29,6 +29,7 @@ function showWifiManager(){
   var header = document.createElement('h1');
   header.innerText = "Wi-Fi Manager";
   popup.appendChild(header);
+  describeDialog(popup, header);
 
   var networkForm = document.createElement('form');
 

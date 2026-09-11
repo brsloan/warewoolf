@@ -1,4 +1,4 @@
-const { closePopups, createButton, removeElementsByClass, generateRow } = require('../controllers/utils');
+const { closePopups, createButton, removeElementsByClass, generateRow, describeDialog } = require('../controllers/utils');
 const { renumberChaps } = require('../controllers/renumber-chapters');
 
 function showRenumberChapters(project, onFinish){
@@ -9,6 +9,7 @@ function showRenumberChapters(project, onFinish){
   var popupTitle = document.createElement('h1');
   popupTitle.innerText = 'Renumber Chapters';
   popup.appendChild(popupTitle);
+  describeDialog(popup, popupTitle);
 
   var undoWarning = document.createElement('p');
   undoWarning.innerText = 'WARNING: This action cannot be undone. Be sure to save first.';

@@ -1,6 +1,6 @@
 var nspell = require('nspell');
 const {
-  closePopups, createButton, removeElementsByClass, removeOptions
+  closePopups, createButton, removeElementsByClass, removeOptions, describeDialog
 } = require('../controllers/utils');
 const showFileDialog = require('./file-dialog_display');
 const showBlockedActionAlert = require('./blocked-action_display');
@@ -30,6 +30,7 @@ async function showDictionaries(userSettings, project, callback){
   var header = document.createElement('h1');
   header.innerText = 'Dictionaries';
   popup.appendChild(header);
+  describeDialog(popup, header);
 
   var available = await platform.listDictionaries();
   var selectedIds = Array.isArray(userSettings.spellcheckDictionaries)
@@ -407,6 +408,7 @@ function wordListEditor(options){
   var listbox = document.createElement('select');
   listbox.multiple = true;
   listbox.classList.add('word-list');
+  listbox.setAttribute('aria-label', 'Words');
   body.appendChild(listbox);
 
   var buttonColumn = document.createElement('div');

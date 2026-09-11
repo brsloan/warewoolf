@@ -1,4 +1,4 @@
-const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
+const { closePopups, createButton, removeElementsByClass, describeDialog } = require('../controllers/utils');
 const { getFileList } = require('../controllers/file-manager');
 const { createPlatform } = require('../controllers/platform');
 const { createIpcBacking } = require('../controllers/platform-ipc');
@@ -23,6 +23,7 @@ async function promptForMissingPups(project, callback){
   var title = document.createElement('h1');
   title.innerText = 'Missing Chapters';
   popup.appendChild(title);
+  describeDialog(popup, title);
 
   var warningTitle = document.createElement("h1");
   warningTitle.innerText = "Oops! Some of your chapters are missing.";
@@ -42,12 +43,17 @@ async function promptForMissingPups(project, callback){
   projDir.classList.add('popup-text-small');
   popup.appendChild(projDir);
 
+  //A heading rather than a <label>, so it cannot point at the field with `for`; the field points
+  //back at it instead, and a reader hears "Expected Subdirectory" on landing in the box.
   var chapsDirLabel = document.createElement('h2');
   chapsDirLabel.innerText = 'Expected Subdirectory:';
+  chapsDirLabel.id = 'chaps-dir-label';
   popup.appendChild(chapsDirLabel);
 
   var chapsDirIn = document.createElement('input');
   chapsDirIn.type = 'text';
+  chapsDirIn.id = 'chaps-dir-input';
+  chapsDirIn.setAttribute('aria-labelledby', 'chaps-dir-label');
   chapsDirIn.value = project.chapsDirectory;
   popup.appendChild(chapsDirIn);
 
@@ -120,6 +126,7 @@ async function fillMissingChapsList(project, missingChapsList, fileList, chapsDi
     missingChapsList.appendChild(chapTitle);
 
     let chapFilename = document.createElement('input');
+    chapFilename.setAttribute('aria-label', 'Filename for ' + (chap.title || '(untitled)'));
     chapFilename.type = 'text';
     chapFilename.value = chap.filename;
     missingChapsList.appendChild(chapFilename);

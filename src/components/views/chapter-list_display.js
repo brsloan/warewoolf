@@ -44,6 +44,7 @@ function renderChapterList(project, handlers){
 
       if(combinedIndex == project.activeChapterIndex){
         row.classList.add("activeChapter");
+        row.setAttribute('aria-current', 'true');
         if(section.list == 'chapters')
           rowToReveal = row;
       }
@@ -123,6 +124,7 @@ function renameChapterInList(combinedIndex, handlers){
   var nameBox = document.createElement("input");
   nameBox.type = "text";
   nameBox.classList.add("name-box");
+  nameBox.setAttribute('aria-label', 'Chapter title');
 
   nameBox.addEventListener("keydown", function(e){
     if(e.key === "Enter" || e.key === "Tab"){

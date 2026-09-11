@@ -1,4 +1,4 @@
-const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
+const { closePopups, createButton, removeElementsByClass, describeDialog } = require('../controllers/utils');
 const { getUpdates, downloadUpdate, startWindowsUpdate, finishWindowsUpdate } = require('../controllers/updates');
 const { logError } = require('../controllers/error-log');
 const showInstallUpdate = require('./install-update_display');
@@ -22,10 +22,12 @@ function showAbout(appVersion, platformInfo, confirmBeforeContinuing){
   var popupTitle = document.createElement('h1');
   popupTitle.innerText = 'About';
   popup.appendChild(popupTitle);
+  describeDialog(popup, popupTitle);
 
   var logo = document.createElement('img');
   logo.src = "assets/logo.png";
   logo.classList.add('logo');
+  logo.alt = 'WareWoolf logo';
   popup.appendChild(logo);
 
   var version = document.createElement('h1');

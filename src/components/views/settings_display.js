@@ -1,4 +1,4 @@
-const { closePopups, createButton, removeElementsByClass, convertFilepath, generateRow } = require('../controllers/utils');
+const { closePopups, createButton, removeElementsByClass, convertFilepath, generateRow, describeDialog } = require('../controllers/utils');
 const { showBattery, removeBattery } = require('./battery_display');
 const showFileDialog = require('./file-dialog_display');
 const { getAutocorrectDefs, resolveAutocorrect, diffFromDefaults } = require('../models/autocorrect');
@@ -11,6 +11,7 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
   var settingsHeader = document.createElement('h1');
   settingsHeader.innerText = "Settings";
   popup.appendChild(settingsHeader);
+  describeDialog(popup, settingsHeader);
 
   var settingsForm = document.createElement('form');
 
@@ -21,10 +22,12 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
 
   var defAuthLab = document.createElement('label');
   defAuthLab.innerText = 'Default Author: ';
+  defAuthLab.htmlFor = 'default-author-input';
   infoSet.appendChild(defAuthLab);
 
   var defAuthIn = document.createElement('input');
   defAuthIn.type = 'text';
+  defAuthIn.id = 'default-author-input';
   defAuthIn.value = userSettings.defaultAuthor;
   infoSet.appendChild(defAuthIn);
 
@@ -32,6 +35,7 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
 
   var addressLab = document.createElement('label');
   addressLab.innerText = 'Address Info (for cover page export): ';
+  addressLab.htmlFor = 'address-info-input';
   infoSet.appendChild(addressLab);
 
   var addressIn = document.createElement('textarea');
@@ -50,6 +54,7 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
 
   var backupDirLabel = document.createElement('label');
   backupDirLabel.innerText = "Backups Directory: ";
+  backupDirLabel.htmlFor = 'backup-dir-input';
   saveSet.appendChild(backupDirLabel);
 
   saveSet.appendChild(document.createElement('br'));
@@ -76,17 +81,21 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
 
   var autoBackupLabel = document.createElement('label');
   autoBackupLabel.innerText = 'Auto Backup On Close: ';
+  autoBackupLabel.htmlFor = 'auto-backup-check';
 
   var autoBackupCheck = document.createElement('input');
   autoBackupCheck.type = 'checkbox';
+  autoBackupCheck.id = 'auto-backup-check';
   autoBackupCheck.checked = userSettings.autoBackup;
 
   backupTbl.appendChild(generateRow(autoBackupLabel, autoBackupCheck));
 
   var backupsLimitLabel = document.createElement('label');
   backupsLimitLabel.innerText = 'Latest backups to keep (0=infinite): ';
+  backupsLimitLabel.htmlFor = 'backups-to-keep-input';
 
   var backupLimitInput = document.createElement('input');
+  backupLimitInput.id = 'backups-to-keep-input';
   backupLimitInput.type = 'number';
   backupLimitInput.min = 0;
   backupLimitInput.value = userSettings.backupsToKeep;
@@ -96,8 +105,10 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
 
   var autosaveLabel = document.createElement('label');
   autosaveLabel.innerText = 'Autosave every X minutes (0=never): ';
+  autosaveLabel.htmlFor = 'autosave-interval-input';
 
   var autosaveIntervalInput = document.createElement('input');
+  autosaveIntervalInput.id = 'autosave-interval-input';
   autosaveIntervalInput.type = 'number';
   autosaveIntervalInput.min = 0;
   autosaveIntervalInput.value = userSettings.autosaveIntMinutes;

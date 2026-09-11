@@ -1,4 +1,4 @@
-const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
+const { closePopups, createButton, removeElementsByClass, describeDialog } = require('../controllers/utils');
 const { countWords, convertToPlainText } = require('../controllers/wordcount');
 
 //Async because each chapter's word count needs its text, which for a chapter not already in memory
@@ -8,6 +8,7 @@ async function showOutliner(project){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup", "popup-outliner");
+  describeDialog(popup, 'Outliner');
 
   var chapTable = document.createElement('table');
   chapTable.id = "outliner-table";
@@ -49,6 +50,7 @@ async function showOutliner(project){
     summaryCell.classList.add('outliner-summary');
     var summaryInput = document.createElement('input');
     summaryInput.type = "text";
+    summaryInput.setAttribute('aria-label', 'Summary of ' + (chap.title || '(untitled)'));
     summaryInput.value = chap.summary || '';
     summaryInput.onchange = function(){
       chap.summary = summaryInput.value;

@@ -1,4 +1,4 @@
-const { closePopups, createButton, removeElementsByClass, generateRow } = require('../controllers/utils');
+const { closePopups, createButton, removeElementsByClass, generateRow, describeDialog } = require('../controllers/utils');
 const showFileDialog = require('./file-dialog_display');
 const { showWorking, hideWorking } = require('./working_display');
 const { compileProject } = require('../controllers/compile');
@@ -12,6 +12,7 @@ function showCompileOptions(project, sysDirectories, userSettings){
     var popupTitle = document.createElement('h1');
     popupTitle.innerText = 'Compile Project';
     popup.appendChild(popupTitle);
+    describeDialog(popup, popupTitle);
 
     var compileForm = document.createElement("form");
 

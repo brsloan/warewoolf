@@ -1,4 +1,4 @@
-const { removeElementsByClass } = require('../controllers/utils');
+const { removeElementsByClass, describeDialog } = require('../controllers/utils');
 
 //Shown when render.js's loadPlatformState() rejects - the app could not finish starting up.
 //
@@ -25,6 +25,7 @@ function reportStartupFailure(err){
   var title = document.createElement('h1');
   title.innerText = 'WareWoolf Could Not Start';
   popup.appendChild(title);
+  describeDialog(popup, title, 'alertdialog');
 
   var warning = document.createElement('h1');
   warning.innerText = 'Something went wrong while starting up.';

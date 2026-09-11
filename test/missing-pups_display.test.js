@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const { JSDOM } = require('jsdom');
+const { assertDialogDescribed, assertControlsNamed } = require('./helpers');
 
 const missingPupsDisplayPath = require.resolve('../src/components/views/missing-pups_display');
 const fileManagerControllerPath = require.resolve('../src/components/controllers/file-manager');
@@ -477,4 +478,21 @@ test('the file listing copes with a project whose notes chapter is not set up ye
 
   await assert.doesNotReject(function(){ return promptForMissingPups(project, function(){}); });
   assert.strictEqual(listedFiles()['ch1.txt'], ' ✔');
+});
+
+//The Expected Subdirectory label now points at its field, and each missing chapter's filename
+//box says which chapter it is for, since its label is the chapter title beside it.
+test('the missing chapters prompt is a dialog and its fields are labelled', async function(t){
+  t.mock.method(fs, 'existsSync', function(){ return true; });
+  t.mock.method(fs, 'readdirSync', function(){ return []; });
+  var chap = makeChap('Chapter One', 'ch1.txt');
+  var project = makeProject({ chapters: [chap], testChapsDirectory: function(){ return [chap]; } });
+  var promptForMissingPups = freshMissingPupsDisplay({});
+
+  await promptForMissingPups(project, function(){});
+
+  var popup = document.querySelector('.popup');
+  assertDialogDescribed(popup, 'dialog');
+  assert.ok(assertControlsNamed(popup) >= 2, 'the prompt should have the directory and filename fields to check');
+  assert.ok(Array.from(popup.querySelectorAll('input')).some(function(i){ return i.getAttribute('aria-label') === 'Filename for Chapter One'; }));
 });

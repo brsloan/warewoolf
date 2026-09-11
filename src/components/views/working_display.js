@@ -1,4 +1,4 @@
-const { removeElementsByClass } = require('../controllers/utils');
+const { removeElementsByClass, describeDialog } = require('../controllers/utils');
 
 //Shared DOM builder for showWorking/showWorkingAndThen. When onImageSettled is given, it's
 //wired to the hardhat image's load/error events before src is set, so a cached or failed
@@ -6,9 +6,12 @@ const { removeElementsByClass } = require('../controllers/utils');
 function buildWorkingPopup(status, onImageSettled){
     var workingPopup = document.createElement('div');
     workingPopup.classList.add('working-popup');
+    workingPopup.setAttribute('role', 'status');
+    workingPopup.setAttribute('aria-live', 'polite');
 
     var hardhat = document.createElement('img');
     hardhat.classList.add('working-img');
+    hardhat.alt = '';
     if(onImageSettled){
         hardhat.onload = onImageSettled;
         hardhat.onerror = onImageSettled;
@@ -71,6 +74,8 @@ function showBackupAlert(message, onSkipBackup, skipLabel = 'Exit Without Backup
         backupAlertText = document.createElement('p');
         backupAlertText.id = 'backup-alert-text';
         backupAlert.appendChild(backupAlertText);
+        describeDialog(backupAlert, backupAlertText);
+        backupAlertText.setAttribute('aria-live', 'polite');
     }
 
     backupAlertText.innerText = message;

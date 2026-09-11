@@ -139,18 +139,18 @@ function flushMicrotasks(){
 //with getElementById needs to already be present before it's (re-)required, since setUpQuills()/
 //applyUserSettings() touch them synchronously at require-time.
 function bodyShell(){
-  return '<div id="chapter-list-sidebar" class="sidebar" tabindex="-1">' +
+  return '<div id="chapter-list-sidebar" class="sidebar" tabindex="-1" role="navigation" aria-label="Project contents">' +
       '<h1 id="chapters-header">Chapters</h1>' +
-      '<ul id="chapter-list"></ul>' +
+      '<ul id="chapter-list" aria-labelledby="chapters-header"></ul>' +
       '<h1 id="reference-header">Reference</h1>' +
-      '<ul id="reference-list"></ul>' +
+      '<ul id="reference-list" aria-labelledby="reference-header"></ul>' +
       "<h1 id='trash-header'>Trash</h1>" +
-      '<ul id="trash-list"></ul>' +
+      '<ul id="trash-list" aria-labelledby="trash-header"></ul>' +
     '</div>' +
-    '<div id="writing-field" class="writing-field-standard-view">' +
+    '<div id="writing-field" class="writing-field-standard-view" role="main" aria-label="Manuscript">' +
       '<div id="editor-container"></div>' +
     '</div>' +
-    '<div id="project-notes" class="sidebar">' +
+    '<div id="project-notes" class="sidebar" role="complementary" aria-labelledby="notes-header">' +
       '<h1 id="notes-header">Project Notes</h1>' +
       '<div id="notes-editor"></div>' +
     '</div>';
@@ -2216,4 +2216,18 @@ test('a project outside the install directory stays writable', async function(t)
 
   assert.strictEqual(r.module.project.title, 'An Ordinary Novel');
   assert.strictEqual(r.module.project.isReadOnly, false);
+});
+
+//Quill 1.x leaves its contenteditable root with no role and no name. render.js names both editors
+//on construction: the manuscript outright, the notes by the sidebar heading that already changes
+//between "Chapter Notes" and "Project Notes".
+test('both editors are named multiline text boxes for assistive technology', async function(){
+  var r = await freshRender();
+
+  assert.strictEqual(r.editorQuill.root.getAttribute('role'), 'textbox');
+  assert.strictEqual(r.editorQuill.root.getAttribute('aria-multiline'), 'true');
+  assert.strictEqual(r.editorQuill.root.getAttribute('aria-label'), 'Manuscript');
+  assert.strictEqual(r.notesQuill.root.getAttribute('role'), 'textbox');
+  assert.strictEqual(r.notesQuill.root.getAttribute('aria-multiline'), 'true');
+  assert.strictEqual(r.notesQuill.root.getAttribute('aria-labelledby'), 'notes-header');
 });

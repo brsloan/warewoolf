@@ -1,3 +1,4 @@
+const { describeDialog } = require('../controllers/utils');
 //A minimal "here's why not" popup, in the same hand-built-DOM style as working_display.js's
 //showBackupAlert - no dependency on markup already present in index.html, since this is the only
 //caller and the whole popup is three elements. Reused rather than duplicated per caller: calling it
@@ -13,6 +14,7 @@ function showBlockedActionAlert(message){
     var text = document.createElement('p');
     text.id = 'blocked-action-alert-text';
     popup.appendChild(text);
+    describeDialog(popup, text, 'alertdialog');
 
     var okBtn = document.createElement('button');
     okBtn.innerText = 'OK';

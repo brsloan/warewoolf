@@ -84,6 +84,42 @@ function createButton(text){
 }
   
 
+//Marks a popup as a dialog for assistive technology, and names it. Every popup in the app is a
+//plain <div class="popup"> built by hand, which a screen reader announces as nothing at all: no
+//role, so it is not a dialog; no name, so a reader landing inside it has no idea what just opened.
+//This gives it both, from the heading the view already draws - the same text a sighted writer
+//reads - so there is one title, not two that can drift.
+//
+//`heading` is the h1 (or h3, for the file dialog) the popup shows; it is given an id if it has
+//none, and the popup points at it with aria-labelledby. A string names a popup that has no
+//heading of its own (the corkboard, the shortcut helper). `role` defaults to 'dialog';
+//'alertdialog' is for the confirmations and error reports that interrupt with a question or a
+//failure, which readers announce more insistently.
+//
+//aria-modal is set because every popup here behaves that way: closePopups() tears down whatever
+//is open, focus is moved into it on open, and nothing behind it is meant to be reachable while it
+//is up. It tells a reader to stop exploring the page behind the dialog rather than to keep
+//reading through it.
+var dialogTitleCount = 0;
+
+function describeDialog(popup, heading, role){
+    popup.setAttribute('role', role || 'dialog');
+    popup.setAttribute('aria-modal', 'true');
+
+    if(typeof heading === 'string'){
+      popup.setAttribute('aria-label', heading);
+      return popup;
+    }
+
+    if(!heading.id){
+      dialogTitleCount++;
+      heading.id = 'dialog-title-' + dialogTitleCount;
+    }
+    popup.setAttribute('aria-labelledby', heading.id);
+
+    return popup;
+}
+
 function generateRow(elOne, elTwo){
     var row = document.createElement('tr');
     var cellOne = document.createElement('td');
@@ -162,6 +198,7 @@ function generateRow(elOne, elTwo){
     removeElementsByClass,
     convertFilepath,
     createButton,
+    describeDialog,
     generateRow,
     removeOptions,
     enableSearchView,

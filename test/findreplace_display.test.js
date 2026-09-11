@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { JSDOM } = require('jsdom');
+const { assertDialogDescribed, assertControlsNamed } = require('./helpers');
 
 const findReplaceDisplayPath = require.resolve('../src/components/views/findreplace_display');
 const findReplaceControllerPath = require.resolve('../src/components/controllers/findreplace');
@@ -372,4 +373,17 @@ test('Replace refuses a pattern that will not compile', function(){
 
   assert.strictEqual(replaceCalls, 0);
   assert.strictEqual(findCalls, 0, 'and it should not fall through to a Find that cannot work either');
+});
+
+//The Find and Replace boxes had only placeholder text, which disappears as soon as a reader
+//types into them; they carry a name of their own now.
+test('the find/replace popup is a dialog and its fields are labelled', function(){
+  var showFindReplace = freshFindReplaceDisplay({});
+  showFindReplace({}, makeEditorQuill(''), function(){});
+
+  var popup = document.querySelector('.popup');
+  assertDialogDescribed(popup, 'dialog');
+  assert.strictEqual(document.getElementById('find-input').getAttribute('aria-label'), 'Find');
+  assert.strictEqual(document.getElementById('replace-input').getAttribute('aria-label'), 'Replace with');
+  assert.ok(assertControlsNamed(popup) >= 6, 'the search options should be there to check');
 });

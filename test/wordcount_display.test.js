@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { JSDOM } = require('jsdom');
+const { assertDialogDescribed, assertControlsNamed } = require('./helpers');
 
 const wordcountDisplayPath = require.resolve('../src/components/views/wordcount_display');
 
@@ -215,4 +216,13 @@ test('the words-per-page field rejects a zero or negative value via the min attr
   await showWordCount(makeProject(), makeEditorQuill(''), makeUserSettings());
 
   assert.strictEqual(document.getElementById('words-per-page-input').min, '1');
+});
+
+test('the word count popup is a dialog and its fields are labelled', async function(){
+  var showWordCount = require(wordcountDisplayPath);
+  await showWordCount(makeProject(), makeEditorQuill('one two'), makeUserSettings());
+
+  var popup = document.querySelector('.popup');
+  assertDialogDescribed(popup, 'dialog');
+  assert.ok(assertControlsNamed(popup) >= 2, 'the goal and words-per-page fields should be there to check');
 });

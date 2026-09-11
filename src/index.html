@@ -13,22 +13,22 @@
   </head>
   <body>
 
-    <div id="chapter-list-sidebar" class="sidebar" tabindex="-1">
+    <div id="chapter-list-sidebar" class="sidebar" tabindex="-1" role="navigation" aria-label="Project contents">
       <h1 id="chapters-header">Chapters</h1>
-      <ul id="chapter-list"></ul>
+      <ul id="chapter-list" aria-labelledby="chapters-header"></ul>
       <h1 id="reference-header">Reference</h1>
-      <ul id="reference-list"></ul>
+      <ul id="reference-list" aria-labelledby="reference-header"></ul>
       <h1 id='trash-header'>Trash</h1>
-      <ul id="trash-list"></ul>
+      <ul id="trash-list" aria-labelledby="trash-header"></ul>
     </div>
 
-    <div id="writing-field" class="writing-field-standard-view">
+    <div id="writing-field" class="writing-field-standard-view" role="main" aria-label="Manuscript">
       <div id="editor-container">
     </div>
     </div>
 
 
-    <div id="project-notes" class="sidebar">
+    <div id="project-notes" class="sidebar" role="complementary" aria-labelledby="notes-header">
       <h1 id="notes-header">Project Notes</h1>
       <div id="notes-editor"></div>
     </div>

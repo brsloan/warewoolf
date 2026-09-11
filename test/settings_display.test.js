@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { JSDOM } = require('jsdom');
+const { assertDialogDescribed, assertControlsNamed } = require('./helpers');
 
 const settingsDisplayPath = require.resolve('../src/components/views/settings_display');
 const fileDialogPath = require.resolve('../src/components/views/file-dialog_display');
@@ -227,4 +228,16 @@ test('Save stores nothing at all when every rule is left on its default', functi
   findButton('Save').onclick();
 
   assert.deepStrictEqual(userSettings.autocorrect, {});
+});
+
+//What a screen reader is told: the popup is a dialog named "Settings", and every field has a
+//label it can read out - the Default Author, Auto Backup, backups-to-keep and autosave fields
+//used to sit beside label text that pointed at nothing.
+test('the Settings popup is a dialog and every field is labelled', function(){
+  var showSettings = freshSettingsDisplay({});
+  showSettings(makeUserSettings(), { updateAutosave: function(){} }, sysDirectories(), function(){}, function(){}, platformInfo());
+
+  var popup = document.querySelector('.popup');
+  assertDialogDescribed(popup, 'dialog');
+  assert.ok(assertControlsNamed(popup) > 5, 'the settings form should have fields to check');
 });

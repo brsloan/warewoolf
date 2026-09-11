@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { JSDOM } = require('jsdom');
+const { assertDialogDescribed, assertControlsNamed } = require('./helpers');
 
 const outlinerDisplayPath = require.resolve('../src/components/views/outliner_display');
 
@@ -110,4 +111,16 @@ test('does not throw when the project has no chapters', function(t){
     await showOutliner(project);
   });
   assert.strictEqual(document.querySelectorAll('#outliner-table tr').length, 1, 'only the header row should be present');
+});
+
+//The outliner has no heading of its own, so it is named outright, and each summary box - a bare
+//field in a table cell - says which chapter it belongs to.
+test('the outliner is a named dialog and each summary field says which chapter it is for', async function(){
+  var showOutliner = require(outlinerDisplayPath);
+  await showOutliner(makeProject({ chapters: [makeChap({ title: 'Intro' })] }));
+
+  var popup = document.querySelector('.popup');
+  assertDialogDescribed(popup, 'dialog');
+  assert.strictEqual(popup.querySelector('.outliner-summary input').getAttribute('aria-label'), 'Summary of Intro');
+  assertControlsNamed(popup);
 });

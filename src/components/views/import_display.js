@@ -1,4 +1,4 @@
-const { closePopups, createButton, removeElementsByClass, generateRow } = require('../controllers/utils');
+const { closePopups, createButton, removeElementsByClass, generateRow, describeDialog } = require('../controllers/utils');
 const { initiateImport } = require('../controllers/import');
 
 function showImportOptions(sysDirectories, addImportedChapter, onFinish){
@@ -9,6 +9,7 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish){
   var popupTitle = document.createElement('h1');
   popupTitle.innerText = 'Import Documents';
   popup.appendChild(popupTitle);
+  describeDialog(popup, popupTitle);
 
   var importForm = document.createElement("form");
 

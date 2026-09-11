@@ -1,4 +1,4 @@
-const { closePopups, createButton, removeElementsByClass, generateRow } = require('../controllers/utils');
+const { closePopups, createButton, removeElementsByClass, generateRow, describeDialog } = require('../controllers/utils');
 const { loadErrorLog, clearErrorLog } = require('../controllers/error-log');
 const { APP_PASSWORD_HINT } = require('../controllers/credential-help');
 const { emailFile } = require('../controllers/email-doc');
@@ -15,11 +15,13 @@ async function showErrorLog(userSettings, platform){
   var popupTitle = document.createElement('h1');
   popupTitle.innerText = 'Error Log';
   popup.appendChild(popupTitle);
+  describeDialog(popup, popupTitle);
 
   var errorLogTextBox = document.createElement("pre");
   var errorLogText = await loadErrorLog();
   errorLogTextBox.innerText = errorLogText != '' ? errorLogText : '(Log Empty)';
   errorLogTextBox.tabIndex = 1;
+  errorLogTextBox.setAttribute('aria-label', 'Error log');
   popup.appendChild(errorLogTextBox);
 
   var header = document.createElement('h1');

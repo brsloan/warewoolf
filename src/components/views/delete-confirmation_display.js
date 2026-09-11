@@ -1,4 +1,4 @@
-const { createButton } = require('../controllers/utils');
+const { createButton, describeDialog } = require('../controllers/utils');
 
 //Permanent deletion is the one action in the app with nothing behind it - the chapter is already
 //in the trash, and this removes its file from disk. So it asks first, and defaults focus to Yes
@@ -16,6 +16,7 @@ function displayDeleteConfirmation(onConfirm){
   var warningTitle = document.createElement('h1');
   warningTitle.innerText = 'WARNING:'
   popup.appendChild(warningTitle);
+  describeDialog(popup, warningTitle, 'alertdialog');
 
   var message = document.createElement("p");
   message.innerText = "Are you sure you want to delete this file? This is permanent.";

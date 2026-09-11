@@ -1,4 +1,4 @@
-const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
+const { closePopups, createButton, removeElementsByClass, describeDialog } = require('../controllers/utils');
 const { getCardsFromFile, saveCards } = require('../controllers/corkboard');
 
 //Set from showCorkboard()'s platformInfo argument below rather than read here at module scope -
@@ -26,6 +26,7 @@ async function showCorkboard(project, platformInfo){
     removeElementsByClass('popup');
     var popup = document.createElement("div");
     popup.classList.add("popup", "popup-corkboard");
+    describeDialog(popup, 'Corkboard');
 
     var corkboard = document.createElement('div');
     corkboard.id = 'corkboard';
@@ -108,6 +109,7 @@ function createCardSpot(num, posInCol) {
   label.type = "text";
   label.classList.add("card-label");
   label.id = "card-label" + num;
+  label.setAttribute('aria-label', 'Card ' + num + ' title');
   label.disabled = true;
   label.onchange = markUnsavedChanges;  
 
@@ -121,6 +123,7 @@ function createCardSpot(num, posInCol) {
   var descr = document.createElement("textarea");
   descr.classList.add("card-description");
   descr.id = "card-descr" + num;
+  descr.setAttribute('aria-label', 'Card ' + num + ' description');
   descr.disabled = true;
   descr.onchange = markUnsavedChanges;
 
@@ -441,6 +444,7 @@ function promptToSave(){
   var warning = document.createElement('h1');
   warning.innerText = "WARNING:";
   popup.appendChild(warning);
+  describeDialog(popup, warning, 'alertdialog');
 
   var subWarning = document.createElement('p');
   subWarning.innerText = 'You have unsaved changes. Would you like to save first?';
@@ -477,6 +481,7 @@ function promptToSave(){
 function showHelp(){
     var popup = document.createElement("div");
     popup.classList.add("popup-dialog", "popup-shortcuts");
+    describeDialog(popup, 'Corkboard Shortcuts');
 
     const cmdOrCtrl = isMac ? 'Cmd' : 'Ctrl';
 

@@ -1,4 +1,4 @@
-const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
+const { closePopups, createButton, removeElementsByClass, describeDialog } = require('../controllers/utils');
 const {
   SECTIONS,
   getShortcutDefs,
@@ -49,6 +49,7 @@ function showShortcutsHelp(options){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup", "popup-shortcuts");
+  describeDialog(popup, 'Keyboard Shortcuts');
 
   SECTIONS.forEach(function(section){
     appendSection(section, getShortcutDefs().filter(function(def){

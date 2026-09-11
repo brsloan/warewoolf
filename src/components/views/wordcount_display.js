@@ -1,4 +1,4 @@
-const { closePopups, createButton, removeElementsByClass, generateRow } = require('../controllers/utils');
+const { closePopups, createButton, removeElementsByClass, generateRow, describeDialog } = require('../controllers/utils');
 const { countWords, getTotalWordCount } = require('../controllers/wordcount');
 
 //Async because the project-wide total needs every chapter's text, which for a chapter not already
@@ -11,6 +11,7 @@ async function showWordCount(project, editorQuill, userSettings){
     var popupTitle = document.createElement('h1');
     popupTitle.innerText = 'Word Count';
     popup.appendChild(popupTitle);
+    describeDialog(popup, popupTitle);
 
     var cntTbl = document.createElement('table');
 

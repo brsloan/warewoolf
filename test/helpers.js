@@ -115,4 +115,79 @@ function normalizeAttributes(attributes){
   return normalized;
 }
 
-module.exports = { normalizeDelta, makeChapter, makeUnloadableChapter, makeProject, scopedTmpdir };
+//What a screen reader needs from a popup, checked the way the reader would resolve it: a dialog
+//role, aria-modal, and a name - either aria-label text or an aria-labelledby that points at an
+//element in the document with text in it. jsdom does not lay text out, and the views set headings
+//through innerText, which jsdom keeps as a plain property - so the name is read back through
+//either, whichever the view used.
+function assertDialogDescribed(popup, expectedRole){
+  var assert = require('node:assert');
+  var role = popup.getAttribute('role');
+
+  if(expectedRole)
+    assert.strictEqual(role, expectedRole);
+  else
+    assert.ok(role === 'dialog' || role === 'alertdialog', 'popup has role ' + JSON.stringify(role));
+  assert.strictEqual(popup.getAttribute('aria-modal'), 'true');
+
+  var label = popup.getAttribute('aria-label');
+  if(label != null){
+    assert.ok(label.trim().length > 0, 'aria-label is empty');
+    return;
+  }
+
+  var labelledBy = popup.getAttribute('aria-labelledby');
+  assert.ok(labelledBy, 'popup has neither aria-label nor aria-labelledby');
+  var heading = popup.ownerDocument.getElementById(labelledBy);
+  assert.ok(heading, 'aria-labelledby points at #' + labelledBy + ', which is not in the document');
+  assert.ok(textOf(heading).trim().length > 0, 'the element naming the dialog has no text');
+}
+
+//Every form control inside `root` has an accessible name: a <label for> pointing at its id, a
+//<label> wrapping it, aria-label, or aria-labelledby. Submit and button inputs name themselves
+//from their value; hidden inputs are not presented at all.
+function assertControlsNamed(root){
+  var assert = require('node:assert');
+  var doc = root.ownerDocument;
+  var controls = Array.from(root.querySelectorAll('input, select, textarea'));
+
+  controls.forEach(function(control){
+    var type = (control.getAttribute('type') || '').toLowerCase();
+    if(type === 'hidden' || type === 'submit' || type === 'button')
+      return;
+
+    var named = false;
+    var ariaLabel = control.getAttribute('aria-label');
+    if(ariaLabel != null && ariaLabel.trim() !== '')
+      named = true;
+    var labelledBy = control.getAttribute('aria-labelledby');
+    if(!named && labelledBy){
+      var el = doc.getElementById(labelledBy);
+      named = el != null && textOf(el).trim() !== '';
+    }
+    if(!named && control.id){
+      var labels = Array.from(doc.querySelectorAll('label')).filter(function(l){ return l.htmlFor === control.id; });
+      named = labels.some(function(l){ return textOf(l).trim() !== ''; });
+    }
+    if(!named && control.closest('label'))
+      named = textOf(control.closest('label')).trim() !== '';
+
+    assert.ok(named, describeControl(control) + ' has no accessible name');
+  });
+
+  return controls.length;
+}
+
+function textOf(el){
+  return (el.textContent && el.textContent.trim() !== '') ? el.textContent : (el.innerText || '');
+}
+
+function describeControl(control){
+  return '<' + control.tagName.toLowerCase()
+    + (control.getAttribute('type') ? ' type=' + control.getAttribute('type') : '')
+    + (control.id ? ' id=' + control.id : '')
+    + (control.className ? ' class=' + control.className : '') + '>';
+}
+
+module.exports = { normalizeDelta, makeChapter, makeUnloadableChapter, makeProject, scopedTmpdir,
+  assertDialogDescribed, assertControlsNamed };

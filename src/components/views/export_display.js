@@ -1,4 +1,4 @@
-const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
+const { closePopups, createButton, removeElementsByClass, describeDialog } = require('../controllers/utils');
 const showFileDialog = require('./file-dialog_display');
 const { exportProject } = require('../controllers/export');
 const { logError } = require('../controllers/error-log');
@@ -12,6 +12,7 @@ function showExportOptions(project, userSettings, sysDirectories){
     var popupTitle = document.createElement('h1');
     popupTitle.innerText = 'Export';
     popup.appendChild(popupTitle);
+    describeDialog(popup, popupTitle);
 
     var exportForm = document.createElement("form");
 

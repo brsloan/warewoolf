@@ -76,6 +76,20 @@ editorQuill.keyboard.bindings[13].unshift(footnoteEnterBinding(editorQuill));
 
 attachFootnoteClipboard(editorQuill);
 
+//Quill 1.x gives its contenteditable root no role and no name, so a screen reader lands in the
+//manuscript and hears only "editable" - not what it is editing. Named here, once, on the root
+//element Quill owns: the manuscript by a fixed label, the notes by the sidebar heading that
+//already says whether these are chapter notes or project notes (see refreshNotesDisplay), so the
+//two stay one text. aria-multiline is what turns "text box" into "document" for a reader's
+//navigation: Enter makes a paragraph here, it does not submit anything.
+function describeEditor(quill, labelOrHeadingId, byHeading){
+  quill.root.setAttribute('role', 'textbox');
+  quill.root.setAttribute('aria-multiline', 'true');
+  quill.root.setAttribute(byHeading ? 'aria-labelledby' : 'aria-label', labelOrHeadingId);
+}
+
+describeEditor(editorQuill, 'Manuscript');
+
 var notesQuill = new Quill('#notes-editor', {
   modules: {
     history: {
@@ -88,6 +102,8 @@ var notesQuill = new Quill('#notes-editor', {
   placeholder: 'Notes...',
   formats: ['bold', 'italic', 'strike', 'underline', 'blockquote', 'header', 'align', 'list', 'indent']
 });
+
+describeEditor(notesQuill, 'notes-header', true);
 
 //notesQuill's own `formats` above has no 'footnote' entry, so a pasted marker would otherwise be
 //silently dropped by scroll.js's whitelist check - the writer loses characters with no indication.

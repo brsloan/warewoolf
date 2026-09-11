@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { JSDOM } = require('jsdom');
+const { assertDialogDescribed, assertControlsNamed } = require('./helpers');
 
 const dictionariesDisplayPath = require.resolve('../src/components/views/dictionaries_display');
 const fileDialogPath = require.resolve('../src/components/views/file-dialog_display');
@@ -687,4 +688,18 @@ test('Delete, Save and Close carry distinct access keys', async function(t){
   //The marked letter has to be the one the accessKey answers to, or the underline points at nothing.
   assert.strictEqual(fieldsetByLegend('Project Dictionary')
     .querySelector('.word-list-buttons .access-key').textContent, 't');
+});
+
+test('the dictionaries popup is a dialog and its controls are labelled', async function(){
+  const appDir = tempDir('warewoolf-dict-app-');
+  const userDataDir = tempDir('warewoolf-dict-userdata-');
+  writeDictFixture(appDir, 'en_US-large', ['hello']);
+  installBridge({ paths: { app: appDir, userData: userDataDir, docs: '/docs', home: '/home' } });
+  const showDictionaries = freshDictionariesDisplay({});
+
+  await showDictionaries(makeUserSettings({ spellcheckDictionaries: [] }), makeProject(), function(){});
+
+  var popup = document.querySelector('.popup');
+  assertDialogDescribed(popup, 'dialog');
+  assertControlsNamed(popup);
 });

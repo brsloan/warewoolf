@@ -1,4 +1,4 @@
-const { closePopups, createButton, removeElementsByClass, enableSearchView } = require('../controllers/utils');
+const { closePopups, createButton, removeElementsByClass, enableSearchView, describeDialog } = require('../controllers/utils');
 const {
   runSpellcheck, addWordToPersonalDictFile, addWordToProjectDictionary, releaseSpellchecker
 } = require('../controllers/spellcheck');
@@ -20,6 +20,7 @@ async function showSpellcheck(editorQuill, project, displayChapterByIndex, start
     var popupTitle = document.createElement('h1');
     popupTitle.innerText = 'Spell Check';
     popup.appendChild(popupTitle);
+    describeDialog(popup, popupTitle);
 
     var wordDisplay = document.createElement("h2");
     wordDisplay.innerText = invalidWord ? invalidWord.word : "*spellcheck finished*";
