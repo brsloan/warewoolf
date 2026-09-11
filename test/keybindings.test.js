@@ -418,6 +418,35 @@ test('a shortcut a writer has unassigned does nothing at all', function(){
   teardown(env);
 });
 
+//The other way bindingFromEvent answers null: a key that reported nothing to be identified by. It
+//has to be told from an unassigned shortcut for the same reason a bare modifier does - two nulls
+//compare equal, so an action nobody bound would otherwise fire on a key nobody can name.
+test('a key with nothing to identify it does not fire an unassigned shortcut', function(){
+  var env = setup(null, { toggleChapterList: null });
+
+  keydown(document, '\u0000', { code: '', keyCode: 0 });
+  keydown(document, 'Unidentified', { code: 'Unidentified', keyCode: 0 });
+
+  assert.deepStrictEqual(env.actions.calls, []);
+
+  teardown(env);
+});
+
+//The dispatcher works the pressed key out once for the keypress rather than once per shortcut
+//considered, so the binding it compares against is built outside the search. Worth a test of its own
+//that the search still finds the right shortcut and still stops at it.
+test('the right shortcut fires when several are considered first', function(){
+  var env = setup();
+  document.getElementById('writing-field').classList.add('visible');
+
+  //Late in the list, so the search walks past every focus and display shortcut to reach it.
+  keydown(document, 'F3', { ctrlKey: true });
+
+  assert.deepStrictEqual(env.actions.calls, [['toggleChapterNotes']]);
+
+  teardown(env);
+});
+
 //The old if/else chain tested the modifiers it cared about and ignored the rest, so Ctrl+Alt+= was
 //a font-size increase and Ctrl+Shift+Left was a focus change as well as a rename.
 test('a shortcut does not fire when a modifier it does not name is held', function(){

@@ -4,7 +4,7 @@ const { goPageDown } = require('./quill-utils');
 const { releaseSpellchecker } = require('./spellcheck');
 const { createPlatform } = require('./platform');
 const { createIpcBacking } = require('./platform-ipc');
-const { getShortcutDefs, bindingMatchesEvent } = require('../models/shortcuts');
+const { getShortcutDefs, bindingFromEvent, bindingsEqual } = require('../models/shortcuts');
 
 //A platform instance of its own rather than one threaded through `context`, matching how it already
 //requires 'electron' independently of render.js - createIpcBacking() resolves ipcRenderer at call
@@ -174,11 +174,23 @@ function registerKeybindings(context){
   var defs = getShortcutDefs();
 
   function dispatch(e, target){
+    //Worked out once for the keypress rather than inside the search below. bindingMatchesEvent would
+    //rebuild it for every shortcut considered - sixteen times a keystroke across the two listeners,
+    //each time allocating the same object and running the same lookup - and this is the one path in
+    //the app that every keystroke goes down.
+    var pressed = bindingFromEvent(e);
+
+    //A modifier held on its own, or a key that reported nothing to identify it by. No shortcut can
+    //match either, and the early return is also what keeps bindingsEqual below from answering true
+    //for an unbound action, since it considers two nulls equal.
+    if(pressed == null)
+      return false;
+
     var bindings = context.getShortcuts();
 
     var def = defs.find(function(candidate){
       return candidate.target === target && actions[candidate.id] != null &&
-        bindingMatchesEvent(bindings[candidate.id], e);
+        bindingsEqual(bindings[candidate.id], pressed);
     });
 
     if(def == null)

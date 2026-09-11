@@ -89,6 +89,15 @@ const NAVIGATION_NAMED_KEYS = [
 //saved in a shape that could not fire again.
 const KNOWN_NAMED_KEYS = NAVIGATION_NAMED_KEYS.concat(STANDALONE_NAMED_KEYS);
 
+//The same list keyed by its own lowercased names, because normalizeKeyName is on the keystroke path:
+//it runs for every shortcut the dispatcher considers, on every keydown, and a walk of the list was
+//costing a string allocation per entry walked. Built once, so the list above can grow without the
+//lookup noticing. Null-prototype, so a key name can never collide with something off Object.
+const KNOWN_NAMED_KEYS_BY_LOWERCASE = KNOWN_NAMED_KEYS.reduce(function(map, name){
+  map[name.toLowerCase()] = name;
+  return map;
+}, Object.create(null));
+
 //Text with a glyph to print for every character of it - letters, numbers, punctuation, symbols and
 //spaces, and nothing from the control, private-use or unassigned ranges.
 //
@@ -177,10 +186,17 @@ const MODIFIER_KEY_NAMES = ['Control', 'Shift', 'Alt', 'Meta', 'AltGraph', 'Caps
 const SECTIONS = ['Navigation', 'Alteration', 'Formatting', 'Display'];
 
 function makeBinding(key, flags){
+  return buildBinding(normalizeKeyName(key), flags);
+}
+
+//The half of makeBinding after the normalizing, for the one caller that has already done it.
+//bindingFromEvent has to normalize in order to know whether it has a named binding at all, and
+//handing the result back to makeBinding put every keydown through the lookup a second time.
+function buildBinding(key, flags){
   flags = flags || {};
 
   var binding = {
-    key: normalizeKeyName(key),
+    key: key,
     mod: Boolean(flags.mod),
     alt: Boolean(flags.alt),
     shift: Boolean(flags.shift)
@@ -374,14 +390,20 @@ function normalizeKeyName(key){
   if(key === ' ')
     return 'Space';
 
-  if(key.length === 1)
+  if(key.length === 1){
+    //Nearly every keypress a writer makes is ordinary printable ASCII, and a codepoint comparison is
+    //several times cheaper than the Unicode property test - which is left to the keys that are
+    //something else. Space is excluded from the range deliberately: it is answered above, as 'Space'
+    //rather than as itself.
+    var codePoint = key.charCodeAt(0);
+
+    if(codePoint > 0x20 && codePoint < 0x7f)
+      return key.toUpperCase();
+
     return PRINTABLE_TEXT.test(key) ? key.toUpperCase() : null;
+  }
 
-  var known = KNOWN_NAMED_KEYS.find(function(named){
-    return named.toLowerCase() === key.toLowerCase();
-  });
-
-  return known || null;
+  return KNOWN_NAMED_KEYS_BY_LOWERCASE[key.toLowerCase()] || null;
 }
 
 //The physical key a binding's key name most likely came from, for callers that need a
@@ -433,7 +455,7 @@ function bindingFromEvent(e){
     return makeCodeBinding(e.code, flags) || makeKeyCodeBinding(e.keyCode, flags);
   }
 
-  return makeBinding(key, {
+  return buildBinding(key, {
     mod: e.ctrlKey || e.metaKey,
     alt: e.altKey,
     shift: e.shiftKey,
