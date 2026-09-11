@@ -424,7 +424,51 @@ function createNodeBacking(deps){
     requireText(args.filename, 'filename');
     requireText(args.contents, 'contents');
 
-    fs.writeFileSync(args.directory + args.filename, args.contents, 'utf8');
+    writeFileAtomic(args.directory + args.filename, args.contents);
+  }
+
+  //The three whole-file rewrites the app makes - the .woolf index, user-settings.json, and the
+  //corkboard - all used to go through one writeFileSync in place. That call truncates the file
+  //before it writes a byte, so a power cut or a kill between the two (a writerDeck on a dying
+  //battery is the usual way) leaves an empty or half-written file behind. For the .woolf that is
+  //the index of the whole project beside a set of chapter files that are all still fine, which is
+  //the outcome project.js's loadError path exists for; for the other two it is every setting, or
+  //the whole outline, gone on the next launch.
+  //
+  //Written to a sibling temp file instead, flushed to disk, and renamed over the original: rename
+  //replaces the target as one operation on every filesystem this runs on (Node's rename maps to
+  //MoveFileEx with REPLACE_EXISTING on Windows), so the file on disk is always either the previous
+  //complete version or the new complete version, never a mix. A failed write leaves the original
+  //untouched and the temp file gone; a crash between the write and the rename leaves the original
+  //untouched and a stray .tmp beside it, which the next save overwrites. The temp name keeps the
+  //real extension out of last position so the file dialog's .woolf filter never lists it.
+  //
+  //fsync before the rename is what makes the rename mean anything after a power cut: without it
+  //the rename can reach the journal ahead of the data it points at, and the new name can come up
+  //empty on the next boot - the same truncation this exists to prevent, one step later.
+  function writeFileAtomic(filePath, contents){
+    var tempPath = filePath + '.tmp';
+    var fd = fs.openSync(tempPath, 'w');
+
+    try{
+      fs.writeSync(fd, contents, null, 'utf8');
+      fs.fsyncSync(fd);
+    }
+    catch(writeErr){
+      try{ fs.closeSync(fd); } catch(_){ }
+      try{ fs.unlinkSync(tempPath); } catch(_){ }
+      throw writeErr;
+    }
+
+    fs.closeSync(fd);
+
+    try{
+      fs.renameSync(tempPath, filePath);
+    }
+    catch(renameErr){
+      try{ fs.unlinkSync(tempPath); } catch(_){ }
+      throw renameErr;
+    }
   }
 
   //Save As, up to but not including the .woolf write - see the note on saveProject in platform.js
@@ -776,8 +820,13 @@ function createNodeBacking(deps){
 
   //JSON.stringify drops function-valued properties on its own, so passing the live settings object
   //(methods and all) writes exactly the same file user-settings.js's own save() used to.
+  //
+  //Atomic for the same reason the .woolf is (see writeFileAtomic): this file is rewritten on every
+  //pane toggle and every Save As, and a truncated one used to cost the writer every setting they
+  //had - shortcuts, autocorrect rules, the last project - on the next launch, since load() treats
+  //an unparseable file as "start from defaults".
   function saveUserSettings(args){
-    fs.writeFileSync(settingsPath(), JSON.stringify(args == null ? undefined : args.settings, null, '\t'), 'utf8');
+    writeFileAtomic(settingsPath(), JSON.stringify(args == null ? undefined : args.settings, null, '\t'));
   }
 
   //Raw text in, raw text out - see the correction note on these two in platform.js. `chaptersDir` is
@@ -791,11 +840,13 @@ function createNodeBacking(deps){
     return fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : null;
   }
 
+  //Atomic like the .woolf and the settings file: the corkboard is the writer's outline, saved
+  //whole on every edit, and nothing else on disk could rebuild a truncated one.
   function saveCorkboard(args){
     requireText(args == null ? undefined : args.chaptersDir, 'chaptersDir');
     requireText(args.contents, 'contents');
 
-    fs.writeFileSync(args.chaptersDir + CORKBOARD_FILENAME, args.contents, 'utf8');
+    writeFileAtomic(args.chaptersDir + CORKBOARD_FILENAME, args.contents);
   }
 
   //Silently empty rather than rejecting when the file (or the app directory itself) is missing -

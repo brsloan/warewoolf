@@ -183,7 +183,9 @@ test('saveFile regression: returns false instead of silently reporting success w
   proj.directory = dir;
   proj.filename = 'test.woolf';
   proj.chapsDirectory = '';
-  t.mock.method(fs, 'writeFileSync', function(){
+  //writeSync rather than writeFileSync: the .woolf is written to a temp file through an fd and
+  //renamed into place (platform-node.js's writeFileAtomic), so this is the call a full disk fails.
+  t.mock.method(fs, 'writeSync', function(){
     throw new Error('disk full');
   });
 
@@ -192,6 +194,7 @@ test('saveFile regression: returns false instead of silently reporting success w
   t.mock.restoreAll();
   assert.strictEqual(result, false, 'a caller checking the return value must be able to tell the save failed');
   assert.ok(!fs.existsSync(dir + 'test.woolf'));
+  assert.ok(!fs.existsSync(dir + 'test.woolf.tmp'), 'a failed write must not leave its temp file behind');
 });
 
 //---------------------------------------------------------------------------

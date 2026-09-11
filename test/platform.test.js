@@ -858,6 +858,69 @@ test('saveProject writes the project file where it is told', async function(t){
   assert.strictEqual(fs.readFileSync(built.dir + 'p.woolf', 'utf8'), '{"title":"P"}');
 });
 
+test('saveProject replaces an existing project file and leaves nothing else beside it', async function(t){
+  const built = platformIn(t);
+  fs.writeFileSync(built.dir + 'p.woolf', '{"title":"old"}', 'utf8');
+
+  await built.platform.saveProject({ directory: built.dir, filename: 'p.woolf', contents: '{"title":"new"}' });
+
+  assert.strictEqual(fs.readFileSync(built.dir + 'p.woolf', 'utf8'), '{"title":"new"}');
+  assert.deepStrictEqual(fs.readdirSync(built.dir), ['p.woolf'], 'the temp file must not survive a successful save');
+});
+
+test('saveProject writes to a temp file and renames it over the project file, never in place', async function(t){
+  const built = platformIn(t);
+  fs.writeFileSync(built.dir + 'p.woolf', '{"title":"old"}', 'utf8');
+
+  const renames = [];
+  const realRename = patch(t, fs, 'renameSync', function(from, to){
+    renames.push({ from: from, to: to, targetBefore: fs.readFileSync(to, 'utf8'), sourceBefore: fs.readFileSync(from, 'utf8') });
+    return realRename(from, to);
+  });
+
+  await built.platform.saveProject({ directory: built.dir, filename: 'p.woolf', contents: '{"title":"new"}' });
+
+  assert.strictEqual(renames.length, 1);
+  assert.strictEqual(renames[0].to, built.dir + 'p.woolf');
+  assert.notStrictEqual(renames[0].from, renames[0].to);
+  assert.strictEqual(renames[0].targetBefore, '{"title":"old"}', 'the original must be untouched until the rename');
+  assert.strictEqual(renames[0].sourceBefore, '{"title":"new"}', 'the rename source must already hold the complete new contents');
+});
+
+test('saveProject leaves the previous project file intact when the write fails', async function(t){
+  const built = platformIn(t);
+  fs.writeFileSync(built.dir + 'p.woolf', '{"title":"old"}', 'utf8');
+
+  patch(t, fs, 'writeSync', function(){
+    const err = new Error('ENOSPC: no space left on device');
+    err.code = 'ENOSPC';
+    throw err;
+  });
+
+  const err = await rejection(built.platform.saveProject({ directory: built.dir, filename: 'p.woolf', contents: '{"title":"new"}' }));
+
+  assert.ok(err.isPlatformError);
+  assert.strictEqual(fs.readFileSync(built.dir + 'p.woolf', 'utf8'), '{"title":"old"}');
+  assert.deepStrictEqual(fs.readdirSync(built.dir), ['p.woolf'], 'a failed write must not leave its temp file behind');
+});
+
+test('saveProject leaves the previous project file intact when the rename fails', async function(t){
+  const built = platformIn(t);
+  fs.writeFileSync(built.dir + 'p.woolf', '{"title":"old"}', 'utf8');
+
+  patch(t, fs, 'renameSync', function(){
+    const err = new Error('EPERM: operation not permitted');
+    err.code = 'EPERM';
+    throw err;
+  });
+
+  const err = await rejection(built.platform.saveProject({ directory: built.dir, filename: 'p.woolf', contents: '{"title":"new"}' }));
+
+  assert.ok(err.isPlatformError);
+  assert.strictEqual(fs.readFileSync(built.dir + 'p.woolf', 'utf8'), '{"title":"old"}');
+  assert.deepStrictEqual(fs.readdirSync(built.dir), ['p.woolf'], 'a failed rename must not leave its temp file behind');
+});
+
 test('saveProjectAs makes both directories and copies every chapter across', async function(t){
   const built = platformIn(t);
   const target = tempDir(t).replaceAll('\\', '/');
@@ -1315,6 +1378,24 @@ test('saveUserSettings and loadUserSettings round-trip an object', async functio
   assert.deepStrictEqual(await built.platform.loadUserSettings(), settings);
 });
 
+test('saveUserSettings leaves the previous settings file intact when the write fails', async function(t){
+  const built = platformIn(t);
+  await built.platform.saveUserSettings({ settings: { theme: 'dark' } });
+
+  patch(t, fs, 'writeSync', function(){
+    const err = new Error('ENOSPC: no space left on device');
+    err.code = 'ENOSPC';
+    throw err;
+  });
+
+  const err = await rejection(built.platform.saveUserSettings({ settings: { theme: 'light' } }));
+
+  assert.ok(err.isPlatformError);
+  assert.deepStrictEqual(await built.platform.loadUserSettings(), { theme: 'dark' });
+  assert.ok(!fs.readdirSync(built.dir).some(function(name){ return name.endsWith('.tmp'); }),
+    'a failed write must not leave its temp file behind');
+});
+
 test('user settings commands reject UNAVAILABLE without a userData directory configured', async function(){
   const platform = wrap(createNodeBacking({}));
 
@@ -1337,6 +1418,24 @@ test('saveCorkboard and loadCorkboard round-trip the raw corkboard text', async 
   await built.platform.saveCorkboard({ chaptersDir: built.dir, contents: raw });
 
   assert.strictEqual(await built.platform.loadCorkboard({ chaptersDir: built.dir }), raw);
+});
+
+test('saveCorkboard leaves the previous corkboard intact when the write fails', async function(t){
+  const built = platformIn(t);
+  await built.platform.saveCorkboard({ chaptersDir: built.dir, contents: '# Card one\n' });
+
+  patch(t, fs, 'writeSync', function(){
+    const err = new Error('ENOSPC: no space left on device');
+    err.code = 'ENOSPC';
+    throw err;
+  });
+
+  const err = await rejection(built.platform.saveCorkboard({ chaptersDir: built.dir, contents: '# Card two\n' }));
+
+  assert.ok(err.isPlatformError);
+  assert.strictEqual(await built.platform.loadCorkboard({ chaptersDir: built.dir }), '# Card one\n');
+  assert.ok(!fs.readdirSync(built.dir).some(function(name){ return name.endsWith('.tmp'); }),
+    'a failed write must not leave its temp file behind');
 });
 
 test('the corkboard commands refuse arguments they cannot act on', async function(t){
