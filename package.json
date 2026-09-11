@@ -56,7 +56,8 @@
           "^/src/assets/warewoolf_logo_small\\.png$",
           "^/src/assets/icon\\.(ico|icns)$",
           "^/src/examples/Frankenstein_Legacy_[^/]+($|/)",
-          "^/src/examples/markdownfic\\.[^/]+$"
+          "^/src/examples/markdownfic\\.[^/]+$",
+          "^/node_modules/nodemailer/dist/esm($|/)"
         ]
       },
       "makers": [
@@ -91,7 +92,7 @@
     "archiver": "^6.0.1",
     "docx": "^7.8.2",
     "electron-squirrel-startup": "^1.0.0",
-    "nodemailer": "^6.7.5",
+    "nodemailer": "10.0.7",
     "nspell": "^2.1.5",
     "quill": "^1.3.7",
     "unzipper": "^0.10.14"

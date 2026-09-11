@@ -46,6 +46,10 @@ const DEV_ONLY = [
   '/src/render.bundle.js.map',
   '/src/preload.bundle.js.map',
   '/node_modules/quill/dist/quill.js.map',
+  //nodemailer 10 ships both module formats; the main process requires it, so only the CommonJS
+  //half is ever loaded and the ES module half is dead weight in the package.
+  '/node_modules/nodemailer/dist/esm/nodemailer.js',
+  '/node_modules/nodemailer/dist/esm/smtp-transport/index.js',
   '/src/components/views/about_display.js',
   '/src/components/blots/footnotes.js',
   '/src/assets/screenshot_darkmode.png',
@@ -81,7 +85,10 @@ const RUNTIME = [
   '/src/components/controllers/platform-node.js',
   '/src/components/models/credential-store.js',
   '/node_modules/quill/dist/quill.js',
-  '/node_modules/nodemailer/package.json'
+  '/node_modules/nodemailer/package.json',
+  '/node_modules/nodemailer/dist/cjs/nodemailer.js',
+  '/node_modules/nodemailer/dist/cjs/smtp-transport/index.js',
+  '/node_modules/nodemailer/dist/well-known/services.json'
 ];
 
 test('the package leaves every development-only file out', function(){
