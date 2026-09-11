@@ -40,7 +40,23 @@
         "icon": "src/assets/icon",
         "extendInfo": "src/plist/Info.plist",
         "ignore": [
-          "^/test($|/)"
+          "^/test($|/)",
+          "^/docs($|/)",
+          "^/\\.github($|/)",
+          "^/\\.gitignore$",
+          "^/\\.vscode($|/)",
+          "^/README\\.md$",
+          "^/error_log\\.txt$",
+          "^/user-settings\\.json$",
+          "^/src/render\\.js$",
+          "^/src/preload\\.js$",
+          "\\.map$",
+          "^/src/components/(views|blots)($|/)",
+          "^/src/assets/screenshot_[^/]+$",
+          "^/src/assets/warewoolf_logo_small\\.png$",
+          "^/src/assets/icon\\.(ico|icns)$",
+          "^/src/examples/Frankenstein_Legacy_[^/]+($|/)",
+          "^/src/examples/markdownfic\\.[^/]+$"
         ]
       },
       "makers": [
