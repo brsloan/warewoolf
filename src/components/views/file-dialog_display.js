@@ -54,7 +54,11 @@ async function showFileDialog(options, callback){
     if(options.dialogType == 'save'){
       //Only append filenameInput if in save mode
       filenameIn.type = 'text';
-      filenameIn.value = (options.filters && options.filters.length > 0) ? "." + options.filters[0].extensions[0] : "";
+      //`options.defaultFilename` is a name to start from (a screenplay export starts from the
+      //project title); without one the box holds only the extension, as Save As always has.
+      var extension = (options.filters && options.filters.length > 0) ? "." + options.filters[0].extensions[0] : "";
+      filenameIn.value = (typeof options.defaultFilename === 'string' && options.defaultFilename.trim() !== ''
+        ? options.defaultFilename.trim() : '') + extension;
       popup.appendChild(filenameIn);
 
       fileListSelect.onchange = function(){

@@ -193,7 +193,7 @@ test('a screenplay project offers its own formats and exports one file to the pa
   } };
   var showExportOptions = require(exportDisplayPath);
 
-  showExportOptions({ type: 'screenplay', directory: '/proj/', chapters: [script], reference: [] }, makeUserSettings(), sysDirectories());
+  showExportOptions({ type: 'screenplay', title: 'Big Fish', directory: '/proj/', chapters: [script], reference: [] }, makeUserSettings(), sysDirectories());
 
   assert.deepStrictEqual(Array.from(document.querySelectorAll('#filetype-select option')).map(function(o){ return o.value; }), ['.pdf', '.fdx', '.fountain', '.txt']);
   assert.strictEqual(document.querySelector('#proj-radio'), null, 'no project/chapter choice for one script');
@@ -203,6 +203,7 @@ test('a screenplay project offers its own formats and exports one file to the pa
   await new Promise(function(r){ setImmediate(r); });
 
   assert.strictEqual(dialogs[0].dialogType, 'save');
+  assert.strictEqual(dialogs[0].defaultFilename, 'Big Fish', 'the save box starts from the project title');
   assert.deepStrictEqual(dialogs[0].filters, [{ name: 'Final Draft', extensions: ['fdx'] }]);
   assert.deepStrictEqual(exported, [[script, '.fdx', '/docs/big fish.fdx']]);
   assert.deepStrictEqual(closed, ['hidden']);

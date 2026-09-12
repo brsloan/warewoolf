@@ -194,6 +194,7 @@ function showExportOptions(project, userSettings, sysDirectories){
       showFileDialog({
         title: 'Export screenplay as...',
         defaultPath: sysDirectories.docs,
+        defaultFilename: project.title,
         filters: [{ name: format.name, extensions: format.extensions }],
         bookmarkedPaths: [sysDirectories.docs, sysDirectories.home],
         projectDirectory: project.directory,
