@@ -1,7 +1,7 @@
 <p align="center">
 	<img src="./src/assets/logo.png" style="width: 280px"/>
 </p>
-<p align="center">v2.5.0</p>
+<p align="center">v3.0.0</p>
 <p align="center">"The only writing software I use." -Virginia Woolf</p>
 
 WareWoolf is designed for one thing: writing fiction. It is intentionally simplified: beyond a choice of typeface for the manuscript and the sidebars, and light or dark, there is nothing to fiddle with--no line spacing, no colors, no styles. But it has everything you need to organize, edit, and revise a novel--and you don't even need a mouse.
