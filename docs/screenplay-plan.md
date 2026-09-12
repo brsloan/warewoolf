@@ -118,10 +118,12 @@ project's copy. `project.title` and `project.author` mirror the `Title` and
 `Author` keys so the title bar and every export that reads them keep working.
 
 **Text case.** Scene headings, character cues and transitions display in
-capitals through CSS and are upper-cased by the serializer on the way out, so
-the file is what a reader of raw Fountain expects and a lower-case cue does not
-come back with an `@` in front of it. The one exception is a cue with no letter
-in it at all (`911`), which the Fountain spec requires to be forced.
+capitals through CSS, and the editor upper-cases a line's text when it becomes
+one of those types (Phase 4). The serializer never changes case: a cue or
+heading whose case would not read back is written forced (`@McCLANE`,
+`.sniper scope pov`), which is what the force markers are for and is lossless
+where upper-casing is not. Big Fish itself carries `@McCLANE` for exactly this
+reason. Because the editor upper-cases on the way in, forced forms stay rare.
 
 ## Decisions taken
 
@@ -137,7 +139,7 @@ in it at all (`911`), which the Fountain spec requires to be forced.
 | Current scene in the sidebar | The scene containing the caret, as Chapters already does; not the scroll position |
 | Multi-line elements | One block per line, `tight` attributor on continuation lines; Shift+Enter makes one |
 | Title page | Structured, on the project, round-tripped through the file; the file wins on load |
-| Case of cues and headings | Upper-cased on save; forced with `@`/`.`/`>` only when the text would still not parse |
+| Case of cues and headings | Written as typed; forced with `@`/`.`/`>` when the text would not read back as its type. The editor upper-cases on the way in |
 | Literal `*`, `_`, `[[`, leading `.`/`!`/`@`/`>`/`~`/`=`/`#` in text | Escaped with a backslash on save, exactly as `convertDeltaToMDF` escapes MarkdownFic markers |
 | Enter after Dialogue | Character, as Final Draft does. The old branch went to Action; a second Enter on the empty cue gets there. **Confirm before Phase 4** |
 | Element shortcuts | Ctrl+1..6 as before. Definitions carry a `mode`, and conflicts are checked within a mode, so Ctrl+1 can mean Heading 1 in prose and Scene Heading in a script |
