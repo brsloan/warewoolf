@@ -287,8 +287,25 @@ jobs:
           $staging = Join-Path $env:RUNNER_TEMP 'portable-staging'
           $folder = Join-Path $staging "WareWoolf_${version}_Portable"
           if (Test-Path $staging) { Remove-Item -Recurse -Force $staging }
-          New-Item -ItemType Directory -Path $folder -Force | Out-Null
-          Copy-Item -Recurse -Force "$packaged/*" $folder
+          New-Item -ItemType Directory -Path $staging -Force | Out-Null
+
+          # Copied as a whole directory onto a destination that does not exist yet, rather than as
+          # "$packaged/*" into a folder created first. Copy-Item's wildcard-plus--Recurse form is
+          # the one shape of this call whose meaning is not the same in Windows PowerShell and the
+          # pwsh 7 this step runs on - it is a long-standing difference in how the two walk a
+          # wildcard source - and the v3.0.0 release failed here with a zip whose folder did not
+          # hold warewoolf.exe even though the packaged folder did. Copying the directory itself
+          # has one meaning in both: with the destination name free, the tree lands *as* that name.
+          # The destination must therefore not exist, which is why only $staging is created above.
+          Copy-Item -LiteralPath $packaged -Destination $folder -Recurse
+
+          # Asserted here rather than left to the zip check below, so a copy that goes wrong again
+          # says so at the step that went wrong and prints what it actually produced.
+          if (-not (Test-Path (Join-Path $folder 'warewoolf.exe'))) {
+            Write-Output "::error::$folder has no warewoolf.exe after copying $packaged; it holds:"
+            Get-ChildItem $folder | Select-Object -First 20 -ExpandProperty Name | ForEach-Object { Write-Output "  $_" }
+            exit 1
+          }
 
           # The portable build has no Squirrel beside it, so the in-app updater's install-in-place
           # path cannot work for these writers: it fails, and the About panel drops them onto its
@@ -373,6 +390,12 @@ jobs:
           for required in "$folder/warewoolf.exe" "$folder/resources/app/src/index.js"; do
             if ! echo "$entries" | grep -qxF "$required"; then
               echo "::error::$zip is missing $required - this is not a runnable portable build"
+              # Printed because the name alone does not say which way the zip went wrong: an app
+              # copied a level too deep, a renamed executable and a staging copy that dropped
+              # files all read as the same missing path. The v3.0.0 release failed here and the
+              # log said only which name was absent, not what was there instead.
+              echo "$folder/ holds, at its first two levels:"
+              echo "$entries" | cut -d/ -f1-2 | sort -u | head -30
               exit 1
             fi
           done
