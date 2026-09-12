@@ -676,6 +676,40 @@ test('changeChapterTitle commits the new title and clears unsaved-rename state o
   assert.strictEqual(document.querySelector('#chapter-list li').textContent, 'New Title*');
 });
 
+//A double-click on a row fires both of its clicks before it, and each of those clicks loads the
+//chapter - which finishes a tick later, after the file has been read, by rebuilding every row in
+//the sidebar. The rename box the double-click opened has to survive that: it used to be torn out
+//again a moment after it appeared, so the box flashed up and vanished before a title could be
+//typed into it. Driven through the row's real click/dblclick handlers, since the ordering is the
+//whole point.
+test('double-clicking a row leaves a usable rename box behind once the click that came with it has finished loading the chapter', async function(){
+  var r = await freshRender();
+  var c1 = makeChap('c1');
+  r.project.chapters = [makeChap('c0'), c1];
+  r.updateFileList();
+  //Not in memory, so selecting it has to go to the file - which is what makes the load finish a
+  //tick after the double-click rather than during it.
+  c1.contents = null;
+
+  var row = document.querySelectorAll('#chapter-list li')[1];
+  row.dispatchEvent(new window.MouseEvent('click'));
+  row.dispatchEvent(new window.MouseEvent('click'));
+  row.dispatchEvent(new window.MouseEvent('dblclick'));
+
+  await flushMicrotasks();
+
+  var nameBox = document.querySelector('.name-box');
+  assert.ok(nameBox, 'the rename box should still be in the list');
+  assert.strictEqual(nameBox.parentElement, document.querySelectorAll('#chapter-list li')[1]);
+  assert.strictEqual(document.activeElement, nameBox);
+
+  nameBox.value = 'Renamed';
+  nameBox.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter' }));
+
+  assert.strictEqual(c1.title, 'Renamed');
+  assert.strictEqual(document.querySelectorAll('#chapter-list li')[1].textContent, 'Renamed*');
+});
+
 test('changeChapterTitle discards the edit on Escape', async function(){
   var r = await freshRender();
   var c0 = makeChap('Old Title');

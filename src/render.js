@@ -634,9 +634,33 @@ async function setWordCountOnLoad(){
 
 function updateFileList(){
   renderChapterList(project, {
-    onSelect: displayChapterByIndex,
+    onSelect: selectChapterFromList,
     onRename: changeChapterTitle
   });
+}
+
+//A click from the sidebar loads the chapter, and that finishes asynchronously - after the file has
+//been read - by rebuilding every row in the list. A double-click fires both of its clicks before
+//the rename it means, so those rebuilds were still on their way when the rename box went into the
+//row, and tore it back out again a moment later: the box flashed up and disappeared before a title
+//could be typed into it. Selections made from the list are chained here so changeChapterTitle()
+//below can wait for them to be over first. A failed load is reported like any other detached
+//failure (nothing looks at what a click returns) and then treated as finished, since it is over
+//either way and the next click needs a chain that still resolves.
+var pendingListSelections = 0;
+var listSelectionsSettled = Promise.resolve();
+
+function selectChapterFromList(ind){
+  var selection = displayChapterByIndex(ind);
+
+  pendingListSelections++;
+  listSelectionsSettled = listSelectionsSettled.then(function(){
+    return selection.catch(reportDetachedFailure);
+  }).then(function(){
+    pendingListSelections--;
+  });
+
+  return selection;
 }
 
 async function displayChapterByIndex(ind){
@@ -1310,6 +1334,20 @@ async function restoreFromTrash(ind){
 }
 
 function changeChapterTitle(ind){
+  //Only a rename that follows a click has anything to wait for - see selectChapterFromList() above.
+  //A rename from the keyboard, or the one that opens on a chapter just added or split off, still
+  //runs straight through and puts its box in the row before returning.
+  if(pendingListSelections > 0){
+    listSelectionsSettled.then(function(){
+      openRenameBox(ind);
+    }).catch(reportDetachedFailure);
+    return;
+  }
+
+  openRenameBox(ind);
+}
+
+function openRenameBox(ind){
   var chap = chapterList.chapterAt(project, ind);
   if(!chap)
     return;
