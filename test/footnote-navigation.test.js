@@ -6,7 +6,8 @@ const assert = require('node:assert');
 const { registerFootnoteBlots } = require('../src/components/blots/footnotes');
 const {
   attachFootnoteClipboard,
-  footnoteEnterBinding
+  footnoteEnterBinding,
+  insertOrJumpFootnote
 } = require('../src/components/controllers/footnote-navigation');
 
 registerFootnoteBlots();
@@ -176,6 +177,24 @@ test('Enter anywhere else falls through to Quill\'s own handler', function(){
 
   assert.strictEqual(pressEnterAt(quill, 4), true);
   assert.strictEqual(pressEnterAt(quill, 0), true);
+});
+
+//Regression: the back-jump left the caret just *after* the marker, which is not a position the
+//shortcut reads as "before a marker" - so a second press inserted a whole new footnote instead of
+//jumping back into the body, and there was no way to flip between the two.
+test('the shortcut jumps from a note body to just before its marker, and back again', function(){
+  var quill = makeEditor(WITH_FOOTNOTE);
+
+  //Index 20 is inside the body text: 'See note' plus the marker plus ' here.\n' is sixteen.
+  quill.setSelection(20, 0);
+  insertOrJumpFootnote(quill);
+
+  assert.strictEqual(quill.getSelection().index, 8, 'caret sits immediately before the marker');
+
+  insertOrJumpFootnote(quill);
+
+  assert.strictEqual(quill.getSelection().index, 16, 'and pressing it again returns to the body');
+  assert.strictEqual(plainText(quill), 'See note[marker] here.\nThe note body.\n', 'jumping must not insert anything');
 });
 
 //Not navigation, but it needs the same attached-editor harness: the stylesheet keys a note's

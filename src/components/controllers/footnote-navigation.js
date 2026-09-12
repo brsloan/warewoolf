@@ -69,12 +69,15 @@ function jumpToFootnoteBody(quill, id){
   scrollIntoView(quill, target);
 }
 
+//The caret lands immediately *before* the marker, not after it: that is the one position
+//insertOrJumpFootnote reads as "jump to this note's body", so the shortcut round-trips - press it
+//again and you are back in the body you came from, and again to return here.
 function jumpToFootnoteMarker(quill, id){
   var target = footnoteMarkerIndex(quill, id);
   if(target === -1)
     return;
 
-  quill.setSelection(target + 1, 0, 'user');
+  quill.setSelection(target, 0, 'user');
   scrollIntoView(quill, target);
 }
 
