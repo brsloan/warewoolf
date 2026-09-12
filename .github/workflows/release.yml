@@ -319,8 +319,13 @@ jobs:
           )
           Set-Content -Path (Join-Path $folder 'READ ME - Portable.txt') -Value $readme -Encoding utf8
 
-          New-Item -ItemType Directory -Path 'out/make/portable' -Force | Out-Null
-          $zip = "out/make/portable/warewoolf_${version}_Windows_Portable_x64.zip"
+          # Written beside the installer, RELEASES and the .nupkg rather than into a folder of its
+          # own. upload-artifact roots a multi-path artifact at the least common ancestor of its
+          # paths: with every Windows file in this one directory the artifact stays flat, as it was
+          # before the zip existed, and the release job's non-recursive artifacts/* glob finds them.
+          # A second directory would move that ancestor up to out/make, nest all four files under
+          # subfolders, and drop every Windows asset from the release without a failure.
+          $zip = "out/make/squirrel.windows/x64/warewoolf_${version}_Windows_Portable_x64.zip"
           if (Test-Path $zip) { Remove-Item -Force $zip }
           # .NET Framework needed this loaded by hand; on the .NET that pwsh 7 runs, ZipFile is
           # already there and the facade may or may not resolve by name. Either outcome is fine,
@@ -350,7 +355,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          zip="out/make/portable/warewoolf_${{ needs.check-version.outputs.version }}_Windows_Portable_x64.zip"
+          zip="out/make/squirrel.windows/x64/warewoolf_${{ needs.check-version.outputs.version }}_Windows_Portable_x64.zip"
           folder="WareWoolf_${{ needs.check-version.outputs.version }}_Portable"
           test -f "$zip"
           entries="$(unzip -Z1 "$zip")"
@@ -433,7 +438,7 @@ jobs:
             out/make/squirrel.windows/x64/warewoolf_*_Windows_x64.exe
             out/make/squirrel.windows/x64/warewoolf-*-full.nupkg
             out/make/squirrel.windows/x64/RELEASES
-            out/make/portable/warewoolf_*_Windows_Portable_x64.zip
+            out/make/squirrel.windows/x64/warewoolf_*_Windows_Portable_x64.zip
           if-no-files-found: error
 
   release:
