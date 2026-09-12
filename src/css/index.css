@@ -1061,7 +1061,7 @@ hr {
   box-sizing: border-box;
   width: 15em;
   margin: 6px;
-  padding: 6px 8px 8px 8px;
+  padding: 3px 5px 4px 5px;
   font-size: var(--dialog-font-size-small);
   background-color: var(--card-bg);
   border: 1px solid var(--border-strong);
@@ -1087,13 +1087,14 @@ hr {
   font-size: var(--dialog-font-size-small);
 }
 
-.card-num-label {
+/* Scoped to .popup so it outranks the generic `.popup h2` margin reset above. */
+.popup .card-num-label {
   display: inline;
   font-family: var(--font-serif);
   font-size: var(--dialog-font-size);
   font-weight: 700;
   color: var(--text);
-  margin-left: 6px;
+  margin: 0 0 0 6px;
 }
 
 .card-label {
@@ -1112,8 +1113,8 @@ hr {
 .card-checkmark {
   display: none;
   position: absolute;
-  bottom: 10px;
-  right: 14px;
+  bottom: 6px;
+  right: 11px;
   transform: rotate(45deg);
   height: 22px;
   width: 11px;
