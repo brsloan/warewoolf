@@ -115,6 +115,60 @@ test('the active row is measured for scrolling only once every row has been rend
     'the sidebar should be measured once, after all ten rows are in the document');
 });
 
+//jsdom has no layout, so both the sidebar and the rows are given rects by hand: a 100px-tall
+//sidebar, and an active row sitting 200px down - well past the bottom of it, which is where a
+//reference or trash row lands in a project with enough chapters above it. Every other row measures
+//as on-screen, so a scroll can only have come from the active one.
+function stubLayoutWithActiveRowBelowTheFold(){
+  var sidebar = document.getElementById('chapter-list-sidebar');
+
+  sidebar.getBoundingClientRect = function(){
+    return { top: 0, bottom: 100, height: 100 };
+  };
+  window.Element.prototype.getBoundingClientRect = function(){
+    if(this.classList && this.classList.contains('activeChapter'))
+      return { top: 200, bottom: 210, height: 10 };
+
+    return { top: 0, bottom: 10, height: 10 };
+  };
+
+  return sidebar;
+}
+
+//The sidebar scrolls as one column, so which of the three lists the active row sits in says nothing
+//about whether it is on screen. It used to: only a chapters row was revealed, and stepping down
+//into the reference docs or the trash at the end of a long project left the list where it was while
+//the bold title sat below the fold.
+['chapters', 'reference', 'trash'].forEach(function(listName, listIndex){
+  test('the active row is scrolled into view when it is in ' + listName, function(){
+    var sidebar = stubLayoutWithActiveRowBelowTheFold();
+
+    renderChapterList(
+      makeProject([chap('c0')], [chap('r0')], [chap('t0')], listIndex),
+      noopHandlers()
+    );
+
+    assert.strictEqual(sidebar.scrollTop, 110,
+      'the sidebar should scroll far enough to bring the bottom of the active row into view');
+  });
+});
+
+test('a row already in view leaves the scroll position alone', function(){
+  var sidebar = document.getElementById('chapter-list-sidebar');
+
+  sidebar.getBoundingClientRect = function(){
+    return { top: 0, bottom: 100, height: 100 };
+  };
+  window.Element.prototype.getBoundingClientRect = function(){
+    return { top: 20, bottom: 30, height: 10 };
+  };
+  sidebar.scrollTop = 40;
+
+  renderChapterList(makeProject([chap('c0')], [chap('r0')], [chap('t0')], 2), noopHandlers());
+
+  assert.strictEqual(sidebar.scrollTop, 40);
+});
+
 test('clicking a row selects it and double-clicking renames it, both by combined index', function(){
   var selected = [];
   var renamed = [];

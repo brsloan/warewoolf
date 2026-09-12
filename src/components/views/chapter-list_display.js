@@ -26,8 +26,10 @@ function renderChapterList(project, handlers){
   //to trip over.
   removeElementsByClass('name-box');
 
-  //Only the chapters list scrolls itself into view, which is how it has always behaved: stepping
-  //into a reference or trash row with the keyboard can still leave it below the fold.
+  //The active row is revealed whichever of the three lists it is in. The sidebar scrolls as one
+  //column, so a reference or trash row at the bottom of a long project is just as capable of
+  //sitting below the fold as a late chapter is - stepping down into one used to leave the list
+  //frozen with the bold title off-screen.
   var rowToReveal = null;
 
   SECTIONS.forEach(function(section){
@@ -45,8 +47,7 @@ function renderChapterList(project, handlers){
       if(combinedIndex == project.activeChapterIndex){
         row.classList.add("activeChapter");
         row.setAttribute('aria-current', 'true');
-        if(section.list == 'chapters')
-          rowToReveal = row;
+        rowToReveal = row;
       }
     });
 
