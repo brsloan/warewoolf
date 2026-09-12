@@ -132,6 +132,43 @@ async function exportProject(project, userSettings, options, filepath, cback = f
     cback(errorCount);
 }
 
+//A screenplay is one script, so its export is one file wherever the writer chose to put it - a
+//Save As, not a directory of numbered chapters (docs/screenplay-plan.md, Phase 7). `filepath`
+//already carries the extension the file dialog settled on; `type` says which of the four formats
+//to write into it. Rejects on failure so the dialog can say so.
+async function exportScreenplayFile(project, chapter, type, filepath){
+  var delta = await chapter.getContentsOrFile();
+  var elements = deltaToElements(delta);
+  var titlePage = project.titlePage || [];
+
+  switch(type){
+    case '.pdf':
+      await platform.printToPdf({ path: filepath, html: screenplayToPrintHtml(titlePage, elements) });
+      break;
+    case '.fdx':
+      await platform.writeTextFile({ path: filepath, contents: elementsToFdx(titlePage, elements) });
+      break;
+    case '.fountain':
+      await platform.writeTextFile({ path: filepath, contents: serializeFountain(titlePage, elements) });
+      break;
+    case '.txt':
+      await platform.writeTextFile({ path: filepath, contents: convertToPlainText(delta) });
+      break;
+    default:
+      throw new Error('No screenplay export for "' + type + '".');
+  }
+}
+
+//The script of a screenplay project: the active document when it is one, otherwise the first
+//.fountain document in Chapters. Null for a project with no script at all.
+function screenplayChapter(project){
+  var isScript = function(chap){ return chap && (chap.format === 'fountain' || /\.fountain$/i.test(chap.filename || '')); };
+  var active = project.getActiveChapter ? project.getActiveChapter() : null;
+  if(isScript(active))
+    return active;
+  return (project.chapters || []).find(isScript) || null;
+}
+
 //.txt/.mdfc/.md/.html are awaited directly rather than routed through taskStarted/taskDone: their
 //writes are a single platform call each with no further async work of their own (unlike .docx and
 //.epub, which finish on their own callback well after this returns), so awaiting them here is what
@@ -239,5 +276,7 @@ function generateChapterFilename(num, title, what){
 }
 
 module.exports = {
-  exportProject
+  exportProject,
+  exportScreenplayFile,
+  screenplayChapter
 }

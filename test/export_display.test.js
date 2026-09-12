@@ -170,6 +170,45 @@ test('a single export failure is reported in the singular', function(t){
 
 //Cancelling the "choose a directory" dialog (dirpath is falsy) should never call exportProject,
 //and should still close the export options popup.
+//A screenplay project's export is a format and a Save As for one file, not the directory chooser.
+test('a screenplay project offers its own formats and exports one file to the path chosen in a save dialog', async function(t){
+  var dialogs = [];
+  var exported = [];
+  var closed = [];
+  delete require.cache[exportDisplayPath];
+  require.cache[fileDialogPath] = { id: fileDialogPath, filename: fileDialogPath, loaded: true, exports: function(options, cb){
+    dialogs.push(options);
+    cb('/docs/big fish.fdx');
+  } };
+  require.cache[workingDisplayPath] = { id: workingDisplayPath, filename: workingDisplayPath, loaded: true, exports: {
+    showWorkingAndThen: function(msg, fn){ fn(); },
+    showWorking: function(){},
+    hideWorking: function(){ closed.push('hidden'); }
+  } };
+  var script = { format: 'fountain', title: 'Big Fish' };
+  require.cache[exportPath] = { id: exportPath, filename: exportPath, loaded: true, exports: {
+    exportProject: function(){ throw new Error('the chapter exporter must not run for a screenplay'); },
+    exportScreenplayFile: function(project, chapter, type, filepath){ exported.push([chapter, type, filepath]); return Promise.resolve(); },
+    screenplayChapter: function(){ return script; }
+  } };
+  var showExportOptions = require(exportDisplayPath);
+
+  showExportOptions({ type: 'screenplay', directory: '/proj/', chapters: [script], reference: [] }, makeUserSettings(), sysDirectories());
+
+  assert.deepStrictEqual(Array.from(document.querySelectorAll('#filetype-select option')).map(function(o){ return o.value; }), ['.pdf', '.fdx', '.fountain', '.txt']);
+  assert.strictEqual(document.querySelector('#proj-radio'), null, 'no project/chapter choice for one script');
+
+  document.getElementById('filetype-select').value = '.fdx';
+  document.querySelector('form').onsubmit({ preventDefault: function(){} });
+  await new Promise(function(r){ setImmediate(r); });
+
+  assert.strictEqual(dialogs[0].dialogType, 'save');
+  assert.deepStrictEqual(dialogs[0].filters, [{ name: 'Final Draft', extensions: ['fdx'] }]);
+  assert.deepStrictEqual(exported, [[script, '.fdx', '/docs/big fish.fdx']]);
+  assert.deepStrictEqual(closed, ['hidden']);
+  assert.strictEqual(document.querySelector('.popup'), null);
+});
+
 test('cancelling the directory chooser closes the popup without exporting', function(t){
   var exportProjectCalls = 0;
 

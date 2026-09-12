@@ -1027,9 +1027,15 @@ async function addNewChapter(){
   //A new chapter joins the Chapters list, right after the active one - except when a Reference
   //document is active, where it joins Reference instead. A Trash item active, or nothing in any
   //list yet, both fall through to appending onto the end of Chapters.
+  //
+  //A screenplay project's Chapters list is its script, and a script has no chapters: Ctrl+N with
+  //the script active makes a Reference document instead - the character bible, the notes - which
+  //is the only kind of document there is to add beside a script.
   var landed;
   if(currentLoc && currentLoc.list == 'reference')
     landed = chapterList.insertAt(project, 'reference', currentLoc.index + 1, newChap);
+  else if(project.isScreenplay())
+    landed = chapterList.append(project, 'reference', newChap);
   else if(currentLoc && currentLoc.list == 'chapters')
     landed = chapterList.insertAt(project, 'chapters', currentLoc.index + 1, newChap);
   else
@@ -2075,12 +2081,11 @@ const menuCommands = {
 //What the menus offer a screenplay - docs/screenplay-plan.md, "What the menus offer". Two kinds of
 //refusal, told apart by what they are about: the chapter tools want a prose *document* in the
 //editor (a Reference note beside a script is one), and the manuscript-wide conversions want a
-//novel *project*. Everything else works on a script as it stands. The main process is not told;
-//an item that does not apply says so here, which keeps index.js and the channel contract
-//untouched.
+//novel *project*. Everything else works on a script as it stands - Add New Chapter included, which
+//makes a Reference document there (see addNewChapter). The main process is not told; an item that
+//does not apply says so here, which keeps index.js and the channel contract untouched.
 const PROSE_DOCUMENT_ONLY = {
   'split-chapter-clicked': 'Split Chapter',
-  'add-chapter-clicked': 'Add New Chapter',
   'delete-chapter-clicked': 'Delete Chapter',
   'restore-chapter-clicked': 'Restore Deleted Chapter',
   'headings-to-chaps-clicked': 'Break Headings Into Chapters'

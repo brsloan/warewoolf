@@ -620,21 +620,29 @@ test('the chapter tools refuse a script and the manuscript conversions refuse a 
   await r.displayChapterByIndex(0);
   focusEditor();
 
-  var before = r.project.chapters.length;
-  await currentBridge().handlers['add-chapter-clicked']();
-  assert.strictEqual(r.project.chapters.length, before, 'no chapter was added to the script');
-  assert.match(document.getElementById('blocked-action-alert-text').innerText, /Add New Chapter works on chapters/);
+  await currentBridge().handlers['split-chapter-clicked']();
+  assert.match(document.getElementById('blocked-action-alert-text').innerText, /Split Chapter works on chapters/);
 
   await currentBridge().handlers['renumber-chapters-clicked']();
   assert.match(document.getElementById('blocked-action-alert-text').innerText, /Renumber Chapters is for a novel project/);
-
-  //A Reference document beside the script is prose, and the chapter tools work on it.
   document.getElementById('blocked-action-alert').remove();
+
+  //Add New Chapter with the script active makes a Reference document - the one kind of document
+  //there is to add beside a script - and shows it, in prose mode.
+  await currentBridge().handlers['add-chapter-clicked']();
+  assert.strictEqual(document.getElementById('blocked-action-alert'), null);
+  assert.strictEqual(r.project.chapters.length, 1, 'the script is still the only chapter');
+  assert.strictEqual(r.project.reference.length, 2);
+  assert.strictEqual(r.project.getActiveChapter(), r.project.reference[1]);
+  assert.strictEqual(r.editorMode(), 'prose');
+  Array.from(document.querySelectorAll('.name-box')).forEach(function(box){ box.remove(); });
+
+  //And with a Reference document active it joins Reference after it, as in a novel.
   await r.displayChapterByIndex(1);
   focusEditor();
   await currentBridge().handlers['add-chapter-clicked']();
-  assert.strictEqual(document.getElementById('blocked-action-alert'), null);
-  assert.strictEqual(r.project.reference.length, 2);
+  assert.strictEqual(r.project.reference.length, 3);
+  assert.strictEqual(r.project.getActiveChapter(), r.project.reference[1]);
 });
 
 //The core editing loop: type in a chapter, look at a different one, come back. If this regresses,

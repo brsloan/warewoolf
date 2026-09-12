@@ -1,10 +1,15 @@
 const { closePopups, createButton, removeElementsByClass, describeDialog } = require('../controllers/utils');
 const showFileDialog = require('./file-dialog_display');
-const { exportProject } = require('../controllers/export');
+const { exportProject, exportScreenplayFile, screenplayChapter } = require('../controllers/export');
 const { logError } = require('../controllers/error-log');
 const { showWorkingAndThen, showWorking, hideWorking } = require('./working_display');
 
 function showExportOptions(project, userSettings, sysDirectories){
+    if(project.type === 'screenplay'){
+      showScreenplayExportOptions(project, sysDirectories);
+      return;
+    }
+
     removeElementsByClass('popup');
     var popup = document.createElement("div");
     popup.classList.add("popup");
@@ -50,12 +55,7 @@ function showExportOptions(project, userSettings, sysDirectories){
 
     var typeSelect = document.createElement("select");
     typeSelect.id = "filetype-select";
-    //A screenplay project offers the formats a script goes out in (docs/screenplay-plan.md,
-    //Phase 7): the PDF everyone reads, Final Draft's FDX, the Fountain file itself, and plain
-    //text. The prose formats would lay a script out as a manuscript.
-    const typeOptions = project.type === 'screenplay'
-      ? [".pdf", ".fdx", ".fountain", ".txt"]
-      : [".docx", ".txt", ".mdfc", ".md", ".html", ".epub"];
+    const typeOptions = [".docx", ".txt", ".mdfc", ".md", ".html", ".epub"];
     typeOptions.forEach(function(op){
       var txtOp = document.createElement("option");
       txtOp.value = op;
@@ -121,6 +121,102 @@ function showExportOptions(project, userSettings, sysDirectories){
       }
       getExportFilePath(project, userSettings, options, sysDirectories, function(){
           closePopups();
+      });
+    };
+
+    popup.appendChild(exportForm);
+    document.body.appendChild(popup);
+    exportBtn.focus();
+  }
+
+  //A screenplay project's export: one script, one file, wherever the writer puts it. The dialog is
+  //a format to choose and then a Save As, not the directory chooser above, since there is no set
+  //of numbered chapter files to make a folder for. See docs/screenplay-plan.md, Phase 7.
+  const SCREENPLAY_FORMATS = [
+    { type: '.pdf', name: 'PDF', extensions: ['pdf'] },
+    { type: '.fdx', name: 'Final Draft', extensions: ['fdx'] },
+    { type: '.fountain', name: 'Fountain', extensions: ['fountain'] },
+    { type: '.txt', name: 'Plain Text', extensions: ['txt'] }
+  ];
+
+  function showScreenplayExportOptions(project, sysDirectories){
+    removeElementsByClass('popup');
+    var popup = document.createElement("div");
+    popup.classList.add("popup");
+
+    var popupTitle = document.createElement('h1');
+    popupTitle.innerText = 'Export Screenplay';
+    popup.appendChild(popupTitle);
+    describeDialog(popup, popupTitle);
+
+    var exportForm = document.createElement("form");
+
+    var typeLabel = document.createElement("label");
+    typeLabel.innerText = "File Type: ";
+    typeLabel.htmlFor = "filetype-select";
+    exportForm.appendChild(typeLabel);
+
+    var typeSelect = document.createElement("select");
+    typeSelect.id = "filetype-select";
+    SCREENPLAY_FORMATS.forEach(function(format){
+      var option = document.createElement("option");
+      option.value = format.type;
+      option.innerText = format.type;
+      typeSelect.appendChild(option);
+    });
+    exportForm.appendChild(typeSelect);
+
+    exportForm.appendChild(document.createElement('br'));
+
+    var exportBtn = document.createElement("input");
+    exportBtn.type = "submit";
+    exportBtn.value = "Export";
+    exportForm.appendChild(exportBtn);
+
+    var cancelBtn = createButton("Cancel");
+    cancelBtn.onclick = function(){
+      closePopups();
+    };
+    exportForm.appendChild(cancelBtn);
+
+    exportForm.onsubmit = function(e){
+      e.preventDefault();
+
+      var format = SCREENPLAY_FORMATS.find(function(f){ return f.type === typeSelect.value; });
+      var chapter = screenplayChapter(project);
+
+      if(!chapter){
+        closePopups();
+        require('./blocked-action_display')('This project has no script to export.');
+        return;
+      }
+
+      showFileDialog({
+        title: 'Export screenplay as...',
+        defaultPath: sysDirectories.docs,
+        filters: [{ name: format.name, extensions: format.extensions }],
+        bookmarkedPaths: [sysDirectories.docs, sysDirectories.home],
+        projectDirectory: project.directory,
+        dialogType: 'save'
+      }, function(filepath){
+        if(!filepath){
+          closePopups();
+          return;
+        }
+
+        showWorkingAndThen('Exporting...', function(){
+          Promise.resolve(exportScreenplayFile(project, chapter, format.type, filepath)).then(function(){
+            hideWorking();
+            closePopups();
+          }).catch(function(err){
+            logError(err);
+            showWorking('The export failed - see the Error Log for details.');
+            setTimeout(function(){
+              hideWorking();
+              closePopups();
+            }, 2500);
+          });
+        });
       });
     };
 

@@ -438,8 +438,9 @@ the 37-channel contract untouched.
 | Works as-is | Needs a screenplay branch | Prose only |
 | --- | --- | --- |
 | Save, Save As, Save Copy, Backup, Open, New | Word Count (pages) | Split Chapter |
-| Find/Replace, Spell Check | Properties (title page) | Add/Delete/Restore Chapter (script row); allowed on Reference |
-| Send via Email (sends the script as `.fountain`) | Export (Fountain, FDX, PDF) | Renumber Chapters |
+| Find/Replace, Spell Check | Properties (title page) | Delete/Restore Chapter (script row); allowed on Reference |
+| Send via Email (sends the script as `.fountain`) | Export (one file, Save As: PDF, FDX, Fountain, text) | Renumber Chapters |
+| Add New Chapter (makes a Reference document while the script is active) | | |
 | Settings, Dictionaries, File Manager, Wi-Fi | Compile (one document: Export instead) | Convert First Lines, Marked Italics, Marked Tabs |
 | Corkboard, Outliner (project-level notes) | | Break Headings Into Chapters |
 | Convert Straight Quotes (still wanted in dialogue) | | Tab-Indent Paragraphs, Center All Headings |
@@ -552,8 +553,12 @@ per phase. Where the implementation departed from the plan above:
   is the active document; with a Reference document active the sidebar shows
   chapters, with the script as one row. A screenplay project's reference
   documents are prose, as intended.
-- Export offers a screenplay project PDF, FDX, Fountain and plain text and
-  hides the manuscript formats; a novel project's list is unchanged. The PDF
+- A screenplay project's Export is a format and a Save As: one file, at the
+  path and name the writer chooses, rather than the novel's folder of numbered
+  chapter files (`exportScreenplayFile` in `export.js`). A novel project's
+  dialog is unchanged. Ctrl+N with the script active makes a Reference
+  document, since that is the only kind of document there is to add beside a
+  script; with a Reference document active it joins Reference after it. The PDF
   goes through a new `printToPdf` platform command (a hidden window and
   `webContents.printToPDF` in `index.js`), which only a running Electron can
   exercise - the node backing rejects it UNAVAILABLE, and that path is what

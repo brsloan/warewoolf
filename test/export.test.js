@@ -130,6 +130,41 @@ test('exportProject writes a script as .fountain and .fdx with the project title
   assert.ok(!fs.existsSync(path.join(outDir, 'Script.pdf')));
 });
 
+//A screenplay's own export is one file at the path the writer chose - a Save As - not a folder.
+test('exportScreenplayFile writes the script to the chosen path in each format, and rejects a PDF it cannot print', async function(t){
+  const { exportScreenplayFile, screenplayChapter } = require(exportPath);
+  const dir = tempDir(t);
+  const script = makeChapter({ ops: [
+    { insert: 'INT. A - DAY' }, { insert: '\n', attributes: { element: 'scene' } },
+    { insert: 'BOB' }, { insert: '\n', attributes: { element: 'character' } },
+    { insert: 'Hi.' }, { insert: '\n', attributes: { element: 'dialogue' } }
+  ] });
+  script.title = 'Script';
+  script.format = 'fountain';
+  const bible = makeChapter(textDelta('Bob is tall.'));
+  const project = makeTestProject([script], [bible]);
+  project.type = 'screenplay';
+  project.titlePage = [{ key: 'Title', values: ['Test Project'] }];
+
+  assert.strictEqual(screenplayChapter(project), script);
+  project.activeChapterIndex = 1;
+  project.getActiveChapter = function(){ return bible; };
+  assert.strictEqual(screenplayChapter(project), script, 'the script, whichever document is active');
+
+  await exportScreenplayFile(project, script, '.fountain', path.join(dir, 'out.fountain'));
+  assert.strictEqual(fs.readFileSync(path.join(dir, 'out.fountain'), 'utf8'), 'Title: Test Project\n\nINT. A - DAY\n\nBOB\nHi.\n');
+
+  await exportScreenplayFile(project, script, '.fdx', path.join(dir, 'out.fdx'));
+  assert.match(fs.readFileSync(path.join(dir, 'out.fdx'), 'utf8'), /<Paragraph Type="Scene Heading">/);
+
+  await exportScreenplayFile(project, script, '.txt', path.join(dir, 'out.txt'));
+  assert.match(fs.readFileSync(path.join(dir, 'out.txt'), 'utf8'), /INT\. A - DAY/);
+
+  await assert.rejects(exportScreenplayFile(project, script, '.pdf', path.join(dir, 'out.pdf')), function(err){ return /PDF/.test(err.message); });
+  assert.ok(!fs.existsSync(path.join(dir, 'out.pdf')));
+  await assert.rejects(exportScreenplayFile(project, script, '.docx', path.join(dir, 'out.docx')), /No screenplay export/);
+});
+
 test('exportProject prefixes reference-chapter filenames with "-ref_"', async function(t){
   var chap = makeChapter(textDelta('Body.'));
   var ref = makeChapter(textDelta('Reference body.'));
