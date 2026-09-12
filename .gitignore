@@ -10,3 +10,4 @@ error_log.txt
 .vscode/settings.json
 .DS_store
 test/driven/results.json
+screenplay/
