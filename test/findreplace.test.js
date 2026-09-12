@@ -21,8 +21,13 @@ function makeEditorQuill(text){
 
 //Mirrors the relevant part of render.js's displayChapterByIndex: swap the editor's contents for
 //the target chapter's and record which chapter is now active.
+//
+//Async like the real one, which reads a chapter the writer has not opened yet off disk - and async
+//in the same way, reaching the editor only after the caller has had the chance to run on. A
+//synchronous stub here passed every test below while In All Chapters searching was broken.
 function makeDisplayChapterByIndex(project, editorQuill, chapters){
-  return function(ind){
+  return async function(ind){
+    await Promise.resolve();
     project.activeChapterIndex = ind;
     editorQuill.setText(chapters[ind].contents);
   };
@@ -186,11 +191,11 @@ test('replaceAllInAllChapters leaves project.hasUnsavedChanges alone when nothin
 //Regression: a match starting exactly at the search's starting index (most notably index 0, where
 //the cursor sits on a freshly opened chapter) used to be discarded by a heuristic that assumed it
 //must be the previously-found match. It isn't, on a fresh search, and got skipped entirely.
-test('find does not skip a match that starts at the search\'s starting index', function(){
+test('find does not skip a match that starts at the search\'s starting index', async function(){
   var editorQuill = makeEditorQuill('cat sat on the mat\n');
   var project = makeProject([]);
 
-  var index = find(editorQuill, project, 'cat', 0, false, undefined);
+  var index = await find(editorQuill, project, 'cat', 0, false, undefined);
 
   assert.strictEqual(index, 0);
   var selection = editorQuill.getSelection(true);
@@ -201,15 +206,15 @@ test('find does not skip a match that starts at the search\'s starting index', f
 //Regression coverage for the caller-side fix: searching from the end of the current selection
 //(rather than its start) is what lets a repeat Find move past the match that's currently selected
 //without the old skip-hack, which incorrectly discarded matches on a fresh search too (above).
-test('searching from the end of a just-found match advances to the next occurrence', function(){
+test('searching from the end of a just-found match advances to the next occurrence', async function(){
   var editorQuill = makeEditorQuill('cat and cat\n');
   var project = makeProject([]);
 
-  var first = find(editorQuill, project, 'cat', 0, false, undefined);
+  var first = await find(editorQuill, project, 'cat', 0, false, undefined);
   assert.strictEqual(first, 0);
 
   var selection = editorQuill.getSelection(true);
-  var second = find(editorQuill, project, 'cat', selection.index + selection.length, false, undefined);
+  var second = await find(editorQuill, project, 'cat', selection.index + selection.length, false, undefined);
 
   assert.strictEqual(second, 8);
 });
@@ -218,7 +223,7 @@ test('searching from the end of a just-found match advances to the next occurren
 //first chapter omitted wholeWordOnly, so it silently fell back to substring matching once the
 //search wrapped. activeChapterIndex is set to the last chapter so the very first hop wraps to
 //chapter 0 immediately, exercising that same transition.
-test('find keeps respecting wholeWordOnly across a search-all-chapters wraparound', function(){
+test('find keeps respecting wholeWordOnly across a search-all-chapters wraparound', async function(){
   var chapters = [
     { contents: 'concatenate\n' },     //substring-only match, must be skipped
     { contents: 'the cat sat\n' },     //whole-word match
@@ -228,7 +233,7 @@ test('find keeps respecting wholeWordOnly across a search-all-chapters wraparoun
   var project = makeProject(chapters, [], 2);
   var displayChapterByIndex = makeDisplayChapterByIndex(project, editorQuill, chapters);
 
-  var index = find(editorQuill, project, 'cat', 0, true, displayChapterByIndex, { wholeWordOnly: true });
+  var index = await find(editorQuill, project, 'cat', 0, true, displayChapterByIndex, { wholeWordOnly: true });
 
   assert.strictEqual(index, 4);
   assert.strictEqual(project.activeChapterIndex, 1);
@@ -237,7 +242,7 @@ test('find keeps respecting wholeWordOnly across a search-all-chapters wraparoun
 //Regression: a failed search-all-chapters search re-walked chapters it had already searched during
 //the wraparound, and left the view on whichever chapter that redundant pass happened to end on
 //instead of restoring the chapter the search started from.
-test('find visits each other chapter once and restores the starting chapter when nothing is found', function(){
+test('find visits each other chapter once and restores the starting chapter when nothing is found', async function(){
   var chapters = [
     { contents: 'no match here\n' },
     { contents: 'nor here\n' },
@@ -249,14 +254,38 @@ test('find visits each other chapter once and restores the starting chapter when
   var visited = [];
   var displayChapterByIndex = function(ind){
     visited.push(ind);
-    makeDisplayChapterByIndex(project, editorQuill, chapters)(ind);
+    return makeDisplayChapterByIndex(project, editorQuill, chapters)(ind);
   };
 
-  var index = find(editorQuill, project, 'zzz', 0, true, displayChapterByIndex);
+  var index = await find(editorQuill, project, 'zzz', 0, true, displayChapterByIndex);
 
   assert.strictEqual(index, -1);
   assert.deepStrictEqual(visited, [1, 2, 0]);
   assert.strictEqual(project.activeChapterIndex, 0);
+});
+
+//Regression: displaying a chapter finishes asynchronously, because one the writer has not opened
+//yet has to be read off disk first, and the search did not wait for it. Every time round the loop
+//it therefore searched the chapter still in the editor - the one it started from - so a term
+//anywhere else in the book came back as "None Found.", and the loads it had set going landed in the
+//editor in whatever order they finished.
+test('find waits for each chapter to be displayed before searching it', async function(){
+  var chapters = [
+    { contents: 'no match here\n' },
+    { contents: 'nor here\n' },
+    { contents: 'a [bracket] at last\n' }
+  ];
+  var editorQuill = makeEditorQuill(chapters[0].contents);
+  var project = makeProject(chapters, [], 0);
+  var displayChapterByIndex = makeDisplayChapterByIndex(project, editorQuill, chapters);
+
+  var index = await find(editorQuill, project, '[', 0, true, displayChapterByIndex);
+
+  assert.strictEqual(index, 2);
+  assert.strictEqual(project.activeChapterIndex, 2);
+  var selection = editorQuill.getSelection(true);
+  assert.strictEqual(selection.index, 2);
+  assert.strictEqual(selection.length, 1);
 });
 
 //---------------------------------------------------------------------------
@@ -388,12 +417,12 @@ test('a pattern that is not a regex is still fine as literal text', function(){
   assert.strictEqual(compileSearch('(', { wholeWordOnly: true }).error, undefined);
 });
 
-test('an uncompilable pattern finds nothing instead of throwing', function(){
+test('an uncompilable pattern finds nothing instead of throwing', async function(){
   assert.doesNotThrow(function(){ getNextMatch('[a-', 'a b c', 0, REGEX); });
   assert.strictEqual(getNextMatch('[a-', 'a b c', 0, REGEX), null);
 
   var editorQuill = makeEditorQuill('the cat sat\n');
-  assert.strictEqual(find(editorQuill, makeProject([]), '(', 0, false, undefined, REGEX), -1);
+  assert.strictEqual(await find(editorQuill, makeProject([]), '(', 0, false, undefined, REGEX), -1);
 });
 
 //Replace All runs over every chapter in the project, so a pattern that will not compile has to be

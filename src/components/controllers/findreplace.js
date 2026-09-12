@@ -17,7 +17,9 @@ function searchOptions(options){
 //Compiled once here rather than inside the recursion below, which re-enters this search for every
 //chapter an In All Chapters search visits. A pattern that will not compile finds nothing; the popup
 //has already told the writer why, having compiled it itself before getting this far.
-function find(editorQuill, project, str, startingIndex, searchAllChapters, displayChapterByIndex, options){
+//
+//Async because displaying a chapter is: see findWith below.
+async function find(editorQuill, project, str, startingIndex, searchAllChapters, displayChapterByIndex, options){
     if(!str)
         return -1;
 
@@ -26,7 +28,12 @@ function find(editorQuill, project, str, startingIndex, searchAllChapters, displ
     return search.error ? -1 : findWith(search, editorQuill, project, startingIndex, searchAllChapters, displayChapterByIndex);
 }
 
-function findWith(search, editorQuill, project, startingIndex, searchAllChapters, displayChapterByIndex){
+//Awaits displayChapterByIndex, which finishes asynchronously - a chapter the writer has not opened
+//yet has to be read off disk before its text is in the editor. Without the await the search below
+//ran against whatever chapter was still on screen, so an In All Chapters search found only what was
+//in the chapter it started from and reported "None Found." for the rest of the book, while the
+//loads it had set going landed in the editor in whatever order they finished.
+async function findWith(search, editorQuill, project, startingIndex, searchAllChapters, displayChapterByIndex){
     var index = -1;
     var match = search.findFrom(getIndexableText(editorQuill), startingIndex);
 
@@ -46,19 +53,19 @@ function findWith(search, editorQuill, project, startingIndex, searchAllChapters
             //around, stopping as soon as a match turns up.
             for(var i = 0; i < project.chapters.length - 1 && index < 0; i++){
                 chapIndex = chapIndex < project.chapters.length - 1 ? chapIndex + 1 : 0;
-                displayChapterByIndex(chapIndex);
+                await displayChapterByIndex(chapIndex);
                 //searchAllChapters is deliberately false here so the recursive call searches
                 //only the chapter just displayed rather than re-entering this loop.
-                index = findWith(search, editorQuill, project, 0, false, displayChapterByIndex);
+                index = await findWith(search, editorQuill, project, 0, false, displayChapterByIndex);
             }
 
             //Nothing found anywhere; return to the chapter the search started from instead of
             //leaving the view on whichever chapter the wraparound happened to end on.
             if(index < 0)
-                displayChapterByIndex(startingChapIndex);
+                await displayChapterByIndex(startingChapIndex);
         } else {
             if(startingIndex != 0){
-                index = findWith(search, editorQuill, project, 0, false, displayChapterByIndex);
+                index = await findWith(search, editorQuill, project, 0, false, displayChapterByIndex);
             }
         }
     }

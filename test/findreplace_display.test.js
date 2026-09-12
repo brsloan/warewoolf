@@ -322,6 +322,26 @@ test('a pattern that will not compile is reported rather than searched for', fun
   assert.strictEqual(message.indexOf('Invalid pattern: '), 0, 'got: ' + message);
 });
 
+//Regression: an In All Chapters search reads chapters off disk, so find() only answers once those
+//reads are over. The button used to print its verdict without waiting for that answer, which is the
+//"None Found." a writer saw while the search was still working through the book.
+test('the verdict waits for a search that finishes asynchronously', async function(){
+  var showFindReplace = freshFindReplaceDisplay({
+    find: function(){ return Promise.resolve(-1); }
+  });
+
+  showFindReplace({}, makeEditorQuill(''), function(){});
+  document.getElementById('find-input').value = 'cat';
+
+  var message = function(){ return document.querySelector('.popup label:not([for])').innerText; };
+
+  var clicked = getButtonByAccessKey('f').onclick();
+  assert.strictEqual(message(), '', 'nothing should be reported while the search is still running');
+
+  await clicked;
+  assert.strictEqual(message(), 'None Found.');
+});
+
 test('the same pattern is ordinary text when Use Regex is off', function(){
   var findCalls = 0;
   var showFindReplace = freshFindReplaceDisplay({

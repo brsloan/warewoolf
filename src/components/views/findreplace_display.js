@@ -105,18 +105,27 @@ function showFindReplace(project, editorQuill, displayChapterByIndex){
       return true;
     }
 
-    var findBtn = createButton("<span class='access-key'>F</span>ind");
-    findBtn.onclick = function(){
+    //The search itself, apart from the button that usually starts it, so that Replace can run it
+    //and wait for it too. Awaited throughout: an In All Chapters search reads chapters off disk, so
+    //both the "None Found." and the focus() that follow it have to come after it has finished - the
+    //focus() in particular, since the search moves the focus into the editor when it selects a
+    //match, and taking it back before that has happened would not take it back at all.
+    async function runFind(){
       replacementCount.innerText = "";
       if(patternIsBroken())
-        return findBtn.focus();
+        return;
       //Search from the end of the current selection rather than its start, so a repeat Find
       //advances past the match that's currently selected instead of re-finding it, while a fresh
       //click with no selection (length 0) still searches from the cursor itself.
       var selection = editorQuill.getSelection(true);
-      var found = find(editorQuill, project, findIn.value, selection.index + selection.length, inAllChapters.checked, displayChapterByIndex, searchOptions());
+      var found = await find(editorQuill, project, findIn.value, selection.index + selection.length, inAllChapters.checked, displayChapterByIndex, searchOptions());
       if(found < 0)
         replacementCount.innerText = "None Found.";
+    }
+
+    var findBtn = createButton("<span class='access-key'>F</span>ind");
+    findBtn.onclick = async function(){
+      await runFind();
       findBtn.focus();
     };
     findBtn.accessKey = "f";
@@ -124,7 +133,7 @@ function showFindReplace(project, editorQuill, displayChapterByIndex){
 
     var replaceBtn = createButton("<span class='access-key'>R</span>eplace");
     replaceBtn.id = "replace-btn";
-    replaceBtn.onclick = function(){
+    replaceBtn.onclick = async function(){
       replacementCount.innerText = "";
       if(patternIsBroken())
         return replaceBtn.focus();
@@ -139,7 +148,9 @@ function showFindReplace(project, editorQuill, displayChapterByIndex){
       var match = matchEntireText(findIn.value, selectedText, searchOptions());
       if(match)
         replace(editorQuill, replaceIn.value, match, searchOptions());
-      findBtn.click();
+      //runFind() rather than findBtn.click(), which would hand back a promise nothing could wait
+      //for and leave the focus below racing the search for it.
+      await runFind();
       replaceBtn.focus();
     };
     replaceBtn.accessKey = "r";
