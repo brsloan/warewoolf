@@ -32,6 +32,16 @@ async function showCorkboard(project, platformInfo){
     corkboard.id = 'corkboard';
     popup.appendChild(corkboard);
 
+    //What the shortcuts just did to a card, for a screen reader. Every alteration below either
+    //toggles a class (colour) or rebuilds the board and puts focus back on the same field
+    //(everything else) - neither of which says anything to a reader on its own. A sibling of the
+    //board rather than a child, since fillCorkboard() empties the board on every rebuild.
+    var announcer = document.createElement('div');
+    announcer.id = 'corkboard-announcer';
+    announcer.classList.add('visually-hidden');
+    announcer.setAttribute('aria-live', 'polite');
+    popup.appendChild(announcer);
+
     document.body.appendChild(popup);
 
     loadedCards = await getCardsFromFile(project.directory + project.chapsDirectory);
@@ -100,6 +110,31 @@ function getTitleBar(){
   return titleBar;
 }
 
+//A card's finished mark and colour are drawn entirely by CSS - a class on the card, a class on
+//the checkmark - so a reader landing on the card's fields hears neither. This is the same
+//state as text: "Finished", "Color 3", both, or nothing. Each card's fields point at it with
+//aria-describedby, so it is read out after the field's name when the arrows land there.
+function describeCardState(card){
+  var parts = [];
+  if(card.checked == true)
+    parts.push('Finished');
+  if(card.color && card.color != 0)
+    parts.push('Color ' + card.color);
+  return parts.join('. ');
+}
+
+function announce(text){
+  var announcer = document.getElementById('corkboard-announcer');
+  if(!announcer)
+    return;
+  //A live region only speaks when its text changes, and the same thing can happen twice running
+  //(delete a card, then the one that took its place). A zero-width space is a change to the
+  //text and nothing to the ear.
+  if(announcer.textContent === text)
+    text += '\u200B';
+  announcer.textContent = text;
+}
+
 function createCardSpot(num, posInCol) {
   var card = document.createElement("div");
   card.id = "card" + num;
@@ -110,8 +145,9 @@ function createCardSpot(num, posInCol) {
   label.classList.add("card-label");
   label.id = "card-label" + num;
   label.setAttribute('aria-label', 'Card ' + num + ' title');
+  label.setAttribute('aria-describedby', 'card-status' + num);
   label.disabled = true;
-  label.onchange = markUnsavedChanges;  
+  label.onchange = markUnsavedChanges;
 
   card.appendChild(label);
 
@@ -124,20 +160,33 @@ function createCardSpot(num, posInCol) {
   descr.classList.add("card-description");
   descr.id = "card-descr" + num;
   descr.setAttribute('aria-label', 'Card ' + num + ' description');
+  descr.setAttribute('aria-describedby', 'card-status' + num);
   descr.disabled = true;
   descr.onchange = markUnsavedChanges;
 
   card.appendChild(descr);
-  
+
   card.dataset.index = num - 1;
   card.dataset.posInCol = posInCol;
   card.addEventListener('keydown', cardCntrlEvents);
   card.classList.add('corkboard-card-unused');
-  
+  //An unused spot is a dashed outline with two disabled fields in it, which a reader exploring
+  //the board would hear as "Card 7 title, unavailable". Hidden until a card is assigned to it.
+  card.setAttribute('aria-hidden', 'true');
+
   var checkmark = document.createElement('div');
   checkmark.id = "card-checkmark" + num;
   checkmark.classList.add('card-checkmark');
+  //Shown only when the card is finished (display: none otherwise, which also hides it from
+  //readers), so a reader exploring the board finds the mark by name.
+  checkmark.setAttribute('role', 'img');
+  checkmark.setAttribute('aria-label', 'Finished');
   card.appendChild(checkmark);
+
+  var status = document.createElement('span');
+  status.id = 'card-status' + num;
+  status.classList.add('visually-hidden', 'card-status');
+  card.appendChild(status);
 
   return card;
 }
@@ -148,7 +197,9 @@ function assignLoadedCards() {
     
     if(matchingCard){
       matchingCard.classList.remove('corkboard-card-unused');
-      
+      matchingCard.removeAttribute('aria-hidden');
+      document.getElementById('card-status' + (i + 1)).textContent = describeCardState(loadedCards[i]);
+
       var thisCardLabel = document.getElementById("card-label" + (i + 1));
       thisCardLabel.value = loadedCards[i].label;
       thisCardLabel.disabled = false;
@@ -323,20 +374,34 @@ async function boardCntrlEvents(e){
   }
 }
 
+//Says where a card went after a move, or that it stayed put at an edge of the board - the board
+//is rebuilt and focus returns to the card either way, so this is the only way a reader can tell
+//the two apart.
+function announceMove(fromNum, toNum){
+  if(toNum == fromNum)
+    announce('Card ' + fromNum + ' did not move');
+  else
+    announce('Moved to card ' + toNum);
+}
+
 function cardCntrlEvents(e) {
   if ((e.ctrlKey || e.metaKey)  && e.shiftKey && e.key === "ArrowUp")   {
     stopDefaultPropagation(e);
+    var fromNum = parseInt(this.dataset.index) + 1;
     var newCardNum = moveCardUp(this);
     resetCorkboard();
     focusCard(newCardNum);
     markUnsavedChanges();
+    announceMove(fromNum, newCardNum);
   }
   else if((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "ArrowDown"){
     stopDefaultPropagation(e);
+    var fromNum = parseInt(this.dataset.index) + 1;
     var newCardNum = moveCardDown(this);
     resetCorkboard();
     focusCard(newCardNum);
     markUnsavedChanges();
+    announceMove(fromNum, newCardNum);
   }
   else if((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "ArrowRight"){
     stopDefaultPropagation(e);
@@ -344,13 +409,16 @@ function cardCntrlEvents(e) {
     resetCorkboard();
     focusCard(parseInt(this.dataset.index) + 2);
     markUnsavedChanges();
+    announce('Moved to card ' + (parseInt(this.dataset.index) + 2));
   }
   else if((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "ArrowLeft"){
     stopDefaultPropagation(e);
+    var fromNum = parseInt(this.dataset.index) + 1;
     moveCardLeft(this);
     resetCorkboard();
     focusCard(parseInt(this.dataset.index));
     markUnsavedChanges();
+    announceMove(fromNum, fromNum > 1 ? fromNum - 1 : fromNum);
   }
   else if((e.ctrlKey || e.metaKey) && e.key === "ArrowUp"){
     stopDefaultPropagation(e);
@@ -374,6 +442,7 @@ function cardCntrlEvents(e) {
       resetCorkboard();
       focusCard(parseInt(this.dataset.index) + 2);
       markUnsavedChanges();
+      announce('Card ' + (parseInt(this.dataset.index) + 2) + ' inserted');
   }
     else if((e.ctrlKey || e.metaKey) && (e.key === "Delete" || e.key === "Backspace")){
       stopDefaultPropagation(e);
@@ -381,9 +450,12 @@ function cardCntrlEvents(e) {
       if(loadedCards.length > 1){
         loadedCards.splice(thisIndex, 1);
         resetCorkboard();
-        focusCard(thisIndex < loadedCards.length ? thisIndex + 1 : thisIndex);  
+        focusCard(thisIndex < loadedCards.length ? thisIndex + 1 : thisIndex);
         markUnsavedChanges();
+        announce('Card ' + (thisIndex + 1) + ' deleted');
       }
+      else
+        announce('The last card cannot be deleted');
   }
   else if((e.ctrlKey || e.metaKey) && (e.key === "Enter")){
     stopDefaultPropagation(e);
@@ -392,6 +464,7 @@ function cardCntrlEvents(e) {
     resetCorkboard();
     focusCard(thisIndex + 1);
     markUnsavedChanges();
+    announce('Card ' + (thisIndex + 1) + (loadedCards[thisIndex].checked ? ' finished' : ' not finished'));
   }
   else if((e.ctrlKey || e.metaKey) && (e.key === ",")){
     stopDefaultPropagation(e);
@@ -401,6 +474,7 @@ function cardCntrlEvents(e) {
     resetCorkboard();
     focusCard(thisIndex + 1);
     markUnsavedChanges();
+    announceColumns();
   }
   else if((e.ctrlKey || e.metaKey) && (e.key === ".")){
     stopDefaultPropagation(e);
@@ -409,6 +483,7 @@ function cardCntrlEvents(e) {
     resetCorkboard();
     focusCard(thisIndex + 1);
     markUnsavedChanges();
+    announceColumns();
   }
   else if((e.ctrlKey || e.metaKey) && isFinite(e.key) && e.key !== " "){
     stopDefaultPropagation(e);
@@ -418,10 +493,19 @@ function cardCntrlEvents(e) {
       this.classList.remove('corkboard-color' + i);
     }
     if(e.key > 0)
-      this.classList.add('corkboard-color' + e.key);     
-    
+      this.classList.add('corkboard-color' + e.key);
+
+    //The one alteration that does not rebuild the board, so the card's own description is
+    //brought up to date here.
+    document.getElementById('card-status' + (thisIndex + 1)).textContent = describeCardState(loadedCards[thisIndex]);
     markUnsavedChanges();
+    announce('Card ' + (thisIndex + 1) + (e.key > 0 ? ' color ' + e.key : ' color cleared'));
   }
+}
+
+function announceColumns(){
+  var n = openProject.corkboardColumns;
+  announce(n + (n == 1 ? ' column' : ' columns'));
 }
 
 function stopDefaultPropagation(keyEvent) {
