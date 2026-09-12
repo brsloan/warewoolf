@@ -1825,11 +1825,15 @@ function alertBackupResult(msg, skipBackup = null, skipLabel){
   showBackupAlert(msg, skipBackup, skipLabel);
 }
 
-async function addImportedChapter(chapDelta, title){
+//`format` is 'fountain' for an imported screenplay (import.js's importScreenplay), which is what
+//has it saved as a .fountain file and shown in screenplay mode; absent for everything else.
+async function addImportedChapter(chapDelta, title, format){
   var newChap = newChapter(project);
   newChap.hasUnsavedChanges = true;
   newChap.contents = chapDelta;
   newChap.title = title;
+  if(format === 'fountain')
+    newChap.format = 'fountain';
 
   //Same placement rule as addNewChapter(): joins Reference after the active document if that's
   //what's active, otherwise appends onto Chapters (which also covers a Trash item being active -
@@ -1903,6 +1907,11 @@ const menuCommands = {
     const { applyBookMetadata } = require('./components/controllers/import');
     showImportOptions(sysDirectories, detached(addImportedChapter), detached(async function(bookMetadata){
       applyBookMetadata(project, bookMetadata);
+      //An imported script's title page fills a screenplay project that has none of its own; a
+      //project that already has one keeps it.
+      if(bookMetadata && Array.isArray(bookMetadata.titlePage) && bookMetadata.titlePage.length > 0 &&
+          project.isScreenplay() && project.titlePage.length === 0)
+        project.titlePage = bookMetadata.titlePage;
       await displayChapterByIndex(project.activeChapterIndex);
       if(project.chapters.length > 0)
         editorQuill.enable();
@@ -2063,11 +2072,51 @@ const menuCommands = {
 //that drifts from what index.js sends used to be silent - a menu item that simply did nothing, with
 //nothing anywhere saying why. It now throws here, at startup, out of the first pass through this
 //file.
+//What the menus offer a screenplay - docs/screenplay-plan.md, "What the menus offer". Two kinds of
+//refusal, told apart by what they are about: the chapter tools want a prose *document* in the
+//editor (a Reference note beside a script is one), and the manuscript-wide conversions want a
+//novel *project*. Everything else works on a script as it stands. The main process is not told;
+//an item that does not apply says so here, which keeps index.js and the channel contract
+//untouched.
+const PROSE_DOCUMENT_ONLY = {
+  'split-chapter-clicked': 'Split Chapter',
+  'add-chapter-clicked': 'Add New Chapter',
+  'delete-chapter-clicked': 'Delete Chapter',
+  'restore-chapter-clicked': 'Restore Deleted Chapter',
+  'headings-to-chaps-clicked': 'Break Headings Into Chapters'
+};
+
+const NOVEL_PROJECT_ONLY = {
+  'compile-clicked': 'Compile',
+  'renumber-chapters-clicked': 'Renumber Chapters',
+  'convert-first-lines-clicked': 'Convert First Lines To Titles',
+  'convert-italics-clicked': 'Convert Marked Italics',
+  'convert-tabs-clicked': 'Convert Marked Tabs',
+  'tab-indent-paragraphs-clicked': 'Tab-Indent Paragraphs',
+  'center-all-heads-clicked': 'Center All Headings'
+};
+
+function menuItemBlockedFor(channel){
+  if(PROSE_DOCUMENT_ONLY[channel] && editorMode() === 'screenplay')
+    return PROSE_DOCUMENT_ONLY[channel] + ' works on chapters, not on a screenplay. Select a Reference document to use it, or use Export for the script.';
+
+  if(NOVEL_PROJECT_ONLY[channel] && project.isScreenplay())
+    return NOVEL_PROJECT_ONLY[channel] + ' is for a novel project. A screenplay is one script, exported through File > Export.';
+
+  return null;
+}
+
 Object.keys(menuCommands).forEach(function(channel){
   var command = menuCommands[channel];
   platform.on(channel, function(){
     if(command.requiresFocus && !editorHasFocus())
       return;
+
+    var blocked = menuItemBlockedFor(channel);
+    if(blocked){
+      require('./components/views/blocked-action_display')(blocked);
+      return;
+    }
     //Wrapped because several of these are async now and nothing reads what a menu channel returns
     //- see detached(). The promise is handed back anyway: the bridge ignores it, but a test can
     //await the handler instead of guessing how many ticks the command needs.

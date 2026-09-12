@@ -10,6 +10,8 @@ const { convertFirstLineToTitle } = require('./convert-first-lines')
 const { convertMarkedItalics } = require('./convert-italics');
 const { convertMarkedTabs } = require('./convert-tabs');
 const { parseMDF } = require('./markdownFic');
+const { parseFountain, elementsToDelta, getTitlePageValues } = require('./fountain');
+const { parseFdx } = require('./screenplay-export');
 const { createPlatform } = require('./platform');
 const { createIpcBacking } = require('./platform-ipc');
 
@@ -79,6 +81,12 @@ function importFilesAsync(filepaths, options, addImportedChapter, cback, sysDire
     importMDF(filepath, options.mdfcOptions, function(delts){
       recurse(delts);
     });
+  else if(options.fileType.id == 'fountainSelect' || options.fileType.id == 'fdxSelect')
+    importScreenplay(filepath, options.fileType.id == 'fdxSelect', function(delts, metadata){
+      if(!bookMetadata && metadata)
+        bookMetadata = metadata;
+      recurse(delts);
+    });
   else {
     //Should be unreachable from the UI (import_display.js only ever offers these fileType ids),
     //but without this the working overlay hangs forever with no error surfaced if it happens.
@@ -98,7 +106,7 @@ function importFilesAsync(filepaths, options, addImportedChapter, cback, sysDire
     }
     else {
       importedDeltas.forEach((delt, i) => {
-        addImportedChapter(delt.delta, delt.title);
+        addImportedChapter(delt.delta, delt.title, delt.format);
       });
       hideWorking();
       cback(bookMetadata);
@@ -267,6 +275,30 @@ function importMDF(filepath, options, callback){
   });
 }
 
+//A screenplay, from Fountain or Final Draft, as one document stamped `format: 'fountain'` - which
+//is what has it saved as a .fountain file and puts the editor in screenplay mode for it. The
+//file's title page travels out as metadata, the way an epub's title and author do, for a
+//screenplay project with no title page of its own to take (render.js's import finish).
+function importScreenplay(filepath, isFdx, callback){
+  platform.readTextFile({ path: filepath }).then(function(data){
+    var parsed = isFdx ? parseFdx(data) : parseFountain(data);
+    var title = getTitlePageValues(parsed.titlePage, 'Title').join(' ') || getFilenameFromFilepath(filepath);
+
+    callback([{
+      title: title,
+      delta: elementsToDelta(parsed.elements),
+      format: 'fountain'
+    }], {
+      title: title,
+      author: getTitlePageValues(parsed.titlePage, 'Author').concat(getTitlePageValues(parsed.titlePage, 'Authors')).join(' '),
+      titlePage: parsed.titlePage
+    });
+  }).catch(function(err){
+    logError(err);
+    callback([], null);
+  });
+}
+
 //Splits off only the final extension, not every "." in the filename - splitting on the first "."
 //lost everything after it for a multi-dot name (e.g. "chapter 1.5.txt" became "chapter 1",
 //"my.novel.draft.txt" became "my"). stemOfPath is the shared helper file-manager.js applies for
@@ -284,5 +316,6 @@ module.exports = {
   applyBookMetadata,
   importPlainText,
   importMDF,
+  importScreenplay,
   getFilenameFromFilepath
 }

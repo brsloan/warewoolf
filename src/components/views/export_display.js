@@ -50,7 +50,12 @@ function showExportOptions(project, userSettings, sysDirectories){
 
     var typeSelect = document.createElement("select");
     typeSelect.id = "filetype-select";
-    const typeOptions = [".docx", ".txt", ".mdfc", ".md", ".html", ".epub"];
+    //A screenplay project offers the formats a script goes out in (docs/screenplay-plan.md,
+    //Phase 7): the PDF everyone reads, Final Draft's FDX, the Fountain file itself, and plain
+    //text. The prose formats would lay a script out as a manuscript.
+    const typeOptions = project.type === 'screenplay'
+      ? [".pdf", ".fdx", ".fountain", ".txt"]
+      : [".docx", ".txt", ".mdfc", ".md", ".html", ".epub"];
     typeOptions.forEach(function(op){
       var txtOp = document.createElement("option");
       txtOp.value = op;

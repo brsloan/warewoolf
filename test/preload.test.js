@@ -206,5 +206,5 @@ test('the built preload bundle publishes the same three functions', function(){
   //The bundle carries its own copy of the contract table, so a stale bundle would validate against
   //a stale command list.
   assert.strictEqual(EVENTS.length, 41);
-  assert.strictEqual(Object.keys(COMMANDS).length, 73);
+  assert.strictEqual(Object.keys(COMMANDS).length, 74);
 });

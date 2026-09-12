@@ -9,6 +9,8 @@ const { getCorkboardForExport } = require('./corkboard');
 const { convertToPlainText } = require('./quill-utils');
 const { getTotalWordCount } = require('./wordcount');
 const { markSceneBreaks } = require('./mark-scene-breaks');
+const { serializeFountain, deltaToElements } = require('./fountain');
+const { screenplayToPrintHtml, elementsToFdx } = require('./screenplay-export');
 const { createPlatform } = require('./platform');
 const { createIpcBacking } = require('./platform-ipc');
 const notesNamePrepend = '-notes_';
@@ -153,6 +155,21 @@ async function exportChapter(project, chapterTitle, author, chapDelta, filepathN
             break;
         case ".epub":
             exportChapAsEpub(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.generateTitlePage, taskStarted, taskDone);
+            break;
+        //The screenplay formats (docs/screenplay-plan.md, Phase 7). A document that is not a
+        //script - a Reference note beside one - goes out the same way, as action lines, which is
+        //what Fountain would make of it too.
+        case ".fountain":
+            await platform.writeTextFile({ path: filepathNameNoExt + ".fountain",
+              contents: serializeFountain(project.titlePage || [], deltaToElements(chapDelta)) });
+            break;
+        case ".fdx":
+            await platform.writeTextFile({ path: filepathNameNoExt + ".fdx",
+              contents: elementsToFdx(project.titlePage || [], deltaToElements(chapDelta)) });
+            break;
+        case ".pdf":
+            await platform.printToPdf({ path: filepathNameNoExt + ".pdf",
+              html: screenplayToPrintHtml(project.titlePage || [], deltaToElements(chapDelta)) });
             break;
         default:
             console.log("No valid filetype selected for export.");

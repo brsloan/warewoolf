@@ -611,6 +611,32 @@ test('renaming a scene row rewrites the heading in the script', async function()
   assert.deepStrictEqual(sceneRowTitles(), ['INT. A - DAY', 'EXT. BEACH - DAWN', 'INT. C - DAY']);
 });
 
+//docs/screenplay-plan.md, Phase 7: what the menus refuse for a script, and that they say so.
+test('the chapter tools refuse a script and the manuscript conversions refuse a screenplay project, each with a message', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [scriptWithScenes()];
+  r.project.reference = [makeChap('Bible')];
+  await r.displayChapterByIndex(0);
+  focusEditor();
+
+  var before = r.project.chapters.length;
+  await currentBridge().handlers['add-chapter-clicked']();
+  assert.strictEqual(r.project.chapters.length, before, 'no chapter was added to the script');
+  assert.match(document.getElementById('blocked-action-alert-text').innerText, /Add New Chapter works on chapters/);
+
+  await currentBridge().handlers['renumber-chapters-clicked']();
+  assert.match(document.getElementById('blocked-action-alert-text').innerText, /Renumber Chapters is for a novel project/);
+
+  //A Reference document beside the script is prose, and the chapter tools work on it.
+  document.getElementById('blocked-action-alert').remove();
+  await r.displayChapterByIndex(1);
+  focusEditor();
+  await currentBridge().handlers['add-chapter-clicked']();
+  assert.strictEqual(document.getElementById('blocked-action-alert'), null);
+  assert.strictEqual(r.project.reference.length, 2);
+});
+
 //The core editing loop: type in a chapter, look at a different one, come back. If this regresses,
 //edits are silently lost the moment the writer glances at another chapter - about the worst
 //possible failure mode for this app.

@@ -165,6 +165,12 @@ var COMMANDS = {
   showAppMenu: { group: 'A', params: [], returns: 'void' },
   confirmExit: { group: 'A', params: [], returns: 'void' },
   notifyRendererReady: { group: 'A', params: [], returns: 'void' },
+  //A screenplay's PDF export (docs/screenplay-plan.md, Phase 7). The renderer builds the page as
+  //HTML; printing it is a main-process affair (a hidden window and webContents.printToPDF), so it
+  //is a command here rather than anything the renderer could do. Group A because the backing
+  //reaches it through a callback index.js supplies, like setTheme. Tauri: a webview print API.
+  printToPdf: { group: 'A', params: ['html', 'path'], returns: 'void',
+    note: 'Letter, an inch and a half on the left and an inch elsewhere, a page number top right. Rejects UNAVAILABLE where no printer callback was supplied (tests, a headless backing).' },
 
   // --- B. Project lifecycle -----------------------------------------------------------------
   openProject: { group: 'B', params: ['path'],

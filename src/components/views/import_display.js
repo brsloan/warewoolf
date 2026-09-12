@@ -24,7 +24,11 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish){
     { name: 'Plain Text', id: 'txtSelect', extensions: ['txt'] },
     { name: 'MarkdownFic', id: 'mdfcSelect', extensions: ['mdfc', 'txt', "md"] },
     { name: 'HTML', id: 'htmlSelect', extensions: ['html', 'htm', 'xhtml'] },
-    { name: 'EPUB', id: 'epubSelect', extensions: ['epub'] }
+    { name: 'EPUB', id: 'epubSelect', extensions: ['epub'] },
+    //Screenplays (docs/screenplay-plan.md, Phase 7). Either comes in as a .fountain document,
+    //which is what puts the editor in screenplay mode for it, whatever kind of project it joins.
+    { name: 'Fountain', id: 'fountainSelect', extensions: ['fountain', 'txt'] },
+    { name: 'Final Draft', id: 'fdxSelect', extensions: ['fdx'] }
   ];
 
   filetypes.forEach((type, i) => {

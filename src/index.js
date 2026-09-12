@@ -1,4 +1,5 @@
 const { app, BrowserWindow, Menu, nativeTheme, safeStorage, autoUpdater } = require('electron');
+const fs = require('fs');
 const path = require('path');
 const { ipcMain } = require('electron');
 const { COMMANDS, createPlatform } = require('./components/controllers/platform');
@@ -625,6 +626,32 @@ function host(){
       },
       onShowAppMenu: function(){
         app.applicationMenu.popup({ x: 0, y: 0 });
+      },
+      //A screenplay's PDF (docs/screenplay-plan.md, Phase 7): the renderer's print page, loaded
+      //in a window nobody sees and printed by Chromium to Letter with a script's margins - an
+      //inch and a half on the left, an inch elsewhere - and a page number top right. The window
+      //is closed whether or not the print succeeded.
+      onPrintToPdf: function(html, filePath){
+        var printer = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true } });
+        var done = printer.webContents.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html))
+          .then(function(){
+            return printer.webContents.printToPDF({
+              pageSize: 'Letter',
+              printBackground: false,
+              margins: { marginType: 'custom', top: 1, bottom: 1, left: 1.5, right: 1 },
+              displayHeaderFooter: true,
+              headerTemplate: '<div style="width:100%;font-family:Courier,monospace;font-size:12pt;text-align:right;padding-right:1in;padding-top:0.5in"><span class="pageNumber"></span>.</div>',
+              footerTemplate: '<div></div>'
+            });
+          })
+          .then(function(bytes){
+            fs.writeFileSync(filePath, bytes);
+          });
+
+        return done.finally(function(){
+          if(!printer.isDestroyed())
+            printer.close();
+        });
       },
       onConfirmExit: function(){
         closeConfirmed = true;

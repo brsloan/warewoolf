@@ -363,6 +363,27 @@ testOnce('an error that is already a PlatformError passes through unchanged', as
   assert.strictEqual(err.message, 'already ours');
 });
 
+//docs/screenplay-plan.md, Phase 7. The printing is the host's (a hidden window in index.js); the
+//backing only carries the call, and without a printer it must say so rather than resolve to a PDF
+//that was never written.
+test('printToPdf hands the page to the host\'s printer, and rejects UNAVAILABLE without one', async function(t){
+  const printed = [];
+  const withPrinter = createPlatform(createNodeBacking({
+    paths: { userData: fs.mkdtempSync(path.join(os.tmpdir(), 'warewoolf-print-')) },
+    onPrintToPdf: function(html, filePath){ printed.push([html, filePath]); return Promise.resolve('ignored'); }
+  }));
+
+  assert.strictEqual(await withPrinter.printToPdf({ html: '<p>x</p>', path: '/out/script.pdf' }), undefined);
+  assert.deepStrictEqual(printed, [['<p>x</p>', '/out/script.pdf']]);
+
+  const withoutPrinter = platformIn(t).platform;
+  const err = await rejection(withoutPrinter.printToPdf({ html: '<p>x</p>', path: '/out/script.pdf' }));
+  assert.strictEqual(err.code, CODES.UNAVAILABLE);
+
+  const bad = await rejection(withPrinter.printToPdf({ html: '<p>x</p>' }));
+  assert.strictEqual(bad.code, CODES.INVALID_ARGUMENT);
+});
+
 test('every command is documented and takes a single object argument', function(t){
   const platform = platformIn(t).platform;
 

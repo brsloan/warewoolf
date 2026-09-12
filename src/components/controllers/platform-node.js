@@ -216,6 +216,8 @@ function createNodeBacking(deps){
   var onSetTheme = options.onSetTheme || function(){};
   var onShowAppMenu = options.onShowAppMenu || function(){};
   var onConfirmExit = options.onConfirmExit || function(){};
+  //Absent rather than a no-op: a PDF that was never written must not look written. See printToPdf.
+  var onPrintToPdf = options.onPrintToPdf || null;
   var onNotifyRendererReady = options.onNotifyRendererReady || function(){};
   //Group K's Windows update pair. Not group A, despite living beside its neighbours here in the
   //options destructuring - autoUpdater is a main-process API exactly like nativeTheme/the
@@ -237,6 +239,7 @@ function createNodeBacking(deps){
     getPlatform: getPlatform,
     getFileRequestedOnOpen: getFileRequestedOnOpen,
     setTheme: setTheme,
+    printToPdf: printToPdf,
     showAppMenu: showAppMenu,
     confirmExit: confirmExit,
     notifyRendererReady: notifyRendererReady,
@@ -410,6 +413,20 @@ function createNodeBacking(deps){
 
   function setTheme(args){
     onSetTheme(args == null ? null : args.mode);
+  }
+
+  //The screenplay PDF. The HTML is the renderer's (screenplay-export.js) and the printing is the
+  //host's: index.js supplies onPrintToPdf, which loads the page in a hidden window and writes
+  //webContents.printToPDF's bytes to `path`. Without one - a test, a backing with no window -
+  //this rejects rather than resolving to a file that does not exist.
+  function printToPdf(args){
+    requireText(args == null ? null : args.html, 'html');
+    requireText(args == null ? null : args.path, 'path');
+
+    if(onPrintToPdf == null)
+      throw PlatformError(CODES.UNAVAILABLE, 'PDF printing is not available in this environment.');
+
+    return Promise.resolve(onPrintToPdf(args.html, args.path)).then(function(){ return undefined; });
   }
 
   function showAppMenu(){

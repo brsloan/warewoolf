@@ -174,6 +174,61 @@ test('importPlainText regression: a split marker containing regex metacharacters
 // importMDF
 //---------------------------------------------------------------------------
 
+//docs/screenplay-plan.md, Phase 7: a screenplay comes in from Fountain or Final Draft as one
+//document stamped for the .fountain codec, with its title page as metadata.
+test('importScreenplay reads a .fountain file as one fountain-format chapter titled from its title page', async function(){
+  const dir = tempDir();
+  const filepath = path.join(dir, 'script.fountain').replaceAll('\\', '/');
+  fs.writeFileSync(filepath, 'Title: Big Fish\nAuthor: John August\n\nINT. HOUSE - DAY\n\nBOB\nHi.\n', 'utf8');
+
+  const result = await new Promise(function(resolve){
+    importCtrl.importScreenplay(filepath, false, function(delts, metadata){ resolve({ delts: delts, metadata: metadata }); });
+  });
+
+  assert.strictEqual(result.delts.length, 1);
+  assert.strictEqual(result.delts[0].title, 'Big Fish');
+  assert.strictEqual(result.delts[0].format, 'fountain');
+  assert.deepStrictEqual(result.delts[0].delta.ops[1], { insert: '\n', attributes: { element: 'scene' } });
+  assert.strictEqual(result.metadata.title, 'Big Fish');
+  assert.strictEqual(result.metadata.author, 'John August');
+  assert.deepStrictEqual(result.metadata.titlePage[0], { key: 'Title', values: ['Big Fish'] });
+});
+
+test('importScreenplay reads an .fdx file, and titles it from the filename when there is no title page', async function(){
+  const { JSDOM } = require('jsdom');
+  global.DOMParser = new JSDOM().window.DOMParser;
+  const dir = tempDir();
+  const filepath = path.join(dir, 'my.script.fdx').replaceAll('\\', '/');
+  fs.writeFileSync(filepath, '<?xml version="1.0"?><FinalDraft DocumentType="Script"><Content>' +
+    '<Paragraph Type="Scene Heading"><Text>INT. HOUSE - DAY</Text></Paragraph>' +
+    '<Paragraph Type="Character"><Text>BOB</Text></Paragraph>' +
+    '<Paragraph Type="Dialogue"><Text>Hi.</Text></Paragraph>' +
+    '</Content></FinalDraft>', 'utf8');
+
+  const result = await new Promise(function(resolve){
+    importCtrl.importScreenplay(filepath, true, function(delts, metadata){ resolve({ delts: delts, metadata: metadata }); });
+  });
+
+  assert.strictEqual(result.delts[0].title, 'my.script');
+  assert.strictEqual(result.delts[0].format, 'fountain');
+  assert.deepStrictEqual(result.delts[0].delta.ops.map(function(op){ return op.insert; }), ['INT. HOUSE - DAY', '\n', 'BOB', '\n', 'Hi.', '\n']);
+  assert.deepStrictEqual(result.metadata.titlePage, []);
+});
+
+test('importScreenplay regression: a missing file logs an error and calls back with no chapters instead of throwing', async function(){
+  var logged = [];
+  errorLog.logError = function(err){ logged.push(err); };
+  const fresh = freshImportCtrl();
+
+  const result = await new Promise(function(resolve){
+    fresh.importScreenplay(path.join(tempDir(), 'missing.fountain').replaceAll('\\', '/'), false, function(delts, metadata){ resolve({ delts: delts, metadata: metadata }); });
+  });
+
+  assert.deepStrictEqual(result.delts, []);
+  assert.strictEqual(result.metadata, null);
+  assert.strictEqual(logged.length, 1);
+});
+
 test('importMDF reads a .mdfc file and packages it as a chapter delta', async function(){
   const dir = tempDir();
   const file = path.join(dir, 'story.mdfc');

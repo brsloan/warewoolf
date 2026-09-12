@@ -117,6 +117,7 @@ Mostly already IPC. Small, and the first group to move.
 | `showAppMenu()` | `show-menu` (`index.js:563`) | `keybindings.js:87`. |
 | `confirmExit()` | `exit-app-confirmed` (`index.js:480`) | `render.js:846,849,865`. |
 | `notifyRendererReady()` | `renderer-ready` (`index.js:486`) | `render.js:1126`. Fire-and-forget startup signal; the only command here with no return value. |
+| `printToPdf(html, path)` | new with screenplay mode (`docs/screenplay-plan.md`, Phase 7) | The renderer builds a script's print page as HTML; the host loads it in a hidden window and writes `webContents.printToPDF` to `path` (Letter, 1.5in left margin, 1in elsewhere, page number top right). Rejects `UNAVAILABLE` where no printer callback was supplied. Tauri: webview print API. |
 
 ### Events (main → renderer) — **(corrected in Phase 1)**
 

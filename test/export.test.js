@@ -95,6 +95,41 @@ test('exportProject writes one sequentially numbered file per chapter when expor
   assert.match(fs.readFileSync(path.join(outDir, '0002_Chapter 2.txt'), 'utf8'), /Second chapter text\./);
 });
 
+//docs/screenplay-plan.md, Phase 7: the screenplay formats. .fountain and .fdx are text written like
+//the others; .pdf goes through the printToPdf command, which the node backing behind the test bridge
+//has no printer for - so it rejects, and the export reports the failure rather than a file.
+test('exportProject writes a script as .fountain and .fdx with the project title page, and counts a .pdf it cannot print', async function(t){
+  const dir = tempDir(t);
+  const script = makeChapter({ ops: [
+    { insert: 'INT. A - DAY' }, { insert: '\n', attributes: { element: 'scene' } },
+    { insert: 'BOB' }, { insert: '\n', attributes: { element: 'character' } },
+    { insert: 'Hi.' }, { insert: '\n', attributes: { element: 'dialogue' } }
+  ] });
+  script.title = 'Script';
+  const project = makeTestProject([script], []);
+  project.type = 'screenplay';
+  project.titlePage = [{ key: 'Title', values: ['Test Project'] }];
+
+  await new Promise(function(resolve){
+    exportProject(project, {}, { type: '.fountain', what: 'project', markSceneBreaks: false }, dir, resolve);
+  });
+  const outDir = path.join(dir, 'Test Project');
+  assert.strictEqual(fs.readFileSync(path.join(outDir, '0001_Script.fountain'), 'utf8'), 'Title: Test Project\n\nINT. A - DAY\n\nBOB\nHi.\n');
+
+  await new Promise(function(resolve){
+    exportProject(project, {}, { type: '.fdx', what: 'project', markSceneBreaks: false }, dir, resolve);
+  });
+  const fdx = fs.readFileSync(path.join(outDir, '0001_Script.fdx'), 'utf8');
+  assert.match(fdx, /<Paragraph Type="Scene Heading">\s*<Text>INT. A - DAY<\/Text>/);
+  assert.match(fdx, /<TitlePage>/);
+
+  const errors = await new Promise(function(resolve){
+    exportProject(project, {}, { type: '.pdf', what: 'chapter', markSceneBreaks: false }, dir, resolve);
+  });
+  assert.strictEqual(errors, 1);
+  assert.ok(!fs.existsSync(path.join(outDir, 'Script.pdf')));
+});
+
 test('exportProject prefixes reference-chapter filenames with "-ref_"', async function(t){
   var chap = makeChapter(textDelta('Body.'));
   var ref = makeChapter(textDelta('Reference body.'));
