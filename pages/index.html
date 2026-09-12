@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WareWoolf - a novel writing system you can use without a mouse</title>
+  <meta name="description" content="WareWoolf is free, open-source software for writing fiction: three text panels, no toolbar, every command on a shortcut, and your chapters saved as plain text forever. Windows, macOS, Linux and Raspberry Pi.">
+  <meta property="og:title" content="WareWoolf">
+  <meta property="og:description" content="A simple novel writing system designed to be usable without a mouse.">
+  <meta property="og:image" content="assets/screenshot_lightmode.png">
+  <meta property="og:type" content="website">
+  <link rel="icon" href="assets/icon.png" type="image/png">
+  <link rel="stylesheet" href="style.css">
+  <script>
+    /* Apply a remembered theme before first paint so the page never flashes the wrong palette. */
+    (function () {
+      try {
+        var t = localStorage.getItem('warewoolf-theme');
+        if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="#top">
+      <img src="assets/icon.png" alt="" width="28" height="28">
+      WareWoolf
+    </a>
+    <nav class="site-nav" aria-label="Site">
+      <a href="#features">Features</a>
+      <a href="#writerdeck">writerDeck</a>
+      <a href="#download">Download</a>
+      <a href="https://github.com/brsloan/warewoolf/wiki">Wiki</a>
+      <a href="https://github.com/brsloan/warewoolf">GitHub</a>
+      <button class="theme-toggle" type="button" id="theme-toggle" aria-label="Switch between light and dark theme">
+        <span class="when-light" aria-hidden="true">&#9790; Dark</span>
+        <span class="when-dark" aria-hidden="true">&#9788; Light</span>
+      </button>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+  <section class="hero">
+    <div class="wrap">
+      <div>
+        <img class="hero-logo" src="assets/logo.png" alt="WareWoolf" width="566" height="508">
+        <h1>Software for the Woolf in you.</h1>
+        <p class="tagline">A simple novel writing system designed to be usable without a mouse.</p>
+        <p class="lede">Three text panels. No toolbar. No icons. Not even a menu until you press <kbd>Alt</kbd>. Everything you need to organize, draft, and revise a book, and nothing that gets in the way of writing it.</p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="https://github.com/brsloan/warewoolf/releases">Download v3.0.0</a>
+          <a class="btn" href="https://github.com/brsloan/warewoolf/wiki">Read the Wiki</a>
+        </div>
+        <p class="version">Free and open source under the MIT license. Windows, macOS, Debian Linux, and Raspberry Pi.</p>
+      </div>
+      <div class="hero-shots">
+        <figure class="shot-stack">
+          <div class="shot">
+            <img src="assets/screenshot_lightmode.png" alt="WareWoolf in light mode: a chapter list on the left, the manuscript on a cream sheet in the middle, chapter notes on the right" width="1920" height="1080">
+          </div>
+          <figcaption class="shot-caption">Light mode: warm paper and ink.</figcaption>
+        </figure>
+        <figure class="shot-stack">
+          <div class="shot">
+            <img src="assets/screenshot_darkmode.png" alt="WareWoolf in dark mode: the same three panels on warm charcoal with cream text" width="1920" height="1080">
+          </div>
+          <figcaption class="shot-caption">Dark mode: a lamp-lit study.</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <div class="quote-band">
+    <div class="wrap">
+      <blockquote>
+        &ldquo;The only writing software I use.&rdquo;
+        <cite>&mdash; Virginia Woolf</cite>
+      </blockquote>
+    </div>
+  </div>
+
+  <section id="panels">
+    <div class="wrap">
+      <p class="eyebrow">Intentionally simplified</p>
+      <h2>Chapters. Editor. Notes. That&rsquo;s the whole interface.</h2>
+      <p class="lede">Beyond a typeface for the manuscript, another for the sidebars, and light or dark, there is nothing to fiddle with. No colors, no styles, no twenty-button toolbar. Each panel toggles off at a keypress, so you can write with only your manuscript on screen.</p>
+
+      <div class="panels-demo" aria-hidden="true">
+        <div class="panel">
+          <div class="panel-title">Chapters</div>
+          <ul>
+            <li>Quick Start</li>
+            <li class="active">Letter 1</li>
+            <li>Letter 2</li>
+            <li>Letter 3</li>
+            <li>Chapter 1</li>
+            <li>Chapter 2</li>
+            <li class="placeholder">Reference: Characters</li>
+          </ul>
+        </div>
+        <div class="panel editor">
+          <h3>Letter 1</h3>
+          <p>You will rejoice to hear that no disaster has accompanied the commencement of an enterprise which you have regarded with such evil forebodings.</p>
+          <p>I arrived here yesterday, and my first task is to assure my dear sister of my welfare and increasing confidence in the success of my undertaking.</p>
+        </div>
+        <div class="panel">
+          <div class="panel-title">Chapter Notes</div>
+          <p class="placeholder">Notes&hellip;</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="features">
+    <div class="wrap">
+      <p class="eyebrow">What it does have</p>
+      <h2>Everything a manuscript needs, all of it on a shortcut.</h2>
+      <p class="lede">Fiction doesn&rsquo;t take much formatting. WareWoolf gives you exactly that much and puts the rest of its effort into the parts of writing a book that are actually hard.</p>
+
+      <div class="features">
+        <article class="feature">
+          <h3><span class="glyph">&#8984;</span>All-keyboard navigation</h3>
+          <p>Designed to be pleasant with no mouse at all. Panels, chapters, dialogs and menus all answer to the keyboard, and every control is labeled for screen readers.</p>
+        </article>
+        <article class="feature">
+          <h3><span class="glyph">&para;</span>The formatting fiction uses</h3>
+          <p>Bold, italics, underline, strikethrough, four heading levels, alignment, lists, blockquotes and footnotes. Nothing else, and none of it on a toolbar.</p>
+        </article>
+        <article class="feature">
+          <h3><span class="glyph">&#8646;</span>Reorder and renumber</h3>
+          <p>Move a chapter up or down the list with a keystroke and let WareWoolf renumber the headings for you: Chapter One, Chapter Two, and on.</p>
+        </article>
+        <article class="feature">
+          <h3><span class="glyph">&#9998;</span>Notes and reference</h3>
+          <p>Keep notes on every chapter and on the project as a whole. A Reference section holds character lists and world-building that stay out of the compile and the word count.</p>
+        </article>
+        <article class="feature">
+          <h3><span class="glyph">&#8721;</span>Word counts and goals</h3>
+          <p>Total, chapter, and session counts, plus a goal with a progress bar that shows how close the draft is to done.</p>
+        </article>
+        <article class="feature">
+          <h3><span class="glyph">&#10003;</span>Spellcheck on your terms</h3>
+          <p>Run it after you write. No red squiggles, no grammar advice. Check against any number of dictionaries at once, import your own, and keep a per-project word list for names.</p>
+        </article>
+        <article class="feature">
+          <h3><span class="glyph">&ldquo;</span>Smart substitutions</h3>
+          <p>Curly quotes, an em dash from two hyphens, an ellipsis from three periods, as you type. Undo any one of them, switch it off, or apply it to an old manuscript in one pass.</p>
+        </article>
+        <article class="feature">
+          <h3><span class="glyph">&#9993;</span>Send via email</h3>
+          <p>Email a chapter or the whole manuscript to yourself at the press of a button. The simplest backup there is, and it works from a device with no other software on it.</p>
+        </article>
+        <article class="feature">
+          <h3><span class="glyph">&#9881;</span>Yours to rebind</h3>
+          <p>Every shortcut can be changed in the Shortcut Helper, and your choices are remembered. Restore the defaults whenever you like.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="corkboard">
+    <div class="wrap split">
+      <div class="shot">
+        <img src="assets/screenshot_corkboard.png" alt="The WareWoolf corkboard: rows of tinted index cards, each with a chapter title, number, a one-line synopsis and a green checkmark, separated by dashed act breaks" width="1920" height="1080" loading="lazy">
+      </div>
+      <div class="text">
+        <p class="eyebrow">Plan the book</p>
+        <h2>An outliner and a corkboard that is secretly a Markdown file.</h2>
+        <p>Pin a card for every chapter, give it a color, write the synopsis, tick it off when it&rsquo;s drafted. Draw a line where an act ends. The whole board saves as one Markdown file that doubles as your outline, readable in anything.</p>
+        <ul class="cork-swatches" aria-hidden="true"><li></li><li></li><li></li><li></li></ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="import">
+    <div class="wrap split flip">
+      <div class="text">
+        <p class="eyebrow">Bring a draft in, send a manuscript out</p>
+        <h2>Import almost anything. Export to everything that matters.</h2>
+        <p>Paste in a plain-text draft and let WareWoolf turn it into a proper manuscript: it can read a simplified Markdown, interpret your own markers for italics and headings, and split the text into chapters at a heading or a custom break string.</p>
+        <ul>
+          <li><strong>In:</strong> plain text, MarkdownFic, Word .docx, HTML, and EPUB, with ebooks split into chapters by their own table of contents.</li>
+          <li><strong>Out:</strong> plain text, MarkdownFic, standard Markdown, .docx, HTML, and .epub.</li>
+          <li><strong>Compile</strong> chapters into a single manuscript, or export one file per chapter.</li>
+        </ul>
+      </div>
+      <div>
+        <div class="feature">
+          <h3><span class="glyph">&#8734;</span>Files that outlive the software</h3>
+          <p>Every chapter is its own <code>.txt</code> file with light Markdown-style formatting. If WareWoolf vanished tomorrow you could still open, read, and edit your book in any text editor. It is the most archival format there is, and people will still be able to open it in a hundred years.</p>
+          <p style="margin-top: 0.75em">Because each chapter loads only when you work on it, a very long novel never slows the app down, even on a Raspberry Pi. Auto-save and auto-backup are built in.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="writerdeck" class="deck">
+    <div class="wrap split">
+      <div class="text">
+        <img class="deck-mascot" src="assets/warewoolf_at_work.png" alt="The WareWoolf wolf wearing a yellow hard hat" width="264" height="264" loading="lazy">
+        <p class="eyebrow">Built for writerDecks</p>
+        <h2>Turn a cheap computer into a machine that only writes.</h2>
+        <p>A writerDeck is a standalone writing device: a Raspberry Pi and a mechanical keyboard, an old laptop, whatever you have. WareWoolf is designed to be the only program on it, so it carries the small pieces of an operating system a writer still needs.</p>
+      </div>
+      <ul class="deck-list">
+        <li><span class="mark">&#10003;</span><div><strong>Built-in file manager</strong><span class="muted">Rename, delete, copy, move, and organize files without leaving the app.</span></div></li>
+        <li><span class="mark">&#10003;</span><div><strong>Wi-Fi manager</strong><span class="muted">Turn wireless on and off and join new networks from inside WareWoolf. Linux only.</span></div></li>
+        <li><span class="mark">&#10003;</span><div><strong>Battery monitor</strong><span class="muted">Battery percentage on screen so you know how long the session can run. Linux only.</span></div></li>
+        <li><span class="mark">&#10003;</span><div><strong>Reboot from the File menu</strong><span class="muted">Restart the machine after the usual save prompt and auto-backup. Linux only.</span></div></li>
+        <li><span class="mark">&#10003;</span><div><strong>Light on memory</strong><span class="muted">Chapters load one at a time, so a long book runs fine on a Pi.</span></div></li>
+        <li><span class="mark">&#10003;</span><div><strong>Debian ARM64 build</strong><span class="muted">A ready-made package for Raspberry Pi in every release.</span></div></li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="shortcuts">
+    <div class="wrap">
+      <p class="eyebrow">Nothing to memorize</p>
+      <h2>Press <kbd>Ctrl</kbd> + <kbd>H</kbd> and every shortcut is on screen.</h2>
+      <p class="lede">The Shortcut Helper lists every command and lets you rebind any of them to the keys you prefer. A few of the things you&rsquo;ll reach for most:</p>
+      <ul class="keys">
+        <li><span>Show or hide the Chapters panel</span><span class="k"><kbd>F1</kbd></span></li>
+        <li><span>Show or hide the Editor</span><span class="k"><kbd>F2</kbd></span></li>
+        <li><span>Show or hide the Notes panel</span><span class="k"><kbd>F3</kbd></span></li>
+        <li><span>Summon the menu bar</span><span class="k"><kbd>Alt</kbd></span></li>
+        <li><span>Shortcut Helper</span><span class="k"><kbd>Ctrl</kbd>+<kbd>H</kbd></span></li>
+        <li><span>Previous or next chapter</span><span class="k"><kbd>Ctrl</kbd>+<kbd>&uarr;</kbd> / <kbd>&darr;</kbd></span></li>
+        <li><span>Move chapter up or down</span><span class="k"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>&uarr;</kbd> / <kbd>&darr;</kbd></span></li>
+        <li><span>Italics, bold, underline</span><span class="k"><kbd>Ctrl</kbd>+<kbd>I</kbd> / <kbd>B</kbd> / <kbd>U</kbd></span></li>
+        <li><span>Typewriter mode</span><span class="k"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>T</kbd></span></li>
+        <li><span>Word count</span><span class="k"><kbd>Ctrl</kbd>+<kbd>8</kbd></span></li>
+        <li><span>Spell check</span><span class="k"><kbd>Ctrl</kbd>+<kbd>7</kbd></span></li>
+        <li><span>Send via Email</span><span class="k"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>E</kbd></span></li>
+      </ul>
+      <p class="muted" style="margin-top: 1.25rem; font-size: 0.95rem">Defaults shown, with Cmd in place of Ctrl on a Mac. Rebind anything in the Helper and WareWoolf remembers.</p>
+    </div>
+  </section>
+
+  <section id="download">
+    <div class="wrap">
+      <p class="eyebrow">Get WareWoolf</p>
+      <h2>Free, open source, and yours to keep.</h2>
+      <p class="lede">Binaries for every platform are on the releases page. The app can check for updates itself once installed.</p>
+
+      <div class="downloads">
+        <div class="download">
+          <h3>Windows</h3>
+          <p>An installer that puts WareWoolf in the Start Menu and updates in place, or a portable zip you unzip and run from a USB stick or a locked-down machine. Nothing is written outside the folder but your settings.</p>
+          <a class="btn btn-primary" href="https://github.com/brsloan/warewoolf/releases">Installer or portable</a>
+        </div>
+        <div class="download">
+          <h3>macOS</h3>
+          <p>A mainline build for macOS 13 Ventura and newer. On an older Mac, from Catalina through Monterey, take the Legacy build instead. It is the same WareWoolf from the same source.</p>
+          <a class="btn btn-primary" href="https://github.com/brsloan/warewoolf/releases">Download .dmg</a>
+        </div>
+        <div class="download">
+          <h3>Linux and Raspberry Pi</h3>
+          <p>Debian packages for AMD64 and for ARM64, which is what a Raspberry Pi needs. The Wi-Fi manager uses NetworkManager, which Raspberry Pi OS leaves off by default.</p>
+          <a class="btn btn-primary" href="https://github.com/brsloan/warewoolf/releases">Download .deb</a>
+        </div>
+      </div>
+
+      <div class="note">
+        <p><strong>Prefer to build it yourself?</strong> WareWoolf is an Electron Forge app. With Node.js installed, run <code>npm install</code> and then <code>npm start</code> in the source directory, or <code>npm run make</code> to produce a binary for your platform. Full instructions are in the <a href="https://github.com/brsloan/warewoolf#run-or-build-from-source">README</a>.</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <span>WareWoolf v3.0.0 &middot; MIT License &middot; by Benjamin Sloan</span>
+    <nav aria-label="Footer">
+      <a href="https://github.com/brsloan/warewoolf">Source</a>
+      <a href="https://github.com/brsloan/warewoolf/wiki">Wiki</a>
+      <a href="https://github.com/brsloan/warewoolf/releases">Releases</a>
+      <a href="https://github.com/brsloan/warewoolf/blob/main/CHANGELOG.md">Changelog</a>
+      <a href="https://github.com/brsloan/warewoolf/issues">Issues</a>
+    </nav>
+  </div>
+</footer>
+
+<script>
+  (function () {
+    var root = document.documentElement;
+    var btn = document.getElementById('theme-toggle');
+    if (!btn) return;
+    function current() {
+      var explicit = root.getAttribute('data-theme');
+      if (explicit) return explicit;
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    btn.addEventListener('click', function () {
+      var next = current() === 'dark' ? 'light' : 'dark';
+      root.setAttribute('data-theme', next);
+      try { localStorage.setItem('warewoolf-theme', next); } catch (e) {}
+    });
+  })();
+</script>
+
+</body>
+</html>
