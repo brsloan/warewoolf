@@ -8,6 +8,15 @@ Releases before v0.9.0 were never tagged or published; the work from that period
 
 ## [Unreleased]
 
+### Added
+
+- Screenplay projects. New Project asks Novel or Screenplay; a screenplay is one script written in Fountain syntax and saved as a `.fountain` file, edited all at once. The Chapters sidebar becomes a Scenes list built from the scene headings, the chapter shortcuts jump between scenes and reorder them, and renaming a scene row rewrites its heading. Enter and Tab move between screenplay elements the way Final Draft does (Ctrl+1 to Ctrl+6 set them outright, Shift+Enter makes a line break inside an element), character names and locations complete as they are typed, Word Count shows a page estimate, and Properties edits the title page. Export offers PDF, Final Draft `.fdx`, `.fountain` and plain text for a screenplay; Import reads `.fountain` and `.fdx` files. Reference documents in a screenplay project stay prose. See `docs/screenplay-plan.md`.
+
+### Changed
+
+- Keyboard shortcuts carry a mode: the heading, list, blockquote, alignment and footnote shortcuts are bound only while a prose document is shown, the screenplay element shortcuts only while a script is, so the two sets can share Ctrl+1 to Ctrl+6 and Ctrl+E. The Shortcuts popup lists a new Screenplay section, and the chapter navigation rows read "Chapter / Scene".
+- The chapter-save commands take an optional file extension (`.txt` or `.fountain`), and the project file carries a `type` and a `titlePage`. Older builds open a screenplay project as prose with the Fountain markup visible, losing nothing.
+
 ## [3.0.0] - 2026-09-12
 
 ### Added

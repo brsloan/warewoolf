@@ -539,6 +539,32 @@ Tests: FDX writer output parsed back with `DOMParser` and compared to the
 element list; the same for the reader; a PDF page count against the estimate
 on Big Fish, loosely.
 
+## Status
+
+All seven phases are implemented, on the `screenplay-new` branch, one commit
+per phase. Where the implementation departed from the plan above:
+
+- The codec never upper-cases; the editor does, when a line becomes a heading,
+  cue or transition (see "Text case"). Big Fish's own `@McCLANE` is the reason.
+- Enter on an empty line of any type makes it action, rather than leaving a
+  heading as it was: the keyboard table above was corrected to match.
+- The Scenes rows come from the editor's delta, so they show while the script
+  is the active document; with a Reference document active the sidebar shows
+  chapters, with the script as one row. A screenplay project's reference
+  documents are prose, as intended.
+- Export offers a screenplay project PDF, FDX, Fountain and plain text and
+  hides the manuscript formats; a novel project's list is unchanged. The PDF
+  goes through a new `printToPdf` platform command (a hidden window and
+  `webContents.printToPDF` in `index.js`), which only a running Electron can
+  exercise - the node backing rejects it UNAVAILABLE, and that path is what
+  the tests cover. The title page is numbered like every other page.
+- FDX in and out covers what both formats share. Sections, synopses, notes
+  and boneyards do not go to FDX; Final Draft's empty action paragraphs and a
+  speech with no cue over it do not survive the trip to Fountain.
+- Menu gating is by a table in `render.js` rather than a flag per command
+  entry, and comes in two kinds: the chapter tools need a prose document in
+  the editor, the manuscript conversions need a novel project.
+
 ## Open findings to carry
 
 - A `.fountain` chapter in a novel project, or a `.txt` in a screenplay one,
