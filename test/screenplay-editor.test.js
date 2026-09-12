@@ -411,6 +411,106 @@ test('moveScene swaps a scene with its neighbour and leaves the text before the 
   assert.deepStrictEqual(deltaToElements(down).length, parsed.elements.length);
 });
 
+//---- Phase 6: autocomplete -----------------------------------------------------------------------
+
+const fs = require('fs');
+const path = require('path');
+const { characterNames, locations, suggestionsFor, attachAutocomplete } = require('../src/components/controllers/screenplay-editor');
+
+const CAST = 'INT. WILL\'S BEDROOM - NIGHT (1973)\n\nEDWARD (V.O.)\nOne.\n\nWILL\nTwo.\n\nEDWARD (CONT\'D)\nThree.\n\nEXT. CAMPFIRE - NIGHT\n\nSANDRA ^\nFour.\n\nINT. WILL\'S BEDROOM - DAY #4#\n\nwill\nFive.\n';
+
+test('characterNames and locations come from the cues and headings, stripped, in capitals, once each', function(){
+  var d = elementsToDelta(parseFountain(CAST).elements);
+  assert.deepStrictEqual(characterNames(d), ['EDWARD', 'SANDRA', 'WILL']);
+  assert.deepStrictEqual(locations(d), ['CAMPFIRE', 'WILL\'S BEDROOM']);
+  assert.deepStrictEqual(characterNames(null), []);
+});
+
+test('suggestionsFor offers names a cue is the start of and places a heading is, after two characters', function(){
+  var d = elementsToDelta(parseFountain(CAST).elements);
+
+  assert.deepStrictEqual(suggestionsFor(d, 'character', 'ed'), { typed: 'ED', prefix: '', suggestions: ['EDWARD'] });
+  assert.strictEqual(suggestionsFor(d, 'character', 'e'), null, 'one character is too few');
+  assert.strictEqual(suggestionsFor(d, 'character', 'EDWARD'), null, 'already typed in full');
+  assert.strictEqual(suggestionsFor(d, 'character', 'zz'), null);
+
+  assert.deepStrictEqual(suggestionsFor(d, 'scene', 'INT. wi'), { typed: 'WI', prefix: 'INT. ', suggestions: ['WILL\'S BEDROOM'] });
+  assert.deepStrictEqual(suggestionsFor(d, 'scene', 'ext. ca'), { typed: 'CA', prefix: 'ext. ', suggestions: ['CAMPFIRE'] });
+  assert.strictEqual(suggestionsFor(d, 'scene', 'wi'), null, 'no prefix yet');
+  assert.strictEqual(suggestionsFor(d, 'dialogue', 'ed'), null);
+});
+
+test('the suggestion box opens under a cue being typed, moves with the arrows, and accepts with Enter', function(){
+  var s = scriptQuill(elementsToDelta(parseFountain(CAST).elements));
+  var box = attachAutocomplete(s.quill, function(){ return s.state.mode; });
+  var end = s.quill.getLength() - 1;
+
+  //A new cue at the end of the script.
+  s.quill.insertText(end, '\n', 'user');
+  s.quill.formatLine(end + 1, 1, 'element', 'character', 'user');
+  s.quill.setSelection(end + 1, 0, 'user');
+  s.quill.insertText(end + 1, 'S', 'user');
+  assert.strictEqual(box.isOpen(), false, 'one character is too few');
+
+  s.quill.setSelection(end + 2, 0, 'user');
+  s.quill.insertText(end + 2, 'A', 'user');
+  assert.strictEqual(box.isOpen(), true);
+  assert.deepStrictEqual(Array.from(document.querySelectorAll('.suggestion')).map(function(el){ return el.textContent; }), ['SANDRA']);
+
+  s.quill.setSelection(end + 3, 0, 'user');
+  var enter = s.quill.keyboard.bindings[13][0];
+  assert.strictEqual(enter.handler.call(s.quill.keyboard, { index: end + 3, length: 0 }, {}), false, 'Enter is claimed while the box is open');
+  assert.strictEqual(box.isOpen(), false);
+  assert.strictEqual(s.quill.getText(end + 1, 6), 'SANDRA');
+  assert.strictEqual(s.quill.getSelection().index, end + 7, 'the caret lands at the end of the name');
+
+  //Closed, Enter falls through to the screenplay binding beneath it.
+  assert.strictEqual(enter.handler.call(s.quill.keyboard, { index: end + 7, length: 0 }, {}), true);
+});
+
+test('the suggestion box closes on Escape, on moving off the line, and while the editor shows prose', function(){
+  var s = scriptQuill(elementsToDelta(parseFountain(CAST).elements));
+  var box = attachAutocomplete(s.quill, function(){ return s.state.mode; });
+  var end = s.quill.getLength() - 1;
+  s.quill.insertText(end, '\n', 'user');
+  s.quill.formatLine(end + 1, 1, 'element', 'character', 'user');
+  s.quill.setSelection(end + 1, 0, 'user');
+  s.quill.insertText(end + 1, 'ED', 'user');
+  s.quill.setSelection(end + 3, 0, 'user');
+  assert.strictEqual(box.isOpen(), true);
+
+  var escape = s.quill.keyboard.bindings[27][0];
+  assert.strictEqual(escape.handler.call(s.quill.keyboard, { index: end + 3, length: 0 }, {}), false);
+  assert.strictEqual(box.isOpen(), false);
+  assert.strictEqual(escape.handler.call(s.quill.keyboard, { index: end + 3, length: 0 }, {}), true, 'closed, Escape is not claimed');
+
+  box.refresh();
+  assert.strictEqual(box.isOpen(), true);
+  s.quill.setSelection(0, 0, 'user');
+  assert.strictEqual(box.isOpen(), false, 'the caret left the line');
+
+  s.state.mode = 'prose';
+  s.quill.setSelection(end + 3, 0, 'user');
+  box.refresh();
+  assert.strictEqual(box.isOpen(), false);
+});
+
+const BIG_FISH = path.join(__dirname, '..', 'screenplay', 'Big-Fish.fountain');
+
+test('Big Fish: the cast and the places', { skip: !fs.existsSync(BIG_FISH) && 'screenplay/Big-Fish.fountain is not present' }, function(){
+  var d = elementsToDelta(parseFountain(fs.readFileSync(BIG_FISH, 'utf8')).elements);
+  var names = characterNames(d);
+  var places = locations(d);
+
+  ['EDWARD', 'WILL', 'SANDRA', 'JOSEPHINE'].forEach(function(name){
+    assert.ok(names.indexOf(name) !== -1, name + ' is in the cast');
+  });
+  assert.ok(names.indexOf('EDWARD (V.O.)') === -1, 'extensions are stripped');
+  assert.ok(places.indexOf('WILL\'S BEDROOM') !== -1);
+  assert.ok(places.indexOf('CAMPFIRE') !== -1);
+  assert.ok(places.every(function(p){ return !/^INT|^EXT/.test(p); }), 'prefixes are stripped');
+});
+
 test('a script survives editor -> delta -> elements after the HTML load', function(){
   var quill = makeQuill();
   var parsed = parseFountain(SCRIPT);

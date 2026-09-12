@@ -3,7 +3,11 @@ const { countWords, getTotalWordCount } = require('../controllers/wordcount');
 
 //Async because the project-wide total needs every chapter's text, which for a chapter not already
 //in memory is now an asynchronous read through the platform facade.
-async function showWordCount(project, editorQuill, userSettings){
+//
+//`options.pages`, when given, is a screenplay's page estimate ({ pages, eighths } from
+//fountain.js's estimatePages) for the script in the editor: shown in a row of its own above the
+//word counts, and said to be an estimate, since a real count needs the PDF.
+async function showWordCount(project, editorQuill, userSettings, options){
     removeElementsByClass('popup');
     var popup = document.createElement("div");
     popup.classList.add("popup");
@@ -15,8 +19,19 @@ async function showWordCount(project, editorQuill, userSettings){
 
     var cntTbl = document.createElement('table');
 
+    if(options && options.pages){
+      var pagesLabel = document.createElement('label');
+      pagesLabel.innerText = 'Script pages (estimate): ';
+
+      var pagesDisplay = document.createElement('p');
+      pagesDisplay.id = 'script-pages';
+      pagesDisplay.innerText = options.pages.pages + (options.pages.eighths !== String(options.pages.pages) ? ' (' + options.pages.eighths + ')' : '');
+
+      cntTbl.appendChild(generateRow(pagesLabel, pagesDisplay));
+    }
+
     var chapLabel = document.createElement('label');
-    chapLabel.innerText = 'Chapter: ';
+    chapLabel.innerText = (options && options.pages ? 'Script: ' : 'Chapter: ');
 
     var chapTotalDisplay = document.createElement('p');
     chapTotalDisplay.innerText = "Calculating...";

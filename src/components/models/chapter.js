@@ -156,7 +156,10 @@ function newChapter(parentProject){
       return this;
     }
 
-    async function getFile(){
+    //`options.keepProjectTitlePage` reads a script without letting its file's title page replace
+    //the project's - what a save has to do when it reads the file back only to rewrite it, since
+    //the project's copy is then the newer one (Properties may have just changed it).
+    async function getFile(options){
       try{
         var chap = this;
         var where = chapterLocation(chap);
@@ -175,7 +178,8 @@ function newChapter(parentProject){
 
         if(isFountainFile(chap.filename)){
           var parsed = parseFountain(fileText);
-          adoptTitlePage(chap.parentProject, parsed.titlePage);
+          if(!(options && options.keepProjectTitlePage))
+            adoptTitlePage(chap.parentProject, parsed.titlePage);
           return elementsToDelta(parsed.elements);
         }
 
@@ -248,7 +252,7 @@ function newChapter(parentProject){
         //is read back and rewritten under the new name. Round-tripped through the parser rather
         //than copied as text, because a .pup chapter is JSON and comes out as MarkdownFic.
         if(chap.contents == null && chap.filename != null)
-          chap.contents = await chap.getFile();
+          chap.contents = await chap.getFile({ keepProjectTitlePage: true });
 
         var saved = await platform.saveChapterAtomic({
           projectDir: where.projectDir,

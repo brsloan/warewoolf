@@ -141,6 +141,23 @@ test('updating the goal recalculates the progress bar width and color', async fu
   assert.strictEqual(progressBarFill.style.width, '100%'); //capped even though 5/2 > 100%
 });
 
+//docs/screenplay-plan.md, Phase 6: a script's page estimate, in its own row, said to be one.
+test('a screenplay shows its page estimate above the counts, and a novel shows nothing of the kind', async function(){
+  var showWordCount = require(wordcountDisplayPath);
+
+  await showWordCount(makeProject(), makeEditorQuill('one two'), makeUserSettings(), { pages: { pages: 112, eighths: '111 3/8' } });
+  assert.strictEqual(document.getElementById('script-pages').innerText, '112 (111 3/8)');
+  assert.match(document.querySelector('label').innerText, /^Script pages \(estimate\)/);
+  assert.strictEqual(document.querySelectorAll('label')[1].innerText, 'Script: ');
+
+  await showWordCount(makeProject(), makeEditorQuill('one two'), makeUserSettings(), { pages: { pages: 3, eighths: '3' } });
+  assert.strictEqual(document.getElementById('script-pages').innerText, '3', 'a whole number is not repeated');
+
+  await showWordCount(makeProject(), makeEditorQuill('one two'), makeUserSettings());
+  assert.strictEqual(document.getElementById('script-pages'), null);
+  assert.strictEqual(document.querySelector('label').innerText, 'Chapter: ');
+});
+
 test('Close removes the popup', async function(){
   var showWordCount = require(wordcountDisplayPath);
   await showWordCount(makeProject(), makeEditorQuill(''), makeUserSettings());

@@ -376,6 +376,25 @@ test('a .fountain chapter round-trips through save and load', async function(t){
   assert.deepStrictEqual(await script.getFile(), expected);
 });
 
+//Properties changes the project's title page, and the script has to be rewritten with it. A script
+//not in memory is read back from its file for that - and the file's title page, the older one,
+//must not win over the project's on the way.
+test('saving a script that is not in memory keeps the project\'s newer title page', async function(t){
+  const dir = tempDir(t);
+  const proj = projectIn(dir);
+  const script = newChapter(proj);
+  script.title = 'Test';
+  script.filename = 'Test.fountain';
+  fs.writeFileSync(dir + 'Test.fountain', 'Title: Old\n\nINT. HOUSE - DAY\n', 'utf8');
+
+  proj.titlePage = [{ key: 'Title', values: ['New'] }];
+  script.hasUnsavedChanges = true;
+  await script.saveFile();
+
+  assert.strictEqual(fs.readFileSync(dir + 'Test.fountain', 'utf8'), 'Title: New\n\nINT. HOUSE - DAY\n');
+  assert.deepStrictEqual(proj.titlePage, [{ key: 'Title', values: ['New'] }]);
+});
+
 test('the native side refuses a chapter extension outside its list', async function(t){
   const dir = tempDir(t);
   await assert.rejects(platform.saveChapter({ projectDir: dir, chapsDir: '', title: 'x', mdfc: 'x', extension: '.exe' }),

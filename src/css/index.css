@@ -593,6 +593,31 @@ hr {
   color: var(--text-muted);
 }
 
+/* The autocomplete list under a cue or heading being typed - screenplay-editor.js's
+   attachAutocomplete positions it from the caret's bounds. */
+.suggestion-box {
+  position: fixed;
+  z-index: 5;
+  min-width: 12em;
+  max-height: 10em;
+  overflow-y: auto;
+  background-color: var(--sheet);
+  color: var(--text);
+  border: 1px solid var(--border);
+  box-shadow: var(--sheet-shadow);
+  font-family: var(--font-sidebar);
+  font-size: var(--dialog-font-size-small);
+}
+
+.suggestion {
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.suggestion-selected {
+  background-color: var(--selected-bg);
+}
+
 /* ------------------------------------------------------------------------------------------
    Popups
    ------------------------------------------------------------------------------------------ */

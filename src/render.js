@@ -14,6 +14,7 @@ const { registerScreenplayFormats, SCREENPLAY_FORMATS } = require('./components/
 const {
   loadScreenplayDelta,
   attachScreenplayKeys,
+  attachAutocomplete,
   sceneIndex,
   sceneAt,
   previousSceneStart,
@@ -422,8 +423,10 @@ function setUpQuills(){
   applyEditorShortcuts();
   applyQuillShortcuts(notesQuill, shortcutBindings);
   //Enter, Shift+Enter, Tab and Shift+Tab for a script. Attached once: each asks editorMode() when
-  //it fires and hands the key back to Quill while the editor shows prose.
+  //it fires and hands the key back to Quill while the editor shows prose. The autocomplete's own
+  //keys go on first, so an open suggestion box takes Enter and Tab before the element cycle does.
   attachScreenplayKeys(editorQuill, editorMode);
+  attachAutocomplete(editorQuill, editorMode);
   //Attached once and never re-attached: unlike Quill's own bindings, these read the rules through
   //the getter below on every keystroke, so a change in Settings takes effect on the next character
   //typed. The returned detach functions are dropped because both editors live as long as the
@@ -1719,6 +1722,12 @@ function changeSceneTitle(k){
   });
 }
 
+//The script in the editor's page estimate, for Word Count - see fountain.js's estimatePages.
+function scriptPageEstimate(){
+  const { estimatePages, deltaToElements } = require('./components/controllers/fountain');
+  return estimatePages(deltaToElements(editorQuill.getContents()));
+}
+
 function replaceSceneHeading(k, title){
   var Delta = Quill.import('delta');
   var scene = currentScenes()[k];
@@ -1913,7 +1922,7 @@ const menuCommands = {
   } },
   'word-count-clicked': { run: function(){
     const showWordCount = require('./components/views/wordcount_display');
-    return showWordCount(project, editorQuill, userSettings);
+    return showWordCount(project, editorQuill, userSettings, editorMode() === 'screenplay' ? { pages: scriptPageEstimate() } : null);
   } },
   'find-replace-clicked': { requiresFocus: true, run: function(){
     const showFindReplace = require('./components/views/findreplace_display');

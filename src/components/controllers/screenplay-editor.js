@@ -449,12 +449,249 @@ function moveScene(delta, k, direction){
   return { ops: ops, start: start };
 }
 
+// ------------------------------------------------------------------------------------------
+// Autocomplete - docs/screenplay-plan.md, "Autocomplete, word count, title page"
+// ------------------------------------------------------------------------------------------
+
+//The extensions a cue carries after the name - (V.O.), (CONT'D), (O.S.) - and the dual marker.
+const CUE_EXTENSIONS = /\s*\(.*$/;
+//A heading's INT./EXT. prefix and its " - DAY" time of day, which is not part of the place.
+const HEADING_PREFIX = /^(?:INT\.?\/EXT|EXT\.?\/INT|INT|EXT|EST|I\/E)[.\s\-]+/i;
+const HEADING_TIME = /\s+-\s+[^-]*$/;
+const HEADING_NUMBER = /\s*#[^#]*#\s*$/;
+
+//Every character the script has a cue for, once each, in capitals, sorted - what a cue being
+//typed is completed from.
+function characterNames(delta){
+  return unique(linesOfType(delta, 'character').map(function(text){
+    return text.replace(CUE_EXTENSIONS, '').replace(/\s*\^$/, '').trim().toUpperCase();
+  }));
+}
+
+//Every place the script has a heading for, the same way: "INT. WILL'S BEDROOM - NIGHT (1973)"
+//contributes "WILL'S BEDROOM".
+function locations(delta){
+  return unique(linesOfType(delta, 'scene').map(function(text){
+    return text.replace(HEADING_NUMBER, '').replace(HEADING_PREFIX, '').replace(HEADING_TIME, '').trim().toUpperCase();
+  }));
+}
+
+function linesOfType(delta, type){
+  if(!delta || !Array.isArray(delta.ops))
+    return [];
+
+  return parseDelta(delta).paragraphs.filter(function(para){
+    return para.attributes && para.attributes.element === type;
+  }).map(function(para){
+    return para.textRuns.map(function(run){ return typeof run.text === 'string' ? run.text : ''; }).join('');
+  });
+}
+
+function unique(values){
+  var seen = {};
+  return values.filter(function(value){
+    if(value === '' || seen[value])
+      return false;
+    seen[value] = true;
+    return true;
+  }).sort();
+}
+
+//What to offer for the line being typed: on a cue, the names it is the start of; on a heading,
+//the places its text after the prefix is the start of. Nothing until two characters are typed,
+//and never the thing already typed in full. Returns { typed, suggestions, prefix } - `prefix` is
+//the heading's INT./EXT. part, kept so an accepted suggestion goes back behind it.
+function suggestionsFor(delta, type, lineText){
+  if(type === 'character'){
+    var typedName = lineText.trim().toUpperCase();
+    if(typedName.length < 2)
+      return null;
+
+    var names = characterNames(delta).filter(function(name){
+      return name.indexOf(typedName) === 0 && name !== typedName;
+    });
+    return names.length > 0 ? { typed: typedName, prefix: '', suggestions: names } : null;
+  }
+
+  if(type === 'scene'){
+    var prefix = HEADING_PREFIX.exec(lineText);
+    if(!prefix)
+      return null;
+
+    var typedPlace = lineText.slice(prefix[0].length).trim().toUpperCase();
+    if(typedPlace.length < 2)
+      return null;
+
+    var places = locations(delta).filter(function(place){
+      return place.indexOf(typedPlace) === 0 && place !== typedPlace;
+    });
+    return places.length > 0 ? { typed: typedPlace, prefix: prefix[0], suggestions: places } : null;
+  }
+
+  return null;
+}
+
+//The suggestion box: a list under the caret while a cue or heading is being typed, moved through
+//with the arrow keys, accepted with Enter or Tab, dismissed with Escape or by typing on to
+//something it has nothing for. Its keys are Quill bindings unshifted ahead of the screenplay ones
+//and guarded on the box being open, rather than one-shot listeners racing each other, which is
+//what the abandoned first attempt had. Positioned from quill.getBounds, so it needs no DOM of
+//the editor's own read; the names and places come from the delta.
+function attachAutocomplete(quill, getMode){
+  var box = null;
+  var current = null;
+  var selected = 0;
+
+  function close(){
+    if(box && box.parentNode)
+      box.parentNode.removeChild(box);
+    box = null;
+    current = null;
+  }
+
+  function isOpen(){
+    return box != null;
+  }
+
+  function render(){
+    if(!box){
+      box = document.createElement('div');
+      box.className = 'suggestion-box';
+      box.setAttribute('role', 'listbox');
+      box.setAttribute('aria-label', 'Suggestions');
+      document.body.appendChild(box);
+    }
+
+    while(box.firstChild)
+      box.removeChild(box.firstChild);
+
+    current.suggestions.forEach(function(text, i){
+      var item = document.createElement('div');
+      item.className = 'suggestion' + (i === selected ? ' suggestion-selected' : '');
+      item.setAttribute('role', 'option');
+      item.setAttribute('aria-selected', i === selected ? 'true' : 'false');
+      item.textContent = text;
+      item.onmousedown = function(e){
+        e.preventDefault();
+        selected = i;
+        accept();
+      };
+      box.appendChild(item);
+    });
+
+    var range = quill.getSelection();
+    var bounds = quill.getBounds(range ? range.index : 0);
+    var editor = quill.root.getBoundingClientRect();
+    box.style.left = (editor.left + bounds.left) + 'px';
+    box.style.top = (editor.top + bounds.top + bounds.height) + 'px';
+  }
+
+  function refresh(){
+    if(getMode() !== 'screenplay'){
+      close();
+      return;
+    }
+
+    var range = quill.getSelection();
+    if(!range || range.length > 0){
+      close();
+      return;
+    }
+
+    var info = lineAt(quill, range.index);
+    var type = elementOf(info.line);
+    var found = suggestionsFor(quill.getContents(), type, quill.getText(info.index, info.length - 1));
+
+    if(!found){
+      close();
+      return;
+    }
+
+    current = found;
+    current.lineStart = info.index;
+    current.lineLength = info.length - 1;
+    selected = 0;
+    render();
+  }
+
+  //The chosen name or place replaces the line's text - behind the heading's prefix, for a
+  //heading - as one user change, and the caret lands at the end of it.
+  function accept(){
+    if(!current)
+      return;
+
+    var start = current.lineStart;
+    var length = current.lineLength;
+    var replacement = current.prefix + current.suggestions[selected];
+    var Delta = Quill.import('delta');
+
+    //Closed before the change goes in: the change is a user text-change, which would otherwise
+    //refresh the box against the line it has just completed - and reopen it when the name chosen
+    //is the start of a longer one ("WILL", with "WILLIAM" in the cast).
+    close();
+    accepting = true;
+    try{
+      quill.updateContents(new Delta().retain(start).delete(length).insert(replacement), 'user');
+      quill.setSelection(start + replacement.length, 0, 'user');
+    }
+    finally{
+      accepting = false;
+    }
+  }
+
+  var accepting = false;
+
+  function move(step){
+    selected = (selected + step + current.suggestions.length) % current.suggestions.length;
+    render();
+  }
+
+  function whenOpen(action){
+    return function(){
+      if(!isOpen())
+        return true;
+      action();
+      return false;
+    };
+  }
+
+  var bindings = quill.keyboard.bindings;
+  [[13, function(){ accept(); }], [9, function(){ accept(); }], [27, close],
+   [40, function(){ move(1); }], [38, function(){ move(-1); }]].forEach(function(pair){
+    bindings[pair[0]] = bindings[pair[0]] || [];
+    bindings[pair[0]].unshift({ key: pair[0], handler: whenOpen(pair[1]) });
+  });
+
+  quill.on('text-change', function(delta, oldDelta, source){
+    if(accepting)
+      return;
+    if(source === 'user')
+      refresh();
+    else
+      close();
+  });
+
+  //Moving the caret off the line, or out of the editor, takes the box with it.
+  quill.on('selection-change', function(range){
+    if(!isOpen())
+      return;
+    if(!range || range.index < current.lineStart || range.index > current.lineStart + current.lineLength)
+      close();
+  });
+
+  return { close: close, isOpen: isOpen, refresh: refresh };
+}
+
 module.exports = {
   loadScreenplayDelta,
   deltaToScreenplayHtml,
   setElement,
   elementOf,
   lineAt,
+  characterNames,
+  locations,
+  suggestionsFor,
+  attachAutocomplete,
   sceneIndex,
   sceneAt,
   previousSceneStart,
