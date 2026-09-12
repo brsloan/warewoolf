@@ -290,17 +290,16 @@ jobs:
           New-Item -ItemType Directory -Path $staging -Force | Out-Null
 
           # Copied as a whole directory onto a destination that does not exist yet, rather than as
-          # "$packaged/*" into a folder created first. Copy-Item's wildcard-plus--Recurse form is
-          # the one shape of this call whose meaning is not the same in Windows PowerShell and the
-          # pwsh 7 this step runs on - it is a long-standing difference in how the two walk a
-          # wildcard source - and the v3.0.0 release failed here with a zip whose folder did not
-          # hold warewoolf.exe even though the packaged folder did. Copying the directory itself
-          # has one meaning in both: with the destination name free, the tree lands *as* that name.
-          # The destination must therefore not exist, which is why only $staging is created above.
+          # "$packaged/*" into a folder created first: with the destination name free, Copy-Item
+          # lands the tree *as* that name, and means that in both Windows PowerShell and pwsh 7.
+          # The destination must not exist for that to hold, which is why only $staging is created
+          # above. (The wildcard form was suspected, wrongly, when v3.0.0 failed its zip check -
+          # the zip was fine; the check was not. See that step. This form is kept because it is
+          # the unambiguous one, not because the other was ever shown to misbehave.)
           Copy-Item -LiteralPath $packaged -Destination $folder -Recurse
 
-          # Asserted here rather than left to the zip check below, so a copy that goes wrong again
-          # says so at the step that went wrong and prints what it actually produced.
+          # Asserted here rather than left to the zip check below, so a copy that goes wrong says
+          # so at the step that went wrong and prints what it actually produced.
           if (-not (Test-Path (Join-Path $folder 'warewoolf.exe'))) {
             Write-Output "::error::$folder has no warewoolf.exe after copying $packaged; it holds:"
             Get-ChildItem $folder | Select-Object -First 20 -ExpandProperty Name | ForEach-Object { Write-Output "  $_" }
@@ -376,26 +375,36 @@ jobs:
           folder="WareWoolf_${{ needs.check-version.outputs.version }}_Portable"
           test -f "$zip"
           entries="$(unzip -Z1 "$zip")"
-          if echo "$entries" | grep -q '\\'; then
+          # Every test below reads $entries through a here-string, never "echo | grep -q". The
+          # listing is ~3,700 lines, past the pipe buffer, and warewoolf.exe sits in the first
+          # twenty of them because .NET zips the top-level files before descending. grep -q exits
+          # on its first match while echo is still writing; echo dies of SIGPIPE with status 141;
+          # and under pipefail that 141, not grep's 0, is the pipeline's status - so a successful
+          # match read as "missing". That is the whole of why v3.0.0 failed here, twice, on a zip
+          # that was correct both times. The backslash check had the same fault the other way
+          # round: a match would have exited grep early and made the if skip the error.
+          if grep -q '\\' <<<"$entries"; then
             echo "::error::$zip has backslashes in its entry names; many extractors will unpack it as a heap of oddly-named files"
-            echo "$entries" | grep '\\' | head -5
+            grep '\\' <<<"$entries" | head -5 || true
             exit 1
           fi
-          roots="$(echo "$entries" | cut -d/ -f1 | sort -u)"
+          roots="$(cut -d/ -f1 <<<"$entries" | sort -u)"
           if [ "$roots" != "$folder" ]; then
             echo "::error::$zip does not unpack into a single $folder directory; its root holds $(echo "$roots" | wc -l) entries, starting with:"
             echo "$roots" | head -5
             exit 1
           fi
           for required in "$folder/warewoolf.exe" "$folder/resources/app/src/index.js"; do
-            if ! echo "$entries" | grep -qxF "$required"; then
+            if ! grep -qxF "$required" <<<"$entries"; then
               echo "::error::$zip is missing $required - this is not a runnable portable build"
               # Printed because the name alone does not say which way the zip went wrong: an app
               # copied a level too deep, a renamed executable and a staging copy that dropped
-              # files all read as the same missing path. The v3.0.0 release failed here and the
-              # log said only which name was absent, not what was there instead.
+              # files all read as the same missing path. (It was this listing, showing
+              # warewoolf.exe present in a zip the check called it missing from, that gave the
+              # pipefail fault above away.) `|| true` because head can close the pipe early on a
+              # long listing, and this diagnostic must not itself die of the fault it exists to show.
               echo "$folder/ holds, at its first two levels:"
-              echo "$entries" | cut -d/ -f1-2 | sort -u | head -30
+              cut -d/ -f1-2 <<<"$entries" | sort -u | head -30 || true
               exit 1
             fi
           done
