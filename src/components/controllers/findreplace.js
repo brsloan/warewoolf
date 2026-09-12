@@ -48,11 +48,19 @@ async function findWith(search, editorQuill, project, startingIndex, searchAllCh
         if(searchAllChapters){
             var startingChapIndex = project.activeChapterIndex;
             var chapIndex = startingChapIndex;
+            //The chapters this search covers occupy combined indexes 0 to searchable - 1: see
+            //searchableChapters(). Walking project.chapters.length instead used to leave the
+            //reference docs unsearched, and a search started from one of them wrapped into the
+            //manuscript and stopped one chapter short of the end of it.
+            var searchable = searchableChapters(project).length;
+            //Every other chapter, so one fewer than there are - unless the search started from a
+            //chapter in the trash, which is not one of them and leaves all of them still to visit.
+            var toVisit = startingChapIndex < searchable ? searchable - 1 : searchable;
 
             //Visits every other chapter exactly once, starting with the next one and wrapping
             //around, stopping as soon as a match turns up.
-            for(var i = 0; i < project.chapters.length - 1 && index < 0; i++){
-                chapIndex = chapIndex < project.chapters.length - 1 ? chapIndex + 1 : 0;
+            for(var i = 0; i < toVisit && index < 0; i++){
+                chapIndex = chapIndex < searchable - 1 ? chapIndex + 1 : 0;
                 await displayChapterByIndex(chapIndex);
                 //searchAllChapters is deliberately false here so the recursive call searches
                 //only the chapter just displayed rather than re-entering this loop.
@@ -71,6 +79,14 @@ async function findWith(search, editorQuill, project, startingIndex, searchAllCh
     }
 
     return index;
+}
+
+//What In All Chapters covers, for the search above and the replace below alike: the manuscript and
+//the reference docs, in the order the sidebar shows them - which is also the order their combined
+//indexes run in, chapters first - and never the trash, which sits after them and holds what the
+//writer has already thrown away.
+function searchableChapters(project){
+    return project.chapters.concat(project.reference || []);
 }
 
 //Works out how to run a search once, rather than once per match: for a regular expression that
@@ -322,7 +338,7 @@ function replace(editorQuill, newStr, match, options){
 //convert-tabs.js and the tests reuse.
 async function replaceAllInAllChapters(project, oldStr, newStr, options){
   var numReplaced = 0;
-  var everyChapter = project.chapters.concat(project.reference);
+  var everyChapter = searchableChapters(project);
 
   for(let i = 0; i < everyChapter.length; i++){
     numReplaced += await replaceAllInChapter(oldStr, newStr, everyChapter[i], options);

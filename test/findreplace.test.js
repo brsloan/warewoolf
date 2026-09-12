@@ -20,17 +20,23 @@ function makeEditorQuill(text){
 }
 
 //Mirrors the relevant part of render.js's displayChapterByIndex: swap the editor's contents for
-//the target chapter's and record which chapter is now active.
+//the target chapter's and record which chapter is now active. The index is a combined one, so it
+//is resolved against the project's three lists as one run - chapters, then reference, then trash -
+//exactly as chapter-list.js resolves it for the real thing.
 //
 //Async like the real one, which reads a chapter the writer has not opened yet off disk - and async
 //in the same way, reaching the editor only after the caller has had the chance to run on. A
 //synchronous stub here passed every test below while In All Chapters searching was broken.
-function makeDisplayChapterByIndex(project, editorQuill, chapters){
+function makeDisplayChapterByIndex(project, editorQuill){
   return async function(ind){
     await Promise.resolve();
     project.activeChapterIndex = ind;
-    editorQuill.setText(chapters[ind].contents);
+    editorQuill.setText(everyChapterInOrder(project)[ind].contents);
   };
+}
+
+function everyChapterInOrder(project){
+  return (project.chapters || []).concat(project.reference || [], project.trash || []);
 }
 
 test('substring search finds a match at or after the starting index', function(){
@@ -231,7 +237,7 @@ test('find keeps respecting wholeWordOnly across a search-all-chapters wraparoun
   ];
   var editorQuill = makeEditorQuill(chapters[2].contents);
   var project = makeProject(chapters, [], 2);
-  var displayChapterByIndex = makeDisplayChapterByIndex(project, editorQuill, chapters);
+  var displayChapterByIndex = makeDisplayChapterByIndex(project, editorQuill);
 
   var index = await find(editorQuill, project, 'cat', 0, true, displayChapterByIndex, { wholeWordOnly: true });
 
@@ -254,7 +260,7 @@ test('find visits each other chapter once and restores the starting chapter when
   var visited = [];
   var displayChapterByIndex = function(ind){
     visited.push(ind);
-    return makeDisplayChapterByIndex(project, editorQuill, chapters)(ind);
+    return makeDisplayChapterByIndex(project, editorQuill)(ind);
   };
 
   var index = await find(editorQuill, project, 'zzz', 0, true, displayChapterByIndex);
@@ -277,7 +283,7 @@ test('find waits for each chapter to be displayed before searching it', async fu
   ];
   var editorQuill = makeEditorQuill(chapters[0].contents);
   var project = makeProject(chapters, [], 0);
-  var displayChapterByIndex = makeDisplayChapterByIndex(project, editorQuill, chapters);
+  var displayChapterByIndex = makeDisplayChapterByIndex(project, editorQuill);
 
   var index = await find(editorQuill, project, '[', 0, true, displayChapterByIndex);
 
@@ -286,6 +292,69 @@ test('find waits for each chapter to be displayed before searching it', async fu
   var selection = editorQuill.getSelection(true);
   assert.strictEqual(selection.index, 2);
   assert.strictEqual(selection.length, 1);
+});
+
+//A walk that recorded where it went, for the tests below - which are about which chapters an In All
+//Chapters search visits, and in what order, rather than about what it finds in them.
+function recordingDisplayChapterByIndex(project, editorQuill, visited){
+  var display = makeDisplayChapterByIndex(project, editorQuill);
+
+  return function(ind){
+    visited.push(ind);
+    return display(ind);
+  };
+}
+
+//Regression: the walk counted in project.chapters alone, so the reference docs - which Replace All
+//in all chapters has always rewritten - were never searched.
+test('find searches the reference docs as well as the chapters', async function(){
+  var chapters = [{ contents: 'no match here\n' }];
+  var reference = [{ contents: 'nor here\n' }, { contents: 'a [bracket] in the notes\n' }];
+  var project = makeProject(chapters, reference, 0);
+  var editorQuill = makeEditorQuill(chapters[0].contents);
+
+  var visited = [];
+  var index = await find(editorQuill, project, '[', 0, true, recordingDisplayChapterByIndex(project, editorQuill, visited));
+
+  assert.strictEqual(index, 2);
+  assert.deepStrictEqual(visited, [1, 2]);
+  assert.strictEqual(project.activeChapterIndex, 2);
+});
+
+//Regression: a search started from a reference doc wrapped as though the manuscript were the whole
+//project, so it stopped one short of the end of it - the last chapter went unsearched - and it never
+//came back round to the other reference docs either.
+test('find started from a reference doc still visits every other chapter once', async function(){
+  var chapters = [{ contents: 'nothing\n' }, { contents: 'nothing here either\n' }];
+  var reference = [{ contents: 'the notes the search starts in\n' }, { contents: 'more notes\n' }];
+  var project = makeProject(chapters, reference, 2);
+  var editorQuill = makeEditorQuill(reference[0].contents);
+
+  var visited = [];
+  var index = await find(editorQuill, project, 'zzz', 0, true, recordingDisplayChapterByIndex(project, editorQuill, visited));
+
+  assert.strictEqual(index, -1);
+  assert.deepStrictEqual(visited, [3, 0, 1, 2]);
+  assert.strictEqual(project.activeChapterIndex, 2);
+});
+
+//The trash holds what the writer has thrown away, so it is not visited - the search covers the same
+//chapters Replace All in all chapters rewrites, and no more. A trashed doc is still openable from
+//the sidebar, though, so a search can start in one: the chapter the writer is looking at is searched
+//whichever list it is in, none of the rest has been visited yet, and the search has to land back in
+//it rather than in the last chapter it looked at.
+test('find leaves the rest of the trash out of an all-chapters search', async function(){
+  var chapters = [{ contents: 'nothing\n' }, { contents: 'nothing here either\n' }];
+  var project = makeProject(chapters, [{ contents: 'nor in the notes\n' }], 3);
+  project.trash = [{ contents: 'the trashed doc the search starts in\n' }, { contents: 'a [bracket] in the trash\n' }];
+  var editorQuill = makeEditorQuill(project.trash[0].contents);
+
+  var visited = [];
+  var index = await find(editorQuill, project, '[', 0, true, recordingDisplayChapterByIndex(project, editorQuill, visited));
+
+  assert.strictEqual(index, -1, 'the only bracket is in a trashed doc, which is not searched');
+  assert.deepStrictEqual(visited, [0, 1, 2, 3]);
+  assert.strictEqual(project.activeChapterIndex, 3);
 });
 
 //---------------------------------------------------------------------------
