@@ -1,3 +1,11 @@
+/* WareWoolf - layout, typography and component styling.
+
+   Every colour in this file is a var() token. The light palette is defined on :root in
+   lightmode.css and the dark palette overrides it in darkmode.css under prefers-color-scheme:
+   dark, which is what index.js's nativeTheme.themeSource setting drives. Both palettes are checked
+   against WCAG 2.1 AA - 4.5:1 for text, 3:1 for control boundaries, focus rings and graphics - so
+   a rule here should reach for a token rather than a literal colour. */
+
 :root {
   --main-font-size: 12pt; /*overwritten by user settings.*/
   --dialog-font-size: 12pt; /*overwritten by user settings.*/
@@ -7,20 +15,209 @@
   --sidebar-width: 25%;  /*overwritten by user settings.*/
   --sidebar-width-double-view: 50%;  /*overwritten by user settings.*/
   --corkboard-column-width: 25%; /*overwritten by user settings*/
+
+  --font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Charter,
+    Georgia, "Times New Roman", serif;
+  --font-sans: "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial,
+    sans-serif;
+  --font-mono: "Cascadia Mono", Consolas, "SF Mono", Menlo, "DejaVu Sans Mono", monospace;
+
+  --radius: 4px;
+  --radius-large: 8px;
 }
+
+/* ------------------------------------------------------------------------------------------
+   Page
+   ------------------------------------------------------------------------------------------ */
 
 body {
   margin: 0;
   padding-top: 12px;
-  font-family: Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  background-color: var(--bg);
+  color: var(--text);
 }
+
+::selection {
+  background-color: var(--selection);
+  color: var(--text);
+}
+
+/* One focus treatment for the whole app: a ring in the theme's focus colour, offset so it sits on
+   the surrounding surface rather than over the control's own border. Keyed off :focus rather than
+   :focus-visible because this is a keyboard-first app - focus is moved by script and by shortcut
+   far more often than by pointer, and the ring should never be in doubt. */
+:focus {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* The manuscript and notes are documents, not fields: the caret is the focus indicator, and a
+   ring around the whole sheet would follow the reader everywhere. */
+.ql-editor:focus {
+  outline: none;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scrollbar-hover);
+}
+
+/* ------------------------------------------------------------------------------------------
+   Form controls
+   ------------------------------------------------------------------------------------------ */
 
 input, textarea, select, button {
   box-sizing: border-box;
-  border-radius: 0px;
   margin-bottom: 3px;
   margin-top: 3px;
+  font-family: var(--font-sans);
+  font-size: var(--dialog-font-size);
+  color: var(--text);
 }
+
+input[type=text],
+input[type=number],
+input[type=password],
+input[type=email],
+input:not([type]),
+textarea,
+select {
+  background-color: var(--input-bg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  padding: 5px 8px;
+  line-height: 1.35;
+}
+
+textarea {
+  resize: vertical;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-muted);
+  opacity: 1;
+}
+
+input[type=checkbox],
+input[type=radio] {
+  accent-color: var(--accent);
+  width: 1.05em;
+  height: 1.05em;
+  margin-right: 0.45em;
+  vertical-align: -0.15em;
+}
+
+input:disabled,
+textarea:disabled,
+select:disabled {
+  border-style: dashed;
+  color: var(--text-muted);
+}
+
+/* Listboxes - the file browser and the word list. */
+select[size],
+select[multiple] {
+  padding: 4px;
+}
+
+select option {
+  padding: 3px 6px;
+  border-radius: 2px;
+}
+
+select option:checked {
+  background-color: var(--selected-bg);
+  color: var(--text);
+}
+
+button, input[type=submit] {
+  display: inline-block;
+  margin: 3px;
+  padding: 6px 14px;
+  min-height: 2.1em;
+  text-align: center;
+  text-decoration: none;
+  font-size: var(--dialog-font-size);
+  font-family: var(--font-sans);
+  color: var(--btn-text);
+  background-color: var(--btn-bg);
+  border: 1px solid var(--btn-border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+button:hover, input[type=submit]:hover {
+  background-color: var(--btn-hover);
+  border-color: var(--accent);
+}
+
+button:active, input[type=submit]:active {
+  background-color: var(--selected-bg);
+}
+
+button:disabled, input[type=submit]:disabled {
+  cursor: default;
+  color: var(--text-muted);
+  border-style: dashed;
+  background-color: var(--btn-bg);
+}
+
+fieldset {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 14px 12px 14px;
+  margin: 10px 0;
+  min-width: 0;
+}
+
+legend {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--accent);
+  padding: 0 6px;
+}
+
+label {
+  color: var(--text);
+}
+
+table {
+  border-collapse: collapse;
+}
+
+td, th {
+  padding: 3px 8px 3px 0;
+  vertical-align: middle;
+}
+
+hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 12px 0;
+}
+
+/* ------------------------------------------------------------------------------------------
+   Sidebars
+   ------------------------------------------------------------------------------------------ */
 
 .sidebar {
   width: var(--sidebar-width);
@@ -28,17 +225,69 @@ input, textarea, select, button {
   float: left;
   height: 93vh;
   font-size: var(--main-font-size);
+  font-family: var(--font-serif);
+  color: var(--text);
 }
 
 .sidebar h1{
   text-align: center;
-  font-size: 14pt;
-  margin-top: 0px;
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: calc(var(--main-font-size) * 0.85);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 0 12px 6px 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
 }
 
+.sidebar h1:not(:first-child) {
+  margin-top: 22px;
+}
 
 .sidebar ul {
   overflow: hidden;
+  list-style: none;
+  margin: 0 8px 0 8px;
+  padding: 0;
+}
+
+.sidebar li {
+  padding: 0.22em 0.65em 0.22em 0.55em;
+  margin: 1px 0;
+  border-left: 3px solid transparent;
+  border-radius: 0 var(--radius) var(--radius) 0;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar li:hover {
+  background-color: var(--hover-bg);
+}
+
+.activeChapter {
+  font-weight: bold;
+}
+
+.sidebar li.activeChapter {
+  color: var(--accent);
+  border-left-color: var(--accent);
+  background-color: var(--selected-bg);
+}
+
+/* The chapter list takes focus as a whole (it is one keyboard-navigable region), and a ring
+   around the entire column says nothing about which row the arrow keys are on. So the ring goes
+   on the row instead - the active chapter, which is what the arrows move. */
+#chapter-list-sidebar:focus {
+  outline: none;
+}
+
+#chapter-list-sidebar:focus li.activeChapter {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
 }
 
 .sidebar-search-view {
@@ -61,6 +310,37 @@ input, textarea, select, button {
   width: var(--editor-width);
 }
 
+#chapter-list-sidebar {
+  overflow-x: hidden;
+}
+
+.name-box {
+  width: 95%;
+  font-family: var(--font-serif);
+  font-size: inherit;
+  padding: 2px 6px;
+  margin: 0;
+}
+
+.trash-header-empty {
+  display: none;
+}
+
+/* The notes editor lives in a sidebar: a lighter hand than the manuscript, and no sheet. */
+.sidebar .ql-editor {
+  padding: 8px 14px;
+  line-height: 165%;
+}
+
+.sidebar .ql-editor.ql-blank::before {
+  left: 14px;
+  right: 14px;
+}
+
+/* ------------------------------------------------------------------------------------------
+   The manuscript
+   ------------------------------------------------------------------------------------------ */
+
 .writing-field-standard-view {
   width: var(--editor-width);
   display: none;
@@ -79,6 +359,18 @@ input, textarea, select, button {
   margin-right: none;
 }
 
+/* border-box: the three columns are sized to exactly 100% between them (see updateEditorWidth in
+   render.js), so the sheet's own edges have to be counted inside its width or the notes column
+   wraps beneath it. */
+#writing-field {
+  box-sizing: border-box;
+  background-color: var(--sheet);
+  color: var(--text);
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  box-shadow: var(--sheet-shadow);
+}
+
 #editor-container {
   height: 97vh;
 }
@@ -86,12 +378,81 @@ input, textarea, select, button {
 .ql-editor {
   line-height: 200%;
   font-size: var(--main-font-size);
-  font-family: serif;
+  font-family: var(--font-serif);
+  color: var(--text);
 }
 
-.activeChapter {
-  font-weight: bold;
+#writing-field .ql-editor {
+  padding: 24px 32px;
 }
+
+#writing-field .ql-editor.ql-blank::before {
+  left: 32px;
+  right: 32px;
+}
+
+.ql-editor.ql-blank::before {
+  color: var(--text-muted);
+}
+
+.ql-editor blockquote{
+  margin-left: 40px;
+  margin-right: 40px;
+  margin-top: 0px;
+  margin-bottom: 0px;
+}
+
+/* Footnotes - blots/footnotes.js. The marker's own visible number and the body's are both drawn
+   entirely from CSS (::before, reading the data-n/data-footnote attribute) rather than written
+   into the DOM by the blot itself - nothing here is ever read back by anything. */
+.ql-editor sup.ww-fnref {
+  cursor: pointer;
+  user-select: none;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.ql-editor sup.ww-fnref::before {
+  content: attr(data-n);
+}
+
+.ql-editor [data-footnote] {
+  margin-left: 1.5em;
+}
+
+.ql-editor [data-footnote]::before {
+  content: attr(data-footnote) ". ";
+  font-weight: bold;
+  color: var(--accent);
+}
+
+/* Only the very first footnote paragraph in the document gets the separator - the general sibling
+   combinator matches any later [data-footnote], whether it's a continuation of the same note or an
+   entirely different one, and removes it there instead. */
+.ql-editor [data-footnote] {
+  border-top: 1px solid var(--border-strong);
+  padding-top: 0.5em;
+  margin-top: 1.5em;
+}
+
+.ql-editor [data-footnote] ~ [data-footnote] {
+  border-top: none;
+  padding-top: 0;
+  margin-top: 0;
+}
+
+/* Only a note's opening paragraph prints its number. This cannot key off "follows another body
+   paragraph" - that matches the first paragraph of the *next* note just as readily as the second
+   paragraph of this one, which is what left every note after the first with no number in front of
+   it. Which paragraphs continue a note is written into the document instead; see
+   blots/footnotes.js. */
+.ql-editor [data-footnote-cont]::before {
+  content: "";
+}
+
+/* ------------------------------------------------------------------------------------------
+   Popups
+   ------------------------------------------------------------------------------------------ */
 
 .popup, .popup-dialog, .working-popup {
   display: block;
@@ -100,13 +461,19 @@ input, textarea, select, button {
   left: 50%;
   transform: translate(-50%, -50%);
   width: 50%;
-  padding: 8px;
+  box-sizing: border-box;
+  padding: 18px 24px 20px 24px;
   font-size: var(--dialog-font-size);
   text-align: left;
   max-height: 100%;
   overflow-x: hidden;
   overflow-wrap: break-word;
   hyphens: auto;
+  background-color: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-large);
+  box-shadow: var(--popup-shadow);
 }
 
 .popup td{
@@ -116,28 +483,61 @@ input, textarea, select, button {
 .popup p {
   margin: 4px;
   padding: 0;
+  line-height: 1.45;
 }
 
 .popup pre{
   height: 250px;
   overflow-y: scroll;
   text-align: left;
-  background-color: white;
-  color: black;
+  background-color: var(--code-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  font-family: var(--font-mono);
+  font-size: var(--dialog-font-size-small);
+  white-space: pre-wrap;
 }
 
 .popup h1 {
-  margin: 3px 0px 12px 3px;
-  padding: 0px 0px 0px 0px;
+  margin: 0 0 14px 0;
+  padding: 0 0 8px 0;
+  font-family: var(--font-serif);
+  font-weight: 600;
   font-size: var(--dialog-heading-size);
+  letter-spacing: 0.01em;
+  border-bottom: 1px solid var(--border);
 }
 
 .popup h2 {
+  font-family: var(--font-serif);
+  font-weight: 600;
   font-size: var(--dialog-heading-size);
+  margin: 12px 0 6px 0;
+}
+
+.popup h3 {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: var(--dialog-font-size);
+  margin: 10px 0 4px 0;
 }
 
 .popup label{
   margin-left: 3px;
+}
+
+.popup a{
+  display: block;
+  margin: 8px;
+  color: var(--link);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.popup a:hover {
+  color: var(--accent-hover);
 }
 
 .popup-search-view {
@@ -149,40 +549,118 @@ input, textarea, select, button {
 
 .popup-text-small {
   font-size: var(--dialog-font-size-small);
+  color: var(--text-muted);
 }
 
 .sublabel {
   margin-left: 22px;
 }
 
-#chapter-list-sidebar {
-  overflow-x: hidden;
+.popup-dialog h3{
+  margin: 0px 0px 0px 0px;
+  padding: 0px 0px 0px 0px;
+  font-size: var(--dialog-heading-size);
 }
 
-.name-box {
-  width: 95%;
-}
-
-#prog-bar-container {
-  display: block;
-  background-color: gray;
-  width: 100%;
-  height: 30px;
-  margin-top: 8px;
-  margin-bottom: 8px;
-}
-
-#prog-bar-fill {
-  display: block;
-  background-color: green;
-  height: 28px;
-  width: 100%;
+.popup-dialog p{
+  text-align: left;
+  margin: 3px 0px 3px 0px;
+  color: var(--text);
+  padding-left: 6px;
 }
 
 .access-key {
   text-decoration: underline;
+  text-underline-offset: 0.12em;
   font-weight: bold;
 }
+
+.warning-text {
+  font-size: var(--dialog-font-size);
+  color: var(--warning-text);
+  background-color: var(--warning-bg);
+  border: 1px dashed var(--warning-border);
+  border-radius: var(--radius);
+  padding: 8px 10px !important;
+}
+
+.save-input {
+  width: 100%;
+}
+
+#title-input {
+  width: 100%;
+}
+
+#address-info-input {
+  width: 100%;
+}
+
+#backup-dir-input {
+  width: 75%;
+}
+
+.number-ticker {
+  width: 4em;
+}
+
+#word-goal-input,
+#words-per-page-input {
+  width: 7em;
+}
+
+#network-pass {
+  width: 100%;
+}
+
+.good-check {
+  color: var(--success);
+  font-weight: 600;
+}
+
+.bad-check {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.unsure-check {
+  color: var(--warning-text);
+  font-weight: 600;
+}
+
+#missing-file-list, #subdirs-list {
+  font-size: var(--dialog-font-size);
+  margin: 12px;
+}
+
+/* --- Word count --------------------------------------------------------------------------- */
+
+#prog-bar-container {
+  display: block;
+  box-sizing: border-box;
+  background-color: var(--track);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  width: 100%;
+  height: 24px;
+  margin-top: 8px;
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+
+/* wordcount_display.js sets --progress-hue on the fill: 0 (red) at nothing written, sweeping to
+   120 (green) at the goal. Saturation and lightness are the theme's, so the fill keeps 3:1
+   against the track at every hue on both palettes - a fixed lightness could not, since the same
+   red that stands out on paper sinks into a dark track. */
+#prog-bar-fill {
+  display: block;
+  background-color: hsl(var(--progress-hue, 120), var(--progress-sat), var(--progress-light));
+  height: 100%;
+  width: 100%;
+  transition: width 200ms ease;
+}
+
+/* --- Shortcuts ---------------------------------------------------------------------------- */
 
 .shortcuts-table td {
   text-align: left;
@@ -206,11 +684,14 @@ input, textarea, select, button {
 .shortcut-key {
   min-width: 160px;
   text-align: left;
+  font-family: var(--font-mono);
+  font-size: var(--dialog-font-size-small);
 }
 
 .shortcut-key.capturing {
   font-style: italic;
-  outline: 2px solid #EF233C;
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 .shortcut-message {
@@ -225,33 +706,51 @@ input, textarea, select, button {
   min-width: 0;
   padding: 0 0 6px 8px;
   white-space: normal;
+  color: var(--text-muted);
 }
+
+/* --- Outliner ----------------------------------------------------------------------------- */
 
 .popup-outliner {
   width: 100%;
   height: 100%;
   overflow-y: scroll;
+  border-radius: 0;
+  border: none;
+  background-color: var(--bg);
 }
 
 .popup-outliner table, .popup-outliner td, .popup-outliner th{
-  border: 1px solid black;
+  border: 1px solid var(--border-strong);
   border-collapse: collapse;
-  padding: 3px 8px 3px 8px;
+  padding: 4px 10px;
 }
 
 .popup-outliner table{
   margin-left: 8px;
   margin-top: 8px;
+  background-color: var(--sheet);
+}
+
+.popup-outliner th {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  text-align: left;
+  background-color: var(--surface-2);
+  position: sticky;
+  top: 0;
 }
 
 .outliner-title {
   text-align: left;
   white-space: nowrap;
+  font-family: var(--font-serif);
 }
 
 .outliner-word-count {
   text-align: right;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .outliner-summary {
@@ -268,17 +767,18 @@ input, textarea, select, button {
   height: 100%;
   width: 100%;
   margin: 0px;
-  padding: 3px;
+  padding: 3px 8px;
+  border: none;
+  border-radius: 0;
+  background-color: transparent;
 }
 
-::-webkit-scrollbar {
-  width: 5px;
-  height: 8px;
+.outliner-summary input:focus {
+  outline-offset: -2px;
+  background-color: var(--input-bg);
 }
 
-.trash-header-empty {
-  display: none;
-}
+/* --- About -------------------------------------------------------------------------------- */
 
 .logo {
   display: block;
@@ -292,75 +792,38 @@ input, textarea, select, button {
   text-align: center;
 }
 
-.popup a{
-  display: block;
-  margin: 8px;
+.popup h1.about-version {
+  border-bottom: none;
+  margin-bottom: 4px;
+  padding-bottom: 0;
 }
 
-button, input[type=submit] {
-  border: none;
-  margin: 3px;
-  text-align: center;
-  text-decoration: none;
-  display: inline-block;
+.updates-panel {
+  display: block;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background-color: var(--surface-2);
+  margin: 8px 3px;
+}
+
+.updates-text {
   font-size: var(--dialog-font-size);
 }
 
-.visible {
-  display: block;
+.updates-status {
+  font-size: var(--dialog-font-size);
 }
 
-.ql-editor blockquote{
-  margin-left: 40px;
-  margin-right: 40px;
-  margin-top: 0px;
-  margin-bottom: 0px;
+/* Carries the "still working" line while a Windows update downloads, and is empty every other
+   moment on every other platform - where an empty <p> would still take a paragraph's worth of
+   blank space in the panel. Hidden by :empty rather than by toggling a style from the view, so
+   there is no display state for the two outcome handlers to have to put back. */
+.updates-status:empty {
+  display: none;
 }
 
-/* Footnotes - blots/footnotes.js. The marker's own visible number and the body's are both drawn
-   entirely from CSS (::before, reading the data-n/data-footnote attribute) rather than written
-   into the DOM by the blot itself - nothing here is ever read back by anything. */
-.ql-editor sup.ww-fnref {
-  cursor: pointer;
-  user-select: none;
-}
-
-.ql-editor sup.ww-fnref::before {
-  content: attr(data-n);
-}
-
-.ql-editor [data-footnote] {
-  margin-left: 1.5em;
-}
-
-.ql-editor [data-footnote]::before {
-  content: attr(data-footnote) ". ";
-  font-weight: bold;
-}
-
-/* Only the very first footnote paragraph in the document gets the separator - the general sibling
-   combinator matches any later [data-footnote], whether it's a continuation of the same note or an
-   entirely different one, and removes it there instead. */
-.ql-editor [data-footnote] {
-  border-top: 1px solid gray;
-  padding-top: 0.5em;
-  margin-top: 1.5em;
-}
-
-.ql-editor [data-footnote] ~ [data-footnote] {
-  border-top: none;
-  padding-top: 0;
-  margin-top: 0;
-}
-
-/* Only a note's opening paragraph prints its number. This cannot key off "follows another body
-   paragraph" - that matches the first paragraph of the *next* note just as readily as the second
-   paragraph of this one, which is what left every note after the first with no number in front of
-   it. Which paragraphs continue a note is written into the document instead; see
-   blots/footnotes.js. */
-.ql-editor [data-footnote-cont]::before {
-  content: "";
-}
+/* --- File manager ------------------------------------------------------------------------- */
 
 .file-select-container {
   width: 100%;
@@ -378,6 +841,14 @@ button, input[type=submit] {
   height: 100%;
   float: left;
 }
+
+.to-be-cut {
+  font-style: italic;
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+/* --- Dictionaries ------------------------------------------------------------------------- */
 
 /* The filter and its count share one row above the list; the list and its buttons share one row
    below it. Flex rather than the floats the file browser uses above: these two rows have to size
@@ -399,6 +870,7 @@ button, input[type=submit] {
 .word-list-count {
   flex: 0 0 auto;
   white-space: nowrap;
+  color: var(--text-muted);
 }
 
 .word-list-body {
@@ -427,27 +899,26 @@ button, input[type=submit] {
 .dictionary-checklist {
   max-height: 200px;
   overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px;
 }
 
 /* Highlighting a row is what enables Remove, and it is deliberately separate from whether the row's
    checkbox is ticked - so it has to be visible on its own. Without a rule here the button enables
-   against a selection nothing on screen shows. Not split across darkmode.css/lightmode.css because
-   popups are the same dark panel in both themes (see .popup there), so one translucent overlay
-   reads correctly on either. */
+   against a selection nothing on screen shows. */
 .dictionary-row {
-  padding: 2px 4px;
+  padding: 3px 6px;
   border-left: 3px solid transparent;
+  border-radius: 0 var(--radius) var(--radius) 0;
 }
 
 .dictionary-row.selected {
-  background-color: rgba(255, 255, 255, 0.15);
-  border-left-color: #EF233C;
+  background-color: var(--selected-bg);
+  border-left-color: var(--accent);
 }
 
-.to-be-cut {
-  font-style: italic;
-  opacity: 0.5;
-}
+/* --- Working / backup alerts -------------------------------------------------------------- */
 
 .working-popup, .backup-alert-popup {
   z-index: 4;
@@ -461,7 +932,9 @@ button, input[type=submit] {
 }
 
 .working-popup h1{
-  color: #d39d01;
+  color: var(--accent);
+  border-bottom: none;
+  text-align: center;
 }
 
 @keyframes rotation {
@@ -473,98 +946,27 @@ button, input[type=submit] {
   }
 }
 
-.save-input {
-  width: 100%;
+@media (prefers-reduced-motion: reduce) {
+  .working-img {
+    animation: none;
+  }
+
+  #prog-bar-fill, button, input[type=submit] {
+    transition: none;
+  }
 }
 
-.popup-dialog h3{
-  margin: 0px 0px 0px 0px;
-  padding: 0px 0px 0px 0px;
-  font-size: var(--dialog-heading-size);
-}
-
-.popup-dialog p{
-  text-align: left;
-  margin: 3px 0px 3px 0px;
-  color: white;
-  padding-left: 6px;
-}
-
-#title-input {
-  width: 100%;
-}
-
-#address-info-input {
-  width: 100%;
-}
-
-#backup-dir-input {
-  width: 75%;
-}
-
-.number-ticker {
-  width: 3em;
-}
-
-#word-goal-input,
-#words-per-page-input {
-  width: 6em;
-}
-
-.warning-text {
-  font-size: var(--dialog-font-size);
-  border: 1px dashed;
-  padding: 6px !important;
-}
-
-#network-pass {
-  width: 100%;
-}
-
-.updates-panel {
-  display: block;
-  padding: 12px;
-  border: 3px solid gray;
-  margin: 3px;
-}
-
-.updates-text {
-  font-size: var(--dialog-font-size);
-}
-
-.updates-status {
-  font-size: var(--dialog-font-size);
-}
-
-/* Carries the "still working" line while a Windows update downloads, and is empty every other
-   moment on every other platform - where an empty <p> would still take a paragraph's worth of
-   blank space in the panel. Hidden by :empty rather than by toggling a style from the view, so
-   there is no display state for the two outcome handlers to have to put back. */
-.updates-status:empty {
-  display: none;
-}
-
-#missing-file-list, #subdirs-list { 
-  font-size: var(--dialog-font-size);
-  margin: 12px;
-}
-
-.good-check {
-  color: greenyellow;
-}
-
-.bad-check {
-  color: red;
-}
-
-.unsure-check {
-  color: gold;
-}
+/* ------------------------------------------------------------------------------------------
+   Corkboard
+   ------------------------------------------------------------------------------------------ */
 
 .popup-corkboard {
   width: 100%;
   height: 100%;
   overflow-y: scroll;
+  border-radius: 0;
+  border: none;
+  background-color: var(--bg);
 }
 
 #corkboard {
@@ -580,9 +982,13 @@ button, input[type=submit] {
   text-align: center;
 }
 
+#corkboard-title-bar p {
+  color: var(--text-muted);
+}
+
 .corkboard-column {
   display: block;
-  border-bottom: 3px dashed gray;
+  border-bottom: 2px dashed var(--border-strong);
   margin-bottom: 6px;
   padding-bottom: 6px;
 }
@@ -590,52 +996,86 @@ button, input[type=submit] {
 .corkboard-card {
   display: inline-block;
   position: relative;
+  box-sizing: border-box;
   width: 15em;
   margin: 6px;
+  padding: 6px 8px 8px 8px;
   font-size: var(--dialog-font-size-small);
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-strong);
+  border-left: 5px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--card-shadow);
+  vertical-align: top;
 }
 
 .corkboard-card-unused {
   opacity: 0.5;
+  box-shadow: none;
+  border-style: dashed;
 }
 
 .corkboard-card textarea {
   resize: none;
 }
 
+.corkboard-card input, .corkboard-card textarea {
+  background-color: var(--input-bg);
+  color: var(--text);
+  font-size: var(--dialog-font-size-small);
+}
+
 .card-num-label {
   display: inline;
-  font-size: var(--dialog-font-size-small);
-  margin-left: 3px;
+  font-family: var(--font-serif);
+  font-size: var(--dialog-font-size);
+  font-weight: 700;
+  color: var(--text);
+  margin-left: 6px;
 }
 
 .card-label {
-  width: 80%;
+  width: 78%;
   font-size: var(--dialog-font-size-small);
 }
 
 .card-description {
-  width: 95%;
+  width: 100%;
   height: 5em;
   font-size: var(--dialog-font-size-small);
+  font-family: var(--font-mono);
   margin: 0px;
- }
+}
 
- .card-checkmark {
+.card-checkmark {
   display: none;
   position: absolute;
-  bottom: 5px;
-  right: 12px;
+  bottom: 10px;
+  right: 14px;
   transform: rotate(45deg);
-  height: 25px;
-  width: 12px;
-  border-bottom: 7px solid #78b13f;
-  border-right: 7px solid #78b13f;
+  height: 22px;
+  width: 11px;
+  border-bottom: 6px solid var(--success-mark);
+  border-right: 6px solid var(--success-mark);
 }
 
 .card-checkmark-checked {
-display: block;
+  display: block;
 }
+
+.corkboard-color1 { background-color: var(--cork-1); border-left-color: var(--cork-1-edge); }
+.corkboard-color2 { background-color: var(--cork-2); border-left-color: var(--cork-2-edge); }
+.corkboard-color3 { background-color: var(--cork-3); border-left-color: var(--cork-3-edge); }
+.corkboard-color4 { background-color: var(--cork-4); border-left-color: var(--cork-4-edge); }
+.corkboard-color5 { background-color: var(--cork-5); border-left-color: var(--cork-5-edge); }
+.corkboard-color6 { background-color: var(--cork-6); border-left-color: var(--cork-6-edge); }
+.corkboard-color7 { background-color: var(--cork-7); border-left-color: var(--cork-7-edge); }
+.corkboard-color8 { background-color: var(--cork-8); border-left-color: var(--cork-8-edge); }
+.corkboard-color9 { background-color: var(--cork-9); border-left-color: var(--cork-9-edge); }
+
+/* ------------------------------------------------------------------------------------------
+   Battery (Linux writerDecks)
+   ------------------------------------------------------------------------------------------ */
 
 #battery-block {
   display: block;
@@ -643,13 +1083,21 @@ display: block;
   bottom: 5px;
   right: 12px;
   font-size: 10pt;
-  border: 1px solid gray;
-  line-height: 0px;
-  padding-left: 0.25em;
-  padding-right: 0.25em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  background-color: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  line-height: 1.3;
+  padding: 1px 0.5em;
 }
 
 .battery-emergency {
-  background-color: red;
-  color: white;
+  background-color: var(--danger-bg);
+  color: var(--on-danger);
+  border-color: var(--danger-bg);
+}
+
+.visible {
+  display: block;
 }

@@ -131,13 +131,15 @@ async function showWordCount(project, editorQuill, userSettings){
     function updateProgressBar(){
       var percentOfGoal = project.wordGoal > 0 ? (total / project.wordGoal) * 100 : 100;
       progressBarFill.style.width = (percentOfGoal <= 100 ? percentOfGoal : 100) + "%";
-      progressBarFill.style.backgroundColor = getColor(percentOfGoal/100 <= 1 ? percentOfGoal/100 : 1);
+      progressBarFill.style.setProperty('--progress-hue', getHue(percentOfGoal/100 <= 1 ? percentOfGoal/100 : 1));
     }
 
-    function getColor(value){
+    //Only the hue is decided here - red at nothing written, through amber, to green at the goal.
+    //Saturation and lightness belong to the theme (index.css, #prog-bar-fill), which is what keeps
+    //the fill readable against the track on both palettes; a colour fixed here could only suit one.
+    function getHue(value){
       //value from 0 to 1
-      var hue = ((value)*120).toString(10);
-      return ["hsl(",hue,",95%,40%)"].join("");
+      return ((value)*120).toString(10);
   }
   };
 

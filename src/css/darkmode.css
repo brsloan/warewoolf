@@ -1,107 +1,71 @@
+/* The dark palette: a lamp-lit study - warm charcoal, cream text, brass accents.
+
+   Every token lightmode.css defines is overridden here, so a rule in index.css never has to know
+   which theme is showing. Applied under prefers-color-scheme: dark, which index.js drives through
+   nativeTheme.themeSource from the Dark Mode setting.
+
+   Contrast claims are the same as lightmode.css's and are checked by the same test. */
+
 @media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #171614;
+    --sheet: #1f1e1b;
+    --surface: #26241f;
+    --surface-2: #2f2c26;
 
-  body {
-    background-color: #191a26;
-  }
+    --text: #ede7db;
+    --text-muted: #b6ae9f;
 
-  #writing-field {
-    background-color: #191a26;
-    color: #ffffff;
-  }
+    --border: #423e36;
+    --border-strong: #8a8272;
 
-  .sidebar {
-    color: #abb2bf;
-  }
+    --accent: #d8b370;
+    --accent-hover: #e6c88f;
+    --on-accent: #1b1a18;
+    --focus: #e0b86e;
+    --link: #e2be7a;
 
-  ::-webkit-scrollbar {
-    background-color: none;
-  }
+    --selection: #5a4b2e;
+    --selected-bg: #3a352b;
+    --hover-bg: #2f2c26;
 
-  ::-webkit-scrollbar-thumb {
-    background: #4b5362;
-  }
+    --input-bg: #1c1b18;
+    --code-bg: #1c1b18;
 
-  .popup, .popup-dialog, .working-popup {
-    background-color: #2B2D42;
-    color: white;
-    border: 2px solid gray;
-  }
+    --btn-bg: #2f2c26;
+    --btn-hover: #3a362e;
+    --btn-text: #ede7db;
+    --btn-border: #8a8272;
 
-  .popup-outliner {
-    background-color: #191a26;
-    color: white;
-  }
+    --success: #8fd19a;
+    --success-mark: #7fcb8c;
+    --danger: #f19a8e;
+    --danger-bg: #8f2a22;
+    --on-danger: #ffffff;
+    --warning-text: #f0c866;
+    --warning-bg: #332b17;
+    --warning-border: #a8862e;
 
-  :focus {
-    outline-color: #EF233C;
-  }
+    --track: #3a3630;
+    --progress-sat: 55%;
+    --progress-light: 60%;
 
-  #chapter-list-sidebar:focus {
-    outline: none;
-  }
+    --scrollbar: #7a7264;
+    --scrollbar-hover: #d8b370;
 
-  .warning-text {
-    color: darkorange;
-  }
+    --sheet-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25), 0 2px 18px rgba(0, 0, 0, 0.45);
+    --popup-shadow: 0 12px 40px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.35);
+    --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+    --card-bg: #26241f;
 
-.ql-editor.ql-blank::before{
-    color: #abb2bf;
+    --cork-1: #4a2a26; --cork-1-edge: #e2776a;
+    --cork-2: #24344a; --cork-2-edge: #7aa7dc;
+    --cork-3: #1f3e39; --cork-3-edge: #6cc7b8;
+    --cork-4: #3d371a; --cork-4-edge: #dcbf5a;
+    --cork-5: #382b4a; --cork-5-edge: #b394e6;
+    --cork-6: #4a2840; --cork-6-edge: #e08ac6;
+    --cork-7: #4a3324; --cork-7-edge: #e69a67;
+    --cork-8: #1f3928; --cork-8-edge: #7fcb8c;
+    --cork-9: #223a4a; --cork-9-edge: #7fb6e2;
   }
-
-  .corkboard-card {
-    background-color: #191a26;
-    border: 1px solid gray;
-  }
-
-  .corkboard-card-horiz {
-    border: 1px solid gray;
-    background-color: #191a26;
-  }
-
-  .card-num-label {
-    color: white;
-  }
-
-  .corkboard-card input, .corkboard-card textarea {
-    background-color: #191a26;
-    color: white;
-  }
-
-  .corkboard-color1 {
-    background-color: #ed553b;
-  }
-
-  .corkboard-color2 {
-    background-color: #20639b;
-  }
-
-  .corkboard-color3 {
-    background-color: #3caea3;
-  }
-
-  .corkboard-color4 {
-    background-color: #f6d55c;
-  }
-
-  .corkboard-color5 {
-    background-color: #8b3bed;
-  }
-
-  .corkboard-color6 {
-    background-color: #ed3bed;
-  }
-  .corkboard-color7 {
-    background-color: #ed733b;
-  }
-  .corkboard-color8 {
-    background-color: #3bedbe;
-  }
-  .corkboard-color9 {
-    background-color: #3b94ed;
-  }
-
-#battery-block {
-  color: #abb2bf;
-}
-
 }
