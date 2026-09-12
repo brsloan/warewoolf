@@ -71,6 +71,12 @@
 			"summary": null
 		},
 		{
+			"title": "Fonts",
+			"filename": "Fonts.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
 			"title": "Footnotes",
 			"filename": "Footnotes.txt",
 			"filter": null,

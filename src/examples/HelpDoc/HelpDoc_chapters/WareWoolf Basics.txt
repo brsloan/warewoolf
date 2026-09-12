@@ -5,7 +5,7 @@ On the left is the list of chapters, which you can re-order and rename. In the m
 
 To toggle between ***Chapter Notes*** and ***Project Notes*** in the** **right panel, press **CMD/CTRL + F3**. Chapter Notes are particular to each chapter and will update as you cycle through them, but there is only one Project Notes document, so it will stay the same as you cycle between chapters.
 
-Speaking of room—the editor panel can be contracted or expanded using **CMD/CTRL** + **<** or **>** so you can see your paragraphs as they will look in a narrow paperback or a wide manuscript page. Similarly, you can adjust the font display size with **CMD/CTRL** + **-** or **+**.
+Speaking of room—the editor panel can be contracted or expanded using **CMD/CTRL** + **<** or **>** so you can see your paragraphs as they will look in a narrow paperback or a wide manuscript page. Similarly, you can adjust the font display size with **CMD/CTRL** + **-** or **+**. Which typeface you write in is set separately, in **File > Settings** under **Appearance**—see the ***Fonts*** page.
 
 **CMD/CTRL + ALT + T** switches on ***Typewriter Mode***. Ordinarily the line you are writing creeps down the screen until it is sitting on the bottom edge, and you spend the next paragraph typing at your own shoes. In Typewriter Mode the text scrolls up to meet you instead, holding the line you are on about three-quarters of the way down the editor, so your eyes stay in one place. The same keys switch it off again, and WareWoolf remembers which way you left it.
 

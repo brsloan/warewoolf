@@ -4,7 +4,7 @@
 <p align="center">v2.5.0</p>
 <p align="center">"The only writing software I use." -Virginia Woolf</p>
 
-WareWoolf is designed for one thing: writing fiction. It is intentionally simplified: you cannot change the font, line spacing, or color. But it has everything you need to organize, edit, and revise a novel--and you don't even need a mouse.
+WareWoolf is designed for one thing: writing fiction. It is intentionally simplified: beyond a choice of typeface for the manuscript and the sidebars, and light or dark, there is nothing to fiddle with--no line spacing, no colors, no styles. But it has everything you need to organize, edit, and revise a novel--and you don't even need a mouse.
 
 It is composed of three simple text-based panels with no icons: Chapters, Editor, and Notes.
 
@@ -43,6 +43,7 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 * Outliner.
 * Corkboard that saves as a markdown file that doubles as an outline.
 * Adjust width of text editor and how large text is displayed.
+* Choose a typeface for the manuscript and another for the sidebars (File > Settings), from serif and sans through Times, Garamond and a typewriter face to Atkinson Hyperlegible and OpenDyslexic. A sample under each dropdown shows what your machine will actually draw.
 * Customizable keyboard shortcuts: rebind any shortcut in the Shortcut Helper (Ctrl+H), or restore the defaults, and your choices are remembered.
 * Automatic substitutions as you type: smart quotes, em dashes from two hyphens, and an ellipsis from three periods. Ctrl+Z undoes any one of them, and the whole thing can be switched off in Settings. A Tools item applies the same conversions to an existing manuscript in one pass.
 * Spellcheck, but it must be run after writing (no red squiggles or godawful grammar advice). Check against any number of dictionaries at once (File > Dictionaries), import your own, and keep a personal word list alongside a per-project one for character and place names that shouldn't follow you into your next book.
@@ -109,6 +110,7 @@ Unreleased. Changes made:
 * The Windows download is an installer again. Releases from v0.9.0 to v2.2.1 were built by hand and shipped a Setup.exe; when release builds moved to CI for v2.3.0 the Windows job was pointed at the wrong maker, and v2.3.0 through v2.5.0 shipped a bare application folder under the same filename - no install step, and no entry in Add or Remove Programs. If you installed one of those four, run the new installer and then delete the folder you unzipped; it will not remove it for you, and a copy of WareWoolf left lying around is only wasted disk space, not a problem for the installed one. Your projects and settings are untouched either way, since neither version keeps them beside the program.
 * New “Mark scene breaks with a centered #” box in both Compile and Export, for standard manuscript format: the blank line between one scene and the next comes out carrying a centered hash, so a reader can tell a deliberate break from a page break that happened to land there. Only a blank line with an ordinary paragraph on both sides is marked, which leaves the gap under a chapter heading, the blank lines trailing at the end of a chapter, and anything beside a list, a quotation or a footnote exactly as they were. Your own chapters are untouched — the mark is added to the copy on its way into the file. On export it applies to your chapters, not to your notes or the corkboard, and whichever way you set the box is remembered for next time.
 * Windows: Check For Updates can now install the update too. Click Install, wait for it to download (it can take a few minutes on a slow connection, with nothing to show for it in between - sorry), then click Restart To Finish. No more finding the download in your Downloads folder, running it yourself, and clicking past "Windows protected your PC." If the in-app install doesn't work for some reason, you can still fall back to downloading and running it yourself, same as before. Linux and Mac are unchanged.
+* Two font settings in File > Settings, under Appearance: one for the manuscript and one for the sidebars, chosen separately so the chapter list can stay plain while you draft in Courier. There are eight to pick from, including Times and Garamond for a manuscript that looks like the page you will submit, a typewriter face, and Atkinson Hyperlegible and OpenDyslexic for anyone who reads more easily in them. WareWoolf ships no fonts of its own, so each choice uses the best face of its kind you already have installed - which is why a sample line under each dropdown shows what you will actually get. The face changes the moment you save, and both settings start where WareWoolf has always been, so nothing moves until you move it.
 
 2026-09-07: v2.5.0. Chages made:
 * Security improvements

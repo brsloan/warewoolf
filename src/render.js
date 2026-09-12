@@ -24,6 +24,7 @@ const {
 } = require('./components/controllers/footnote-navigation');
 const { resolveShortcuts } = require('./components/models/shortcuts');
 const { resolveAutocorrect } = require('./components/models/autocorrect');
+const { resolveFontStack } = require('./components/models/fonts');
 const { setSelectedDictionaries, setProjectWords, releaseSpellchecker } = require('./components/controllers/spellcheck');
 const { normalizeSlashes } = require('./components/controllers/path-utils');
 const { enableTypewriterMode, disableTypewriterMode } = require('./components/controllers/typewriter-mode');
@@ -440,6 +441,7 @@ function disableTabbingToEditors(){
 
 function applyUserSettings(){
   updateFontSize();
+  updateFonts();
   if(userSettings.typewriterMode)
     enableTypewriterMode(editorQuill)
   updateEditorWidth();
@@ -457,6 +459,18 @@ function updateFontSize(){
   document.documentElement.style.setProperty('--dialog-font-size', userSettings.fontSize + 'pt');
   document.documentElement.style.setProperty('--dialog-font-size-small', (userSettings.fontSize - 2) + 'pt');
   document.documentElement.style.setProperty('--dialog-heading-size', (userSettings.fontSize + 2) + 'pt');
+}
+
+//The two typeface settings, resolved from the ids in user settings to the font-family stacks
+//index.css's --font-editor/--font-sidebar carry. Kept apart from updateFontSize() above because
+//the two are changed from different places - size by the Ctrl+/Ctrl- shortcuts, face only from
+//Settings - and neither needs to redo the other's work.
+//
+//resolveFontStack answers with the default face for an id it does not recognize, so there is
+//nothing to check here: whatever is in userSettings, both properties end up holding a real stack.
+function updateFonts(){
+  document.documentElement.style.setProperty('--font-editor', resolveFontStack(userSettings.editorFont));
+  document.documentElement.style.setProperty('--font-sidebar', resolveFontStack(userSettings.sidebarFont));
 }
 
 function updateEditorWidth(){
@@ -1653,6 +1667,7 @@ const menuCommands = {
     const showSettings = require('./components/views/settings_display');
     return showSettings(userSettings, autosaver, sysDirectories, detached(autosaveProject), function(){
       setDarkMode();
+      updateFonts();
       autocorrectRules = resolveAutocorrectSetting();
     }, platformInfo);
   } },

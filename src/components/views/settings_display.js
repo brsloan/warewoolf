@@ -2,6 +2,7 @@ const { closePopups, createButton, removeElementsByClass, convertFilepath, gener
 const { showBattery, removeBattery } = require('./battery_display');
 const showFileDialog = require('./file-dialog_display');
 const { getAutocorrectDefs, resolveAutocorrect, diffFromDefaults } = require('../models/autocorrect');
+const { getFontDefs, resolveFontStack, sanitizeFontId } = require('../models/fonts');
 
 function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, callback, platformInfo){
   removeElementsByClass('popup');
@@ -222,6 +223,18 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
   darkModeLightLabel.htmlFor = 'dark-mode-light';
   appearanceSet.appendChild(darkModeLightLabel);
 
+  appearanceSet.appendChild(document.createElement('hr'));
+
+  var fontTbl = document.createElement('table');
+
+  //Two pickers rather than one, because the two columns are read differently: the manuscript is
+  //read the way the finished book will be, and the sidebars are scanned for a chapter title. A
+  //writer who wants one face everywhere still only has to set the same thing twice, once.
+  var editorFontSelect = addFontPicker(fontTbl, 'editor-font', 'Manuscript Font: ', userSettings.editorFont);
+  var sidebarFontSelect = addFontPicker(fontTbl, 'sidebar-font', 'Sidebar Font (chapter list and notes): ', userSettings.sidebarFont);
+
+  appearanceSet.appendChild(fontTbl);
+
   settingsForm.appendChild(appearanceSet);
 
   var batterySet = document.createElement('fieldset');
@@ -256,6 +269,11 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
     userSettings.backupsToKeep = Number(backupLimitInput.value) || 0;
     userSettings.autosaveIntMinutes = Number(autosaveIntervalInput.value) || 0;
     userSettings.darkMode = document.querySelector('input[type=radio][name=dark-mode]:checked').value;
+    //Through sanitizeFontId on the way out as well as on the way in: the value of a <select> is a
+    //string from the DOM, and this is the one field whose value goes straight into a css
+    //font-family declaration.
+    userSettings.editorFont = sanitizeFontId(editorFontSelect.value);
+    userSettings.sidebarFont = sanitizeFontId(sidebarFontSelect.value);
     userSettings.defaultAuthor = defAuthIn.value;
     userSettings.addressInfo = addressIn.value;
     userSettings.autocorrectEnabled = autocorrectCheck.checked;
@@ -293,6 +311,72 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
     Object.keys(ruleChecks).forEach(function(id){
       ruleChecks[id].disabled = !autocorrectCheck.checked;
     });
+  }
+
+  //One setting: a labelled dropdown of every face fonts.js knows, and directly beneath it a line of
+  //sample text in whichever is chosen. Two rows rather than one, the sample spanning both columns,
+  //so a sample sits under the picker it belongs to instead of the pair of them collecting at the
+  //bottom where neither says which is which. Returns the select, which is what Save reads.
+  function addFontPicker(table, idPrefix, labelText, selected){
+    var select = buildFontSelect(idPrefix + '-select', selected);
+    var label = document.createElement('label');
+    label.innerText = labelText;
+    label.htmlFor = select.id;
+    table.appendChild(generateRow(label, select));
+
+    var sampleRow = document.createElement('tr');
+    var sampleCell = document.createElement('td');
+    sampleCell.colSpan = 2;
+    sampleCell.appendChild(buildFontSample(idPrefix + '-sample', select));
+    sampleRow.appendChild(sampleCell);
+    table.appendChild(sampleRow);
+
+    return select;
+  }
+
+  //A dropdown of every face in fonts.js, with each option drawn in the face it names so the list
+  //itself is the specimen sheet. `selected` is whatever is in user settings, run through
+  //sanitizeFontId so an id this version does not know lands on the default rather than leaving the
+  //select showing its first option while the app is drawn in something else.
+  function buildFontSelect(id, selected){
+    var select = document.createElement('select');
+    select.id = id;
+
+    getFontDefs().forEach(function(def){
+      var option = document.createElement('option');
+      option.value = def.id;
+      option.innerText = def.label;
+      option.style.fontFamily = def.stack;
+      select.appendChild(option);
+    });
+
+    select.value = sanitizeFontId(selected);
+
+    return select;
+  }
+
+  //WareWoolf ships no font files, so a face is only ever the best one of its stack a writer happens
+  //to have installed, and there is no honest way to say which that is in the dropdown. The sample
+  //answers it by showing the result: whatever is drawn here is what the panel will be drawn in.
+  //
+  //A pangram, because what is being shown is the shape of the letters and a pangram is the shortest
+  //way to show all of them. Marked aria-hidden: it is the same information the selected option
+  //already carries by name, and read aloud it is a sentence about a fox.
+  function buildFontSample(id, select){
+    var sample = document.createElement('p');
+    sample.id = id;
+    sample.classList.add('font-sample');
+    sample.innerText = 'The quick brown fox jumps over the lazy dog.';
+    sample.setAttribute('aria-hidden', 'true');
+
+    select.addEventListener('change', updateSample);
+    updateSample();
+
+    return sample;
+
+    function updateSample(){
+      sample.style.fontFamily = resolveFontStack(select.value);
+    }
   }
 
   function checkedRules(){

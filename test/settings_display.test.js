@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { JSDOM } = require('jsdom');
 const { assertDialogDescribed, assertControlsNamed } = require('./helpers');
+const { DEFAULT_FONT_ID, getFontDefs, resolveFontStack } = require('../src/components/models/fonts');
 
 const settingsDisplayPath = require.resolve('../src/components/views/settings_display');
 const fileDialogPath = require.resolve('../src/components/views/file-dialog_display');
@@ -37,6 +38,8 @@ function makeUserSettings(overrides){
     showBattery: false,
     autocorrectEnabled: true,
     autocorrect: {},
+    editorFont: DEFAULT_FONT_ID,
+    sidebarFont: DEFAULT_FONT_ID,
     save: function(){}
   }, overrides);
 }
@@ -240,4 +243,118 @@ test('the Settings popup is a dialog and every field is labelled', function(){
   var popup = document.querySelector('.popup');
   assertDialogDescribed(popup, 'dialog');
   assert.ok(assertControlsNamed(popup) > 5, 'the settings form should have fields to check');
+});
+
+//---------------------------------------------------------------------------
+// editor and sidebar fonts
+//---------------------------------------------------------------------------
+
+test('both font pickers offer every font WareWoolf knows about', function(){
+  openSettings(makeUserSettings());
+
+  var expected = getFontDefs().map(function(def){ return def.id; });
+
+  ['editor-font-select', 'sidebar-font-select'].forEach(function(id){
+    var options = Array.from(document.getElementById(id).options);
+
+    assert.deepStrictEqual(options.map(function(o){ return o.value; }), expected);
+    //innerText rather than textContent: the app sets it that way throughout, and jsdom keeps
+    //innerText as a plain property without reflecting it into the node's text.
+    assert.ok(options.every(function(o){ return o.innerText !== ''; }), 'every option should be named');
+  });
+});
+
+//The list is its own specimen sheet: WareWoolf ships no font files, so drawing each option in the
+//face it names is the only honest way to show a writer what they actually have installed.
+test('each option is drawn in the face it names', function(){
+  openSettings(makeUserSettings());
+
+  var options = Array.from(document.getElementById('editor-font-select').options);
+
+  getFontDefs().forEach(function(def, i){
+    assert.strictEqual(options[i].style.fontFamily, def.stack);
+  });
+});
+
+test('the pickers open on the fonts already in user settings', function(){
+  openSettings(makeUserSettings({ editorFont: 'typewriter', sidebarFont: 'sans' }));
+
+  assert.strictEqual(document.getElementById('editor-font-select').value, 'typewriter');
+  assert.strictEqual(document.getElementById('sidebar-font-select').value, 'sans');
+});
+
+//A picker left showing its first option while the app is drawn in something else would be lying
+//about the current state, and Save would then quietly change a setting the writer never touched.
+test('a font id this version does not know falls back to the default rather than to the first option', function(){
+  openSettings(makeUserSettings({ editorFont: 'some-font-from-the-future', sidebarFont: null }));
+
+  assert.strictEqual(document.getElementById('editor-font-select').value, DEFAULT_FONT_ID);
+  assert.strictEqual(document.getElementById('sidebar-font-select').value, DEFAULT_FONT_ID);
+});
+
+test('Save writes both font choices back to user settings', function(){
+  var userSettings = openSettings(makeUserSettings());
+
+  document.getElementById('editor-font-select').value = 'garamond';
+  document.getElementById('sidebar-font-select').value = 'sans';
+  findButton('Save').onclick();
+
+  assert.strictEqual(userSettings.editorFont, 'garamond');
+  assert.strictEqual(userSettings.sidebarFont, 'sans');
+});
+
+//The saved value goes straight into a css font-family declaration, so it is sanitized on the way
+//out of the dialog as well as on the way in off disk.
+test('Save sanitizes a font value that is not one of ours', function(){
+  var userSettings = openSettings(makeUserSettings());
+
+  var select = document.getElementById('editor-font-select');
+  var smuggled = document.createElement('option');
+  smuggled.value = 'nonsense; color: red';
+  select.appendChild(smuggled);
+  select.value = 'nonsense; color: red';
+
+  findButton('Save').onclick();
+
+  assert.strictEqual(userSettings.editorFont, DEFAULT_FONT_ID);
+});
+
+//Both samples collecting at the bottom of the fieldset would leave a writer to work out which of
+//them answered which dropdown.
+test('each sample sits in the row directly under its own picker', function(){
+  openSettings(makeUserSettings());
+
+  [['editor-font-select', 'editor-font-sample'], ['sidebar-font-select', 'sidebar-font-sample']].forEach(function(pair){
+    var pickerRow = document.getElementById(pair[0]).closest('tr');
+    var sampleRow = document.getElementById(pair[1]).closest('tr');
+
+    assert.strictEqual(pickerRow.nextElementSibling, sampleRow);
+    //Spanning the label column too, so the specimen gets the full width of the dialog to show in.
+    assert.strictEqual(sampleRow.cells.length, 1);
+    assert.strictEqual(sampleRow.cells[0].colSpan, 2);
+  });
+});
+
+test('each picker has a sample line, drawn in the font that is selected', function(){
+  openSettings(makeUserSettings({ editorFont: 'monospace', sidebarFont: 'times' }));
+
+  var editorSample = document.getElementById('editor-font-sample');
+  var sidebarSample = document.getElementById('sidebar-font-sample');
+
+  assert.strictEqual(editorSample.style.fontFamily, resolveFontStack('monospace'));
+  assert.strictEqual(sidebarSample.style.fontFamily, resolveFontStack('times'));
+  //Said twice over by the selected option's own name; read aloud it is just a sentence about a fox.
+  assert.strictEqual(editorSample.getAttribute('aria-hidden'), 'true');
+});
+
+test('the sample follows the picker before anything is saved', function(){
+  openSettings(makeUserSettings());
+
+  var select = document.getElementById('sidebar-font-select');
+  select.value = 'dyslexic';
+  select.dispatchEvent(new window.Event('change'));
+
+  assert.strictEqual(document.getElementById('sidebar-font-sample').style.fontFamily, resolveFontStack('dyslexic'));
+  //Only its own sample: the two settings are independent.
+  assert.strictEqual(document.getElementById('editor-font-sample').style.fontFamily, resolveFontStack(DEFAULT_FONT_ID));
 });

@@ -1,6 +1,7 @@
 const { logError } = require('../controllers/error-log');
 const { sanitizeOverrides } = require('./shortcuts');
 const { sanitizeAutocorrect } = require('./autocorrect');
+const { sanitizeFontId, DEFAULT_FONT_ID } = require('./fonts');
 
 //Unlike sanitizeOverrides/sanitizeAutocorrect, there is no fixed id list to check entries against -
 //a valid id is whatever listDictionaries() (group I) finds on disk, which this module has no way to
@@ -66,7 +67,9 @@ const SETTINGS_SCHEMA = {
   autocorrectEnabled: { type: 'boolean' },
   autocorrect: { type: 'object', sanitize: sanitizeAutocorrect },
   spellcheckDictionaries: { type: 'object', sanitize: sanitizeDictionaryIds },
-  wordsPerPage: { type: 'number' }
+  wordsPerPage: { type: 'number' },
+  editorFont: { type: 'string', sanitize: sanitizeFontId },
+  sidebarFont: { type: 'string', sanitize: sanitizeFontId }
 };
 
 function getUserSettings(userSettingsFilepath){
@@ -118,6 +121,13 @@ function getUserSettings(userSettingsFilepath){
     //decides this - 300 is the standard double-spaced manuscript page - so it lives here rather
     //than on the project, and follows the writer from one book to the next.
     wordsPerPage: 300,
+    //Which of fonts.js's typefaces the manuscript and the sidebars are drawn in, by id. Both start
+    //on DEFAULT_FONT_ID, which is the face WareWoolf drew everything in before either of these
+    //existed - a writer who never opens the dropdowns sees no change at all. Stored as an id rather
+    //than a font-family string so that user-settings.json can never put arbitrary css into a
+    //declaration, and so that a later version may improve a stack's fallbacks for everyone.
+    editorFont: DEFAULT_FONT_ID,
+    sidebarFont: DEFAULT_FONT_ID,
     save: save,
     load: load,
     getSettingsFilepath: getSettingsFilepath

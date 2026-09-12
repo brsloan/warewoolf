@@ -15,6 +15,7 @@ const { EventEmitter } = require('events');
 const { createPlatform } = require('../src/components/controllers/platform');
 const { createNodeBacking } = require('../src/components/controllers/platform-node');
 const { createFakeBridge } = require('./fake-bridge');
+const { DEFAULT_FONT_ID, resolveFontStack } = require('../src/components/models/fonts');
 
 const renderPath = require.resolve('../src/render');
 //keybindings.js builds its own platform instance at require-time, same as render.js itself - but it
@@ -2118,6 +2119,64 @@ test('a single rule switched off in Settings leaves the others working', async f
   typeInto(r.editorQuill, '"wait--"');
 
   assert.strictEqual(r.editorQuill.getText().trim(), '“wait--”');
+});
+
+//---------------------------------------------------------------------------
+// editor and sidebar fonts
+//---------------------------------------------------------------------------
+
+function fontProperty(name){
+  return document.documentElement.style.getPropertyValue(name);
+}
+
+//The manuscript and the sidebars read --font-editor/--font-sidebar out of index.css; nothing else
+//turns a saved font id into a face, so if applyUserSettings() skips this at boot the app draws in
+//the stylesheet's fallback no matter what the writer chose.
+test('the saved fonts are on the page as soon as the app has booted', async function(){
+  var r = await freshRender();
+
+  assert.strictEqual(fontProperty('--font-editor'), resolveFontStack(r.userSettings.editorFont));
+  assert.strictEqual(fontProperty('--font-sidebar'), resolveFontStack(r.userSettings.sidebarFont));
+});
+
+//Through the real menu command and the real Save button, so this covers the callback render.js
+//hands the popup: a font that only took effect on the next launch would be a setting a writer
+//cannot watch themselves change.
+test('choosing fonts in Settings redraws both panels without a restart', async function(){
+  await freshRender();
+
+  currentBridge().handlers['settings-clicked']();
+  document.getElementById('editor-font-select').value = 'typewriter';
+  document.getElementById('sidebar-font-select').value = 'sans';
+  settingsPopupSaveButton().onclick();
+
+  assert.strictEqual(fontProperty('--font-editor'), resolveFontStack('typewriter'));
+  assert.strictEqual(fontProperty('--font-sidebar'), resolveFontStack('sans'));
+});
+
+//The two settings are independent - a writer who wants a typewriter manuscript beside a plain
+//chapter list gets exactly that.
+test('the two panels can be set to different fonts', async function(){
+  await freshRender();
+
+  currentBridge().handlers['settings-clicked']();
+  document.getElementById('editor-font-select').value = 'garamond';
+  settingsPopupSaveButton().onclick();
+
+  assert.strictEqual(fontProperty('--font-editor'), resolveFontStack('garamond'));
+  assert.strictEqual(fontProperty('--font-sidebar'), resolveFontStack(DEFAULT_FONT_ID));
+  assert.notStrictEqual(fontProperty('--font-editor'), fontProperty('--font-sidebar'));
+});
+
+//A settings file anything could have written to must not reach a font-family declaration intact.
+test('a font id that names nothing WareWoolf has draws the default face instead', async function(){
+  var r = await freshRender();
+
+  r.userSettings.editorFont = 'nonsense; color: red';
+  saveSettingsPopup();
+
+  assert.strictEqual(fontProperty('--font-editor'), resolveFontStack(DEFAULT_FONT_ID));
+  assert.strictEqual(r.userSettings.editorFont, DEFAULT_FONT_ID);
 });
 
 //The conversion itself is covered in convert-substitutions.test.js, and the popup's own behaviour

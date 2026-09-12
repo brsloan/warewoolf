@@ -22,6 +22,13 @@
     sans-serif;
   --font-mono: "Cascadia Mono", Consolas, "SF Mono", Menlo, "DejaVu Sans Mono", monospace;
 
+  /* The two faces a writer chooses in Settings > Appearance, set by updateFonts() in render.js
+     from the stacks in models/fonts.js. They default to the serif stack above, which is what the
+     app drew everything in before the setting existed - so the defaults here are not a placeholder
+     to be overwritten like the sizes are, they are the real fallback if user settings never load. */
+  --font-editor: var(--font-serif);
+  --font-sidebar: var(--font-serif);
+
   --radius: 4px;
   --radius-large: 8px;
 }
@@ -225,13 +232,13 @@ hr {
   float: left;
   height: 93vh;
   font-size: var(--main-font-size);
-  font-family: var(--font-serif);
+  font-family: var(--font-sidebar);
   color: var(--text);
 }
 
 .sidebar h1{
   text-align: center;
-  font-family: var(--font-serif);
+  font-family: var(--font-sidebar);
   font-weight: 600;
   font-size: calc(var(--main-font-size) * 0.85);
   letter-spacing: 0.14em;
@@ -316,7 +323,7 @@ hr {
 
 .name-box {
   width: 95%;
-  font-family: var(--font-serif);
+  font-family: var(--font-sidebar);
   font-size: inherit;
   padding: 2px 6px;
   margin: 0;
@@ -326,10 +333,15 @@ hr {
   display: none;
 }
 
-/* The notes editor lives in a sidebar: a lighter hand than the manuscript, and no sheet. */
+/* The notes editor lives in a sidebar: a lighter hand than the manuscript, and no sheet. It takes
+   the sidebar's face rather than the editor's for the same reason - Settings offers one choice per
+   column, and the notes are a column, not the manuscript. Stated on this selector rather than left
+   to .sidebar's own inheritance because .ql-editor below declares a face of its own; two classes
+   beat one, so this holds wherever the two rules end up in the file. */
 .sidebar .ql-editor {
   padding: 8px 14px;
   line-height: 165%;
+  font-family: var(--font-sidebar);
 }
 
 .sidebar .ql-editor.ql-blank::before {
@@ -378,7 +390,7 @@ hr {
 .ql-editor {
   line-height: 200%;
   font-size: var(--main-font-size);
-  font-family: var(--font-serif);
+  font-family: var(--font-editor);
   color: var(--text);
 }
 
@@ -554,6 +566,23 @@ hr {
 
 .sublabel {
   margin-left: 22px;
+}
+
+/* The specimen line under each font picker in Settings. Set on a surface of its own so the sample
+   reads as a swatch rather than as a sentence the dialog is telling the writer, and left at the
+   dialog's own size - what is being judged here is the shape of the letters, not how big they are,
+   which Ctrl+/Ctrl- already decides. font-family is set from the picker by settings_display.js.
+
+   It wraps rather than being held to one line: the pangram is there to show every letter, and the
+   widest faces on offer (Courier, OpenDyslexic) overrun the dialog's width, so a single line would
+   cut off the end of the alphabet in exactly the cases a writer most wants to look at. */
+.font-sample {
+  margin: 6px 0 2px 0;
+  padding: 8px 12px;
+  background-color: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
 }
 
 .popup-dialog h3{

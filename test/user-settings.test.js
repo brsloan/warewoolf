@@ -10,6 +10,7 @@ const { createNodeBacking } = require('../src/components/controllers/platform-no
 const getUserSettings = require('../src/components/models/user-settings');
 const { createFakeBridge } = require('./fake-bridge');
 const { createIpcBacking } = require('../src/components/controllers/platform-ipc');
+const { DEFAULT_FONT_ID } = require('../src/components/models/fonts');
 
 //loadUserSettings()/saveUserSettings() are parameterless on the contract - the backing decides
 //where the file lives, from paths.userData - so each test configures a node-backed platform
@@ -448,4 +449,59 @@ test('the words-per-page value round-trips through the file', async function(t){
   const reloaded = await getUserSettings(settingsPath(dir)).load();
 
   assert.strictEqual(reloaded.wordsPerPage, 250);
+});
+
+//---------------------------------------------------------------------------
+// editor and sidebar fonts
+//---------------------------------------------------------------------------
+
+//The face WareWoolf drew everything in before either setting existed, so an existing writer who
+//never opens the dropdowns sees exactly the app they had.
+test('both fonts start on the default face', function(t){
+  const dir = configurePlatform(t);
+  const settings = getUserSettings(settingsPath(dir));
+
+  assert.strictEqual(settings.editorFont, DEFAULT_FONT_ID);
+  assert.strictEqual(settings.sidebarFont, DEFAULT_FONT_ID);
+});
+
+test('a chosen font for each panel round-trips independently', async function(t){
+  const dir = configurePlatform(t);
+  const settings = getUserSettings(settingsPath(dir));
+
+  settings.editorFont = 'typewriter';
+  settings.sidebarFont = 'sans';
+  await settings.save();
+
+  const reloaded = await getUserSettings(settingsPath(dir)).load();
+
+  assert.strictEqual(reloaded.editorFont, 'typewriter');
+  assert.strictEqual(reloaded.sidebarFont, 'sans');
+});
+
+//A font id is the one setting whose value ends up inside a css font-family declaration, so a
+//`type: 'string'` check is not enough: it has to name a font fonts.js actually has a stack for.
+test('a font id that names no font WareWoolf has falls back to the default on load', async function(t){
+  const dir = configurePlatform(t);
+
+  for(const value of ['no-such-font', '', 42, null, [], { id: 'sans' }, 'constructor']){
+    fs.writeFileSync(settingsPath(dir), JSON.stringify({ editorFont: value, sidebarFont: value }), 'utf8');
+    const settings = await getUserSettings(settingsPath(dir)).load();
+    assert.strictEqual(settings.editorFont, DEFAULT_FONT_ID, JSON.stringify(value));
+    assert.strictEqual(settings.sidebarFont, DEFAULT_FONT_ID, JSON.stringify(value));
+  }
+});
+
+//Sanitized on the way out as well as in, so a bad value set on the live object never reaches disk
+//to be loaded back by a version whose sanitizer might read it differently.
+test('an unusable font left on the live object is written out as the default', async function(t){
+  const dir = configurePlatform(t);
+  const settings = getUserSettings(settingsPath(dir));
+
+  settings.editorFont = 'nonsense; color: red';
+  await settings.save();
+
+  const written = JSON.parse(fs.readFileSync(settingsPath(dir), 'utf8'));
+
+  assert.strictEqual(written.editorFont, DEFAULT_FONT_ID);
 });
