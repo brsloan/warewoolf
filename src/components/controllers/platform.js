@@ -201,12 +201,17 @@ var COMMANDS = {
 
   // --- C. Chapter I/O -----------------------------------------------------------------------
   loadChapter: { group: 'C', params: ['projectDir', 'chapsDir', 'filename'], returns: 'mdfc text' },
+  //`extension` is the one the allocated filename ends in: ".txt" when absent, or ".fountain" for a
+  //screenplay project's script (docs/screenplay-plan.md, Phase 2). A closed list on the native
+  //side, since it is the tail of a filename the command writes to. `mdfc` is the file's text in
+  //either format - the name predates the second format and is not worth a contract change.
   saveChapter: { group: 'C', params: ['projectDir', 'chapsDir', 'title', 'mdfc'],
+    optional: ['extension'],
     returns: '{ filename }',
     note: 'Save Copy (chapter.js:107-120): allocate a fresh name and write. No old file, so no transaction.' },
   saveChapterAtomic: { group: 'C',
     params: ['projectDir', 'chapsDir', 'oldFilename', 'title', 'mdfc'],
-    optional: ['notesMdfc'],
+    optional: ['notesMdfc', 'extension'],
     returns: '{ filename, notesFilename }',
     note: 'Takes the title and returns the allocated filename - it does not take one. See the node backing below for why.' },
   deleteChapterFiles: { group: 'C', params: ['projectDir', 'chapsDir', 'filename'], returns: 'void' },

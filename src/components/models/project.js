@@ -1,6 +1,7 @@
 const newChapter = require('./chapter');
 const chapterList = require('../controllers/chapter-list');
 const { logError } = require('../controllers/error-log');
+const { sanitizeTitlePage } = require('../controllers/fountain');
 const defaultProjectNotesName = 'project_.txt'; //Will have default notes prepend ('-notes_') as well (added by Chapter object's save function)
 
 //Group B of the platform contract (see platform.js). Like chapter.js, this module no longer knows
@@ -31,6 +32,15 @@ function newProject(){
         //moved between versions does not lose its word list even though the older build cannot use
         //it. See docs/dictionaries-plan.md.
         projectDictionary: [],
+        //'novel' or 'screenplay'. Policy, not mechanism: what New Project creates, what the sidebar's
+        //top section is, which tools the menus offer. Which codec a document goes through is the
+        //document's own business, by its file extension (see chapter.js) - so a screenplay project
+        //can hold prose Reference documents beside its script. docs/screenplay-plan.md.
+        type: 'novel',
+        //A screenplay's title page: an ordered list of { key, values[] }, edited in Properties and
+        //written into the .fountain at every save so the file stays self-contained. On load the
+        //file wins (chapter.js adoptTitlePage). Empty for a novel.
+        titlePage: [],
         filters: [],
         trash: [],
         activeChapterIndex: 0,
@@ -45,6 +55,7 @@ function newProject(){
         textCursorPosition: 0,
         corkboardColumns: 4,
         getActiveChapter: getActiveChapter,
+        isScreenplay: isScreenplay,
         loadFile: loadFile,
         saveFile: saveFile,
         saveAs: saveAs,
@@ -54,6 +65,10 @@ function newProject(){
 
     function getActiveChapter(){
       return chapterList.chapterAt(this, this.activeChapterIndex);
+    }
+
+    function isScreenplay(){
+      return this.type === 'screenplay';
     }
 
     async function loadFile(projPath){
@@ -75,6 +90,10 @@ function newProject(){
         //"projectDictionary": "Aurelion" must not turn into a spellchecker that accepts every single
         //letter of it.
         this.projectDictionary = sanitizeWordList(this.projectDictionary);
+        //Same discipline for the two screenplay fields: a .woolf from an older build has neither,
+        //and a hand-edited one could hold anything.
+        this.type = this.type === 'screenplay' ? 'screenplay' : 'novel';
+        this.titlePage = sanitizeTitlePage(this.titlePage);
 
         this.filename = opened.filename;
         this.directory = opened.directory;

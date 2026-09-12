@@ -25,6 +25,38 @@ function requestProjectTitle(callback){
   titleInput.id = "title-input";
   titleForm.appendChild(titleInput);
 
+  titleForm.appendChild(document.createElement('br'));
+
+  //Novel or screenplay - see docs/screenplay-plan.md. A radio group named so a screen reader
+  //reads the two as one question, defaulting to the kind of project this app has always made.
+  var typeGroup = document.createElement('fieldset');
+  typeGroup.id = 'project-type';
+  var typeLegend = document.createElement('legend');
+  typeLegend.textContent = 'What kind of project?';
+  typeGroup.appendChild(typeLegend);
+
+  var typeInputs = [
+    { value: 'novel', label: 'Novel', checked: true },
+    { value: 'screenplay', label: 'Screenplay', checked: false }
+  ].map(function(option){
+    var radio = document.createElement('input');
+    radio.type = 'radio';
+    radio.name = 'project-type';
+    radio.value = option.value;
+    radio.id = 'project-type-' + option.value;
+    radio.checked = option.checked;
+
+    var label = document.createElement('label');
+    label.htmlFor = radio.id;
+    label.textContent = option.label;
+
+    typeGroup.appendChild(radio);
+    typeGroup.appendChild(label);
+    return radio;
+  });
+
+  titleForm.appendChild(typeGroup);
+
   var createSubmit = document.createElement("input");
   createSubmit.type = "submit";
   createSubmit.value = "Create"
@@ -36,8 +68,12 @@ function requestProjectTitle(callback){
       title = titleInput.value.trim();
     else
       title = "New Project";
+
+    var chosen = typeInputs.find(function(radio){ return radio.checked; });
+    var type = chosen && chosen.value === 'screenplay' ? 'screenplay' : 'novel';
+
     closePopups();
-    callback(title);
+    callback(title, type);
   }
 
   titleForm.appendChild(createSubmit);

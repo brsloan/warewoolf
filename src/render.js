@@ -887,16 +887,46 @@ function moveChapDown(chapInd){
 
 function createNewProject(){
   const requestProjectTitle = require('./components/views/new-project_display');
-  requestProjectTitle(detached(async function(title){
+  requestProjectTitle(detached(async function(title, type){
     if(title && title != ""){
       project = newProject();
       project.title = title;
       project.author = userSettings.defaultAuthor;
       project.initNotesChap();
+
+      if(type === 'screenplay'){
+        await addScreenplayScript(title);
+        await displayProject();
+        return;
+      }
+
       await addNewChapter();
       await displayProject();
     }
   }));
+}
+
+//A screenplay project starts with its script: one chapter, named after the project, saved as
+//.fountain (the `format` stamp is what tells chapter.js so before the file exists), and a title
+//page carrying what the dialog and settings already know. Not addNewChapter(): that opens the
+//rename box on the new row, and the script's name is the project's.
+async function addScreenplayScript(title){
+  const { setTitlePageValues } = require('./components/controllers/fountain');
+
+  project.type = 'screenplay';
+  project.titlePage = setTitlePageValues([], 'Title', [title]);
+  if(project.author)
+    project.titlePage = setTitlePageValues(project.titlePage, 'Author', [project.author]);
+
+  var script = newChapter(project);
+  script.format = 'fountain';
+  script.title = title;
+  script.hasUnsavedChanges = true;
+  script.contents = getEmptyDelta();
+
+  var landed = chapterList.append(project, 'chapters', script);
+  project.hasUnsavedChanges = true;
+  project.activeChapterIndex = chapterList.toCombinedIndex(project, landed);
 }
 
 async function addNewChapter(){

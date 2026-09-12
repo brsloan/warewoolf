@@ -293,6 +293,113 @@ test('getFile parses a legacy .pup chapter as JSON and a .txt chapter as Markdow
 });
 
 //---------------------------------------------------------------------------
+// screenplays (docs/screenplay-plan.md, Phase 2)
+//---------------------------------------------------------------------------
+
+//The codec a chapter's file goes through is chosen by its extension, and nothing else in the
+//chapter changes: a script is a delta in memory, saved and loaded by the same commands.
+test('getFile parses a .fountain chapter as a screenplay and adopts its title page onto the project', async function(t){
+  const dir = tempDir(t);
+  const proj = projectIn(dir);
+  proj.title = 'stale';
+  const script = newChapter(proj);
+  script.filename = 'script.fountain';
+  fs.writeFileSync(dir + 'script.fountain', 'Title: Big Fish\nAuthor: John August\n\nINT. HOUSE - DAY\n\nBOB\nHi.\n', 'utf8');
+
+  const delta = await script.getFile();
+
+  assert.deepStrictEqual(delta.ops, [
+    { insert: 'INT. HOUSE - DAY' }, { insert: '\n', attributes: { element: 'scene' } },
+    { insert: 'BOB' }, { insert: '\n', attributes: { element: 'character' } },
+    { insert: 'Hi.' }, { insert: '\n', attributes: { element: 'dialogue' } }
+  ]);
+  assert.deepStrictEqual(proj.titlePage, [{ key: 'Title', values: ['Big Fish'] }, { key: 'Author', values: ['John August'] }]);
+  assert.strictEqual(proj.title, 'Big Fish', 'the file wins');
+  assert.strictEqual(proj.author, 'John August');
+});
+
+test('saveFile writes a .fountain chapter as Fountain with the project title page at its head', async function(t){
+  const dir = tempDir(t);
+  const proj = projectIn(dir);
+  proj.titlePage = [{ key: 'Title', values: ['Test'] }];
+  const script = newChapter(proj);
+  script.title = 'Test';
+  script.filename = 'Test.fountain';
+  script.contents = { ops: [
+    { insert: 'INT. HOUSE - DAY' }, { insert: '\n', attributes: { element: 'scene' } },
+    { insert: 'bob' }, { insert: '\n', attributes: { element: 'character' } },
+    { insert: 'Hi.' }, { insert: '\n', attributes: { element: 'dialogue' } }
+  ] };
+
+  await script.saveFile();
+
+  assert.strictEqual(script.filename, 'Test.fountain', 'the extension follows the file, not the default');
+  assert.strictEqual(fs.readFileSync(dir + 'Test.fountain', 'utf8'), 'Title: Test\n\nINT. HOUSE - DAY\n\n@bob\nHi.\n');
+  assert.strictEqual(script.hasUnsavedChanges, false);
+});
+
+//A script that has never been saved has no filename to be told its codec by, so the stamp
+//createNewProject puts on it is what decides - once, for the first save.
+test('a chapter stamped format: fountain is allocated a .fountain filename on its first save, and a copy', async function(t){
+  const dir = tempDir(t);
+  const script = newChapter(projectIn(dir));
+  script.format = 'fountain';
+  script.title = 'My Script';
+  script.contents = textDelta('FADE IN:');
+
+  await script.saveFile();
+  assert.strictEqual(script.filename, 'My Script.fountain');
+  assert.strictEqual(fs.readFileSync(dir + 'My Script.fountain', 'utf8'), 'FADE IN:\n');
+
+  script.contents = textDelta('FADE IN:');
+  await script.saveCopy();
+  assert.strictEqual(script.filename, 'My Script_2.fountain');
+});
+
+test('a .fountain chapter round-trips through save and load', async function(t){
+  const dir = tempDir(t);
+  const proj = projectIn(dir);
+  const script = newChapter(proj);
+  script.format = 'fountain';
+  script.title = 'Round Trip';
+  script.contents = { ops: [
+    { insert: 'INT. HOUSE - DAY' }, { insert: '\n', attributes: { element: 'scene' } },
+    { insert: 'A ' }, { insert: 'quiet', attributes: { italic: true } }, { insert: ' room.' }, { insert: '\n' },
+    { insert: 'BOB' }, { insert: '\n', attributes: { element: 'character' } },
+    { insert: '(low)' }, { insert: '\n', attributes: { element: 'parenthetical' } },
+    { insert: 'Hi.' }, { insert: '\n', attributes: { element: 'dialogue' } },
+    { insert: 'CUT TO:' }, { insert: '\n', attributes: { element: 'transition' } }
+  ] };
+  const expected = JSON.parse(JSON.stringify(script.contents));
+
+  await script.saveFile();
+  assert.deepStrictEqual(await script.getFile(), expected);
+});
+
+test('the native side refuses a chapter extension outside its list', async function(t){
+  const dir = tempDir(t);
+  await assert.rejects(platform.saveChapter({ projectDir: dir, chapsDir: '', title: 'x', mdfc: 'x', extension: '.exe' }),
+    function(err){ return /extension/.test(err.message); });
+  await assert.rejects(platform.saveChapterAtomic({ projectDir: dir, chapsDir: '', oldFilename: null, title: 'x', mdfc: 'x', extension: '../x' }),
+    function(err){ return /extension/.test(err.message); });
+  assert.deepStrictEqual(fs.readdirSync(dir), []);
+});
+
+test('isFountainFile and isFountainChapter', function(){
+  assert.strictEqual(newChapter.isFountainFile('a.fountain'), true);
+  assert.strictEqual(newChapter.isFountainFile('A.FOUNTAIN'), true);
+  assert.strictEqual(newChapter.isFountainFile('a.txt'), false);
+  assert.strictEqual(newChapter.isFountainFile(null), false);
+
+  var chap = newChapter();
+  assert.strictEqual(newChapter.isFountainChapter(chap), false);
+  chap.format = 'fountain';
+  assert.strictEqual(newChapter.isFountainChapter(chap), true, 'the stamp decides while there is no file');
+  chap.filename = 'chapter.txt';
+  assert.strictEqual(newChapter.isFountainChapter(chap), false, 'the file decides once there is one');
+});
+
+//---------------------------------------------------------------------------
 // parent project
 //---------------------------------------------------------------------------
 

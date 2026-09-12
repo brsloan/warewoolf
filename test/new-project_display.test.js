@@ -76,6 +76,26 @@ test('submitting a title with surrounding whitespace trims it', function(){
   assert.deepStrictEqual(titles, ['Frankenstein']);
 });
 
+//docs/screenplay-plan.md, Phase 2: the dialog asks what kind of project, and says so in the
+//callback's second argument. Novel is the default, since it is what the app has always made.
+test('the project type is Novel unless Screenplay is chosen', function(){
+  var calls = [];
+  requestProjectTitle(function(title, type){ calls.push([title, type]); });
+
+  assert.strictEqual(document.getElementById('project-type-novel').checked, true);
+  assert.strictEqual(document.getElementById('project-type-screenplay').checked, false);
+  assert.strictEqual(document.querySelector('label[for="project-type-screenplay"]').textContent, 'Screenplay');
+
+  document.getElementById('title-input').value = 'Big Fish';
+  submitForm();
+  assert.deepStrictEqual(calls, [['Big Fish', 'novel']]);
+
+  requestProjectTitle(function(title, type){ calls.push([title, type]); });
+  document.getElementById('project-type-screenplay').checked = true;
+  submitForm();
+  assert.deepStrictEqual(calls[1], ['New Project', 'screenplay']);
+});
+
 test('Cancel closes the popup without calling back', function(){
   var titles = [];
   requestProjectTitle(function(title){ titles.push(title); });

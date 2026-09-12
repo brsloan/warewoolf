@@ -256,8 +256,13 @@ not writable at all, so the same distinction has to survive the port.
 | Command | Replaces |
 |---|---|
 | `loadChapter(projectDir, chapsDir, filename)` → mdfc text | `chapter.js:73` |
-| `saveChapter(projectDir, chapsDir, filename, mdfc)` | `chapter.js:112` |
-| `saveChapterAtomic({projectDir, chapsDir, oldFilename, title, mdfc, notesMdfc})` → `{filename, notesFilename, notesError}` | the rename → write → restore-on-failure dance at `chapter.js:134-165` |
+| `saveChapter(projectDir, chapsDir, filename, mdfc, [extension])` | `chapter.js:112` |
+| `saveChapterAtomic({projectDir, chapsDir, oldFilename, title, mdfc, notesMdfc, [extension]})` → `{filename, notesFilename, notesError}` | the rename → write → restore-on-failure dance at `chapter.js:134-165` |
+
+`extension` (added with screenplay mode, `docs/screenplay-plan.md` Phase 2) is
+the one the allocated filename ends in: `.txt` when absent, `.fountain` for a
+screenplay's script. The native side accepts only those two, since the value is
+the tail of a filename it writes to. `mdfc` is the file's text in either format.
 | `deleteChapterFiles(projectDir, chapsDir, filename)` | `chapter.js:47-50` (chapter + notes) |
 | `loadChapterNotes(...)` / `saveChapterNotes(...)` | `chapter.js:187-188`, `:205` |
 

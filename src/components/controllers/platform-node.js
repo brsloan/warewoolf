@@ -66,6 +66,10 @@ const getCredentialStore = require('../models/credential-store');
 //renderer knows how a chapter is laid out on disk; after Phase 4 it knows only titles and the
 //filenames it was handed back.
 const CHAPTER_EXT = '.txt';
+//A screenplay project's script. The extension is what tells chapter.js which codec a file goes
+//through, so it is the one other extension a chapter command may be asked for.
+const SCREENPLAY_EXT = '.fountain';
+const CHAPTER_EXTENSIONS = [CHAPTER_EXT, SCREENPLAY_EXT];
 const NOTES_PREPEND = '-notes_';
 const OLD_VERSION_FLAG = 'old_v_temp';
 const PROJECT_EXT = '.woolf';
@@ -674,14 +678,14 @@ function createNodeBacking(deps){
   //reading it and writing is a race the renderer would own. Folding the loop into the same command
   //as the write closes it, and it is why the inventory's original signature - which passed
   //`newFilename` in, implying a separate findAvailableChapterFilename call - could not be right.
-  function allocateChapterFilename(chaptersDir, title){
+  function allocateChapterFilename(chaptersDir, title, extension){
     var root = sanitizeFilename(title != null && title !== '' ? title : 'untitled');
-    var filename = root + CHAPTER_EXT;
+    var filename = root + extension;
     var copyNum = 1;
 
     while(fs.existsSync(chaptersDir + filename)){
       copyNum++;
-      filename = root + '_' + copyNum + CHAPTER_EXT;
+      filename = root + '_' + copyNum + extension;
     }
 
     return filename;
@@ -692,7 +696,7 @@ function createNodeBacking(deps){
     var chaptersDir = chaptersDirOf(args);
     requireText(args.mdfc, 'mdfc');
 
-    var filename = allocateChapterFilename(chaptersDir, args.title);
+    var filename = allocateChapterFilename(chaptersDir, args.title, chapterExtensionOf(args));
     fs.writeFileSync(chaptersDir + filename, args.mdfc, 'utf8');
 
     return { filename: filename };
@@ -734,7 +738,7 @@ function createNodeBacking(deps){
     }
 
     //2. Allocate, now that the chapter's own file is out of the way.
-    var filename = allocateChapterFilename(chaptersDir, args.title);
+    var filename = allocateChapterFilename(chaptersDir, args.title, chapterExtensionOf(args));
 
     //3. Write, and put the old version back if it fails.
     try{
@@ -797,6 +801,20 @@ function createNodeBacking(deps){
   function requireText(value, name){
     if(typeof value !== 'string')
       throw PlatformError(CODES.INVALID_ARGUMENT, 'Expected ' + name + ' to be text.');
+  }
+
+  //The extension a chapter save allocates its filename under: .txt unless asked for the other one.
+  //A closed list rather than whatever string arrives, for the same reason every other path piece
+  //the renderer sends is checked - an extension is the tail of a filename this writes to.
+  function chapterExtensionOf(args){
+    if(args.extension == null)
+      return CHAPTER_EXT;
+
+    if(CHAPTER_EXTENSIONS.indexOf(args.extension) === -1)
+      throw PlatformError(CODES.INVALID_ARGUMENT,
+        'A chapter file extension must be one of ' + CHAPTER_EXTENSIONS.join(', ') + ', not ' + JSON.stringify(args.extension) + '.');
+
+    return args.extension;
   }
 
   // ------------------------------------------------------------------------------------------
@@ -2621,6 +2639,7 @@ function createNodeBacking(deps){
 module.exports = {
   createNodeBacking: createNodeBacking,
   CHAPTER_EXT: CHAPTER_EXT,
+  SCREENPLAY_EXT: SCREENPLAY_EXT,
   NOTES_PREPEND: NOTES_PREPEND,
   OLD_VERSION_FLAG: OLD_VERSION_FLAG,
   PROJECT_EXT: PROJECT_EXT,
