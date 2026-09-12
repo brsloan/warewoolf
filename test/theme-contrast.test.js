@@ -148,7 +148,7 @@ test('index.css paints only with tokens both palettes define', function(){
   //The sizes index.css sets on its own :root, and the hue the word count view sets per element.
   var ownTokens = ['main-font-size', 'dialog-font-size', 'dialog-font-size-small', 'dialog-heading-size',
     'editor-width', 'sidebar-width', 'sidebar-width-double-view', 'corkboard-column-width',
-    'font-serif', 'font-sans', 'font-mono', 'font-editor', 'font-sidebar',
+    'font-serif', 'font-sans', 'font-mono', 'font-editor', 'font-sidebar', 'line-height-editor',
     'radius', 'radius-large', 'progress-hue'];
 
   var undefinedTokens = Object.keys(used).filter(function(name){

@@ -3,6 +3,7 @@ const assert = require('node:assert');
 const { JSDOM } = require('jsdom');
 const { assertDialogDescribed, assertControlsNamed } = require('./helpers');
 const { DEFAULT_FONT_ID, getFontDefs, resolveFontStack } = require('../src/components/models/fonts');
+const { DEFAULT_LINE_HEIGHT_ID, getLineHeightDefs, resolveLineHeight } = require('../src/components/models/line-heights');
 
 const settingsDisplayPath = require.resolve('../src/components/views/settings_display');
 const fileDialogPath = require.resolve('../src/components/views/file-dialog_display');
@@ -40,6 +41,7 @@ function makeUserSettings(overrides){
     autocorrect: {},
     editorFont: DEFAULT_FONT_ID,
     sidebarFont: DEFAULT_FONT_ID,
+    editorLineHeight: DEFAULT_LINE_HEIGHT_ID,
     save: function(){}
   }, overrides);
 }
@@ -357,4 +359,112 @@ test('the sample follows the picker before anything is saved', function(){
   assert.strictEqual(document.getElementById('sidebar-font-sample').style.fontFamily, resolveFontStack('dyslexic'));
   //Only its own sample: the two settings are independent.
   assert.strictEqual(document.getElementById('editor-font-sample').style.fontFamily, resolveFontStack(DEFAULT_FONT_ID));
+});
+
+
+//---------------------------------------------------------------------------
+// manuscript line spacing
+//---------------------------------------------------------------------------
+
+test('the line spacing picker offers every spacing WareWoolf knows about', function(){
+  openSettings(makeUserSettings());
+
+  var options = Array.from(document.getElementById('editor-line-height-select').options);
+
+  assert.deepStrictEqual(options.map(function(o){ return o.value; }), getLineHeightDefs().map(function(def){ return def.id; }));
+  //innerText rather than textContent: the app sets it that way throughout, and jsdom keeps
+  //innerText as a plain property without reflecting it into the node's text.
+  assert.ok(options.every(function(o){ return o.innerText !== ''; }), 'every option should be named');
+});
+
+test('the picker opens on the spacing already in user settings', function(){
+  openSettings(makeUserSettings({ editorLineHeight: 'one-and-a-half' }));
+
+  assert.strictEqual(document.getElementById('editor-line-height-select').value, 'one-and-a-half');
+});
+
+//A picker left showing its first option - the tightest one - while the manuscript is drawn double
+//spaced would be lying about the current state, and Save would then quietly re-space the book.
+test('a spacing this version does not know falls back to the default rather than to the first option', function(){
+  openSettings(makeUserSettings({ editorLineHeight: 'quintuple' }));
+
+  assert.strictEqual(document.getElementById('editor-line-height-select').value, DEFAULT_LINE_HEIGHT_ID);
+});
+
+test('Save writes the chosen line spacing back to user settings', function(){
+  var userSettings = openSettings(makeUserSettings());
+
+  document.getElementById('editor-line-height-select').value = 'single';
+  findButton('Save').onclick();
+
+  assert.strictEqual(userSettings.editorLineHeight, 'single');
+});
+
+//The saved value goes straight into a css line-height declaration, so it is sanitized on the way
+//out of the dialog as well as on the way in off disk.
+test('Save sanitizes a line spacing that is not one of ours', function(){
+  var userSettings = openSettings(makeUserSettings());
+
+  var select = document.getElementById('editor-line-height-select');
+  var smuggled = document.createElement('option');
+  smuggled.value = '200%; color: red';
+  select.appendChild(smuggled);
+  select.value = '200%; color: red';
+
+  findButton('Save').onclick();
+
+  assert.strictEqual(userSettings.editorLineHeight, DEFAULT_LINE_HEIGHT_ID);
+});
+
+test('the spacing sample sits in the row directly under its picker', function(){
+  openSettings(makeUserSettings());
+
+  var pickerRow = document.getElementById('editor-line-height-select').closest('tr');
+  var sampleRow = document.getElementById('editor-line-height-sample').closest('tr');
+
+  assert.strictEqual(pickerRow.nextElementSibling, sampleRow);
+  assert.strictEqual(sampleRow.cells.length, 1);
+  assert.strictEqual(sampleRow.cells[0].colSpan, 2);
+});
+
+//A single line has no next line to show a gap to, so this sample is a paragraph where the font
+//samples are one sentence.
+test('the spacing sample is set at the spacing that is selected, in the manuscript face', function(){
+  openSettings(makeUserSettings({ editorLineHeight: 'single', editorFont: 'typewriter' }));
+
+  var sample = document.getElementById('editor-line-height-sample');
+
+  assert.strictEqual(sample.style.lineHeight, resolveLineHeight('single'));
+  assert.strictEqual(sample.style.fontFamily, resolveFontStack('typewriter'));
+  assert.ok(sample.innerText.split('. ').length > 2, 'one line cannot show the gap to the next');
+  //Said already by the selected option's own name; read aloud it is three sentences of filler.
+  assert.strictEqual(sample.getAttribute('aria-hidden'), 'true');
+});
+
+test('the spacing sample follows the picker before anything is saved', function(){
+  openSettings(makeUserSettings());
+
+  var select = document.getElementById('editor-line-height-select');
+  select.value = 'two-and-a-half';
+  select.dispatchEvent(new window.Event('change'));
+
+  assert.strictEqual(document.getElementById('editor-line-height-sample').style.lineHeight, resolveLineHeight('two-and-a-half'));
+});
+
+//Spacing that reads well in Courier is not the spacing that reads well in Garamond, so previewing
+//it against a face the manuscript is not in would be answering a question nobody asked.
+test('the spacing sample re-draws when the manuscript face changes', function(){
+  openSettings(makeUserSettings());
+
+  var fontSelect = document.getElementById('editor-font-select');
+  fontSelect.value = 'garamond';
+  fontSelect.dispatchEvent(new window.Event('change'));
+
+  assert.strictEqual(document.getElementById('editor-line-height-sample').style.fontFamily, resolveFontStack('garamond'));
+  //The sidebar face is a different panel's setting and has nothing to do with this one.
+  var sidebarSelect = document.getElementById('sidebar-font-select');
+  sidebarSelect.value = 'monospace';
+  sidebarSelect.dispatchEvent(new window.Event('change'));
+
+  assert.strictEqual(document.getElementById('editor-line-height-sample').style.fontFamily, resolveFontStack('garamond'));
 });

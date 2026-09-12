@@ -11,6 +11,7 @@ const getUserSettings = require('../src/components/models/user-settings');
 const { createFakeBridge } = require('./fake-bridge');
 const { createIpcBacking } = require('../src/components/controllers/platform-ipc');
 const { DEFAULT_FONT_ID } = require('../src/components/models/fonts');
+const { DEFAULT_LINE_HEIGHT_ID } = require('../src/components/models/line-heights');
 
 //loadUserSettings()/saveUserSettings() are parameterless on the contract - the backing decides
 //where the file lives, from paths.userData - so each test configures a node-backed platform
@@ -504,4 +505,57 @@ test('an unusable font left on the live object is written out as the default', a
   const written = JSON.parse(fs.readFileSync(settingsPath(dir), 'utf8'));
 
   assert.strictEqual(written.editorFont, DEFAULT_FONT_ID);
+});
+
+
+//---------------------------------------------------------------------------
+// manuscript line spacing
+//---------------------------------------------------------------------------
+
+//The spacing the editor was already drawn at, so an existing writer who never opens the dropdown
+//sees exactly the manuscript they had.
+test('the manuscript line spacing starts on the default', function(t){
+  const dir = configurePlatform(t);
+  const settings = getUserSettings(settingsPath(dir));
+
+  assert.strictEqual(settings.editorLineHeight, DEFAULT_LINE_HEIGHT_ID);
+});
+
+test('a chosen line spacing round-trips', async function(t){
+  const dir = configurePlatform(t);
+  const settings = getUserSettings(settingsPath(dir));
+
+  settings.editorLineHeight = 'single';
+  await settings.save();
+
+  const reloaded = await getUserSettings(settingsPath(dir)).load();
+
+  assert.strictEqual(reloaded.editorLineHeight, 'single');
+});
+
+//Like a font id, this ends up inside a css declaration, so a `type: 'string'` check is not enough:
+//it has to name a spacing line-heights.js actually has a multiplier for. `2` and `'2'` are in the
+//list because a spacing is a number everywhere else it is written down, so they are what a hand
+//edit is likeliest to put there - and neither is an id.
+test('a line spacing that names nothing WareWoolf has falls back to the default on load', async function(t){
+  const dir = configurePlatform(t);
+
+  for(const value of ['no-such-spacing', '', 2, '2', null, [], { id: 'single' }, 'constructor']){
+    fs.writeFileSync(settingsPath(dir), JSON.stringify({ editorLineHeight: value }), 'utf8');
+    const settings = await getUserSettings(settingsPath(dir)).load();
+    assert.strictEqual(settings.editorLineHeight, DEFAULT_LINE_HEIGHT_ID, JSON.stringify(value));
+  }
+});
+
+//Sanitized on the way out as well as in, so a bad value set on the live object never reaches disk.
+test('an unusable line spacing left on the live object is written out as the default', async function(t){
+  const dir = configurePlatform(t);
+  const settings = getUserSettings(settingsPath(dir));
+
+  settings.editorLineHeight = 'nonsense; color: red';
+  await settings.save();
+
+  const written = JSON.parse(fs.readFileSync(settingsPath(dir), 'utf8'));
+
+  assert.strictEqual(written.editorLineHeight, DEFAULT_LINE_HEIGHT_ID);
 });

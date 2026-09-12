@@ -3,6 +3,7 @@ const { showBattery, removeBattery } = require('./battery_display');
 const showFileDialog = require('./file-dialog_display');
 const { getAutocorrectDefs, resolveAutocorrect, diffFromDefaults } = require('../models/autocorrect');
 const { getFontDefs, resolveFontStack, sanitizeFontId } = require('../models/fonts');
+const { getLineHeightDefs, resolveLineHeight, sanitizeLineHeightId } = require('../models/line-heights');
 
 function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, callback, platformInfo){
   removeElementsByClass('popup');
@@ -233,6 +234,11 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
   var editorFontSelect = addFontPicker(fontTbl, 'editor-font', 'Manuscript Font: ', userSettings.editorFont);
   var sidebarFontSelect = addFontPicker(fontTbl, 'sidebar-font', 'Sidebar Font (chapter list and notes): ', userSettings.sidebarFont);
 
+  //Only the manuscript, so it sits under the manuscript's own settings. The chapter list and the
+  //notes are columns to glance down rather than prose to read a chapter of, and index.css sets
+  //them closer on purpose.
+  var lineHeightSelect = addLineHeightPicker(fontTbl, 'editor-line-height', 'Manuscript Line Spacing: ', userSettings.editorLineHeight, editorFontSelect);
+
   appearanceSet.appendChild(fontTbl);
 
   settingsForm.appendChild(appearanceSet);
@@ -274,6 +280,9 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
     //font-family declaration.
     userSettings.editorFont = sanitizeFontId(editorFontSelect.value);
     userSettings.sidebarFont = sanitizeFontId(sidebarFontSelect.value);
+    //And for the same reason: a <select>'s value is a string from the DOM, and this one ends up in
+    //a css line-height declaration.
+    userSettings.editorLineHeight = sanitizeLineHeightId(lineHeightSelect.value);
     userSettings.defaultAuthor = defAuthIn.value;
     userSettings.addressInfo = addressIn.value;
     userSettings.autocorrectEnabled = autocorrectCheck.checked;
@@ -376,6 +385,78 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
 
     function updateSample(){
       sample.style.fontFamily = resolveFontStack(select.value);
+    }
+  }
+
+  //The manuscript's line spacing: the same shape as a font picker - a labelled dropdown with a
+  //sample directly beneath it - since it is the same kind of choice about the same panel, and a
+  //writer setting up their screen should not have to learn two layouts to do it.
+  //
+  //`fontSelect` is the manuscript's own font picker. The sample is drawn in whatever face that is
+  //currently showing, so the two settings are previewed together rather than each against a face
+  //the editor is not in - spacing that reads well in Courier is not the spacing that reads well in
+  //Garamond, which is the whole reason a writer is looking at this. Returns the select, which is
+  //what Save reads.
+  function addLineHeightPicker(table, idPrefix, labelText, selected, fontSelect){
+    var select = buildLineHeightSelect(idPrefix + '-select', selected);
+    var label = document.createElement('label');
+    label.innerText = labelText;
+    label.htmlFor = select.id;
+    table.appendChild(generateRow(label, select));
+
+    var sampleRow = document.createElement('tr');
+    var sampleCell = document.createElement('td');
+    sampleCell.colSpan = 2;
+    sampleCell.appendChild(buildLineHeightSample(idPrefix + '-sample', select, fontSelect));
+    sampleRow.appendChild(sampleCell);
+    table.appendChild(sampleRow);
+
+    return select;
+  }
+
+  //`selected` is whatever is in user settings, run through sanitizeLineHeightId so an id this
+  //version does not know lands on the default rather than leaving the select showing its first
+  //option - which is the tightest one - while the manuscript is drawn double spaced.
+  function buildLineHeightSelect(id, selected){
+    var select = document.createElement('select');
+    select.id = id;
+
+    getLineHeightDefs().forEach(function(def){
+      var option = document.createElement('option');
+      option.value = def.id;
+      option.innerText = def.label;
+      select.appendChild(option);
+    });
+
+    select.value = sanitizeLineHeightId(selected);
+
+    return select;
+  }
+
+  //Several sentences rather than the fonts' one pangram: line spacing is the gap between one line
+  //and the next, and a single line has no next line to show a gap to. Prose rather than a
+  //specimen sentence for the same reason - what is being judged is how a paragraph of the book
+  //will sit, so the sample is a paragraph.
+  //
+  //Marked aria-hidden: it says nothing the selected option's own name does not, and read aloud it
+  //is three sentences of filler.
+  function buildLineHeightSample(id, select, fontSelect){
+    var sample = document.createElement('p');
+    sample.id = id;
+    sample.classList.add('line-height-sample');
+    sample.innerText = 'She read the page again, more slowly this time. The words were the same words. ' +
+      'It was the space between them that had changed, and with it the speed at which she could think.';
+    sample.setAttribute('aria-hidden', 'true');
+
+    select.addEventListener('change', updateSample);
+    fontSelect.addEventListener('change', updateSample);
+    updateSample();
+
+    return sample;
+
+    function updateSample(){
+      sample.style.lineHeight = resolveLineHeight(select.value);
+      sample.style.fontFamily = resolveFontStack(fontSelect.value);
     }
   }
 

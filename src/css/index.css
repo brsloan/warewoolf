@@ -29,6 +29,13 @@
   --font-editor: var(--font-serif);
   --font-sidebar: var(--font-serif);
 
+  /* How far apart the manuscript's lines are set, chosen in Settings > Appearance and filled in by
+     updateLineHeight() in render.js from the multipliers in models/line-heights.js. Double, like
+     the two faces above, is not a placeholder to be overwritten - it is the spacing the editor was
+     always drawn at, and the real fallback if user settings never load. The sidebars are not
+     included: they are columns to glance down, and keep the spacing stated on them below. */
+  --line-height-editor: 200%;
+
   --radius: 4px;
   --radius-large: 8px;
 }
@@ -335,9 +342,11 @@ hr {
 
 /* The notes editor lives in a sidebar: a lighter hand than the manuscript, and no sheet. It takes
    the sidebar's face rather than the editor's for the same reason - Settings offers one choice per
-   column, and the notes are a column, not the manuscript. Stated on this selector rather than left
-   to .sidebar's own inheritance because .ql-editor below declares a face of its own; two classes
-   beat one, so this holds wherever the two rules end up in the file. */
+   column, and the notes are a column, not the manuscript. Its line spacing is fixed here for the
+   same reason, which is also what keeps the manuscript's spacing setting off it. Both are stated
+   on this selector rather than left to .sidebar's own inheritance because .ql-editor below
+   declares a face and a spacing of its own; two classes beat one, so this holds wherever the two
+   rules end up in the file. */
 .sidebar .ql-editor {
   padding: 8px 14px;
   line-height: 165%;
@@ -388,7 +397,7 @@ hr {
 }
 
 .ql-editor {
-  line-height: 200%;
+  line-height: var(--line-height-editor);
   font-size: var(--main-font-size);
   font-family: var(--font-editor);
   color: var(--text);
@@ -568,15 +577,20 @@ hr {
   margin-left: 22px;
 }
 
-/* The specimen line under each font picker in Settings. Set on a surface of its own so the sample
-   reads as a swatch rather than as a sentence the dialog is telling the writer, and left at the
-   dialog's own size - what is being judged here is the shape of the letters, not how big they are,
-   which Ctrl+/Ctrl- already decides. font-family is set from the picker by settings_display.js.
+/* The specimen boxes under the Appearance pickers in Settings: a line in the chosen face under
+   each font dropdown, a paragraph at the chosen spacing under the line spacing one. The same box
+   for both, since they answer the same kind of question about the same panel. Set on a surface of
+   its own so a sample reads as a swatch rather than as a sentence the dialog is telling the
+   writer, and left at the dialog's own size - what is being judged here is the shape of the
+   letters and the gap between the lines, not how big the text is, which Ctrl+/Ctrl- already
+   decides. font-family and line-height are set from the pickers by settings_display.js.
 
-   It wraps rather than being held to one line: the pangram is there to show every letter, and the
+   Both wrap rather than being held to one line. The pangram is there to show every letter, and the
    widest faces on offer (Courier, OpenDyslexic) overrun the dialog's width, so a single line would
-   cut off the end of the alphabet in exactly the cases a writer most wants to look at. */
-.font-sample {
+   cut off the end of the alphabet in exactly the cases a writer most wants to look at; the spacing
+   sample has nothing to show at all until it has wrapped to a second line. */
+.font-sample,
+.line-height-sample {
   margin: 6px 0 2px 0;
   padding: 8px 12px;
   background-color: var(--input-bg);

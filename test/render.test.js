@@ -16,6 +16,7 @@ const { createPlatform } = require('../src/components/controllers/platform');
 const { createNodeBacking } = require('../src/components/controllers/platform-node');
 const { createFakeBridge } = require('./fake-bridge');
 const { DEFAULT_FONT_ID, resolveFontStack } = require('../src/components/models/fonts');
+const { DEFAULT_LINE_HEIGHT_ID, resolveLineHeight } = require('../src/components/models/line-heights');
 
 const renderPath = require.resolve('../src/render');
 //keybindings.js builds its own platform instance at require-time, same as render.js itself - but it
@@ -2177,6 +2178,57 @@ test('a font id that names nothing WareWoolf has draws the default face instead'
 
   assert.strictEqual(fontProperty('--font-editor'), resolveFontStack(DEFAULT_FONT_ID));
   assert.strictEqual(r.userSettings.editorFont, DEFAULT_FONT_ID);
+});
+
+//---------------------------------------------------------------------------
+// manuscript line spacing
+//---------------------------------------------------------------------------
+
+//The manuscript reads --line-height-editor out of index.css; nothing else turns a saved spacing id
+//into a css value, so if applyUserSettings() skips this at boot the editor is set at the
+//stylesheet's fallback no matter what the writer chose.
+test('the saved line spacing is on the page as soon as the app has booted', async function(){
+  var r = await freshRender();
+
+  assert.strictEqual(fontProperty('--line-height-editor'), resolveLineHeight(r.userSettings.editorLineHeight));
+});
+
+//Through the real menu command and the real Save button, so this covers the callback render.js
+//hands the popup: spacing that only took effect on the next launch would be a setting a writer
+//cannot watch themselves change.
+test('choosing a line spacing in Settings re-spaces the manuscript without a restart', async function(){
+  await freshRender();
+
+  currentBridge().handlers['settings-clicked']();
+  document.getElementById('editor-line-height-select').value = 'single';
+  settingsPopupSaveButton().onclick();
+
+  assert.strictEqual(fontProperty('--line-height-editor'), resolveLineHeight('single'));
+});
+
+//A settings file anything could have written to must not reach a line-height declaration intact.
+test('a line spacing that names nothing WareWoolf has sets the default instead', async function(){
+  var r = await freshRender();
+
+  r.userSettings.editorLineHeight = 'nonsense; color: red';
+  saveSettingsPopup();
+
+  assert.strictEqual(fontProperty('--line-height-editor'), resolveLineHeight(DEFAULT_LINE_HEIGHT_ID));
+  assert.strictEqual(r.userSettings.editorLineHeight, DEFAULT_LINE_HEIGHT_ID);
+});
+
+//The sidebars are columns to glance down rather than prose, and index.css sets them closer on
+//purpose - a writer who spaces their manuscript out has not asked for a taller chapter list.
+test('the line spacing setting leaves the sidebars alone', async function(){
+  await freshRender();
+
+  currentBridge().handlers['settings-clicked']();
+  document.getElementById('editor-line-height-select').value = 'two-and-a-half';
+  settingsPopupSaveButton().onclick();
+
+  assert.strictEqual(fontProperty('--line-height-editor'), resolveLineHeight('two-and-a-half'));
+  //One property, and it is the manuscript's. Nothing was set for a sidebar to read.
+  assert.strictEqual(fontProperty('--line-height-sidebar'), '');
 });
 
 //The conversion itself is covered in convert-substitutions.test.js, and the popup's own behaviour

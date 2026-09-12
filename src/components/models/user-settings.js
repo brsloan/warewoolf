@@ -2,6 +2,7 @@ const { logError } = require('../controllers/error-log');
 const { sanitizeOverrides } = require('./shortcuts');
 const { sanitizeAutocorrect } = require('./autocorrect');
 const { sanitizeFontId, DEFAULT_FONT_ID } = require('./fonts');
+const { sanitizeLineHeightId, DEFAULT_LINE_HEIGHT_ID } = require('./line-heights');
 
 //Unlike sanitizeOverrides/sanitizeAutocorrect, there is no fixed id list to check entries against -
 //a valid id is whatever listDictionaries() (group I) finds on disk, which this module has no way to
@@ -69,7 +70,8 @@ const SETTINGS_SCHEMA = {
   spellcheckDictionaries: { type: 'object', sanitize: sanitizeDictionaryIds },
   wordsPerPage: { type: 'number' },
   editorFont: { type: 'string', sanitize: sanitizeFontId },
-  sidebarFont: { type: 'string', sanitize: sanitizeFontId }
+  sidebarFont: { type: 'string', sanitize: sanitizeFontId },
+  editorLineHeight: { type: 'string', sanitize: sanitizeLineHeightId }
 };
 
 function getUserSettings(userSettingsFilepath){
@@ -128,6 +130,12 @@ function getUserSettings(userSettingsFilepath){
     //declaration, and so that a later version may improve a stack's fallbacks for everyone.
     editorFont: DEFAULT_FONT_ID,
     sidebarFont: DEFAULT_FONT_ID,
+    //How far apart the manuscript's lines are set, by id - see models/line-heights.js. Only the
+    //manuscript: the chapter list and the notes are columns to glance down rather than prose to
+    //read, and they stay on the spacing index.css gives them. Starts on DEFAULT_LINE_HEIGHT_ID,
+    //which is the double spacing the editor was already drawn at, and is stored as an id for the
+    //same reasons the two font settings above are.
+    editorLineHeight: DEFAULT_LINE_HEIGHT_ID,
     save: save,
     load: load,
     getSettingsFilepath: getSettingsFilepath

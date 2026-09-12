@@ -25,6 +25,7 @@ const {
 const { resolveShortcuts } = require('./components/models/shortcuts');
 const { resolveAutocorrect } = require('./components/models/autocorrect');
 const { resolveFontStack } = require('./components/models/fonts');
+const { resolveLineHeight } = require('./components/models/line-heights');
 const { setSelectedDictionaries, setProjectWords, releaseSpellchecker } = require('./components/controllers/spellcheck');
 const { normalizeSlashes } = require('./components/controllers/path-utils');
 const { enableTypewriterMode, disableTypewriterMode } = require('./components/controllers/typewriter-mode');
@@ -442,6 +443,7 @@ function disableTabbingToEditors(){
 function applyUserSettings(){
   updateFontSize();
   updateFonts();
+  updateLineHeight();
   if(userSettings.typewriterMode)
     enableTypewriterMode(editorQuill)
   updateEditorWidth();
@@ -471,6 +473,17 @@ function updateFontSize(){
 function updateFonts(){
   document.documentElement.style.setProperty('--font-editor', resolveFontStack(userSettings.editorFont));
   document.documentElement.style.setProperty('--font-sidebar', resolveFontStack(userSettings.sidebarFont));
+}
+
+//The manuscript's line spacing, resolved from the id in user settings to the css value
+//index.css's --line-height-editor carries. Its own function alongside updateFonts() rather than
+//part of it because they are separate settings that happen to be changed from the same dialog -
+//nothing says a later version cannot put spacing on a shortcut the way font size already is.
+//
+//resolveLineHeight answers with the default spacing for an id it does not recognize, so there is
+//nothing to check here: whatever is in userSettings, the property ends up holding a real value.
+function updateLineHeight(){
+  document.documentElement.style.setProperty('--line-height-editor', resolveLineHeight(userSettings.editorLineHeight));
 }
 
 function updateEditorWidth(){
@@ -1668,6 +1681,7 @@ const menuCommands = {
     return showSettings(userSettings, autosaver, sysDirectories, detached(autosaveProject), function(){
       setDarkMode();
       updateFonts();
+      updateLineHeight();
       autocorrectRules = resolveAutocorrectSetting();
     }, platformInfo);
   } },

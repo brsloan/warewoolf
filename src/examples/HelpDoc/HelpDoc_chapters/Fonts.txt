@@ -22,4 +22,6 @@ It is there because WareWoolf does not ship any fonts of its own. Bundling a set
 The sample is the honest answer to "what will I get?" Whatever is drawn in that line is what the panel will be drawn in. If you pick Garamond and the sample does not look like Garamond, your machine does not have it, and something close is standing in. Installing the real one—through your system's font manager, as with any other program—and reopening Settings is all it takes for WareWoolf to start using it.
 
 ## What This Does Not Change
+How far apart the lines are set is its own dropdown, directly below these two—see the ***Line Spacing*** page.
+
 The font is a setting for your screen, not for your book. Compiling or exporting a manuscript produces the same file whichever face you chose, because the typeface of a submitted document is decided by whoever you are submitting it to. Font *size* is separate as well, and stays on **CMD/CTRL** + **-** or **+**.
