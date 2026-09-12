@@ -8,6 +8,8 @@ Releases before v0.9.0 were never tagged or published; the work from that period
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-09-12
+
 ### Added
 
 - **Customizable keyboard shortcuts.** Open the Shortcut Helper (`Ctrl+H`, `Cmd+Shift+H` on Mac), pick a shortcut, and press the keys you want. Backspace clears one; Restore Defaults puts them all back; changes persist between sessions. Keys the app cannot give up are refused rather than silently broken. A writerdeck's own special keys can be bound too — by name, by physical code, or by keycode, whichever the key reports.
@@ -309,7 +311,8 @@ WareWoolf was developed in the open for two and a half years before the first ta
 - **2022-12** — Fixed data loss when changing a chapter title, the missing-pups alert not taking focus, and the spellcheck dictionary path. README screenshot added.
 - **2023-05** — The error log gained a viewer with send and clear, the Help doc was expanded, `Alt+H` was bound to Change All and `Ctrl+Shift+D` to delete a chapter, DevTools was turned off, and a welcome explanation was added to the head of the sample novel. Released as v0.9.0 beta.
 
-[Unreleased]: https://github.com/brsloan/warewoolf/compare/v2.5.0...HEAD
+[Unreleased]: https://github.com/brsloan/warewoolf/compare/v3.0.0...HEAD
+[3.0.0]: https://github.com/brsloan/warewoolf/compare/v2.5.0...v3.0.0
 [2.5.0]: https://github.com/brsloan/warewoolf/compare/v2.4.0...v2.5.0
 [2.4.0]: https://github.com/brsloan/warewoolf/compare/v2.3.1...v2.4.0
 [2.3.1]: https://github.com/brsloan/warewoolf/compare/v2.3.0...v2.3.1
