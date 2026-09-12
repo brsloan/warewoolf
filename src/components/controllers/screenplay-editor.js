@@ -323,12 +323,143 @@ function attachScreenplayKeys(quill, getMode){
   bindings[9].unshift(screenplayTabBinding(quill, getMode));
 }
 
+// ------------------------------------------------------------------------------------------
+// Scenes
+// ------------------------------------------------------------------------------------------
+
+//The scenes of a script, from the delta: every line whose element is a scene heading, with its
+//text and the index it starts at. This is what the sidebar renders and what navigation and the
+//scene moves work from - never the DOM. One walk of the paragraphs; the index arithmetic is the
+//same one every other delta consumer here makes, a character per string character, one per embed,
+//one per line's newline.
+function sceneIndex(delta){
+  var scenes = [];
+  var index = 0;
+
+  if(!delta || !Array.isArray(delta.ops))
+    return scenes;
+
+  parseDelta(delta).paragraphs.forEach(function(para){
+    var text = '';
+    var length = 0;
+    para.textRuns.forEach(function(run){
+      if(typeof run.text === 'string'){
+        text += run.text;
+        length += run.text.length;
+      }
+      else
+        length += 1;
+    });
+
+    if(para.attributes && para.attributes.element === 'scene')
+      scenes.push({ title: text, index: index });
+
+    index += length + 1;
+  });
+
+  return scenes;
+}
+
+//Which scene the caret is in: the last heading at or before it, or -1 for text before the first
+//heading (a FADE IN:, an opening action line), which belongs to no scene.
+function sceneAt(scenes, caret){
+  var found = -1;
+  scenes.forEach(function(scene, k){
+    if(scene.index <= caret)
+      found = k;
+  });
+  return found;
+}
+
+//The start of the heading before the caret and after it, for the navigation shortcuts. Strictly
+//before: with the caret mid-scene, "previous" is this scene's own heading, which is where a writer
+//pressing it wants to be; from the heading itself, it is the one above.
+function previousSceneStart(scenes, caret){
+  var found = null;
+  scenes.forEach(function(scene){
+    if(scene.index < caret)
+      found = scene.index;
+  });
+  return found;
+}
+
+function nextSceneStart(scenes, caret){
+  var found = scenes.find(function(scene){ return scene.index > caret; });
+  return found ? found.index : null;
+}
+
+//A new delta with scene `k` swapped with the one above (direction -1) or below (+1), or null when
+//there is no such neighbour. A scene is its heading and every line down to the next heading; text
+//before the first heading belongs to no scene and never moves. Pure: the caller diffs this against
+//the editor's contents and applies the difference as one user change, which is one undo entry.
+//Returns the new delta and where the moved heading now starts, for the caret.
+function moveScene(delta, k, direction){
+  var paragraphs = parseDelta(delta).paragraphs;
+  var headings = [];
+  paragraphs.forEach(function(para, i){
+    if(para.attributes && para.attributes.element === 'scene')
+      headings.push(i);
+  });
+
+  var neighbour = k + direction;
+  if(k < 0 || k >= headings.length || neighbour < 0 || neighbour >= headings.length)
+    return null;
+
+  var rangeOf = function(n){
+    return { from: headings[n], to: n + 1 < headings.length ? headings[n + 1] : paragraphs.length };
+  };
+  var first = rangeOf(Math.min(k, neighbour));
+  var second = rangeOf(Math.max(k, neighbour));
+
+  var reordered = paragraphs.slice(0, first.from)
+    .concat(paragraphs.slice(second.from, second.to))
+    .concat(paragraphs.slice(first.from, first.to))
+    .concat(paragraphs.slice(second.to));
+
+  //The moved scene is the first of the two when it went up, and the second when it went down -
+  //which, once reordered, puts it at first.from either way, or after the other scene's length.
+  var movedAt = direction < 0 ? first.from : first.from + (second.to - second.from);
+
+  var ops = [];
+  reordered.forEach(function(para){
+    para.textRuns.forEach(function(run){
+      var op = { insert: run.text };
+      if(run.attributes)
+        op.attributes = run.attributes;
+      ops.push(op);
+    });
+    var lineOp = { insert: '\n' };
+    if(para.attributes)
+      lineOp.attributes = para.attributes;
+    ops.push(lineOp);
+  });
+
+  //Where the moved heading now starts, walked the same way the ops were built.
+  var index = 0;
+  var start = 0;
+  reordered.forEach(function(para, i){
+    if(i === movedAt)
+      start = index;
+    para.textRuns.forEach(function(run){
+      index += typeof run.text === 'string' ? run.text.length : 1;
+    });
+    index += 1;
+  });
+
+  return { ops: ops, start: start };
+}
+
 module.exports = {
   loadScreenplayDelta,
   deltaToScreenplayHtml,
   setElement,
   elementOf,
   lineAt,
+  sceneIndex,
+  sceneAt,
+  previousSceneStart,
+  nextSceneStart,
+  moveScene,
   attachScreenplayKeys,
   screenplayEnterBinding,
   screenplayShiftEnterBinding,

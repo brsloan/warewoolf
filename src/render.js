@@ -11,7 +11,15 @@ const { applyQuillShortcuts, splitDeltaAtIndices } = require('./components/contr
 const { attachAutocorrect } = require('./components/controllers/autocorrect');
 const { registerFootnoteBlots } = require('./components/blots/footnotes');
 const { registerScreenplayFormats, SCREENPLAY_FORMATS } = require('./components/blots/screenplay');
-const { loadScreenplayDelta, attachScreenplayKeys } = require('./components/controllers/screenplay-editor');
+const {
+  loadScreenplayDelta,
+  attachScreenplayKeys,
+  sceneIndex,
+  sceneAt,
+  previousSceneStart,
+  nextSceneStart,
+  moveScene
+} = require('./components/controllers/screenplay-editor');
 const {
   applyStructuralFootnoteChanges,
   containsFootnotes,
@@ -36,7 +44,13 @@ const {
   disableSearchView
 } = require('./components/controllers/utils');
 const { showBattery } = require('./components/views/battery_display');
-const { renderChapterList, renameChapterInList, scrollIntoViewIfNeeded } = require('./components/views/chapter-list_display');
+const {
+  renderChapterList,
+  renameChapterInList,
+  renameSceneInList,
+  markActiveSceneRow,
+  scrollIntoViewIfNeeded
+} = require('./components/views/chapter-list_display');
 
 //The single boundary to the OS and the main process - see platform.js. getAppPaths/
 //getFileRequestedOnOpen used to be sendSync calls made here at module load; both are now regular
@@ -297,6 +311,8 @@ async function loadPlatformState(){
     editorHasFocus,
     editorIsVisible,
     editorMode,
+    displayPreviousChapter,
+    displayNextChapter,
     _unregisterKeybindings: unregisterKeybindings
   });
 }
@@ -644,8 +660,10 @@ async function setWordCountOnLoad(){
 function updateFileList(){
   renderChapterList(project, {
     onSelect: selectChapterFromList,
-    onRename: changeChapterTitle
-  });
+    onRename: changeChapterTitle,
+    onSelectScene: selectScene,
+    onRenameScene: changeSceneTitle
+  }, sceneListForSidebar());
 }
 
 //A click from the sidebar loads the chapter, and that finishes asynchronously - after the file has
@@ -889,7 +907,14 @@ function removeSpecialDisplayClasses(el){
 
 //User Actions
 
+//In a script the same keys move between scenes - positions in the one document - rather than
+//between documents. See docs/screenplay-plan.md, "Keyboard".
 async function displayPreviousChapter(){
+  if(editorMode() === 'screenplay'){
+    jumpToScene(previousSceneStart(currentScenes(), project.textCursorPosition || 0));
+    return;
+  }
+
   if(project.activeChapterIndex > 0){
     await displayChapterByIndex(project.activeChapterIndex - 1);
     editorQuill.setSelection(0);
@@ -898,6 +923,11 @@ async function displayPreviousChapter(){
 }
 
 async function displayNextChapter(){
+  if(editorMode() === 'screenplay'){
+    jumpToScene(nextSceneStart(currentScenes(), project.textCursorPosition || 0));
+    return;
+  }
+
   if(!chapterList.isLastOfAll(project, chapterList.activeLocator(project))){
     await displayChapterByIndex(project.activeChapterIndex + 1);
     editorQuill.setSelection(0);
@@ -907,6 +937,11 @@ async function displayNextChapter(){
 }
 
 function moveChapUp(chapInd){
+  if(editorMode() === 'screenplay'){
+    moveCurrentScene(-1);
+    return;
+  }
+
   var landed = chapterList.moveUp(project, chapterList.toLocator(project, chapInd));
 
   if(landed){
@@ -920,6 +955,11 @@ function moveChapUp(chapInd){
 }
 
 function moveChapDown(chapInd){
+  if(editorMode() === 'screenplay'){
+    moveCurrentScene(1);
+    return;
+  }
+
   var landed = chapterList.moveDown(project, chapterList.toLocator(project, chapInd));
 
   if(landed){
@@ -1161,6 +1201,7 @@ editorQuill.on('text-change', function(delta, oldDelta, source) {
     }
 
     scheduleFootnoteRenumber();
+    scheduleSceneListRefresh();
   }
 });
 
@@ -1256,6 +1297,7 @@ function applyFootnoteRenumber(pass){
 editorQuill.on('selection-change', function(range, oldRange, source){
   if(range){
     project.textCursorPosition = range.index;
+    followCaretInSceneList(range.index);
   }
 
   updateActiveFootnoteHighlight(range);
@@ -1426,6 +1468,13 @@ async function restoreFromTrash(ind){
 }
 
 function changeChapterTitle(ind){
+  //In a script with headings the sidebar's rows are scenes, and renaming one edits the heading
+  //line itself. A script with no headings yet shows its own chapter row, renamed like any other.
+  if(editorMode() === 'screenplay' && currentScenes().length > 0){
+    changeSceneTitle(sceneAt(currentScenes(), project.textCursorPosition || 0));
+    return;
+  }
+
   //Only a rename that follows a click has anything to wait for - see selectChapterFromList() above.
   //A rename from the keyboard, or the one that opens on a chapter just added or split off, still
   //runs straight through and puts its box in the row before returning.
@@ -1524,6 +1573,159 @@ function scrollChapterListToActiveChapter(){
     return;
 
   scrollIntoViewIfNeeded(document.getElementById('chapter-list-sidebar'), activeChapter);
+}
+
+// ------------------------------------------------------------------------------------------
+// Scenes - docs/screenplay-plan.md, "The Scenes sidebar"
+// ------------------------------------------------------------------------------------------
+
+//The scenes of the script in the editor, as of the last sidebar render or refresh. Cached so the
+//caret's every move (followCaretInSceneList) does not walk the document; a user text-change
+//refreshes it, debounced, and re-renders the rows only when the headings themselves changed.
+var cachedScenes = [];
+var cachedSceneTitles = null;
+var activeSceneRow = -1;
+var sceneListRefreshTimer = null;
+
+function currentScenes(){
+  return sceneIndex(editorQuill.getContents());
+}
+
+//What renderChapterList is handed for its top section: null for prose, otherwise the scenes with
+//the one the caret is in and whether the script has unsaved changes - the header carries that
+//marker, since no one scene row could.
+function sceneListForSidebar(){
+  if(editorMode() !== 'screenplay'){
+    cachedScenes = [];
+    cachedSceneTitles = null;
+    activeSceneRow = -1;
+    return null;
+  }
+
+  cachedScenes = currentScenes();
+  cachedSceneTitles = cachedScenes.map(function(scene){ return scene.title; });
+  activeSceneRow = sceneAt(cachedScenes, project.textCursorPosition || 0);
+
+  var chap = project.getActiveChapter();
+  return { rows: cachedScenes, active: activeSceneRow, unsaved: Boolean(chap && chap.hasUnsavedChanges) };
+}
+
+function scheduleSceneListRefresh(){
+  if(editorMode() !== 'screenplay')
+    return;
+
+  if(sceneListRefreshTimer)
+    clearTimeout(sceneListRefreshTimer);
+
+  sceneListRefreshTimer = setTimeout(refreshSceneListIfChanged, 300);
+}
+
+//The indices are re-read on every refresh, since typing above a heading moves it; the rows are
+//rebuilt only when a heading's text changed, one appeared or went, or the unsaved marker on the
+//header has to change - which a keystroke does once, the first after a save.
+function refreshSceneListIfChanged(){
+  sceneListRefreshTimer = null;
+  //A debounce that outlives its editor - a test's render torn down under a pending timer - must
+  //not render into whatever sidebar is on the page now. The editor being on the page is the
+  //condition for any of this having somewhere to draw.
+  if(editorMode() !== 'screenplay' || !document.body.contains(editorQuill.root))
+    return;
+
+  var scenes = currentScenes();
+  var titles = scenes.map(function(scene){ return scene.title; });
+  var sameTitles = cachedSceneTitles != null && titles.length === cachedSceneTitles.length &&
+    titles.every(function(title, i){ return title === cachedSceneTitles[i]; });
+
+  var chap = project.getActiveChapter();
+  var headerMarked = document.getElementById('chapters-header').textContent.slice(-1) === '*';
+  var markerRight = headerMarked === Boolean(chap && chap.hasUnsavedChanges);
+
+  if(sameTitles && markerRight){
+    cachedScenes = scenes;
+    followCaretInSceneList(project.textCursorPosition || 0);
+    return;
+  }
+
+  updateFileList();
+}
+
+//Moves the highlight with the caret: a class toggle on two rows, never a rebuild.
+function followCaretInSceneList(index){
+  if(editorMode() !== 'screenplay' || cachedScenes.length === 0)
+    return;
+
+  var k = sceneAt(cachedScenes, index);
+  if(k === activeSceneRow)
+    return;
+
+  activeSceneRow = k;
+  markActiveSceneRow(k);
+}
+
+//A click on a scene row.
+function selectScene(k){
+  var scenes = currentScenes();
+  if(!scenes[k])
+    return;
+
+  jumpToScene(scenes[k].index);
+}
+
+function jumpToScene(start){
+  if(start == null)
+    return;
+
+  editorQuill.setSelection(start, 0, 'user');
+  project.textCursorPosition = start;
+}
+
+//The scene the caret is in swaps places with its neighbour, as one user change - one undo entry -
+//and the caret follows its heading. See moveScene for what a scene is.
+function moveCurrentScene(direction){
+  var Delta = Quill.import('delta');
+  var current = editorQuill.getContents();
+  var scenes = sceneIndex(current);
+  var moved = moveScene(current, sceneAt(scenes, project.textCursorPosition || 0), direction);
+
+  if(!moved)
+    return;
+
+  editorQuill.updateContents(new Delta(current).diff(new Delta(moved.ops)), 'user');
+  jumpToScene(moved.start);
+  updateFileList();
+}
+
+//Renaming a scene row edits the heading line itself, in place and as a user change, so it is
+//undoable and the sidebar follows through the ordinary refresh. Capitals, as a heading gets when
+//it is typed into being.
+function changeSceneTitle(k){
+  var scenes = currentScenes();
+  if(k < 0 || k >= scenes.length)
+    return;
+
+  renameSceneInList(k, {
+    onCommit: function(newTitle){
+      replaceSceneHeading(k, newTitle);
+      updateFileList();
+      editorQuill.focus();
+    },
+    onCancel: function(){
+      updateFileList();
+      editorQuill.focus();
+    },
+    onDismiss: function(){
+      updateFileList();
+    }
+  });
+}
+
+function replaceSceneHeading(k, title){
+  var Delta = Quill.import('delta');
+  var scene = currentScenes()[k];
+  if(!scene)
+    return;
+
+  editorQuill.updateContents(new Delta().retain(scene.index).delete(scene.title.length).insert(title.toUpperCase()), 'user');
 }
 
 //The Help doc is reference material, not the reader's own work: it has to describe the version

@@ -13,8 +13,16 @@ const SECTIONS = [
   { list: 'trash',     rowsId: 'trash-list',     headerId: 'trash-header' }
 ];
 
-//handlers: { onSelect(combinedIndex), onRename(combinedIndex) }
-function renderChapterList(project, handlers){
+//handlers: { onSelect(combinedIndex), onRename(combinedIndex), onSelectScene(k), onRenameScene(k) }
+//
+//`scenes` is null for a novel. For a screenplay whose script is the active document it is
+//{ rows: [{ title, index }], active, unsaved }: the top section then shows those rows - one per
+//scene heading, from the script's own text (see screenplay-editor.js's sceneIndex) rather than
+//the chapters list - under a "Scenes" header, with `active` the scene the caret is in. A script
+//with no headings yet falls back to its chapter row, so there is always something to select. The
+//Reference and Trash sections render as they do for a novel. docs/screenplay-plan.md, "The Scenes
+//sidebar".
+function renderChapterList(project, handlers, scenes){
   //A rename box left over from before this render started has to go before clearChildren() below
   //tears down the row it lives in. Its own onblur handler also calls removeElementsByClass() - if
   //that box still has focus (the common case: a rename in progress when a new project is opened,
@@ -32,11 +40,30 @@ function renderChapterList(project, handlers){
   //frozen with the bold title off-screen.
   var rowToReveal = null;
 
+  var showScenes = scenes != null && scenes.rows.length > 0;
+  document.getElementById('chapters-header').textContent =
+    scenes != null ? 'Scenes' + (scenes.unsaved ? '*' : '') : 'Chapters';
+
   SECTIONS.forEach(function(section){
-    var chapters = chapterList.listOf(project, section.list);
     var rows = document.getElementById(section.rowsId);
 
     clearChildren(rows);
+
+    if(section.list === 'chapters' && showScenes){
+      scenes.rows.forEach(function(scene, k){
+        var row = buildSceneRow(scene, k, handlers);
+        rows.appendChild(row);
+
+        if(k === scenes.active){
+          row.classList.add('activeChapter');
+          row.setAttribute('aria-selected', 'true');
+          rowToReveal = row;
+        }
+      });
+      return;
+    }
+
+    var chapters = chapterList.listOf(project, section.list);
 
     chapters.forEach(function(chap, indexInList){
       var combinedIndex = chapterList.toCombinedIndex(project, { list: section.list, index: indexInList });
@@ -98,6 +125,49 @@ function buildRow(chap, combinedIndex, handlers){
   return row;
 }
 
+//A scene row: the same option shape as a chapter row, keyed by the scene's number in the script
+//rather than a chapter index, and read back by the same double-click-to-rename flow.
+function buildSceneRow(scene, k, handlers){
+  var row = document.createElement('li');
+
+  row.id = 'scene-row-' + k;
+  row.setAttribute('role', 'option');
+  row.setAttribute('aria-selected', 'false');
+  row.textContent = scene.title.trim() !== '' ? scene.title : '(untitled scene)';
+  row.dataset.sceneIndex = k;
+  row.onclick = function(){
+    handlers.onSelectScene(Number(this.dataset.sceneIndex));
+  };
+  row.ondblclick = function(){
+    handlers.onRenameScene(Number(this.dataset.sceneIndex));
+  };
+
+  return row;
+}
+
+//Moves the highlight to scene `k` without rebuilding the list - what the caret's every move asks
+//for, which is far too often to rebuild rows on. Reveals the row the way a render does.
+function markActiveSceneRow(k){
+  var sidebar = document.getElementById('chapter-list-sidebar');
+  var rows = Array.from(document.querySelectorAll('[data-scene-index]'));
+  var active = null;
+
+  rows.forEach(function(row){
+    var isActive = Number(row.dataset.sceneIndex) === k;
+    row.classList.toggle('activeChapter', isActive);
+    row.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    if(isActive)
+      active = row;
+  });
+
+  if(active){
+    sidebar.setAttribute('aria-activedescendant', active.id);
+    scrollIntoViewIfNeeded(sidebar, active);
+  }
+  else if(rows.length > 0)
+    sidebar.removeAttribute('aria-activedescendant');
+}
+
 //row.offsetTop is measured against the nearest *positioned* ancestor, and nothing between a row
 //and <body> has position set - so it lands relative to <body>, not the scrollable sidebar, and is
 //useless for deciding how far to scroll. getBoundingClientRect() is always viewport-relative
@@ -132,7 +202,16 @@ function clearChildren(element){
 //double-click-to-rename flow has always done.
 //handlers: { onCommit(newTitle), onCancel(), onDismiss() }
 function renameChapterInList(combinedIndex, handlers){
-  var row = document.querySelector("[data-chap-index='" + combinedIndex + "']");
+  return renameRowInList(document.querySelector("[data-chap-index='" + combinedIndex + "']"), 'Chapter title', handlers);
+}
+
+//The same box in a scene row. What is typed replaces the heading's text in the script - the
+//caller's onCommit does that - so the label says so.
+function renameSceneInList(k, handlers){
+  return renameRowInList(document.querySelector("[data-scene-index='" + k + "']"), 'Scene heading', handlers);
+}
+
+function renameRowInList(row, label, handlers){
   if(!row)
     return null;
 
@@ -143,7 +222,7 @@ function renameChapterInList(combinedIndex, handlers){
   var nameBox = document.createElement("input");
   nameBox.type = "text";
   nameBox.classList.add("name-box");
-  nameBox.setAttribute('aria-label', 'Chapter title');
+  nameBox.setAttribute('aria-label', label);
 
   nameBox.addEventListener("keydown", function(e){
     if(e.key === "Enter" || e.key === "Tab"){
@@ -183,5 +262,7 @@ function renameChapterInList(combinedIndex, handlers){
 module.exports = {
   renderChapterList,
   renameChapterInList,
+  renameSceneInList,
+  markActiveSceneRow,
   scrollIntoViewIfNeeded
 };

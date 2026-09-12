@@ -353,6 +353,64 @@ test('the element shortcuts drive setElement on a real editor', function(){
   assert.deepStrictEqual(lines(s.quill), [['character', 'BOB']]);
 });
 
+//---- Phase 5: scenes -----------------------------------------------------------------------------
+
+const { sceneIndex, sceneAt, previousSceneStart, nextSceneStart, moveScene } = require('../src/components/controllers/screenplay-editor');
+
+const THREE_SCENES = 'FADE IN:\n\nINT. A - DAY\n\nOne.\n\nBOB\nHi.\n\nEXT. B - NIGHT\n\nTwo.\n\nINT. C - DAY\n\nThree.\n';
+
+test('sceneIndex lists the headings with the index each starts at', function(){
+  var scenes = sceneIndex(elementsToDelta(parseFountain(THREE_SCENES).elements));
+  assert.deepStrictEqual(scenes, [
+    { title: 'INT. A - DAY', index: 9 },
+    { title: 'EXT. B - NIGHT', index: 35 },
+    { title: 'INT. C - DAY', index: 55 }
+  ]);
+  assert.deepStrictEqual(sceneIndex({ ops: [{ insert: '\n' }] }), []);
+  assert.deepStrictEqual(sceneIndex(null), []);
+});
+
+test('sceneAt, previousSceneStart and nextSceneStart work from the caret', function(){
+  var scenes = sceneIndex(elementsToDelta(parseFountain(THREE_SCENES).elements));
+
+  assert.strictEqual(sceneAt(scenes, 0), -1, 'FADE IN: belongs to no scene');
+  assert.strictEqual(sceneAt(scenes, 9), 0);
+  assert.strictEqual(sceneAt(scenes, 30), 0);
+  assert.strictEqual(sceneAt(scenes, 35), 1);
+  assert.strictEqual(sceneAt(scenes, 999), 2);
+
+  assert.strictEqual(previousSceneStart(scenes, 0), null);
+  assert.strictEqual(previousSceneStart(scenes, 9), null, 'from a heading, the one above');
+  assert.strictEqual(previousSceneStart(scenes, 30), 9, 'from inside a scene, its own heading');
+  assert.strictEqual(previousSceneStart(scenes, 35), 9);
+  assert.strictEqual(nextSceneStart(scenes, 0), 9);
+  assert.strictEqual(nextSceneStart(scenes, 9), 35);
+  assert.strictEqual(nextSceneStart(scenes, 55), null);
+});
+
+test('moveScene swaps a scene with its neighbour and leaves the text before the first heading alone', function(){
+  var parsed = parseFountain(THREE_SCENES);
+  var delta = elementsToDelta(parsed.elements);
+
+  var down = moveScene(delta, 0, 1);
+  var downText = deltaToElements(down).map(function(e){ return e.text; }).filter(Boolean);
+  assert.deepStrictEqual(downText, ['FADE IN:', 'EXT. B - NIGHT', 'Two.', 'INT. A - DAY', 'One.', 'BOB', 'Hi.', 'INT. C - DAY', 'Three.']);
+  assert.strictEqual(down.start, 29, 'the moved heading now starts after FADE IN: and scene B');
+  assert.strictEqual(sceneIndex(down)[1].index, down.start);
+
+  var up = moveScene(delta, 2, -1);
+  var upText = deltaToElements(up).map(function(e){ return e.text; }).filter(Boolean);
+  assert.deepStrictEqual(upText, ['FADE IN:', 'INT. A - DAY', 'One.', 'BOB', 'Hi.', 'INT. C - DAY', 'Three.', 'EXT. B - NIGHT', 'Two.']);
+  assert.strictEqual(sceneIndex(up)[1].index, up.start);
+
+  assert.strictEqual(moveScene(delta, 0, -1), null, 'nothing above the first');
+  assert.strictEqual(moveScene(delta, 2, 1), null, 'nothing below the last');
+  assert.strictEqual(moveScene(delta, -1, 1), null, 'the preamble is not a scene');
+
+  //Everything the elements carried survives: the flags and the inline formats travel with the lines.
+  assert.deepStrictEqual(deltaToElements(down).length, parsed.elements.length);
+});
+
 test('a script survives editor -> delta -> elements after the HTML load', function(){
   var quill = makeQuill();
   var parsed = parseFountain(SCRIPT);

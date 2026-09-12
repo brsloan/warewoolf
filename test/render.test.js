@@ -529,6 +529,88 @@ test('displaying a .fountain chapter puts the editor in screenplay mode, and a .
   assert.strictEqual(r.editorQuill.getText().trim(), 'Notes');
 });
 
+//docs/screenplay-plan.md, Phase 5: the sidebar shows a script's scenes, and the chapter shortcuts
+//move between and reorder them.
+function scriptWithScenes(){
+  var { parseFountain, elementsToDelta } = require('../src/components/controllers/fountain');
+  var delta = elementsToDelta(parseFountain('FADE IN:\n\nINT. A - DAY\n\nOne.\n\nEXT. B - NIGHT\n\nTwo.\n\nINT. C - DAY\n\nThree.\n').elements);
+  var script = makeChap('Script', { contents: delta });
+  script.filename = 'Script.fountain';
+  return script;
+}
+
+function sceneRowTitles(){
+  return Array.from(document.querySelectorAll('#chapter-list li')).map(function(li){ return li.textContent; });
+}
+
+test('a script\'s sidebar lists its scenes, follows the caret, and jumps on a click', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [scriptWithScenes()];
+  r.project.reference = [makeChap('Bible')];
+
+  await r.displayChapterByIndex(0);
+
+  assert.strictEqual(document.getElementById('chapters-header').textContent, 'Scenes');
+  assert.deepStrictEqual(sceneRowTitles(), ['INT. A - DAY', 'EXT. B - NIGHT', 'INT. C - DAY']);
+  assert.deepStrictEqual(Array.from(document.querySelectorAll('#reference-list li')).map(function(li){ return li.textContent; }), ['Bible']);
+
+  r.editorQuill.setSelection(40, 0, 'user');
+  assert.strictEqual(document.querySelector('#chapter-list .activeChapter').textContent, 'EXT. B - NIGHT');
+
+  document.querySelectorAll('#chapter-list li')[2].onclick();
+  assert.strictEqual(r.editorQuill.getSelection().index, 47);
+  assert.strictEqual(document.querySelector('#chapter-list .activeChapter').textContent, 'INT. C - DAY');
+
+  //A reference document beside the script is prose, and the sidebar goes back to chapters for it.
+  await r.displayChapterByIndex(1);
+  assert.strictEqual(document.getElementById('chapters-header').textContent, 'Chapters');
+  assert.deepStrictEqual(sceneRowTitles(), ['Script']);
+});
+
+test('in a script the chapter shortcuts move between scenes and reorder them', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [scriptWithScenes()];
+  await r.displayChapterByIndex(0);
+
+  r.editorQuill.setSelection(0, 0, 'user');
+  await r.displayNextChapter();
+  assert.strictEqual(r.editorQuill.getSelection().index, 9, 'INT. A');
+  await r.displayNextChapter();
+  assert.strictEqual(r.editorQuill.getSelection().index, 27, 'EXT. B');
+  await r.displayPreviousChapter();
+  assert.strictEqual(r.editorQuill.getSelection().index, 9);
+  assert.strictEqual(r.project.activeChapterIndex, 0, 'the document never changed');
+
+  r.editorQuill.setSelection(27, 0, 'user');
+  r.moveChapUp(0);
+  assert.deepStrictEqual(sceneRowTitles(), ['EXT. B - NIGHT', 'INT. A - DAY', 'INT. C - DAY']);
+  assert.strictEqual(r.editorQuill.getSelection().index, 9, 'the caret followed the heading');
+  assert.strictEqual(r.editorQuill.getText(9, 14), 'EXT. B - NIGHT');
+  assert.strictEqual(r.project.chapters[0].hasUnsavedChanges, true);
+
+  r.editorQuill.history.undo();
+  assert.strictEqual(r.editorQuill.getText(9, 12), 'INT. A - DAY', 'one undo entry');
+});
+
+test('renaming a scene row rewrites the heading in the script', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [scriptWithScenes()];
+  await r.displayChapterByIndex(0);
+
+  r.editorQuill.setSelection(27, 0, 'user');
+  r.changeChapterTitle(0);
+  var box = document.querySelector('.name-box');
+  assert.strictEqual(box.getAttribute('aria-label'), 'Scene heading');
+  box.value = 'ext. beach - dawn';
+  box.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter' }));
+
+  assert.strictEqual(r.editorQuill.getText(27, 17), 'EXT. BEACH - DAWN');
+  assert.deepStrictEqual(sceneRowTitles(), ['INT. A - DAY', 'EXT. BEACH - DAWN', 'INT. C - DAY']);
+});
+
 //The core editing loop: type in a chapter, look at a different one, come back. If this regresses,
 //edits are silently lost the moment the writer glances at another chapter - about the worst
 //possible failure mode for this app.
