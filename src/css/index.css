@@ -268,15 +268,23 @@ hr {
   padding: 0;
 }
 
+/* A title too long for the column wraps instead of being cut off at the edge - a chapter called
+   something before a comma is not told apart from the same chapter called something after it by a
+   row that ends in an ellipsis either way. The wrapped lines are indented past the first so the
+   run of titles still reads as one column of left-aligned entries rather than a block of text:
+   padding-left carries the hang and the matching negative text-indent pulls the first line back
+   out to where every other row starts. A single word longer than the column (a pasted URL for a
+   title, say) has nowhere to wrap, so break-word lets it break mid-word rather than push the
+   sidebar's scroll width out. */
 .sidebar li {
-  padding: 0.22em 0.65em 0.11em 0.55em;
+  padding: 0.22em 0.65em 0.11em 1.55em;
+  text-indent: -1em;
   margin: 1px 0;
   border-left: 3px solid transparent;
   border-radius: 0 var(--radius) var(--radius) 0;
   cursor: pointer;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.3;
+  overflow-wrap: break-word;
 }
 
 .sidebar li:hover {
@@ -327,6 +335,14 @@ hr {
 
 #chapter-list-sidebar {
   overflow-x: hidden;
+}
+
+/* The rename box replaces the row's text, and a hanging indent means nothing to a one-line text
+   field - it would only pull the box left of the title it is standing in for and shorten it by
+   the width of the hang. The row gives the indent back while the box is in it. */
+.sidebar li:has(.name-box) {
+  padding-left: 0.55em;
+  text-indent: 0;
 }
 
 .name-box {
