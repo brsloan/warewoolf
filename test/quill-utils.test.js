@@ -1,7 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const { getOrderedListNumbers, getListMarker, parseDelta, generateChapTitleFromFirstLine, addBindingsToQuill, goPageDown } = require('../src/components/controllers/quill-utils');
+const { getOrderedListNumbers, getListMarker, parseDelta, generateChapTitleFromFirstLine, applyQuillShortcuts, goPageDown } = require('../src/components/controllers/quill-utils');
+const shortcutsModel = require('../src/components/models/shortcuts');
 
 //getOrderedListNumbers works on the paragraph shape parseDelta produces. Building them by hand here
 //keeps these tests on the numbering rule itself rather than on delta parsing.
@@ -145,53 +146,83 @@ test('generateChapTitleFromFirstLine returns an empty string when the first inse
 });
 
 //---------------------------------------------------------------------------
-// addBindingsToQuill
+// applyQuillShortcuts
 //---------------------------------------------------------------------------
 
-//addBindingsToQuill only ever calls q.keyboard.addBinding(), q.getFormat() and q.format(), so a
-//recording stand-in exercises the bindings without a real editor or a DOM. Quill invokes a binding
-//handler with `this` bound to a context carrying the instance, which is why some of the handlers
-//reach for this.quill and others close over q directly - fire() supplies both.
-function recordingQuill(currentFormat){
+//applyQuillShortcuts only touches q.keyboard.bindings, q.getFormat() and q.format(), so a recording
+//stand-in exercises the bindings without a real editor or a DOM. It keeps them the way Quill does -
+//an object keyed by keyCode, each holding everything bound to that key - because removing the
+//previously applied ones on a rebind means filtering exactly that structure.
+//
+//Quill invokes a handler with `this` bound to a context carrying the instance, which fire() supplies.
+function recordingQuill(currentFormat, overrides){
   var q = {
-    bindings: [],
     formatCalls: [],
     keyboard: {
-      addBinding: function(binding){ q.bindings.push(binding); }
+      bindings: {},
+      addBinding: function(binding){
+        q.keyboard.bindings[binding.key] = q.keyboard.bindings[binding.key] || [];
+        q.keyboard.bindings[binding.key].push(binding);
+      }
     },
     getFormat: function(){ return currentFormat || {}; },
     format: function(name, value, source){ q.formatCalls.push([name, value, source]); }
   };
 
-  addBindingsToQuill(q);
+  //A binding Quill itself owns - Tab, Enter and the rest come from its keyboard module, not from
+  //us - so a test can prove a rebind leaves those where they are.
+  q.keyboard.addBinding({ key: 9, quillsOwn: true, handler: function(){} });
 
-  q.find = function(key, modifiers){
-    modifiers = modifiers || {};
-    return q.bindings.find(function(b){
-      return b.key === key && Boolean(b.shiftKey) === Boolean(modifiers.shiftKey);
+  applyQuillShortcuts(q, shortcutsModel.resolveShortcuts(overrides));
+
+  q.applied = function(){
+    return Object.keys(q.keyboard.bindings).reduce(function(all, keyCode){
+      return all.concat(q.keyboard.bindings[keyCode].filter(function(binding){
+        return binding.warewoolfAction != null;
+      }));
+    }, []);
+  };
+  q.find = function(actionId){
+    return q.applied().find(function(binding){
+      return binding.warewoolfAction === actionId;
     });
   };
-  q.fire = function(key, modifiers){
-    q.find(key, modifiers).handler.call({ quill: q }, { index: 0, length: 0 }, {});
+  q.fire = function(actionId){
+    q.find(actionId).handler.call({ quill: q }, { index: 0, length: 0 }, {});
   };
 
   return q;
 }
 
-test('every formatting shortcut is bound with the platform modifier key held', function(){
+test('every formatting shortcut is bound on its default key with the platform modifier held', function(){
   var q = recordingQuill();
 
-  assert.deepStrictEqual(
-    q.bindings.map(function(b){ return b.key; }).sort(),
-    ['0', '1', '2', '3', '4', 'E', 'J', 'L', 'R', 'T', 'b', 'k']
-  );
-  assert.ok(q.bindings.every(function(b){ return b.shortKey === true; }));
+  assert.deepStrictEqual(q.applied().map(function(binding){ return binding.warewoolfAction; }).sort(), [
+    'formatAlignCenter', 'formatAlignJustify', 'formatAlignLeft', 'formatAlignRight',
+    'formatBlockquote', 'formatBold', 'formatClearHeading', 'formatHeading1', 'formatHeading2',
+    'formatHeading3', 'formatHeading4', 'formatItalics', 'formatList', 'formatStrikethrough',
+    'formatTitle', 'formatUnderline', 'insertFootnote'
+  ]);
+
+  assert.ok(q.applied().every(function(binding){ return binding.shortKey === true; }));
+});
+
+//Quill matches a keypress on its keyCode, so that is what a binding has to carry - a key's name
+//would never match anything.
+test('a binding carries the key code of the key it is bound to', function(){
+  var q = recordingQuill();
+
+  assert.strictEqual(q.find('formatBold').key, 66);
+  assert.strictEqual(q.find('formatHeading1').key, 49);
+  assert.strictEqual(q.find('formatTitle').key, 84);
+  assert.strictEqual(q.find('formatList').shiftKey, true);
+  assert.strictEqual(q.find('formatBold').shiftKey, false);
 });
 
 test('the title shortcut centres the line and makes it a level one heading', function(){
   var q = recordingQuill();
 
-  q.fire('T');
+  q.fire('formatTitle');
 
   assert.deepStrictEqual(q.formatCalls, [
     ['align', 'center', 'user'],
@@ -199,50 +230,195 @@ test('the title shortcut centres the line and makes it a level one heading', fun
   ]);
 });
 
-test('each number key sets its own heading level, and zero clears it', function(){
-  ['1', '2', '3', '4'].forEach(function(key){
+test('each heading shortcut sets its own level, and clear heading removes it', function(){
+  [1, 2, 3, 4].forEach(function(level){
     var q = recordingQuill();
-    q.fire(key);
-    assert.deepStrictEqual(q.formatCalls, [['header', parseInt(key), 'user']]);
+    q.fire('formatHeading' + level);
+    assert.deepStrictEqual(q.formatCalls, [['header', level, 'user']]);
   });
 
   var cleared = recordingQuill();
-  cleared.fire('0');
+  cleared.fire('formatClearHeading');
   assert.deepStrictEqual(cleared.formatCalls, [['header', null, 'user']]);
 });
 
 test('the four alignment shortcuts each set their own alignment', function(){
-  var expected = { L: null, E: 'center', R: 'right', J: 'justify' };
+  var expected = {
+    formatAlignLeft: null,
+    formatAlignCenter: 'center',
+    formatAlignRight: 'right',
+    formatAlignJustify: 'justify'
+  };
 
-  Object.keys(expected).forEach(function(key){
+  Object.keys(expected).forEach(function(id){
     var q = recordingQuill();
-    q.fire(key);
-    assert.deepStrictEqual(q.formatCalls, [['align', expected[key], 'user']], key + ' should set align ' + expected[key]);
+    q.fire(id);
+    assert.deepStrictEqual(q.formatCalls, [['align', expected[id], 'user']], id);
   });
 });
 
 test('the strikethrough shortcut toggles against the current format', function(){
   var off = recordingQuill({});
-  off.fire('k');
+  off.fire('formatStrikethrough');
   assert.deepStrictEqual(off.formatCalls, [['strike', true, 'user']]);
 
   var on = recordingQuill({ strike: true });
-  on.fire('k');
+  on.fire('formatStrikethrough');
   assert.deepStrictEqual(on.formatCalls, [['strike', false, 'user']]);
+});
+
+test('the blockquote shortcut toggles against the current format', function(){
+  var off = recordingQuill({});
+  off.fire('formatBlockquote');
+  assert.deepStrictEqual(off.formatCalls, [['blockquote', true, 'user']]);
+
+  var on = recordingQuill({ blockquote: true });
+  on.fire('formatBlockquote');
+  assert.deepStrictEqual(on.formatCalls, [['blockquote', false, 'user']]);
+});
+
+//Quill binds these three itself by default. They are switched off where the editors are built (see
+//render.js) so they can be rebound like every other formatting shortcut, which means their handlers
+//have to live here now.
+test('bold, italics and underline toggle against the current format', function(){
+  [['formatBold', 'bold'], ['formatItalics', 'italic'], ['formatUnderline', 'underline']].forEach(function(pair){
+    var off = recordingQuill({});
+    off.fire(pair[0]);
+    assert.deepStrictEqual(off.formatCalls, [[pair[1], true, 'user']]);
+
+    var current = {};
+    current[pair[1]] = true;
+    var on = recordingQuill(current);
+    on.fire(pair[0]);
+    assert.deepStrictEqual(on.formatCalls, [[pair[1], false, 'user']]);
+  });
 });
 
 test('the list shortcut cycles bullet, then numbered, then off', function(){
   var none = recordingQuill({});
-  none.fire('b', { shiftKey: true });
+  none.fire('formatList');
   assert.deepStrictEqual(none.formatCalls, [['list', 'bullet', 'user']]);
 
   var bullet = recordingQuill({ list: 'bullet' });
-  bullet.fire('b', { shiftKey: true });
+  bullet.fire('formatList');
   assert.deepStrictEqual(bullet.formatCalls, [['list', 'ordered', 'user']]);
 
   var ordered = recordingQuill({ list: 'ordered' });
-  ordered.fire('b', { shiftKey: true });
+  ordered.fire('formatList');
   assert.deepStrictEqual(ordered.formatCalls, [['list', null, 'user']]);
+});
+
+test('a rebound formatting shortcut is bound to the key the writer chose', function(){
+  var q = recordingQuill({}, { formatBold: { key: 'W', mod: true, alt: false, shift: true, code: 'KeyW' } });
+
+  assert.strictEqual(q.find('formatBold').key, 87);
+  assert.strictEqual(q.find('formatBold').shiftKey, true);
+
+  q.fire('formatBold');
+  assert.deepStrictEqual(q.formatCalls, [['bold', true, 'user']]);
+});
+
+test('a shortcut a writer has unassigned is not bound at all', function(){
+  var q = recordingQuill({}, { formatBold: null });
+
+  assert.strictEqual(q.find('formatBold'), undefined);
+  assert.strictEqual(q.applied().length, 16);
+});
+
+//Quill 1.x has no removeBinding(), so re-applying has to strip what it added last time - or every
+//rebind would leave the old key working alongside the new one.
+test('re-applying replaces the bindings it added before, leaving Quill to keep its own', function(){
+  var q = recordingQuill();
+
+  applyQuillShortcuts(q, shortcutsModel.resolveShortcuts({
+    formatBold: { key: 'W', mod: true, alt: false, shift: false, code: 'KeyW' }
+  }));
+
+  assert.strictEqual(q.applied().length, 17, 'no duplicates left over from the first application');
+  assert.strictEqual(q.find('formatBold').key, 87);
+  assert.deepStrictEqual((q.keyboard.bindings[66] || []).map(function(binding){
+    return binding.warewoolfAction;
+  }), ['formatList'], 'only the list shortcut should be left on B');
+
+  assert.deepStrictEqual(q.keyboard.bindings[9].map(function(binding){
+    return binding.quillsOwn === true;
+  }), [true], 'the Tab binding Quill added should survive');
+});
+
+//The physical key a binding was captured from is what rescues the shifted symbols: on a US layout
+//Ctrl+Shift+3 reports its key as '#', which says nothing about which key was pressed, while its
+//code says Digit3 - and Quill matches on the key code.
+test('a binding is matched by the physical key it was captured from', function(){
+  var q = recordingQuill({}, { formatBold: { key: '#', mod: true, alt: false, shift: true, code: 'Digit3' } });
+
+  assert.strictEqual(q.find('formatBold').key, 51);
+  assert.strictEqual(q.find('formatBold').shiftKey, true);
+});
+
+//These are bindable now, so Quill has to be able to match them - otherwise a writer moving Bold onto
+//their board's F13 or Volume Up key would get a shortcut that looked bound and did nothing. F1 is
+//keyCode 112, so the row carries on to 135 at F24; the media keys have legacy codes of their own.
+test('a formatting shortcut on a programmable keyboard\'s key is matched, not dropped', function(){
+  [
+    ['F13', 124],
+    ['F24', 135],
+    ['AudioVolumeUp', 175],
+    ['MediaPlayPause', 179],
+    ['ContextMenu', 93],
+    ['LaunchApplication1', 182]
+  ].forEach(function(pair){
+    var q = recordingQuill({}, { formatBold: { key: pair[0], mod: false, alt: false, shift: false } });
+    var bound = q.find('formatBold');
+
+    assert.ok(bound != null, pair[0] + ' should be bound');
+    assert.strictEqual(bound.key, pair[1], pair[0] + ' should carry its keyCode');
+    assert.strictEqual(bound.shortKey, false, pair[0] + ' should be bound with nothing held');
+  });
+});
+
+//No table will ever hold a code like 'ShowAllWindows', so the keyCode the binding was captured from
+//is the only thing Quill could match it on - and without it a formatting shortcut on such a key would
+//sit in the popup looking bound and never fire.
+test('a formatting shortcut on a code-identified key is matched by its captured keyCode', function(){
+  var q = recordingQuill({}, {
+    formatBold: { key: null, code: 'ShowAllWindows', keyCode: 182, mod: false, alt: false, shift: false }
+  });
+
+  assert.strictEqual(q.find('formatBold').key, 182);
+});
+
+//Quill matches on keyCode alone, so a binding that is nothing BUT a keyCode is the one case it needs
+//no help with at all.
+test('a formatting shortcut on a key with only a keyCode is matched by it', function(){
+  var q = recordingQuill({}, {
+    formatBold: { key: null, code: null, keyCode: 232, mod: false, alt: false, shift: false }
+  });
+
+  assert.strictEqual(q.find('formatBold').key, 232);
+});
+
+//The captured keyCode is the physical truth where KEY_CODES is a guess, so it wins for a named
+//binding too - which is what carries the keys that report a name this app has no keyCode for.
+test('a captured keyCode is preferred to the one guessed from the name', function(){
+  var q = recordingQuill({}, {
+    formatBold: { key: 'BrightnessUp', keyCode: 216, mod: false, alt: false, shift: false }
+  });
+
+  assert.strictEqual(q.find('formatBold').key, 216);
+});
+
+//A binding whose key Quill has no code for could never be matched against a keypress, so it is left
+//off rather than sitting in the table looking like it works. Applied directly rather than through
+//resolveShortcuts, which drops a binding like this long before it could get here.
+test('a binding Quill could not match is left off rather than added dead', function(){
+  var q = recordingQuill();
+  var bindings = shortcutsModel.getDefaultBindings();
+  bindings.formatBold = { key: '#', mod: true, alt: false, shift: true };
+
+  applyQuillShortcuts(q, bindings);
+
+  assert.strictEqual(q.find('formatBold'), undefined);
+  assert.strictEqual(q.applied().length, 16);
 });
 
 //---------------------------------------------------------------------------
@@ -252,20 +428,32 @@ test('the list shortcut cycles bullet, then numbered, then off', function(){
 //A fully synthetic stand-in for the pieces goPageDown actually touches, rather than a real Quill
 //instance - real layout metrics (clientHeight, getBoundingClientRect) are always zero under jsdom
 //since it has no layout engine, which would leave every geometric branch below untestable.
+//
+//`length` is the Quill document length, and `clampsBounds` is the difference between the two
+//getBounds() behaviours that matter here: real Quill (core/selection.js) clamps the index it is
+//given to the content's length and so never returns null for an index past the end, which is the
+//behaviour that used to hang the app. The default stays uncalmped so the older tests below can go
+//on using a missing boundsByIndex entry to mean "no such position".
 function stubQuill(opts){
   opts = opts || {};
   var selection = { index: opts.selectionIndex || 0, length: 0 };
   var boundsByIndex = opts.boundsByIndex || {};
+  var length = opts.length != null ? opts.length : 1000;
 
   return {
     getSelection: function(){ return selection; },
     setSelection: function(index){ selection = { index: index, length: 0 }; },
+    getLength: function(){ return length; },
     root: { scrollTop: opts.scrollTop || 0, clientHeight: opts.clientHeight || 100 },
     container: { getBoundingClientRect: function(){ return { top: opts.containerTop || 0 }; } },
     selection: {
-      //Real Quill returns a viewport-relative DOMRect for a found position, or null once the
-      //lookup runs past the end of the content - boundsByIndex models both with plain objects.
-      getBounds: function(index){ return boundsByIndex[index] || null; }
+      //Real Quill returns a viewport-relative DOMRect for a found position - boundsByIndex models
+      //those with plain objects.
+      getBounds: function(index){
+        if(opts.clampsBounds)
+          index = Math.min(index, length - 1);
+        return boundsByIndex[index] || null;
+      }
     }
   };
 }
@@ -302,6 +490,44 @@ test('goPageDown converts viewport-relative bounds to container-relative before 
   //Not yet past the bottom (container-relative top 50 < clientHeight 100), so the loop keeps
   //walking forward and (nothing at index 2) lands one short of it.
   assert.deepStrictEqual(q.getSelection(), { index: 1, length: 0 });
+});
+
+test('goPageDown terminates on the last page, where real Quill clamps getBounds rather than returning null', function(){
+  //The reader has paged down to the bottom of a chapter: every remaining position sits above the
+  //bottom of the editor, and asking for one past the end gets the last position's bounds back
+  //instead of null. The walk used to have no other stop condition and spun here forever, freezing
+  //the whole app with nothing written to the error log.
+  var q = stubQuill({
+    selectionIndex: 3,
+    length: 6,
+    clampsBounds: true,
+    clientHeight: 100,
+    boundsByIndex: {
+      3: { top: 20, height: 20 },
+      4: { top: 40, height: 20 },
+      5: { top: 60, height: 20 }
+    }
+  });
+
+  goPageDown(q);
+
+  //Lands on the final position rather than hanging, and leaves the scroll alone - there is
+  //nothing below to scroll to.
+  assert.deepStrictEqual(q.getSelection(), { index: 5, length: 0 });
+  assert.strictEqual(q.root.scrollTop, 0);
+});
+
+test('goPageDown does not move when the caret is already at the last position', function(){
+  var q = stubQuill({
+    selectionIndex: 5,
+    length: 6,
+    clampsBounds: true,
+    boundsByIndex: { 5: { top: 60, height: 20 } }
+  });
+
+  goPageDown(q);
+
+  assert.deepStrictEqual(q.getSelection(), { index: 5, length: 0 });
 });
 
 test('goPageDown selects the first position that reaches the bottom of the editor and scrolls by its container-relative offset', function(){

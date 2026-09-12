@@ -15,6 +15,7 @@ const {
 const { createNodeBacking, NOTES_PREPEND, OLD_VERSION_FLAG } = require('../src/components/controllers/platform-node');
 const { createIpcBacking } = require('../src/components/controllers/platform-ipc');
 const { createFakeBridge } = require('./fake-bridge');
+const { scopedTmpdir } = require('./helpers');
 
 //Real temp directories, like every other test here - the facade exists so the suite can keep doing
 //this rather than growing a filesystem mock.
@@ -392,14 +393,14 @@ testOnce('every group in the inventory is represented', function(){
     ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K']);
 });
 
-//All 36 main -> renderer channels, not just the file-open one the inventory names. A typo has to
+//All 37 main -> renderer channels, not just the file-open one the inventory names. A typo has to
 //fail here rather than becoming a menu item that quietly does nothing.
 test('events are validated by name and unsubscribe cleanly', function(t){
   const built = platformIn(t);
   const seen = [];
   const handler = function(){ seen.push(1); };
 
-  assert.strictEqual(EVENTS.length, 36);
+  assert.strictEqual(EVENTS.length, 41);
   assert.ok(EVENTS.indexOf('save-clicked') > -1);
 
   const unsubscribe = built.platform.on('save-clicked', handler);
@@ -473,7 +474,37 @@ test('getPlatform reports this process\'s own platform and arch', async function
   assert.deepStrictEqual(await platform.getPlatform(), {
     platform: process.platform,
     arch: process.arch,
-    electron: process.versions.electron || null
+    electron: process.versions.electron || null,
+    //Whatever this suite's own host is. Off win32 that is null by construction; on a Windows dev
+    //machine the suite runs under node, whose execPath has no Squirrel above it, so 'portable'.
+    windowsInstall: process.platform === 'win32' ? 'portable' : null
+  });
+});
+
+//The Windows build a copy belongs to is not a preference or a build-time flag - it is whether
+//Squirrel's Update.exe is sitting one directory above the running binary, which is the same thing
+//Electron's autoUpdater needs in order to work at all. Both layouts are built on disk here rather
+//than faked, because the value decides which release asset a writer is handed and getting it
+//backwards hands them the wrong build of WareWoolf.
+test('getPlatform reports the installed Windows build as squirrel when Update.exe sits above the binary', async function(t){
+  const platform = wrap(createNodeBacking({ platform: 'win32', execPath: squirrelLayout(t) }));
+
+  assert.strictEqual((await platform.getPlatform()).windowsInstall, 'squirrel');
+});
+
+test('getPlatform reports the portable Windows build when there is no Update.exe above the binary', async function(t){
+  const platform = wrap(createNodeBacking({ platform: 'win32', execPath: portableLayout(t) }));
+
+  assert.strictEqual((await platform.getPlatform()).windowsInstall, 'portable');
+});
+
+//null rather than 'portable' off Windows: there is no Squirrel on linux or macOS, so neither answer
+//would mean anything, and a real value would invite a caller to branch on it.
+['linux', 'darwin'].forEach(function(plat){
+  test('getPlatform reports a null windowsInstall on ' + plat, async function(t){
+    const platform = wrap(createNodeBacking({ platform: plat, execPath: portableLayout(t) }));
+
+    assert.strictEqual((await platform.getPlatform()).windowsInstall, null);
   });
 });
 
@@ -855,6 +886,69 @@ test('saveProject writes the project file where it is told', async function(t){
   await built.platform.saveProject({ directory: built.dir, filename: 'p.woolf', contents: '{"title":"P"}' });
 
   assert.strictEqual(fs.readFileSync(built.dir + 'p.woolf', 'utf8'), '{"title":"P"}');
+});
+
+test('saveProject replaces an existing project file and leaves nothing else beside it', async function(t){
+  const built = platformIn(t);
+  fs.writeFileSync(built.dir + 'p.woolf', '{"title":"old"}', 'utf8');
+
+  await built.platform.saveProject({ directory: built.dir, filename: 'p.woolf', contents: '{"title":"new"}' });
+
+  assert.strictEqual(fs.readFileSync(built.dir + 'p.woolf', 'utf8'), '{"title":"new"}');
+  assert.deepStrictEqual(fs.readdirSync(built.dir), ['p.woolf'], 'the temp file must not survive a successful save');
+});
+
+test('saveProject writes to a temp file and renames it over the project file, never in place', async function(t){
+  const built = platformIn(t);
+  fs.writeFileSync(built.dir + 'p.woolf', '{"title":"old"}', 'utf8');
+
+  const renames = [];
+  const realRename = patch(t, fs, 'renameSync', function(from, to){
+    renames.push({ from: from, to: to, targetBefore: fs.readFileSync(to, 'utf8'), sourceBefore: fs.readFileSync(from, 'utf8') });
+    return realRename(from, to);
+  });
+
+  await built.platform.saveProject({ directory: built.dir, filename: 'p.woolf', contents: '{"title":"new"}' });
+
+  assert.strictEqual(renames.length, 1);
+  assert.strictEqual(renames[0].to, built.dir + 'p.woolf');
+  assert.notStrictEqual(renames[0].from, renames[0].to);
+  assert.strictEqual(renames[0].targetBefore, '{"title":"old"}', 'the original must be untouched until the rename');
+  assert.strictEqual(renames[0].sourceBefore, '{"title":"new"}', 'the rename source must already hold the complete new contents');
+});
+
+test('saveProject leaves the previous project file intact when the write fails', async function(t){
+  const built = platformIn(t);
+  fs.writeFileSync(built.dir + 'p.woolf', '{"title":"old"}', 'utf8');
+
+  patch(t, fs, 'writeSync', function(){
+    const err = new Error('ENOSPC: no space left on device');
+    err.code = 'ENOSPC';
+    throw err;
+  });
+
+  const err = await rejection(built.platform.saveProject({ directory: built.dir, filename: 'p.woolf', contents: '{"title":"new"}' }));
+
+  assert.ok(err.isPlatformError);
+  assert.strictEqual(fs.readFileSync(built.dir + 'p.woolf', 'utf8'), '{"title":"old"}');
+  assert.deepStrictEqual(fs.readdirSync(built.dir), ['p.woolf'], 'a failed write must not leave its temp file behind');
+});
+
+test('saveProject leaves the previous project file intact when the rename fails', async function(t){
+  const built = platformIn(t);
+  fs.writeFileSync(built.dir + 'p.woolf', '{"title":"old"}', 'utf8');
+
+  patch(t, fs, 'renameSync', function(){
+    const err = new Error('EPERM: operation not permitted');
+    err.code = 'EPERM';
+    throw err;
+  });
+
+  const err = await rejection(built.platform.saveProject({ directory: built.dir, filename: 'p.woolf', contents: '{"title":"new"}' }));
+
+  assert.ok(err.isPlatformError);
+  assert.strictEqual(fs.readFileSync(built.dir + 'p.woolf', 'utf8'), '{"title":"old"}');
+  assert.deepStrictEqual(fs.readdirSync(built.dir), ['p.woolf'], 'a failed rename must not leave its temp file behind');
 });
 
 test('saveProjectAs makes both directories and copies every chapter across', async function(t){
@@ -1314,6 +1408,24 @@ test('saveUserSettings and loadUserSettings round-trip an object', async functio
   assert.deepStrictEqual(await built.platform.loadUserSettings(), settings);
 });
 
+test('saveUserSettings leaves the previous settings file intact when the write fails', async function(t){
+  const built = platformIn(t);
+  await built.platform.saveUserSettings({ settings: { theme: 'dark' } });
+
+  patch(t, fs, 'writeSync', function(){
+    const err = new Error('ENOSPC: no space left on device');
+    err.code = 'ENOSPC';
+    throw err;
+  });
+
+  const err = await rejection(built.platform.saveUserSettings({ settings: { theme: 'light' } }));
+
+  assert.ok(err.isPlatformError);
+  assert.deepStrictEqual(await built.platform.loadUserSettings(), { theme: 'dark' });
+  assert.ok(!fs.readdirSync(built.dir).some(function(name){ return name.endsWith('.tmp'); }),
+    'a failed write must not leave its temp file behind');
+});
+
 test('user settings commands reject UNAVAILABLE without a userData directory configured', async function(){
   const platform = wrap(createNodeBacking({}));
 
@@ -1336,6 +1448,24 @@ test('saveCorkboard and loadCorkboard round-trip the raw corkboard text', async 
   await built.platform.saveCorkboard({ chaptersDir: built.dir, contents: raw });
 
   assert.strictEqual(await built.platform.loadCorkboard({ chaptersDir: built.dir }), raw);
+});
+
+test('saveCorkboard leaves the previous corkboard intact when the write fails', async function(t){
+  const built = platformIn(t);
+  await built.platform.saveCorkboard({ chaptersDir: built.dir, contents: '# Card one\n' });
+
+  patch(t, fs, 'writeSync', function(){
+    const err = new Error('ENOSPC: no space left on device');
+    err.code = 'ENOSPC';
+    throw err;
+  });
+
+  const err = await rejection(built.platform.saveCorkboard({ chaptersDir: built.dir, contents: '# Card two\n' }));
+
+  assert.ok(err.isPlatformError);
+  assert.strictEqual(await built.platform.loadCorkboard({ chaptersDir: built.dir }), '# Card one\n');
+  assert.ok(!fs.readdirSync(built.dir).some(function(name){ return name.endsWith('.tmp'); }),
+    'a failed write must not leave its temp file behind');
 });
 
 test('the corkboard commands refuse arguments they cannot act on', async function(t){
@@ -1673,11 +1803,11 @@ test('importDocx does not leave its temp extraction directory behind', async fun
   const zipPath = built.dir + 'cleanup.docx';
   await buildDocxZip(zipPath, '<w:p><w:r><w:t>Hi</w:t></w:r></w:p>');
 
-  const before = fs.readdirSync(os.tmpdir()).filter(function(name){ return name.startsWith('warewoolf-docx-'); });
-  await built.platform.importDocx({ path: zipPath });
-  const after = fs.readdirSync(os.tmpdir()).filter(function(name){ return name.startsWith('warewoolf-docx-'); });
+  const tmp = scopedTmpdir(t);
 
-  assert.deepStrictEqual(after, before);
+  await built.platform.importDocx({ path: zipPath });
+
+  assert.deepStrictEqual(fs.readdirSync(tmp), [], 'importDocx left its temp extraction directory behind');
 });
 
 test('importDocx rejects NOT_FOUND for a file that is not there', async function(t){
@@ -1685,6 +1815,134 @@ test('importDocx rejects NOT_FOUND for a file that is not there', async function
   const err = await rejection(built.platform.importDocx({ path: built.dir + 'missing.docx' }));
 
   assert.strictEqual(err.code, CODES.NOT_FOUND);
+});
+
+//An epub is a zip of XHTML plus a manifest. Everything that decides what those parts *mean* - which
+//document is the OPF, what the spine holds, where the chapters break - is format knowledge and lives
+//in the renderer, so this command's whole job is to hand back the archive's text.
+function epubEntries(extra){
+  return [
+    { name: 'mimetype', content: 'application/epub+zip' },
+    { name: 'META-INF/container.xml',
+      content: '<?xml version="1.0"?><container><rootfiles>'
+        + '<rootfile full-path="OEBPS/content.opf"/></rootfiles></container>' },
+    { name: 'OEBPS/content.opf', content: '<package><manifest/><spine/></package>' },
+    { name: 'OEBPS/toc.ncx', content: '<ncx><navMap/></ncx>' },
+    { name: 'OEBPS/chapter_1.xhtml', content: '<html><body><p>Hello</p></body></html>' },
+    { name: 'OEBPS/CSS/template.css', content: '.right { text-align: right; }' }
+  ].concat(extra || []);
+}
+
+test('importEpub returns every text entry keyed by its path in the archive', async function(t){
+  const built = platformIn(t);
+  const epubPath = built.dir + 'book.epub';
+  await buildZip(epubPath, epubEntries());
+
+  const result = await built.platform.importEpub({ path: epubPath });
+
+  assert.deepStrictEqual(Object.keys(result).sort(), ['entries']);
+  assert.deepStrictEqual(Object.keys(result.entries).sort(), [
+    'META-INF/container.xml',
+    'OEBPS/CSS/template.css',
+    'OEBPS/chapter_1.xhtml',
+    'OEBPS/content.opf',
+    'OEBPS/toc.ncx',
+    'mimetype'
+  ]);
+  assert.strictEqual(result.entries['OEBPS/chapter_1.xhtml'], '<html><body><p>Hello</p></body></html>');
+  assert.strictEqual(result.entries['mimetype'], 'application/epub+zip');
+});
+
+//The enforcement point for "images are stripped": a cover jpeg is skipped before its bytes are ever
+//read, so it cannot reach the renderer to be stripped later. html-import.js dropping <img> tags is
+//the second line of the same defence, for markup naming a picture that is no longer there.
+test('importEpub never reads images, fonts or other binary parts', async function(t){
+  const built = platformIn(t);
+  const epubPath = built.dir + 'illustrated.epub';
+  await buildZip(epubPath, epubEntries([
+    { name: 'OEBPS/cover.jpg', content: Buffer.from([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10]) },
+    { name: 'OEBPS/fonts/serif.otf', content: Buffer.from([0x4F, 0x54, 0x54, 0x4F]) },
+    { name: 'OEBPS/audio/track.mp3', content: Buffer.from([0x49, 0x44, 0x33]) }
+  ]));
+
+  const result = await built.platform.importEpub({ path: epubPath });
+
+  Object.keys(result.entries).forEach(function(name){
+    assert.ok(!/\.(?:jpg|otf|mp3)$/.test(name), name + ' should not have been read');
+  });
+});
+
+//An epub links its stylesheets rather than inlining a <style> block - every chapter of all three
+//sample books does - so dropping .css here would mean every class-driven italic in the book resolves
+//to nothing on the renderer side.
+test('importEpub includes stylesheets, which are where an epub keeps its italics', async function(t){
+  const built = platformIn(t);
+  const epubPath = built.dir + 'styled.epub';
+  await buildZip(epubPath, epubEntries());
+
+  const result = await built.platform.importEpub({ path: epubPath });
+
+  assert.strictEqual(result.entries['OEBPS/CSS/template.css'], '.right { text-align: right; }');
+});
+
+test('importEpub strips a byte order mark rather than passing it into the markup', async function(t){
+  const built = platformIn(t);
+  const epubPath = built.dir + 'bom.epub';
+  await buildZip(epubPath, [
+    { name: 'OEBPS/chapter_1.xhtml', content: '﻿<html><body><p>Hi</p></body></html>' }
+  ]);
+
+  const result = await built.platform.importEpub({ path: epubPath });
+
+  assert.strictEqual(result.entries['OEBPS/chapter_1.xhtml'], '<html><body><p>Hi</p></body></html>');
+});
+
+//Nothing is extracted at all - unzipper.Open reads the central directory and pulls one entry's bytes
+//at a time - so unlike importDocx there is no temp directory to own or clean up, and a hostile entry
+//name cannot write anywhere because nothing is written.
+test('importEpub leaves nothing on disk, not even a temp directory', async function(t){
+  const built = platformIn(t);
+  const epubPath = built.dir + 'clean.epub';
+  await buildZip(epubPath, epubEntries());
+
+  const tmp = scopedTmpdir(t);
+  const dirBefore = fs.readdirSync(built.dir).sort();
+
+  await built.platform.importEpub({ path: epubPath });
+
+  assert.deepStrictEqual(fs.readdirSync(tmp), [], 'importEpub put something in the temp directory');
+  assert.deepStrictEqual(fs.readdirSync(built.dir).sort(), dirBefore);
+});
+
+test('importEpub rejects NOT_FOUND for a file that is not there', async function(t){
+  const built = platformIn(t);
+  const err = await rejection(built.platform.importEpub({ path: built.dir + 'missing.epub' }));
+
+  assert.strictEqual(err.code, CODES.NOT_FOUND);
+});
+
+//A file that is not a zip rejects out of unzipper with no errno of its own, so it must land on
+//IO_ERROR rather than being reported as a missing file the writer could go looking for.
+test('importEpub rejects IO_ERROR for a file that is not a zip', async function(t){
+  const built = platformIn(t);
+  fs.writeFileSync(built.dir + 'notreally.epub', 'this is just some text', 'utf8');
+
+  const err = await rejection(built.platform.importEpub({ path: built.dir + 'notreally.epub' }));
+
+  assert.strictEqual(err.code, CODES.IO_ERROR);
+});
+
+//It does not check container.xml or the mimetype: "is this a valid epub" is format knowledge, the
+//renderer has to read those parts anyway, and a check here would only be able to report the failure
+//less precisely than the code that actually needs the answer.
+test('importEpub does not judge whether the archive is a valid epub', async function(t){
+  const built = platformIn(t);
+  const zipPath = built.dir + 'plain.zip';
+  await buildZip(zipPath, [{ name: 'notes.txt', content: 'not a book' }]);
+
+  const result = await built.platform.importEpub({ path: zipPath });
+
+  assert.deepStrictEqual(result.entries, { 'notes.txt': 'not a book' });
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -1978,29 +2236,249 @@ function writeSharedDictionary(appDir){
   fs.writeFileSync(appDir + 'dictionaries/en_US-large.dic', '2\nhello\nworld', 'utf8');
 }
 
+function writeDictionaryPair(dir, id, affText, dicText){
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(dir + '/' + id + '.aff', affText == null ? 'SET UTF-8' : affText, 'utf8');
+  fs.writeFileSync(dir + '/' + id + '.dic', dicText == null ? '1\nhello' : dicText, 'utf8');
+}
+
+function dictPlatformIn(t){
+  const dir = tempDir(t).replaceAll('\\', '/');
+  const appDir = dir + 'app';
+  const userDataDir = dir + 'user';
+  fs.mkdirSync(appDir, { recursive: true });
+  fs.mkdirSync(userDataDir, { recursive: true });
+
+  return {
+    appDir: appDir,
+    userDataDir: userDataDir,
+    platform: wrap(createNodeBacking({ paths: { app: appDir, userData: userDataDir } }))
+  };
+}
+
 //nspell is pure JS and stays in the webview - only the dictionary text crosses.
-test('loadDictionary returns the shipped .aff and .dic text', async function(t){
-  const appDir = tempDir(t).replaceAll('\\', '/');
-  writeSharedDictionary(appDir);
-  const platform = wrap(createNodeBacking({ paths: { app: appDir } }));
+test('loadDictionaries returns the requested bundled and imported pairs, in order', async function(t){
+  const built = dictPlatformIn(t);
+  writeDictionaryPair(built.appDir + '/dictionaries', 'en_US-large', 'SET UTF-8', '2\nhello\nworld');
+  writeDictionaryPair(built.userDataDir + '/dictionaries', 'fr_FR', 'SET UTF-8', '1\nbonjour');
 
-  const dict = await platform.loadDictionary();
+  const loaded = await built.platform.loadDictionaries({ ids: ['fr_FR', 'en_US-large'] });
 
-  assert.strictEqual(dict.aff, 'SET UTF-8');
-  assert.strictEqual(dict.dic, '2\nhello\nworld');
+  assert.deepStrictEqual(loaded, [
+    { id: 'fr_FR', aff: 'SET UTF-8', dic: '1\nbonjour' },
+    { id: 'en_US-large', aff: 'SET UTF-8', dic: '2\nhello\nworld' }
+  ]);
 });
 
-test('loadDictionary rejects UNAVAILABLE without an app directory configured', async function(){
+test('loadDictionaries skips an id that is not on disk', async function(t){
+  const built = dictPlatformIn(t);
+  writeDictionaryPair(built.appDir + '/dictionaries', 'en_US-large');
+
+  const loaded = await built.platform.loadDictionaries({ ids: ['en_US-large', 'nonexistent'] });
+
+  assert.deepStrictEqual(loaded.map(function(d){ return d.id; }), ['en_US-large']);
+});
+
+//The behaviour when a writer removes a dictionary they had selected, unticks everything, or copies
+//user-settings.json to a machine an import does not exist on - spellcheck must not simply stop
+//working.
+test('loadDictionaries falls back to the shared default when the selection resolves to nothing', async function(t){
+  const built = dictPlatformIn(t);
+  writeSharedDictionary(built.appDir + '/');
+
+  const emptyIds = await built.platform.loadDictionaries({ ids: [] });
+  const missingIds = await built.platform.loadDictionaries({ ids: ['nonexistent'] });
+  const noArgs = await built.platform.loadDictionaries({});
+
+  [emptyIds, missingIds, noArgs].forEach(function(loaded){
+    assert.deepStrictEqual(loaded, [{ id: 'en_US-large', aff: 'SET UTF-8', dic: '2\nhello\nworld' }]);
+  });
+});
+
+test('loadDictionaries rejects UNAVAILABLE when the fallback has no app directory configured', async function(){
   const platform = wrap(createNodeBacking({}));
 
-  assert.strictEqual((await rejection(platform.loadDictionary())).code, CODES.UNAVAILABLE);
+  assert.strictEqual((await rejection(platform.loadDictionaries({ ids: [] }))).code, CODES.UNAVAILABLE);
 });
 
-test('loadDictionary rejects NOT_FOUND when the shipped dictionary files are missing', async function(t){
+test('loadDictionaries rejects NOT_FOUND when the fallback dictionary files are missing', async function(t){
   const appDir = tempDir(t).replaceAll('\\', '/');
   const platform = wrap(createNodeBacking({ paths: { app: appDir } }));
 
-  assert.strictEqual((await rejection(platform.loadDictionary())).code, CODES.NOT_FOUND);
+  assert.strictEqual((await rejection(platform.loadDictionaries({ ids: [] }))).code, CODES.NOT_FOUND);
+});
+
+test('listDictionaries finds both bundled pairs and excludes personal.dic and license', async function(t){
+  const built = dictPlatformIn(t);
+  writeDictionaryPair(built.appDir + '/dictionaries', 'en_US-large');
+  writeDictionaryPair(built.appDir + '/dictionaries', 'en_us');
+  fs.writeFileSync(built.appDir + '/dictionaries/personal.dic', 'WareWoolf\n', 'utf8');
+  fs.writeFileSync(built.appDir + '/dictionaries/license', 'MIT', 'utf8');
+
+  const listed = await built.platform.listDictionaries();
+
+  assert.deepStrictEqual(listed, [
+    { id: 'en_US-large', source: 'bundled', removable: false },
+    { id: 'en_us', source: 'bundled', removable: false }
+  ]);
+});
+
+test('an .aff with no .dic is not listed', async function(t){
+  const built = dictPlatformIn(t);
+  fs.mkdirSync(built.appDir + '/dictionaries', { recursive: true });
+  fs.writeFileSync(built.appDir + '/dictionaries/orphan.aff', 'SET UTF-8', 'utf8');
+
+  assert.deepStrictEqual(await built.platform.listDictionaries(), []);
+});
+
+test('listDictionaries marks imported entries removable and bundled ones not', async function(t){
+  const built = dictPlatformIn(t);
+  writeDictionaryPair(built.appDir + '/dictionaries', 'en_US-large');
+  writeDictionaryPair(built.userDataDir + '/dictionaries', 'fr_FR');
+
+  const listed = await built.platform.listDictionaries();
+
+  assert.deepStrictEqual(listed, [
+    { id: 'en_US-large', source: 'bundled', removable: false },
+    { id: 'fr_FR', source: 'imported', removable: true }
+  ]);
+});
+
+test('readDictionaryFiles decodes an ISO8859-1 pair and rewrites the stored SET line to UTF-8', async function(t){
+  const dir = tempDir(t).replaceAll('\\', '/');
+  const affPath = dir + 'café.aff';
+  const dicPath = dir + 'café.dic';
+  //café encoded as ISO8859-1/latin1 bytes.
+  fs.writeFileSync(affPath, Buffer.from('SET ISO8859-1\n', 'latin1'));
+  fs.writeFileSync(dicPath, Buffer.from('1\ncafé', 'latin1'));
+  const built = dictPlatformIn(t);
+
+  const result = await built.platform.readDictionaryFiles({ affPath: affPath, dicPath: dicPath });
+
+  assert.strictEqual(result.id, 'café');
+  assert.strictEqual(result.aff, 'SET UTF-8\n');
+  assert.strictEqual(result.dic, '1\ncafé');
+});
+
+//A .txt or .dic of names with no affix file at all - what a writer importing "every character in my
+//series" actually has.
+test('readDictionaryFiles generates a SET UTF-8 affix for a bare word list with no affPath', async function(t){
+  const dir = tempDir(t).replaceAll('\\', '/');
+  const dicPath = dir + 'characters.dic';
+  fs.writeFileSync(dicPath, '2\nAurelion\nDorrigo', 'utf8');
+  const built = dictPlatformIn(t);
+
+  const result = await built.platform.readDictionaryFiles({ dicPath: dicPath });
+
+  assert.strictEqual(result.id, 'characters');
+  assert.strictEqual(result.aff, 'SET UTF-8\n');
+  assert.strictEqual(result.dic, '2\nAurelion\nDorrigo');
+});
+
+test('importDictionary writes a new pair into userData/dictionaries', async function(t){
+  const built = dictPlatformIn(t);
+
+  await built.platform.importDictionary({ id: 'fr_FR', aff: 'SET UTF-8\n', dic: '1\nbonjour' });
+
+  assert.strictEqual(fs.readFileSync(built.userDataDir + '/dictionaries/fr_FR.aff', 'utf8'), 'SET UTF-8\n');
+  assert.strictEqual(fs.readFileSync(built.userDataDir + '/dictionaries/fr_FR.dic', 'utf8'), '1\nbonjour');
+  assert.deepStrictEqual(await built.platform.listDictionaries(),
+    [{ id: 'fr_FR', source: 'imported', removable: true }]);
+});
+
+test('importDictionary generates a SET UTF-8 affix when none is given', async function(t){
+  const built = dictPlatformIn(t);
+
+  await built.platform.importDictionary({ id: 'characters', dic: '1\nAurelion' });
+
+  assert.strictEqual(fs.readFileSync(built.userDataDir + '/dictionaries/characters.aff', 'utf8'), 'SET UTF-8\n');
+});
+
+test('importDictionary refuses a colliding id whether bundled or already imported', async function(t){
+  const built = dictPlatformIn(t);
+  writeDictionaryPair(built.appDir + '/dictionaries', 'en_US-large');
+  await built.platform.importDictionary({ id: 'fr_FR', aff: 'SET UTF-8\n', dic: '1\nbonjour' });
+
+  const bundledCollision = await rejection(
+    built.platform.importDictionary({ id: 'en_US-large', aff: 'SET UTF-8\n', dic: '1\nx' }));
+  const importedCollision = await rejection(
+    built.platform.importDictionary({ id: 'fr_FR', aff: 'SET UTF-8\n', dic: '1\nx' }));
+
+  assert.strictEqual(bundledCollision.code, CODES.ALREADY_EXISTS);
+  assert.strictEqual(importedCollision.code, CODES.ALREADY_EXISTS);
+});
+
+test('removeDictionary deletes an imported pair', async function(t){
+  const built = dictPlatformIn(t);
+  writeDictionaryPair(built.userDataDir + '/dictionaries', 'fr_FR');
+
+  await built.platform.removeDictionary({ id: 'fr_FR' });
+
+  assert.strictEqual(fs.existsSync(built.userDataDir + '/dictionaries/fr_FR.aff'), false);
+  assert.strictEqual(fs.existsSync(built.userDataDir + '/dictionaries/fr_FR.dic'), false);
+});
+
+test('removeDictionary refuses a bundled id with INVALID_ARGUMENT', async function(t){
+  const built = dictPlatformIn(t);
+  writeDictionaryPair(built.appDir + '/dictionaries', 'en_US-large');
+
+  const err = await rejection(built.platform.removeDictionary({ id: 'en_US-large' }));
+
+  assert.strictEqual(err.code, CODES.INVALID_ARGUMENT);
+  assert.strictEqual(fs.existsSync(built.appDir + '/dictionaries/en_US-large.aff'), true);
+});
+
+//An id is the one value in group I that arrives from the renderer and is then joined into a path.
+//Left unchecked, "../../x" wrote and unlinked outside the dictionaries directory entirely, and an
+//empty id produced files literally named ".aff" and ".dic".
+[
+  { label: 'a parent-directory traversal', id: '../../escaped' },
+  { label: 'a nested path', id: 'sub/escaped' },
+  { label: 'a Windows separator', id: 'sub\\escaped' },
+  { label: 'a drive-relative name', id: 'C:escaped' },
+  { label: 'an empty id', id: '' },
+  { label: 'the current directory', id: '.' },
+  { label: 'the parent directory', id: '..' }
+].forEach(function(bad){
+  test('importDictionary refuses ' + bad.label + ' as an id', async function(t){
+    const built = dictPlatformIn(t);
+
+    const err = await rejection(built.platform.importDictionary({ id: bad.id, dic: '1\nhello' }));
+
+    assert.strictEqual(err.code, CODES.INVALID_ARGUMENT);
+    assert.deepStrictEqual(fs.readdirSync(built.userDataDir), [],
+      'nothing may be written anywhere for an id the command refuses');
+  });
+
+  test('removeDictionary refuses ' + bad.label + ' as an id', async function(t){
+    const built = dictPlatformIn(t);
+
+    const err = await rejection(built.platform.removeDictionary({ id: bad.id }));
+
+    assert.strictEqual(err.code, CODES.INVALID_ARGUMENT);
+  });
+});
+
+//Neither writes nor deletes, so an unusable id here is skipped like any other id that names no
+//dictionary - a saved selection gone bad is not worth failing a spellcheck over. The fallback is
+//what the caller gets instead.
+test('loadDictionaries skips an unusable id rather than rejecting', async function(t){
+  const built = dictPlatformIn(t);
+  writeDictionaryPair(built.appDir + '/dictionaries', 'en_US-large');
+
+  const loaded = await built.platform.loadDictionaries({ ids: ['../../escaped', 'en_US-large'] });
+
+  assert.deepStrictEqual(loaded.map(function(d){ return d.id; }), ['en_US-large']);
+});
+
+//A name with a space or an accent is a perfectly ordinary dictionary filename - the guard is
+//structural, and must not turn into a character allowlist that rejects usable files.
+test('importDictionary accepts an ordinary name with a space in it', async function(t){
+  const built = dictPlatformIn(t);
+
+  await built.platform.importDictionary({ id: 'Aurelion Names', dic: '1\nAurelion' });
+
+  assert.strictEqual(fs.existsSync(built.userDataDir + '/dictionaries/Aurelion Names.dic'), true);
 });
 
 //Folds in the bootstrap write createPersonalDicIfNeeded() used to require the caller run first
@@ -2563,6 +3041,148 @@ test('installUpdate resolves once apt closes with exit code 0', async function(t
 });
 
 // ---------------------------------------------------------------------------------------------
+// Group K - startSquirrelUpdate / quitAndInstallUpdate
+// ---------------------------------------------------------------------------------------------
+
+//Every test below constructs its own backing rather than reusing updatePlatform() (which is shaped
+//around downloadUpdate's httpsGet/paths seams) - what these two commands need is the `platform`
+//test seam and, for the happy path, the injected onStartSquirrelUpdate/onQuitAndInstallUpdate
+//hooks, the same shape platform.test.js already uses for onSetTheme/onShowAppMenu/onConfirmExit.
+//
+//A win32 backing also needs an execPath, because both commands now refuse a copy with no Squirrel
+//beside it. The directory below is the layout Squirrel actually installs into - the app one level
+//down in app-<version>, Update.exe at the root - so what these tests exercise is the real lookup.
+function squirrelLayout(t){
+  const root = tempDir(t);
+  fs.mkdirSync(path.join(root, 'app-2.5.0'));
+  fs.writeFileSync(path.join(root, 'Update.exe'), 'not really Squirrel');
+  return path.join(root, 'app-2.5.0', 'warewoolf.exe');
+}
+
+//The portable build: the same files, with no Update.exe above them, because nothing installed it.
+function portableLayout(t){
+  const root = tempDir(t);
+  fs.mkdirSync(path.join(root, 'WareWoolf_2.5.0_Portable'));
+  return path.join(root, 'WareWoolf_2.5.0_Portable', 'warewoolf.exe');
+}
+
+function squirrelPlatform(t, deps){
+  const withExecPath = Object.assign({}, deps);
+  if(withExecPath.platform === 'win32' && withExecPath.execPath == null)
+    withExecPath.execPath = squirrelLayout(t);
+  return wrap(createNodeBacking(withExecPath));
+}
+
+test('startSquirrelUpdate rejects UNAVAILABLE off win32, without calling the hook', async function(t){
+  const seen = [];
+  const platform = squirrelPlatform(t, {
+    platform: 'linux',
+    onStartSquirrelUpdate: function(feedUrl){ seen.push(feedUrl); }
+  });
+
+  const err = await rejection(platform.startSquirrelUpdate({ tag: 'v2.6.0' }));
+
+  assert.strictEqual(err.code, CODES.UNAVAILABLE);
+  assert.deepStrictEqual(seen, []);
+});
+
+test('quitAndInstallUpdate rejects UNAVAILABLE off win32, without calling the hook', async function(t){
+  let called = 0;
+  const platform = squirrelPlatform(t, {
+    platform: 'darwin',
+    onQuitAndInstallUpdate: function(){ called++; }
+  });
+
+  const err = await rejection(platform.quitAndInstallUpdate());
+
+  assert.strictEqual(err.code, CODES.UNAVAILABLE);
+  assert.strictEqual(called, 0);
+});
+
+test('startSquirrelUpdate rejects INVALID_ARGUMENT for a tag that is not a plain vX.Y.Z, without calling the hook', async function(t){
+  const seen = [];
+  const platform = squirrelPlatform(t, {
+    platform: 'win32',
+    onStartSquirrelUpdate: function(feedUrl){ seen.push(feedUrl); }
+  });
+
+  const badTags = ['2.6.0', 'v2.6', 'v2.6.0-beta', 'v2.6.0/../../etc', '', undefined, null];
+
+  for(const tag of badTags){
+    const err = await rejection(platform.startSquirrelUpdate({ tag: tag }));
+    assert.strictEqual(err.code, CODES.INVALID_ARGUMENT, JSON.stringify(tag) + ' should be refused');
+  }
+
+  assert.deepStrictEqual(seen, [], 'a rejected tag must never reach the hook');
+});
+
+//The composed URL has to match what downloadUpdate's own allowlist is spelled from exactly, so the
+//two cannot drift - see the note on this command in platform.js.
+test('startSquirrelUpdate composes the feed URL from the tag and hands it to the hook', async function(t){
+  const seen = [];
+  const platform = squirrelPlatform(t, {
+    platform: 'win32',
+    onStartSquirrelUpdate: function(feedUrl){ seen.push(feedUrl); }
+  });
+
+  await platform.startSquirrelUpdate({ tag: 'v2.6.0' });
+
+  assert.deepStrictEqual(seen, ['https://github.com/brsloan/warewoolf/releases/download/v2.6.0']);
+});
+
+//startSquirrelUpdate resolves once the check is started, not once Squirrel has an answer - there is
+//nothing else for this call to wait on, since the outcome arrives later as an event.
+test('startSquirrelUpdate resolves as soon as the hook has been called', async function(t){
+  const platform = squirrelPlatform(t, {
+    platform: 'win32',
+    onStartSquirrelUpdate: function(){}
+  });
+
+  await assert.doesNotReject(platform.startSquirrelUpdate({ tag: 'v2.6.0' }));
+});
+
+test('quitAndInstallUpdate calls its injected hook on win32', async function(t){
+  let called = 0;
+  const platform = squirrelPlatform(t, {
+    platform: 'win32',
+    onQuitAndInstallUpdate: function(){ called++; }
+  });
+
+  await platform.quitAndInstallUpdate();
+
+  assert.strictEqual(called, 1);
+});
+
+//The portable build is on Windows and has every reason to think these commands apply to it, which
+//is exactly why they have to refuse rather than try: there is no Update.exe for autoUpdater to shell
+//out to, and letting it find that out itself surfaces an opaque error mid-update instead of a
+//sentence saying which build this is. about_display.js never offers an in-place install to a
+//portable copy in the first place - this is the backing declining to do what it cannot, which is
+//where the refusal belongs.
+//
+//UNAVAILABLE, not INVALID_ARGUMENT: the caller asked for something reasonable and the facility is
+//absent - the same distinction the off-win32 case above draws, and getBatteryCapacity before it.
+[
+  { command: 'startSquirrelUpdate', call: function(p){ return p.startSquirrelUpdate({ tag: 'v2.6.0' }); },
+    hook: 'onStartSquirrelUpdate' },
+  { command: 'quitAndInstallUpdate', call: function(p){ return p.quitAndInstallUpdate(); },
+    hook: 'onQuitAndInstallUpdate' }
+].forEach(function(c){
+  test(c.command + ' rejects UNAVAILABLE on the portable Windows build, without calling the hook', async function(t){
+    let called = 0;
+    const deps = { platform: 'win32', execPath: portableLayout(t) };
+    deps[c.hook] = function(){ called++; };
+    const platform = wrap(createNodeBacking(deps));
+
+    const err = await rejection(c.call(platform));
+
+    assert.strictEqual(err.code, CODES.UNAVAILABLE);
+    assert.match(err.message, /portable/i, 'the message has to say which build this is');
+    assert.strictEqual(called, 0);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
 // Group K - email
 // ---------------------------------------------------------------------------------------------
 
@@ -3062,6 +3682,58 @@ test('getBatteryCapacity rejects IO_ERROR when the kernel read produces non-nume
 
   const err = await rejection(platform.getBatteryCapacity());
   assert.strictEqual(err.code, CODES.IO_ERROR);
+});
+
+//File > Reboot, which index.js only shows on Linux. Every one of these injects the platform rather
+//than reading the real one, so they say the same thing on the Windows and macOS machines this suite
+//also runs on - and so that the linux branch, the one that ends in a spawn, is exercised there too.
+test('rebootSystem spawns "systemctl reboot" on Linux and resolves once it is accepted', async function(t){
+  const spawnFake = fakeSpawn([{ code: 0 }]);
+  const platform = wrap(createNodeBacking({ platform: 'linux', spawnProcess: spawnFake }));
+
+  await platform.rebootSystem();
+
+  assert.strictEqual(spawnFake.calls[0].command, 'systemctl');
+  assert.deepStrictEqual(spawnFake.calls[0].args, ['reboot']);
+});
+
+//The menu item is Linux-only, but the menu is not the boundary - this is. A bridge that answered it
+//anywhere would be a command the contract declares and no platform check stands behind.
+test('rebootSystem rejects UNAVAILABLE off Linux, without spawning anything', async function(t){
+  const spawnFake = fakeSpawn([{ code: 0 }]);
+  const platform = wrap(createNodeBacking({ platform: 'win32', spawnProcess: spawnFake }));
+
+  const err = await rejection(platform.rebootSystem());
+
+  assert.strictEqual(err.code, CODES.UNAVAILABLE);
+  assert.strictEqual(spawnFake.calls.length, 0);
+});
+
+test('rebootSystem rejects UNAVAILABLE when systemctl is not installed', async function(t){
+  const platform = wrap(createNodeBacking({
+    platform: 'linux',
+    spawnProcess: fakeSpawn([{ error: enoent('systemctl') }])
+  }));
+
+  const err = await rejection(platform.rebootSystem());
+
+  assert.strictEqual(err.code, CODES.UNAVAILABLE);
+  assert.match(err.message, /systemctl/);
+});
+
+//The case a writer can actually do something about: systemctl ran and logind refused the session.
+//IO_ERROR rather than UNAVAILABLE, and carrying systemctl's own words, since "reboot failed" on its
+//own tells them nothing about why.
+test("rebootSystem rejects IO_ERROR with systemctl's own output when the reboot is refused", async function(t){
+  const platform = wrap(createNodeBacking({
+    platform: 'linux',
+    spawnProcess: fakeSpawn([{ stderrChunks: ['Interactive authentication required.'], code: 1 }])
+  }));
+
+  const err = await rejection(platform.rebootSystem());
+
+  assert.strictEqual(err.code, CODES.IO_ERROR);
+  assert.match(err.message, /Interactive authentication required/);
 });
 
 test('the network/hardware commands refuse arguments they cannot act on', async function(t){

@@ -1,4 +1,4 @@
-const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
+const { closePopups, createButton, removeElementsByClass, describeDialog } = require('../controllers/utils');
 const { convertMarkedItalicsForAllChapters } = require('../controllers/convert-italics');
 const { showWorkingAndThen, hideWorking } = require('./working_display');
 
@@ -10,6 +10,7 @@ function showItalicsOptions(project, onFinish){
     var popupTitle = document.createElement('h1');
     popupTitle.innerText = 'Convert Marked Italics';
     popup.appendChild(popupTitle);
+    describeDialog(popup, popupTitle);
 
     var undoWarning = document.createElement('p');
     undoWarning.innerText = 'WARNING: This action cannot be undone. Be sure to save first.';

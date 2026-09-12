@@ -1,3 +1,5 @@
+const { codeForKey } = require('../models/shortcuts');
+
 function getTempQuill(){
   const Quill = require('quill');
   return new Quill(document.createElement('div'), {
@@ -76,6 +78,14 @@ function flattenInserts(ops){
   var flattened = [];
 
   for(let i=0;i<ops.length;i++){
+    //An embed (a footnote marker, say) has an object insert rather than a string - there is no
+    //line to split it out of, so it passes through as its own op untouched. Without this check
+    //`.split('\n')` below throws, since objects have no such method.
+    if(typeof ops[i].insert !== 'string'){
+      flattened.push(ops[i]);
+      continue;
+    }
+
     if(ops[i].insert == '\n')
       flattened.push(ops[i]);
     else{
@@ -93,6 +103,31 @@ function flattenInserts(ops){
   }
 
   return flattened;
+}
+
+//Whether a delta insert is a footnote marker embed, shared by everything that has to tell a real
+//character run apart from one: the reconcile pass, the MarkdownFic writer, the docx exporter, and
+//the keyboard's context-sensitive insert/jump handler.
+function isFootnoteMarker(insertValue){
+  return Boolean(insertValue && typeof insertValue === 'object' && insertValue.footnote);
+}
+
+//Quill drops embeds entirely from getText() (core/editor.js filters to string inserts only), which
+//leaves every index after the first marker off by one against Quill's own index space - anything
+//that hands an offset computed from getText() back to setSelection lands one short per marker
+//before it. Built from getContents() instead, with one U+FFFC (object replacement character) per
+//embed: same length as Quill's own count, and a non-letter placeholder still breaks words correctly
+//for the spellchecker.
+const OBJECT_REPLACEMENT_CHAR = '￼';
+
+function getIndexableText(quill){
+  var text = '';
+
+  (quill.getContents().ops || []).forEach(function(op){
+    text += typeof op.insert === 'string' ? op.insert : OBJECT_REPLACEMENT_CHAR;
+  });
+
+  return text;
 }
 
 //Numbered lists restart at one for each new list and count independently at each nesting level, so
@@ -194,77 +229,181 @@ function getLineMarkerForPlaintextExport(attr, listItemNum = 0){
   return marker;
 };
 
-//The editor and the notes pane get the same formatting shortcuts. Quill's own keyboard module
-//owns these bindings, so they are attached to each instance as it is built rather than handled by
-//render.js's document-level keydown listener.
-function addBindingsToQuill(q){
+//What each of the formatting shortcuts does, keyed by the action ids in models/shortcuts.js. Quill
+//calls a handler with `this` bound to a context carrying the instance, so they reach for
+//this.quill rather than closing over one - which is what lets the same table serve both editors,
+//and lets a rebind re-attach them without rebuilding anything.
+const QUILL_HANDLERS = {
   //Title: centre it and make it a top-level heading in one keystroke.
-  q.keyboard.addBinding({
-    key: 'T',
-    shortKey: true,
-    handler: function(range, context) {
-      this.quill.format('align', 'center', 'user');
-      this.quill.format('header', 1, 'user');
-    }
-  });
-
-  for(let i = 1; i <= 4; i++){
-    q.keyboard.addBinding({
-      key: i.toString(),
-      shortKey: true,
-      handler: function(range, context) {
-        this.quill.format('header', i, 'user');
-      }
-    });
-  }
-
-  //Left/centre/right/justify differ only in the value they set, so they are built the same way the
-  //heading levels above are.
-  var alignments = { L: null, E: 'center', R: 'right', J: 'justify' };
-  Object.keys(alignments).forEach(function(key){
-    q.keyboard.addBinding({
-      key: key,
-      shortKey: true,
-      handler: function(range, context) {
-        this.quill.format('align', alignments[key], 'user');
-      }
-    });
-  });
-
-  q.keyboard.addBinding({
-    key: '0',
-    shortKey: true,
-    handler: function(range, context){
-      this.quill.format('header', null, 'user');
-    }
-  });
-
-  q.keyboard.addBinding({
-    key: 'k',
-    shortKey: true,
-    handler: function(range, context){
-      if(q.getFormat().strike)
-        q.format('strike', false, 'user');
-      else {
-        q.format('strike', true, 'user');
-      }
-    }
-  });
-
+  formatTitle: function(){
+    this.quill.format('align', 'center', 'user');
+    this.quill.format('header', 1, 'user');
+  },
+  formatHeading1: headingHandler(1),
+  formatHeading2: headingHandler(2),
+  formatHeading3: headingHandler(3),
+  formatHeading4: headingHandler(4),
+  formatClearHeading: headingHandler(null),
+  formatAlignLeft: alignmentHandler(null),
+  formatAlignCenter: alignmentHandler('center'),
+  formatAlignRight: alignmentHandler('right'),
+  formatAlignJustify: alignmentHandler('justify'),
+  formatStrikethrough: toggleHandler('strike'),
+  formatBold: toggleHandler('bold'),
+  formatItalics: toggleHandler('italic'),
+  formatUnderline: toggleHandler('underline'),
   //Cycles bullet -> numbered -> none.
-  q.keyboard.addBinding({
-    key: 'b',
-    shortKey: true,
-    shiftKey: true,
-    handler: function(range, context){
-      if(q.getFormat().list == 'bullet')
-        q.format('list', 'ordered', 'user');
-      else if(q.getFormat().list == 'ordered')
-        q.format('list', null, 'user');
-      else
-        q.format('list', 'bullet', 'user');
-    }
-  })
+  formatList: function(){
+    var current = this.quill.getFormat().list;
+
+    if(current == 'bullet')
+      this.quill.format('list', 'ordered', 'user');
+    else if(current == 'ordered')
+      this.quill.format('list', null, 'user');
+    else
+      this.quill.format('list', 'bullet', 'user');
+  },
+  formatBlockquote: toggleHandler('blockquote'),
+  //Context-sensitive rather than a single insert action - see footnote-navigation.js. Required
+  //lazily, inside the handler rather than at this module's top level, because that module reaches
+  //back into reconcile-footnotes.js, which itself requires this module for flattenInserts; a
+  //top-level require here would complete that circle before either file has finished exporting.
+  insertFootnote: function(){
+    const { insertOrJumpFootnote } = require('./footnote-navigation');
+    insertOrJumpFootnote(this.quill);
+  }
+};
+
+function headingHandler(level){
+  return function(){
+    this.quill.format('header', level, 'user');
+  };
+}
+
+function alignmentHandler(alignment){
+  return function(){
+    this.quill.format('align', alignment, 'user');
+  };
+}
+
+function toggleHandler(format){
+  return function(){
+    this.quill.format(format, !this.quill.getFormat()[format], 'user');
+  };
+}
+
+//Quill matches a keypress on its keyCode, not on the key's name, and has no table of its own past
+//a handful of named keys - so this is that table. The physical code a binding was captured from is
+//preferred over the guess made from its key name, which is the whole reason a binding carries one:
+//on a keyboard where Shift+1 is not '!', only the code says which key was actually pressed.
+const KEY_CODES = {
+  Backspace: 8, Tab: 9, Enter: 13, Escape: 27, Space: 32,
+  PageUp: 33, PageDown: 34, End: 35, Home: 36,
+  ArrowLeft: 37, ArrowUp: 38, ArrowRight: 39, ArrowDown: 40,
+  Insert: 45, Delete: 46,
+  Semicolon: 186, Equal: 187, Comma: 188, Minus: 189, Period: 190, Slash: 191,
+  Backquote: 192, BracketLeft: 219, Backslash: 220, BracketRight: 221, Quote: 222,
+  //The keys an unusual keyboard reaches for - a programmable board's media layer, a writerdeck's
+  //extra keys. Here for the same reason as the rest: without a keyCode, toQuillBinding drops the
+  //binding, and a formatting shortcut moved onto one of these would sit in the popup looking bound
+  //and never fire.
+  Pause: 19, ContextMenu: 93, ScrollLock: 145,
+  BrowserBack: 166, BrowserForward: 167, BrowserRefresh: 168, BrowserStop: 169,
+  BrowserSearch: 170, BrowserFavorites: 171, BrowserHome: 172,
+  AudioVolumeMute: 173, AudioVolumeDown: 174, AudioVolumeUp: 175,
+  MediaTrackNext: 176, MediaTrackPrevious: 177, MediaStop: 178, MediaPlayPause: 179,
+  LaunchMail: 180, LaunchApp1: 182, LaunchApp2: 183
+};
+
+//The editor and the notes pane get the same formatting shortcuts. Quill's own keyboard module owns
+//these bindings rather than render.js's document-level listener, so they are attached to each
+//instance - and re-attached to it whenever a writer rebinds one.
+//
+//Re-attachable is the whole design here. Quill 1.x has no removeBinding(), so every binding this
+//adds is tagged, and the tagged ones are stripped from the instance before the new set goes on.
+//Only ours are touched: Quill's own bindings for Enter, Tab, Backspace and the rest are left
+//exactly where they are.
+//
+//Bold/italic/underline are in the table too, though Quill binds those itself by default. They are
+//in the popup's list, so they have to be rebindable like everything else - which means Quill's own
+//three are switched off where the editors are built (see render.js) and re-added from here.
+function applyQuillShortcuts(q, bindings){
+  removeAppliedBindings(q);
+
+  Object.keys(QUILL_HANDLERS).forEach(function(id){
+    var binding = toQuillBinding(bindings ? bindings[id] : null);
+
+    if(binding == null)
+      return;
+
+    binding.handler = QUILL_HANDLERS[id];
+    binding.warewoolfAction = id;
+
+    q.keyboard.addBinding(binding);
+  });
+}
+
+//Returns null for a shortcut a writer has unbound, and for one whose key Quill has no code for -
+//in which case leaving it unbound is the honest outcome, since a binding Quill cannot match would
+//sit in the table looking bound and never fire.
+function toQuillBinding(binding){
+  if(binding == null)
+    return null;
+
+  var keyCode = keyCodeFor(binding);
+  if(keyCode == null)
+    return null;
+
+  return {
+    key: keyCode,
+    shortKey: binding.mod,
+    altKey: binding.alt,
+    shiftKey: binding.shift
+  };
+}
+
+function keyCodeFor(binding){
+  //The keyCode the binding was actually captured from, where there is one, beats anything derivable
+  //from its name. For a key this app could not name it is the only thing Quill could match on - no
+  //table will ever hold a code like 'ShowAllWindows' - and for the rest it is the physical truth
+  //where KEY_CODES below is a guess.
+  if(typeof binding.keyCode === 'number')
+    return binding.keyCode;
+
+  var code = binding.code || codeForKey(binding.key);
+
+  if(code == null)
+    return null;
+
+  if(KEY_CODES[code])
+    return KEY_CODES[code];
+
+  var letter = /^Key([A-Z])$/.exec(code);
+  if(letter)
+    return letter[1].charCodeAt(0);
+
+  var digit = /^Digit([0-9])$/.exec(code);
+  if(digit)
+    return digit[1].charCodeAt(0);
+
+  //F1 is 112, so the F-row runs 112-123 and F13-F24 carry straight on from there to 135.
+  var functionKey = /^F([1-9]|1[0-9]|2[0-4])$/.exec(code);
+  if(functionKey)
+    return 111 + Number(functionKey[1]);
+
+  return null;
+}
+
+//Quill keys its bindings by keyCode, each holding an array of everything bound to that key, so
+//removing ours means filtering each of those arrays rather than deleting anything.
+function removeAppliedBindings(q){
+  var bindings = q.keyboard.bindings;
+
+  Object.keys(bindings).forEach(function(keyCode){
+    bindings[keyCode] = bindings[keyCode].filter(function(binding){
+      return binding.warewoolfAction == null;
+    });
+  });
 }
 
 
@@ -275,46 +414,60 @@ function addBindingsToQuill(q){
 function goPageDown(quillObj){
   var selectedRange = quillObj.getSelection();
 
-  if(selectedRange){
-    var startingScrolltop = 0 + quillObj.root.scrollTop;
-    var destinationY = quillObj.root.clientHeight;
-    var textIndex = selectedRange.index + 1;
-    //quillObj.selection.getBounds() returns viewport-relative coordinates, but destinationY and
-    //scrollTop above are relative to the editor's own container - convert before comparing, the
-    //same subtraction Quill's own public getBounds() does (see typewriter-mode.js's use of it).
-    var containerTop = quillObj.container.getBoundingClientRect().top;
+  if(!selectedRange)
+    return;
 
-    var found = false;
+  var startingScrolltop = 0 + quillObj.root.scrollTop;
+  var destinationY = quillObj.root.clientHeight;
+  var containerTop = quillObj.container.getBoundingClientRect().top;
 
-    while(!found){
-      var rawBounds = quillObj.selection.getBounds(textIndex, 1);
-      var bounds = rawBounds ? { top: rawBounds.top - containerTop, height: rawBounds.height } : null;
+  //The last index the caret can sit at. The walk below used to have no bound of its own and stop
+  //only when getBounds() returned null, on the assumption that it does so once the index runs past
+  //the end of the content. It does not: Quill clamps the index to the content's length first
+  //(core/selection.js), so past the end it keeps handing back the *last* position's bounds
+  //forever. A PageDown with less than a screenful of text below the caret - i.e. every PageDown
+  //once the reader has reached the bottom of a chapter - therefore never found a position past
+  //destinationY, never found a null, and spun here with the renderer thread held, which looks from
+  //the outside like the whole app freezing with no error logged.
+  var lastIndex = quillObj.getLength() - 1;
+  var textIndex = selectedRange.index + 1;
 
-      //Checked before reading any property of bounds: getBounds() returns null once textIndex
-      //runs past the end of the content, which this loop always eventually reaches.
-      if(bounds == null){
-        found = true;
-        quillObj.setSelection(textIndex - 1);
-      }
-      else if(bounds.top >= destinationY){
-        found = true;
-        quillObj.setSelection(textIndex);
-        quillObj.root.scrollTop = startingScrolltop + bounds.top - bounds.height;
-      }
-      textIndex += 1;
+  while(textIndex <= lastIndex){
+    var rawBounds = quillObj.selection.getBounds(textIndex, 1);
+    //Still checked before reading any property: getBounds() does return null for a position with
+    //no leaf behind it, which is not the same thing as being past the end.
+    if(rawBounds == null)
+      break;
+
+    var bounds = { top: rawBounds.top - containerTop, height: rawBounds.height };
+
+    if(bounds.top >= destinationY){
+      quillObj.setSelection(textIndex);
+      quillObj.root.scrollTop = startingScrolltop + bounds.top - bounds.height;
+      return;
     }
+
+    textIndex += 1;
   }
+
+  //Nothing a screenful below the caret, so this is the last page: land on the final position
+  //rather than staying put, which is where a native PageDown ends up too.
+  quillObj.setSelection(textIndex - 1);
 }
+
 
 module.exports = {
   getTempQuill,
   splitDeltaAtIndices,
   generateChapTitleFromFirstLine,
   parseDelta,
+  flattenInserts,
+  isFootnoteMarker,
+  getIndexableText,
   convertToPlainText,
   getOrderedListNumbers,
   getListLevel,
   getListMarker,
-  addBindingsToQuill,
+  applyQuillShortcuts,
   goPageDown
 }

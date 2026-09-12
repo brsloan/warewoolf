@@ -274,3 +274,69 @@ test('exportProject\'s callback only fires once an async .epub write has actuall
   await waitForEpub(path.join(dir, 'Test Project', '0001_Chapter One.epub'), 2000);
   assert.strictEqual(callbackFired, true, '.epub callback should have fired by the time the archive is readable');
 });
+
+//---- Mark scene breaks ----
+
+//Same line-per-argument shape the mark-scene-breaks tests use: a bare string is a paragraph and ''
+//is a blank line.
+function sceneDelta(){
+  var ops = [];
+  Array.prototype.forEach.call(arguments, function(line){
+    if(line !== '')
+      ops.push({ insert: line });
+    ops.push({ insert: '\n' });
+  });
+  return { ops: ops };
+}
+
+test('exportProject marks scene breaks in the chapter text when the option is on', async function(t){
+  var chap = makeChapter(sceneDelta('One.', '', 'Two.'));
+  var project = makeTestProject([chap]);
+  var dir = tempDir(t);
+  var options = { type: '.txt', what: 'project', styleHeadingAsChapter: true, generateTitlePage: false, markSceneBreaks: true };
+
+  await exportProject(project, {}, options, dir);
+
+  var text = fs.readFileSync(path.join(dir, 'Test Project', '0001_Chapter 1.txt'), 'utf8');
+  assert.match(text, /One\.\r\n#\r\nTwo\./);
+});
+
+test('exportProject leaves blank lines alone when the option is off', async function(t){
+  var chap = makeChapter(sceneDelta('One.', '', 'Two.'));
+  var project = makeTestProject([chap]);
+  var dir = tempDir(t);
+  var options = { type: '.txt', what: 'project', styleHeadingAsChapter: true, generateTitlePage: false, markSceneBreaks: false };
+
+  await exportProject(project, {}, options, dir);
+
+  var text = fs.readFileSync(path.join(dir, 'Test Project', '0001_Chapter 1.txt'), 'utf8');
+  assert.doesNotMatch(text, /#/);
+});
+
+//The mark is a manuscript convention, and a chapter's notes are not the manuscript - a hash dropped
+//into the gap between two notes would be marking a scene break that isn't there.
+test('exportProject does not mark scene breaks in a chapter\'s notes', async function(t){
+  var chap = makeChapter(sceneDelta('One.', '', 'Two.'));
+  chap.notes = sceneDelta('A note.', '', 'Another note.');
+  var project = makeTestProject([chap]);
+  var dir = tempDir(t);
+  var options = { type: '.txt', what: 'project', styleHeadingAsChapter: true, generateTitlePage: false, markSceneBreaks: true };
+
+  await exportProject(project, {}, options, dir);
+
+  var notes = fs.readFileSync(path.join(dir, 'Test Project', '-notes_0001_Chapter 1.txt'), 'utf8');
+  assert.doesNotMatch(notes, /#/);
+});
+
+test('exportProject centers the scene-break mark in .html output', async function(t){
+  var chap = makeChapter(sceneDelta('One.', '', 'Two.'));
+  chap.title = 'Chapter One';
+  var project = makeTestProject([chap]);
+  var dir = tempDir(t);
+  var options = { type: '.html', what: 'project', styleHeadingAsChapter: true, generateTitlePage: false, markSceneBreaks: true };
+
+  await exportProject(project, {}, options, dir);
+
+  var html = fs.readFileSync(path.join(dir, 'Test Project', '0001_Chapter One.html'), 'utf8');
+  assert.match(html, /class="center">#</);
+});

@@ -26,6 +26,12 @@ function renderChapterList(project, handlers){
   //to trip over.
   removeElementsByClass('name-box');
 
+  //The active row is revealed whichever of the three lists it is in. The sidebar scrolls as one
+  //column, so a reference or trash row at the bottom of a long project is just as capable of
+  //sitting below the fold as a late chapter is - stepping down into one used to leave the list
+  //frozen with the bold title off-screen.
+  var rowToReveal = null;
+
   SECTIONS.forEach(function(section){
     var chapters = chapterList.listOf(project, section.list);
     var rows = document.getElementById(section.rowsId);
@@ -38,20 +44,48 @@ function renderChapterList(project, handlers){
 
       rows.appendChild(row);
 
-      //Marked active only once the row is in the document, because scrolling it into view below
-      //reads a position the row does not have while detached.
-      if(combinedIndex == project.activeChapterIndex)
-        markActive(row, section.list);
+      if(combinedIndex == project.activeChapterIndex){
+        row.classList.add("activeChapter");
+        row.setAttribute('aria-selected', 'true');
+        rowToReveal = row;
+      }
     });
 
     if(section.headerId)
       markHeaderEmpty(document.getElementById(section.headerId), chapters.length == 0);
   });
+
+  //Focus never leaves the sidebar while the shortcuts move the active row, so the sidebar (a
+  //listbox, index.html) says which row that is: a screen reader announces the option
+  //aria-activedescendant points at whenever it changes, which is what makes stepping through the
+  //chapters audible. Cleared when no row is active (an emptied project), rather than left pointing
+  //at a row that no longer exists.
+  var sidebar = document.getElementById('chapter-list-sidebar');
+  if(rowToReveal)
+    sidebar.setAttribute('aria-activedescendant', rowToReveal.id);
+  else
+    sidebar.removeAttribute('aria-activedescendant');
+
+  //Deliberately after the whole list is rebuilt, not as the active row is appended. Every render
+  //clears all three lists and re-appends every row, so mid-loop the active row is the *last* row in
+  //the document - it measures as sitting at the bottom of the view no matter which chapter it is,
+  //reads as already visible, and no scroll happens. The rows below it are then appended and carry
+  //its real position off the top of the sidebar. That is why stepping up through a long book left
+  //the list frozen while the bold title walked off the top.
+  if(rowToReveal)
+    scrollIntoViewIfNeeded(document.getElementById('chapter-list-sidebar'), rowToReveal);
 }
 
+//Each row is an option in the sidebar's listbox, with an id for aria-activedescendant to name and
+//aria-selected saying whether it is the active chapter - a reader announces "selected" on the one
+//the arrows are on and nothing on the rest. The click handlers are what they always were; the
+//role only changes what a reader is told the row is.
 function buildRow(chap, combinedIndex, handlers){
   var row = document.createElement("li");
 
+  row.id = 'chapter-row-' + combinedIndex;
+  row.setAttribute('role', 'option');
+  row.setAttribute('aria-selected', 'false');
   row.textContent = (chap.title != '' ? chap.title : '(untitled)') + (chap.hasUnsavedChanges == true ? "*" : "");
   row.dataset.chapIndex = combinedIndex;
   row.onclick = function(){
@@ -64,14 +98,20 @@ function buildRow(chap, combinedIndex, handlers){
   return row;
 }
 
-function markActive(row, listName){
-  row.classList.add("activeChapter");
+//row.offsetTop is measured against the nearest *positioned* ancestor, and nothing between a row
+//and <body> has position set - so it lands relative to <body>, not the scrollable sidebar, and is
+//useless for deciding how far to scroll. getBoundingClientRect() is always viewport-relative
+//regardless of positioning, so comparing rects tells us exactly how far out of view the row is (in
+//either direction) and by how much to move scrollTop to bring it back in - without disturbing the
+//scroll position at all when the row is already visible.
+function scrollIntoViewIfNeeded(container, row){
+  var containerRect = container.getBoundingClientRect();
+  var rowRect = row.getBoundingClientRect();
 
-  //Only the chapters list scrolls itself into view, which is how it has always behaved: stepping
-  //into a reference or trash row with the keyboard can still leave it below the fold. Worth
-  //unifying, but it is a behaviour change and jsdom has no layout to check it against.
-  if(listName == 'chapters')
-    document.getElementById('chapter-list-sidebar').scrollTop = row.offsetTop;
+  if(rowRect.top < containerRect.top)
+    container.scrollTop -= containerRect.top - rowRect.top;
+  else if(rowRect.bottom > containerRect.bottom)
+    container.scrollTop += rowRect.bottom - containerRect.bottom;
 }
 
 function markHeaderEmpty(header, isEmpty){
@@ -103,6 +143,7 @@ function renameChapterInList(combinedIndex, handlers){
   var nameBox = document.createElement("input");
   nameBox.type = "text";
   nameBox.classList.add("name-box");
+  nameBox.setAttribute('aria-label', 'Chapter title');
 
   nameBox.addEventListener("keydown", function(e){
     if(e.key === "Enter" || e.key === "Tab"){
@@ -125,6 +166,13 @@ function renameChapterInList(combinedIndex, handlers){
     handlers.onDismiss();
   };
 
+  //An option's children are presentational to assistive technology, so a text box left inside
+  //one would be a text box a reader cannot see. The row stops being an option for as long as the
+  //box is in it; every way out of a rename (commit, Escape, blur) rebuilds the list, which gives
+  //the row its role back.
+  row.removeAttribute('role');
+  row.removeAttribute('aria-selected');
+
   row.firstChild.remove();
   row.appendChild(nameBox);
   nameBox.focus();
@@ -134,5 +182,6 @@ function renameChapterInList(combinedIndex, handlers){
 
 module.exports = {
   renderChapterList,
-  renameChapterInList
+  renameChapterInList,
+  scrollIntoViewIfNeeded
 };

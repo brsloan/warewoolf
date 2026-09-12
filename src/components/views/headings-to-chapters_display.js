@@ -1,4 +1,4 @@
-const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
+const { closePopups, createButton, removeElementsByClass, describeDialog } = require('../controllers/utils');
 const { showWorking, showWorkingAndThen, hideWorking } = require('./working_display');
 const breakHeadingsIntoChapters = require('../controllers/headings-to-chapters');
 
@@ -10,6 +10,7 @@ function showBreakHeadingsOptions(editorQuill, addImportedChapter){
   var popupTitle = document.createElement('h1');
   popupTitle.innerText = 'Break Headings Into Chapters';
   popup.appendChild(popupTitle);
+  describeDialog(popup, popupTitle);
 
   var undoWarning = document.createElement('p');
   undoWarning.innerText = 'WARNING: This action cannot be undone. Be sure to save first.';

@@ -1,4 +1,4 @@
-const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
+const { closePopups, createButton, removeElementsByClass, describeDialog } = require('../controllers/utils');
 
 function displayExitConfirmation(saveFunc, continueFunc){
   removeElementsByClass('popup');
@@ -8,6 +8,7 @@ function displayExitConfirmation(saveFunc, continueFunc){
   var warning = document.createElement('h1');
   warning.innerText = "WARNING:";
   popup.appendChild(warning);
+  describeDialog(popup, warning, 'alertdialog');
 
   var subWarning = document.createElement('p');
   subWarning.innerText = 'You have unsaved changes. Would you like to save first?';

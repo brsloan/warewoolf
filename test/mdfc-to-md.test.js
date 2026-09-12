@@ -9,6 +9,14 @@ test('alignment markers are dropped, since markdown has no alignment', function(
   assert.strictEqual(convertMdfcToMd('[>j] Just\n'), 'Just\n');
 });
 
+//An alignment marker can now sit in front of a list or blockquote marker, and markdown still has no
+//way to express alignment - so it is dropped there too, leaving a plain quote or list item behind.
+test('alignment markers are dropped from quotes and list items as well', function(){
+  assert.strictEqual(convertMdfcToMd('[>c] > Quoted.\n\nAfter.\n'), '> Quoted.\n\nAfter.\n');
+  assert.strictEqual(convertMdfcToMd('[>c] * An item.\n'), '* An item.\n');
+  assert.strictEqual(convertMdfcToMd('[>r] \t1. Nested.\n'), '\t1. Nested.\n');
+});
+
 test('tab indented paragraphs become blank line separated ones', function(){
   assert.strictEqual(
     convertMdfcToMd('First para.\n\tSecond para.\n\tThird para.\n'),
@@ -53,6 +61,34 @@ test('indented list items keep their leading tabs', function(){
     convertMdfcToMd('Intro.\n\t* a\n\t\t* b\n'),
     'Intro.\n\t* a\n\t\t* b\n'
   );
+});
+
+//Regression: CommonMark's lazy-continuation rule pulls a non-blank line directly after a block
+//quote's paragraph into that same blockquote, so a quote followed by unindented prose used to
+//render as one blockquote containing both.
+test('a blockquote is separated from the unindented paragraph that follows it', function(){
+  assert.strictEqual(
+    convertMdfcToMd('> Quoted line.\nBack to prose.\n'),
+    '> Quoted line.\n\nBack to prose.\n'
+  );
+});
+
+test('a blockquote followed by an indented paragraph gets exactly one blank line', function(){
+  assert.strictEqual(
+    convertMdfcToMd('> Quoted line.\n\tIndented para.\n'),
+    '> Quoted line.\n\nIndented para.\n'
+  );
+});
+
+test('consecutive quoted lines are not separated from each other', function(){
+  assert.strictEqual(
+    convertMdfcToMd('> First quoted line.\n> Second quoted line.\n'),
+    '> First quoted line.\n> Second quoted line.\n'
+  );
+});
+
+test('a blockquote at the very end of the text is left unchanged', function(){
+  assert.strictEqual(convertMdfcToMd('Some prose.\n> Quoted line.\n'), 'Some prose.\n> Quoted line.\n');
 });
 
 test('headings and inline formatting pass through unchanged', function(){
@@ -100,5 +136,16 @@ test('CRLF line endings do not break indented-paragraph conversion', function(){
   assert.strictEqual(
     convertMdfcToMd('First para.\r\n\tSecond para.\r\n\tThird para.\r\n'),
     'First para.\n\nSecond para.\n\nThird para.\n'
+  );
+});
+
+//Regression: escapeAnyMarkers in markdownFic.js used to escape every "[^" unconditionally, so a
+//footnote authored in WareWoolf saved as "\[^1]" - this converter's convertFootnotes anchors on the
+//*unescaped* "^\[\^\d+\]:", so consolidation never ran and the backslash leaked straight into the
+//exported Markdown. See the worked example at the top of docs/footnotes-plan.md.
+test('a footnote reference and its body export without a leaked backslash', function(){
+  assert.strictEqual(
+    convertMdfcToMd('See note[^1] here.\n[^1]: The note.\n'),
+    'See note[^1] here.\n[^1]: The note.\n'
   );
 });

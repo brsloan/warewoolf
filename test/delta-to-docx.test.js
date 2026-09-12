@@ -121,9 +121,9 @@ test('a bullet list between two numbered lists separates them', async function()
 //numId, producing an invalid .docx. List numbers inside footnotes are rendered as plain text instead.
 test('a numbered list inside a footnote renders as plain-text numbers instead of an unresolved numId', async function(){
   const delta = { ops: [
-    {insert: 'main text'}, {insert: '[^1]'}, {insert: '\n'},
-    {insert: '[^1]: item one'}, {insert: '\n', attributes: {list: 'ordered'}},
-    {insert: '[^1]: item two'}, {insert: '\n', attributes: {list: 'ordered'}}
+    {insert: 'main text'}, {insert: {footnote: {n: '1'}}}, {insert: '\n'},
+    {insert: 'item one'}, {insert: '\n', attributes: {list: 'ordered', footnoteBody: '1'}},
+    {insert: 'item two'}, {insert: '\n', attributes: {list: 'ordered', footnoteBody: '1'}}
   ]};
 
   const doc = convertDeltaToDocx(delta, {}, project, null);
@@ -139,12 +139,12 @@ test('a numbered list inside a footnote renders as plain-text numbers instead of
   assert.match(text, /2\.\s*item two/, 'expected the second footnote list item numbered 2, got: ' + text);
 });
 
-//Regression: a [^N] marker with no matching "[^N]:" footnote body (deleted body paragraph, typo'd
+//Regression: a footnote marker with no matching footnote body (deleted body paragraph, typo'd
 //number) resolved footnoteBodies.findIndex to -1, so fnoteBodyNum became 0 and the export emitted a
 //FootnoteReferenceRun pointing at footnote id 0, which does not exist in the document (footnote ids
 //start at 1). The marker is kept as plain text instead when no footnote body matches it.
 test('a footnote marker with no matching footnote body is kept as text instead of referencing a missing footnote', async function(){
-  const delta = { ops: [ {insert: 'see note'}, {insert: '[^1]'}, {insert: '\n'} ] };
+  const delta = { ops: [ {insert: 'see note'}, {insert: {footnote: {n: '1'}}}, {insert: '\n'} ] };
 
   const doc = convertDeltaToDocx(delta, {}, project, null);
   const buffer = await docx.Packer.toBuffer(doc);
@@ -178,14 +178,51 @@ test('an ordered list nested past the third level still uses a configured number
     'a fourth-level item should fold into the deepest configured level (2) instead of an unconfigured one');
 });
 
+//Regression: convertParaAttributes never looked at attr.blockquote, so a quoted paragraph exported
+//identical to plain body text and the formatting was silently lost.
+test('a blockquote paragraph exports with left and right indentation', async function(){
+  const delta = { ops: [
+    {insert: 'quoted'}, {insert: '\n', attributes: {blockquote: true}},
+    {insert: 'plain'},  {insert: '\n'}
+  ]};
+
+  const doc = convertDeltaToDocx(delta, {}, project, null);
+  const buffer = await docx.Packer.toBuffer(doc);
+  const dir = await unzipper.Open.buffer(buffer);
+  const documentXml = (await dir.files.find(f => f.path === 'word/document.xml').buffer()).toString();
+
+  const indents = [...documentXml.matchAll(/<w:ind ([^\/]*)\/>/g)].map(m => m[1]);
+  assert.strictEqual(indents.length, 1, 'expected exactly one paragraph to carry an indent: ' + documentXml);
+  assert.match(indents[0], /w:left="720"/);
+  assert.match(indents[0], /w:right="720"/);
+});
+
+//Alignment and the blockquote indent are separate paragraph properties in Word, so a centered quote
+//should carry both rather than one displacing the other the way it used to in the .mdfc writer.
+test('a centered blockquote keeps both its alignment and its indentation', async function(){
+  const delta = { ops: [
+    {insert: 'An epigraph.'}, {insert: '\n', attributes: {align: 'center', blockquote: true}}
+  ]};
+
+  const doc = convertDeltaToDocx(delta, {}, project, null);
+  const buffer = await docx.Packer.toBuffer(doc);
+  const dir = await unzipper.Open.buffer(buffer);
+  const documentXml = (await dir.files.find(f => f.path === 'word/document.xml').buffer()).toString();
+
+  const paragraph = /<w:p>(?:(?!<\/w:p>)[\s\S])*An epigraph\.[\s\S]*?<\/w:p>/.exec(documentXml);
+  assert.ok(paragraph, 'could not find the quoted paragraph: ' + documentXml);
+  assert.match(paragraph[0], /<w:jc w:val="center"\/>/);
+  assert.match(paragraph[0], /<w:ind [^\/]*w:left="720"/);
+});
+
 //Regression: the loop building the footnotes object assigned its counter with a bare `i = 0`, leaking
 //it as an implicit global - the same bug class already fixed (and regression-tested) in compile.js.
 test('convertDeltaToDocx does not leak an implicit global "i"', function(){
   delete global.i;
 
   convertDeltaToDocx({ ops: [
-    {insert: 'main text'}, {insert: '[^1]'}, {insert: '\n'},
-    {insert: '[^1]: a footnote'}, {insert: '\n'}
+    {insert: 'main text'}, {insert: {footnote: {n: '1'}}}, {insert: '\n'},
+    {insert: 'a footnote'}, {insert: '\n', attributes: {footnoteBody: '1'}}
   ]}, {}, project, null);
 
   assert.strictEqual(typeof global.i, 'undefined', 'convertDeltaToDocx leaked "i" as an implicit global');

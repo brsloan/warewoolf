@@ -1,7 +1,7 @@
 const { replaceAllInDelta } = require('./findreplace');
 
 function convertMarkedTabs(delt, marker){
-  return replaceAllInDelta(marker, '\t', true, delt);
+  return replaceAllInDelta(marker, '\t', delt, { caseSensitive: true });
 }
 
 //Indexed loop rather than forEach because reading a chapter off disk is asynchronous now - see

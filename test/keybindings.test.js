@@ -3,6 +3,9 @@ const test = require('node:test');
 const assert = require('node:assert');
 
 const keybindingsPath = require.resolve('../src/components/controllers/keybindings');
+//A pure module with no state of its own, so unlike keybindings.js it does not need re-requiring
+//between tests.
+const shortcutsModel = require('../src/components/models/shortcuts');
 
 //keybindings.js creates its own platform instance (createPlatform(createIpcBacking())) at
 //require-time, same pattern (and same reason) as render.js itself. As of Phase 9a that backing
@@ -20,8 +23,22 @@ function fakeBridge(){
   };
 }
 
+//Escape is one of the two ways out of the Spell Check popup (the other is its own Cancel button),
+//so it is where the dictionaries a pass parsed get dropped - see spellcheck.js's getSpellchecker.
+//Stubbed rather than exercised for real: what this file has to prove is that the key calls it, and
+//the controller would otherwise drag nspell and a platform round trip into every test here.
+var spellcheckControllerPath = require.resolve('../src/components/controllers/spellcheck');
+var releaseCalls = 0;
+
 function freshKeybindings(){
   delete require.cache[keybindingsPath];
+  releaseCalls = 0;
+  require.cache[spellcheckControllerPath] = {
+    id: spellcheckControllerPath,
+    filename: spellcheckControllerPath,
+    loaded: true,
+    exports: { releaseSpellchecker: function(){ releaseCalls++; } }
+  };
   globalThis.warewoolf = fakeBridge();
   return require(keybindingsPath);
 }
@@ -50,9 +67,9 @@ function bodyShell(){
 //getSelection()/setSelection()/root/container/selection.getBounds() for PageDown (see
 //quill-utils.test.js's own goPageDown tests for the geometry those cover), and on()/off() for
 //typewriter-mode.js's editor-change binding. `root` is the real DOM node a shortcut moves focus to.
-//getBounds() always reporting "past the end" makes goPageDown() a same-value round trip
-//(setSelection ends up called with the index it started from) - enough to prove goPageDown ran
-//against THIS instance (setSelectionCallCount) without re-testing its own geometry here.
+//A one-position document makes goPageDown() a same-value round trip (setSelection ends up called
+//with the index it started from) - enough to prove goPageDown ran against THIS instance
+//(setSelectionCallCount) without re-testing its own geometry here.
 function stubQuill(root){
   //A real Quill root is contenteditable, which is always focusable regardless of tabindex; a
   //plain <div> is not focusable at all without one, so .focus() would silently no-op on it here.
@@ -65,6 +82,7 @@ function stubQuill(root){
     hasFocus: function(){ return document.activeElement === root; },
     getSelection: function(){ return selection; },
     setSelection: function(index){ selection = { index: index, length: 0 }; setSelectionCallCount++; },
+    getLength: function(){ return 1; },
     get setSelectionCallCount(){ return setSelectionCallCount; },
     container: { getBoundingClientRect: function(){ return { top: 0 }; } },
     selection: { getBounds: function(){ return null; } },
@@ -88,7 +106,11 @@ function recordingActions(){
   return actions;
 }
 
-function setup(projectOverrides){
+//`shortcutOverrides` is what a writer has rebound, in the shape user-settings.json stores (see
+//shortcuts.js) - omitted, every shortcut is on its default, which is what all but the rebinding
+//tests below want. The map is read through a getter on every keypress, exactly as render.js hands
+//it over, so setShortcuts() below can change it mid-test without re-registering anything.
+function setup(projectOverrides, shortcutOverrides){
   var dom = new JSDOM('<!doctype html><html><body>' + bodyShell() + '</body></html>');
   global.window = dom.window;
   global.document = dom.window.document;
@@ -98,10 +120,12 @@ function setup(projectOverrides){
   var editorQuill = stubQuill(document.getElementById('editor-container'));
   var notesQuill = stubQuill(document.getElementById('notes-editor'));
   var actions = recordingActions();
+  var bindings = shortcutsModel.resolveShortcuts(shortcutOverrides);
 
   var keybindings = freshKeybindings();
   var unregister = keybindings.registerKeybindings({
     getProject: function(){ return project; },
+    getShortcuts: function(){ return bindings; },
     userSettings: userSettings,
     editorQuill: editorQuill,
     notesQuill: notesQuill,
@@ -110,7 +134,8 @@ function setup(projectOverrides){
 
   return {
     project: project, userSettings: userSettings, editorQuill: editorQuill, notesQuill: notesQuill,
-    actions: actions, unregister: unregister
+    actions: actions, unregister: unregister,
+    setShortcuts: function(overrides){ bindings = shortcutsModel.resolveShortcuts(overrides); }
   };
 }
 
@@ -191,6 +216,20 @@ test('Escape clears popups, exits search view, and refreshes the panel layout', 
   assert.strictEqual(document.querySelector('.popup-dialog'), null);
   assert.strictEqual(document.getElementById('chapter-list-sidebar').classList.contains('sidebar-search-view'), false);
   assert.deepStrictEqual(env.actions.calls, [['updatePanelDisplays']]);
+
+  teardown(env);
+});
+
+//Escape does not go through closePopups(), so without this the dictionaries a spellcheck pass
+//parsed - tens of megabytes each - stayed resident for the rest of the session whenever a writer
+//left the popup with the key rather than the Cancel button.
+test('Escape releases the dictionaries a spellcheck pass parsed', function(){
+  var env = setup();
+  document.body.appendChild(Object.assign(document.createElement('div'), { className: 'popup' }));
+
+  keydown(document, 'Escape');
+
+  assert.strictEqual(releaseCalls, 1);
 
   teardown(env);
 });
@@ -317,6 +356,123 @@ test('PageDown pages down whichever Quill instance owns the pane it was pressed 
   keydown('notes-editor', 'PageDown');
   assert.strictEqual(env.notesQuill.setSelectionCallCount, 1);
   assert.strictEqual(env.editorQuill.setSelectionCallCount, 1, 'unchanged from the first dispatch');
+
+  teardown(env);
+});
+
+//---------------------------------------------------------------------------
+// Rebound shortcuts
+//---------------------------------------------------------------------------
+
+test('a rebound shortcut fires on its new keys, and no longer on its old ones', function(){
+  var env = setup(null, { toggleChapterList: { key: 'F8', mod: true, alt: false, shift: false } });
+
+  keydown(document, 'F1');
+  assert.deepStrictEqual(env.actions.calls, [], 'the default keys should do nothing once rebound');
+
+  keydown(document, 'F8', ctrl());
+  assert.deepStrictEqual(env.actions.calls, [['togglePanelDisplay', 1]]);
+
+  teardown(env);
+});
+
+test('a rebound pane shortcut is dispatched from the pane, not the document', function(){
+  var env = setup({ activeChapterIndex: 4 }, { moveChapterUp: { key: 'U', mod: true, alt: true, shift: false } });
+
+  keydown(document, 'u', ctrl({ altKey: true }));
+  assert.deepStrictEqual(env.actions.calls, [], 'a pane shortcut should not fire from the document');
+
+  keydown('editor-container', 'u', ctrl({ altKey: true }));
+  assert.deepStrictEqual(env.actions.calls, [['moveChapUp', 4]]);
+
+  teardown(env);
+});
+
+//The bindings are read on every keypress rather than captured when the listeners were registered,
+//which is what lets a writer's change take effect the moment they save it.
+test('changing the bindings takes effect without re-registering anything', function(){
+  var env = setup();
+
+  keydown(document, 'F1');
+  assert.deepStrictEqual(env.actions.calls, [['togglePanelDisplay', 1]]);
+
+  env.setShortcuts({ toggleChapterList: { key: 'F9', mod: false, alt: false, shift: false } });
+
+  keydown(document, 'F1');
+  keydown(document, 'F9');
+
+  assert.deepStrictEqual(env.actions.calls, [['togglePanelDisplay', 1], ['togglePanelDisplay', 1]]);
+
+  teardown(env);
+});
+
+test('a shortcut a writer has unassigned does nothing at all', function(){
+  var env = setup(null, { toggleChapterList: null });
+
+  keydown(document, 'F1');
+  //A bare modifier press is not a binding, and an unassigned shortcut must not be mistaken for one.
+  keydown(document, 'Shift', { shiftKey: true });
+
+  assert.deepStrictEqual(env.actions.calls, []);
+
+  teardown(env);
+});
+
+//The other way bindingFromEvent answers null: a key that reported nothing to be identified by. It
+//has to be told from an unassigned shortcut for the same reason a bare modifier does - two nulls
+//compare equal, so an action nobody bound would otherwise fire on a key nobody can name.
+test('a key with nothing to identify it does not fire an unassigned shortcut', function(){
+  var env = setup(null, { toggleChapterList: null });
+
+  keydown(document, '\u0000', { code: '', keyCode: 0 });
+  keydown(document, 'Unidentified', { code: 'Unidentified', keyCode: 0 });
+
+  assert.deepStrictEqual(env.actions.calls, []);
+
+  teardown(env);
+});
+
+//The dispatcher works the pressed key out once for the keypress rather than once per shortcut
+//considered, so the binding it compares against is built outside the search. Worth a test of its own
+//that the search still finds the right shortcut and still stops at it.
+test('the right shortcut fires when several are considered first', function(){
+  var env = setup();
+  document.getElementById('writing-field').classList.add('visible');
+
+  //Late in the list, so the search walks past every focus and display shortcut to reach it.
+  keydown(document, 'F3', { ctrlKey: true });
+
+  assert.deepStrictEqual(env.actions.calls, [['toggleChapterNotes']]);
+
+  teardown(env);
+});
+
+//The old if/else chain tested the modifiers it cared about and ignored the rest, so Ctrl+Alt+= was
+//a font-size increase and Ctrl+Shift+Left was a focus change as well as a rename.
+test('a shortcut does not fire when a modifier it does not name is held', function(){
+  var env = setup();
+  document.getElementById('writing-field').classList.add('visible');
+
+  keydown(document, '=', ctrl({ altKey: true }));
+  keydown(document, 'ArrowLeft', ctrl({ shiftKey: true }));
+
+  assert.deepStrictEqual(env.actions.calls, []);
+  assert.notStrictEqual(document.activeElement, env.editorQuill.root);
+
+  teardown(env);
+});
+
+//Escape and the menu key are not in the list of what can be rebound, and a settings file that tries
+//to put a shortcut on them is refused before this ever sees it (see shortcuts.js isSafeToBind) - so
+//they keep working whatever else has been rebound.
+test('Escape still closes dialogs even when a settings file tried to bind a shortcut to it', function(){
+  var env = setup(null, { toggleChapterList: { key: 'Escape', mod: false, alt: false, shift: false } });
+  document.body.appendChild(Object.assign(document.createElement('div'), { className: 'popup' }));
+
+  keydown(document, 'Escape');
+
+  assert.strictEqual(document.querySelector('.popup'), null);
+  assert.deepStrictEqual(env.actions.calls, [['updatePanelDisplays']]);
 
   teardown(env);
 });

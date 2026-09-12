@@ -1,6 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { JSDOM } = require('jsdom');
+const { assertDialogDescribed, assertControlsNamed } = require('./helpers');
+const { DEFAULT_FONT_ID, DEFAULT_SIDEBAR_FONT_ID, getFontDefs, resolveFontStack } = require('../src/components/models/fonts');
+const { DEFAULT_LINE_HEIGHT_ID, getLineHeightDefs, resolveLineHeight } = require('../src/components/models/line-heights');
 
 const settingsDisplayPath = require.resolve('../src/components/views/settings_display');
 const fileDialogPath = require.resolve('../src/components/views/file-dialog_display');
@@ -34,6 +37,11 @@ function makeUserSettings(overrides){
     autosaveIntMinutes: 5,
     darkMode: 'system',
     showBattery: false,
+    autocorrectEnabled: true,
+    autocorrect: {},
+    editorFont: DEFAULT_FONT_ID,
+    sidebarFont: DEFAULT_SIDEBAR_FONT_ID,
+    editorLineHeight: DEFAULT_LINE_HEIGHT_ID,
     save: function(){}
   }, overrides);
 }
@@ -156,4 +164,309 @@ test('a recognized darkMode value is still checked and round-trips on Save', fun
   findButton('Save').onclick();
 
   assert.strictEqual(userSettings.darkMode, 'dark');
+});
+
+//---------------------------------------------------------------------------
+// automatic substitutions
+//---------------------------------------------------------------------------
+
+function openSettings(userSettings){
+  var showSettings = freshSettingsDisplay({});
+  showSettings(userSettings, { updateAutosave: function(){} }, sysDirectories(), function(){}, function(){}, platformInfo());
+  return userSettings;
+}
+
+test('every substitution rule gets a checkbox, showing what is actually in force', function(t){
+  openSettings(makeUserSettings({ autocorrect: { emDash: false } }));
+
+  //Shown as the defaults with the writer's one change over them, not as the stored override alone.
+  assert.strictEqual(document.getElementById('autocorrect-smartDoubleQuotes').checked, true);
+  assert.strictEqual(document.getElementById('autocorrect-smartSingleQuotes').checked, true);
+  assert.strictEqual(document.getElementById('autocorrect-ellipsis').checked, true);
+  assert.strictEqual(document.getElementById('autocorrect-emDash').checked, false);
+});
+
+test('the master switch reflects the stored setting and greys the rules out while it is off', function(t){
+  openSettings(makeUserSettings({ autocorrectEnabled: false }));
+
+  assert.strictEqual(document.getElementById('autocorrect-check').checked, false);
+  assert.strictEqual(document.getElementById('autocorrect-emDash').disabled, true);
+  assert.strictEqual(document.getElementById('autocorrect-ellipsis').disabled, true);
+});
+
+test('turning the master switch on releases the individual rules', function(t){
+  openSettings(makeUserSettings({ autocorrectEnabled: false }));
+
+  var master = document.getElementById('autocorrect-check');
+  master.checked = true;
+  master.onchange();
+
+  assert.strictEqual(document.getElementById('autocorrect-emDash').disabled, false);
+});
+
+//Greyed out, not cleared: a writer who switches substitutions off and on again gets back the rules
+//they had chosen rather than the defaults.
+test('the rules a writer chose survive the master switch being turned off and saved', function(t){
+  var userSettings = openSettings(makeUserSettings({ autocorrect: { emDash: false } }));
+
+  document.getElementById('autocorrect-check').checked = false;
+  findButton('Save').onclick();
+
+  assert.strictEqual(userSettings.autocorrectEnabled, false);
+  assert.deepStrictEqual(userSettings.autocorrect, { emDash: false });
+});
+
+test('Save stores only the rules that differ from their defaults', function(t){
+  var userSettings = openSettings(makeUserSettings());
+
+  document.getElementById('autocorrect-ellipsis').checked = false;
+  findButton('Save').onclick();
+
+  assert.strictEqual(userSettings.autocorrectEnabled, true);
+  assert.deepStrictEqual(userSettings.autocorrect, { ellipsis: false });
+});
+
+test('Save stores nothing at all when every rule is left on its default', function(t){
+  var userSettings = openSettings(makeUserSettings({ autocorrect: { emDash: false } }));
+
+  document.getElementById('autocorrect-emDash').checked = true;
+  findButton('Save').onclick();
+
+  assert.deepStrictEqual(userSettings.autocorrect, {});
+});
+
+//What a screen reader is told: the popup is a dialog named "Settings", and every field has a
+//label it can read out - the Default Author, Auto Backup, backups-to-keep and autosave fields
+//used to sit beside label text that pointed at nothing.
+test('the Settings popup is a dialog and every field is labelled', function(){
+  var showSettings = freshSettingsDisplay({});
+  showSettings(makeUserSettings(), { updateAutosave: function(){} }, sysDirectories(), function(){}, function(){}, platformInfo());
+
+  var popup = document.querySelector('.popup');
+  assertDialogDescribed(popup, 'dialog');
+  assert.ok(assertControlsNamed(popup) > 5, 'the settings form should have fields to check');
+});
+
+//---------------------------------------------------------------------------
+// editor and sidebar fonts
+//---------------------------------------------------------------------------
+
+test('both font pickers offer every font WareWoolf knows about', function(){
+  openSettings(makeUserSettings());
+
+  var expected = getFontDefs().map(function(def){ return def.id; });
+
+  ['editor-font-select', 'sidebar-font-select'].forEach(function(id){
+    var options = Array.from(document.getElementById(id).options);
+
+    assert.deepStrictEqual(options.map(function(o){ return o.value; }), expected);
+    //innerText rather than textContent: the app sets it that way throughout, and jsdom keeps
+    //innerText as a plain property without reflecting it into the node's text.
+    assert.ok(options.every(function(o){ return o.innerText !== ''; }), 'every option should be named');
+  });
+});
+
+//The list is its own specimen sheet: WareWoolf ships no font files, so drawing each option in the
+//face it names is the only honest way to show a writer what they actually have installed.
+test('each option is drawn in the face it names', function(){
+  openSettings(makeUserSettings());
+
+  var options = Array.from(document.getElementById('editor-font-select').options);
+
+  getFontDefs().forEach(function(def, i){
+    assert.strictEqual(options[i].style.fontFamily, def.stack);
+  });
+});
+
+test('the pickers open on the fonts already in user settings', function(){
+  openSettings(makeUserSettings({ editorFont: 'typewriter', sidebarFont: 'sans' }));
+
+  assert.strictEqual(document.getElementById('editor-font-select').value, 'typewriter');
+  assert.strictEqual(document.getElementById('sidebar-font-select').value, 'sans');
+});
+
+//A picker left showing its first option while the app is drawn in something else would be lying
+//about the current state, and Save would then quietly change a setting the writer never touched.
+test('a font id this version does not know falls back to the default rather than to the first option', function(){
+  openSettings(makeUserSettings({ editorFont: 'some-font-from-the-future', sidebarFont: null }));
+
+  assert.strictEqual(document.getElementById('editor-font-select').value, DEFAULT_FONT_ID);
+  //The sidebar picker falls back to the sidebars' default, which is the face the app would draw
+  //them in for that same unusable id.
+  assert.strictEqual(document.getElementById('sidebar-font-select').value, DEFAULT_SIDEBAR_FONT_ID);
+});
+
+test('Save writes both font choices back to user settings', function(){
+  var userSettings = openSettings(makeUserSettings());
+
+  document.getElementById('editor-font-select').value = 'garamond';
+  document.getElementById('sidebar-font-select').value = 'sans';
+  findButton('Save').onclick();
+
+  assert.strictEqual(userSettings.editorFont, 'garamond');
+  assert.strictEqual(userSettings.sidebarFont, 'sans');
+});
+
+//The saved value goes straight into a css font-family declaration, so it is sanitized on the way
+//out of the dialog as well as on the way in off disk.
+test('Save sanitizes a font value that is not one of ours', function(){
+  var userSettings = openSettings(makeUserSettings());
+
+  var select = document.getElementById('editor-font-select');
+  var smuggled = document.createElement('option');
+  smuggled.value = 'nonsense; color: red';
+  select.appendChild(smuggled);
+  select.value = 'nonsense; color: red';
+
+  findButton('Save').onclick();
+
+  assert.strictEqual(userSettings.editorFont, DEFAULT_FONT_ID);
+});
+
+//Both samples collecting at the bottom of the fieldset would leave a writer to work out which of
+//them answered which dropdown.
+test('each sample sits in the row directly under its own picker', function(){
+  openSettings(makeUserSettings());
+
+  [['editor-font-select', 'editor-font-sample'], ['sidebar-font-select', 'sidebar-font-sample']].forEach(function(pair){
+    var pickerRow = document.getElementById(pair[0]).closest('tr');
+    var sampleRow = document.getElementById(pair[1]).closest('tr');
+
+    assert.strictEqual(pickerRow.nextElementSibling, sampleRow);
+    //Spanning the label column too, so the specimen gets the full width of the dialog to show in.
+    assert.strictEqual(sampleRow.cells.length, 1);
+    assert.strictEqual(sampleRow.cells[0].colSpan, 2);
+  });
+});
+
+test('each picker has a sample line, drawn in the font that is selected', function(){
+  openSettings(makeUserSettings({ editorFont: 'monospace', sidebarFont: 'times' }));
+
+  var editorSample = document.getElementById('editor-font-sample');
+  var sidebarSample = document.getElementById('sidebar-font-sample');
+
+  assert.strictEqual(editorSample.style.fontFamily, resolveFontStack('monospace'));
+  assert.strictEqual(sidebarSample.style.fontFamily, resolveFontStack('times'));
+  //Said twice over by the selected option's own name; read aloud it is just a sentence about a fox.
+  assert.strictEqual(editorSample.getAttribute('aria-hidden'), 'true');
+});
+
+test('the sample follows the picker before anything is saved', function(){
+  openSettings(makeUserSettings());
+
+  var select = document.getElementById('sidebar-font-select');
+  select.value = 'dyslexic';
+  select.dispatchEvent(new window.Event('change'));
+
+  assert.strictEqual(document.getElementById('sidebar-font-sample').style.fontFamily, resolveFontStack('dyslexic'));
+  //Only its own sample: the two settings are independent.
+  assert.strictEqual(document.getElementById('editor-font-sample').style.fontFamily, resolveFontStack(DEFAULT_FONT_ID));
+});
+
+
+//---------------------------------------------------------------------------
+// manuscript line spacing
+//---------------------------------------------------------------------------
+
+test('the line spacing picker offers every spacing WareWoolf knows about', function(){
+  openSettings(makeUserSettings());
+
+  var options = Array.from(document.getElementById('editor-line-height-select').options);
+
+  assert.deepStrictEqual(options.map(function(o){ return o.value; }), getLineHeightDefs().map(function(def){ return def.id; }));
+  //innerText rather than textContent: the app sets it that way throughout, and jsdom keeps
+  //innerText as a plain property without reflecting it into the node's text.
+  assert.ok(options.every(function(o){ return o.innerText !== ''; }), 'every option should be named');
+});
+
+test('the picker opens on the spacing already in user settings', function(){
+  openSettings(makeUserSettings({ editorLineHeight: 'one-and-a-half' }));
+
+  assert.strictEqual(document.getElementById('editor-line-height-select').value, 'one-and-a-half');
+});
+
+//A picker left showing its first option - the tightest one - while the manuscript is drawn double
+//spaced would be lying about the current state, and Save would then quietly re-space the book.
+test('a spacing this version does not know falls back to the default rather than to the first option', function(){
+  openSettings(makeUserSettings({ editorLineHeight: 'quintuple' }));
+
+  assert.strictEqual(document.getElementById('editor-line-height-select').value, DEFAULT_LINE_HEIGHT_ID);
+});
+
+test('Save writes the chosen line spacing back to user settings', function(){
+  var userSettings = openSettings(makeUserSettings());
+
+  document.getElementById('editor-line-height-select').value = 'single';
+  findButton('Save').onclick();
+
+  assert.strictEqual(userSettings.editorLineHeight, 'single');
+});
+
+//The saved value goes straight into a css line-height declaration, so it is sanitized on the way
+//out of the dialog as well as on the way in off disk.
+test('Save sanitizes a line spacing that is not one of ours', function(){
+  var userSettings = openSettings(makeUserSettings());
+
+  var select = document.getElementById('editor-line-height-select');
+  var smuggled = document.createElement('option');
+  smuggled.value = '200%; color: red';
+  select.appendChild(smuggled);
+  select.value = '200%; color: red';
+
+  findButton('Save').onclick();
+
+  assert.strictEqual(userSettings.editorLineHeight, DEFAULT_LINE_HEIGHT_ID);
+});
+
+test('the spacing sample sits in the row directly under its picker', function(){
+  openSettings(makeUserSettings());
+
+  var pickerRow = document.getElementById('editor-line-height-select').closest('tr');
+  var sampleRow = document.getElementById('editor-line-height-sample').closest('tr');
+
+  assert.strictEqual(pickerRow.nextElementSibling, sampleRow);
+  assert.strictEqual(sampleRow.cells.length, 1);
+  assert.strictEqual(sampleRow.cells[0].colSpan, 2);
+});
+
+//A single line has no next line to show a gap to, so this sample is a paragraph where the font
+//samples are one sentence.
+test('the spacing sample is set at the spacing that is selected, in the manuscript face', function(){
+  openSettings(makeUserSettings({ editorLineHeight: 'single', editorFont: 'typewriter' }));
+
+  var sample = document.getElementById('editor-line-height-sample');
+
+  assert.strictEqual(sample.style.lineHeight, resolveLineHeight('single'));
+  assert.strictEqual(sample.style.fontFamily, resolveFontStack('typewriter'));
+  assert.ok(sample.innerText.split('. ').length > 2, 'one line cannot show the gap to the next');
+  //Said already by the selected option's own name; read aloud it is three sentences of filler.
+  assert.strictEqual(sample.getAttribute('aria-hidden'), 'true');
+});
+
+test('the spacing sample follows the picker before anything is saved', function(){
+  openSettings(makeUserSettings());
+
+  var select = document.getElementById('editor-line-height-select');
+  select.value = 'two-and-a-half';
+  select.dispatchEvent(new window.Event('change'));
+
+  assert.strictEqual(document.getElementById('editor-line-height-sample').style.lineHeight, resolveLineHeight('two-and-a-half'));
+});
+
+//Spacing that reads well in Courier is not the spacing that reads well in Garamond, so previewing
+//it against a face the manuscript is not in would be answering a question nobody asked.
+test('the spacing sample re-draws when the manuscript face changes', function(){
+  openSettings(makeUserSettings());
+
+  var fontSelect = document.getElementById('editor-font-select');
+  fontSelect.value = 'garamond';
+  fontSelect.dispatchEvent(new window.Event('change'));
+
+  assert.strictEqual(document.getElementById('editor-line-height-sample').style.fontFamily, resolveFontStack('garamond'));
+  //The sidebar face is a different panel's setting and has nothing to do with this one.
+  var sidebarSelect = document.getElementById('sidebar-font-select');
+  sidebarSelect.value = 'monospace';
+  sidebarSelect.dispatchEvent(new window.Event('change'));
+
+  assert.strictEqual(document.getElementById('editor-line-height-sample').style.fontFamily, resolveFontStack('garamond'));
 });

@@ -1,0 +1,20 @@
+[>c] # Footnotes
+
+# Adding a Note
+Put the caret where you want the marker and press Ctrl+Alt+F (Cmd+Alt+F on Mac). That drops in a numbered marker and jumps you straight into an empty note at the bottom of the chapter, ready to type. It is one action, and one step to undo.
+
+# Moving Between a Marker and Its Note
+Ctrl+Alt+F does double duty as a jump:
+* with the caret just before a marker, it jumps to that note;
+* from inside a note, it jumps back to its marker.
+Enter does the same forward jump when the caret sits just before a marker. Wherever the caret is, a marker and its note are highlighted together, so you can always see which note you are in.
+
+# Copying and Pasting
+Copying or cutting a marker carries its note along with it, so pasting a passage into another chapter brings its footnotes too. The pasted notes are renumbered to suit their new home.
+
+# Splitting a Chapter
+A marker and its note always end up on the same side of a split, wherever the marker went. The one thing WareWoolf will not do is split a chapter inside a note itself; it asks you to move the caret out of the note first, rather than guess where you meant the break to fall.
+
+# Compiling and Exporting
+Compiling a whole project numbers every chapter’s notes into one sequence, so a five-chapter book does not come out with five notes numbered 1.
+	Notes then survive export in whatever form the format has for them: real Word footnotes in .docx, linked notes in HTML and EPUB, and \[^1] markers in Markdown and MarkdownFic. That last is a syntax you can also write by hand — see the MarkdownFic chapter — and a file written that way reads back in as real footnotes.

@@ -122,7 +122,7 @@ function fromNodeError(err, details){
 var SAVED_SECRET = '\u0000warewoolf:saved-secret\u0000';
 
 //Main -> renderer. Absent from native-command-inventory.md, which names only the file-open event:
-//there are 36 channels, and every one of them has to cross the bridge in Phase 9 or the menu stops
+//there are 37 channels, and every one of them has to cross the bridge in Phase 9 or the menu stops
 //working. Validated by name so a typo fails at subscribe time rather than never firing.
 //
 //These are the literal channel names index.js sends on, not tidied-up versions of them - the ipc
@@ -133,14 +133,18 @@ var SAVED_SECRET = '\u0000warewoolf:saved-secret\u0000';
 var EVENTS = [
   'file-opened-from-outside-warewoolf',
   'about-clicked', 'add-chapter-clicked', 'center-all-heads-clicked', 'compile-clicked',
-  'convert-first-lines-clicked', 'convert-italics-clicked', 'convert-tabs-clicked',
-  'corkboard-clicked', 'delete-chapter-clicked', 'exit-app-clicked', 'export-clicked',
+  'convert-first-lines-clicked', 'convert-italics-clicked', 'convert-substitutions-clicked',
+  'convert-tabs-clicked',
+  'corkboard-clicked', 'delete-chapter-clicked', 'dictionaries-clicked', 'exit-app-clicked', 'export-clicked',
   'file-manager-clicked', 'find-replace-clicked', 'headings-to-chaps-clicked', 'help-doc-clicked',
-  'import-clicked', 'indent-all-clicked', 'new-project-clicked', 'open-clicked',
-  'outliner-clicked', 'properties-clicked', 'renumber-chapters-clicked', 'restore-chapter-clicked',
+  'import-clicked', 'new-project-clicked', 'open-clicked',
+  'outliner-clicked', 'properties-clicked', 'reboot-clicked', 'renumber-chapters-clicked',
+  'restore-chapter-clicked',
   'save-as-clicked', 'save-backup-clicked', 'save-clicked', 'save-copy-clicked',
   'send-via-email-clicked', 'settings-clicked', 'shortcuts-clicked', 'spellcheck-clicked',
-  'split-chapter-clicked', 'view-error-log-clicked', 'wifi-manager-clicked', 'word-count-clicked'
+  'split-chapter-clicked', 'tab-indent-paragraphs-clicked', 'view-error-log-clicked',
+  'wifi-manager-clicked', 'word-count-clicked',
+  'app-update-downloaded', 'app-update-failed'
 ];
 
 //Every command that may cross the boundary. A backing that does not implement one rejects with
@@ -154,7 +158,8 @@ var COMMANDS = {
   getAppPaths: { group: 'A', params: [],
     returns: '{ userData, home, temp, docs, app, downloads }',
     note: 'Convert first (Phase 2). It is sendSync at module load in render.js:4, so nothing else goes async cleanly while it stays that way.' },
-  getPlatform: { group: 'A', params: [], returns: '{ platform, arch, electron }' },
+  getPlatform: { group: 'A', params: [], returns: '{ platform, arch, electron, windowsInstall }',
+    note: '`windowsInstall` is \'squirrel\' | \'portable\' on win32 and null everywhere else. Windows ships two builds of the same app - the installer and a portable zip - and they update by different routes: the installer in place via Squirrel, the portable one by the writer replacing the folder. Decided natively, by looking for Squirrel\'s own Update.exe, because it is a question about the running binary\'s surroundings and the renderer has no business answering it. `electron` is already here for the same shape of reason on macOS (see updates.js\'s legacy-build note).' },
   getFileRequestedOnOpen: { group: 'A', params: [], returns: 'string | null' },
   setTheme: { group: 'A', params: ['mode'], returns: 'void' },
   showAppMenu: { group: 'A', params: [], returns: 'void' },
@@ -257,6 +262,25 @@ var COMMANDS = {
   extractZip: { group: 'F', params: ['zipPath'], optional: ['destPath'], returns: '{ path }' },
   importDocx: { group: 'F', params: ['path'], returns: '{ documentXml, footnotesXml }',
     note: 'Returns the XML text, not a temp directory. The parsing in docx-import.js is pure string work and stays in the webview.' },
+  //An epub is a zip of XHTML documents plus a manifest, and unzipper has no browser build - the
+  //same "native by necessity" reason importDocx is here. What crosses is the archive's *text*, and
+  //deciding what to do with it is the renderer's job: epub-import.js reads container.xml to find
+  //the OPF, the OPF for the spine and manifest, the nav document or toc.ncx for the chapter
+  //boundaries, and hands each chapter's XHTML to html-import.js. None of that is filesystem work,
+  //so none of it belongs on this side - the same call Phase 5 made for loadCorkboard and Phase 6
+  //for importDocx.
+  //
+  //Which is also why this command does not verify that the file is a valid epub. "Has a
+  //container.xml naming a readable OPF" is format knowledge, and the renderer needs to read those
+  //parts anyway; a check here would be a second, worse copy of it that could only report failure
+  //less precisely.
+  //
+  //Stylesheets are in the returned set, not just the markup. An epub links its CSS
+  //(<link rel="stylesheet" href="0.css">) rather than inlining a <style> block - every chapter of
+  //all three sample books does - so without the .css entries every class-driven italic in the book
+  //resolves to nothing, which is the exact failure html-import.js exists to avoid.
+  importEpub: { group: 'F', params: ['path'], returns: '{ entries: { [path]: string } }',
+    note: 'Text entries only - xhtml/html/xml/opf/ncx/css/txt, plus the "mimetype" file. Images, fonts and audio are never read, which is where "images are stripped" is actually enforced: they cannot reach the renderer to be stripped later. Paths are archive-relative with forward slashes, exactly as the zip stores them, because that is what the hrefs inside container.xml/the OPF/the nav document resolve against.' },
 
   // --- G. Export and compile ----------------------------------------------------------------
   ensureDirectory: { group: 'G', params: ['path'], returns: 'void' },
@@ -288,8 +312,52 @@ var COMMANDS = {
     note: 'Deletes each path unconditionally; one bad path is logged and does not stop the rest, matching deleteOldBackups\' original per-file try/catch.' },
 
   // --- I. Spellcheck ------------------------------------------------------------------------
-  loadDictionary: { group: 'I', params: [], returns: '{ aff, dic }',
-    note: 'nspell is pure JS and stays in the webview. Only the dictionary text crosses.' },
+  //nspell is pure JS and stays in the webview - only dictionary text crosses. loadDictionary became
+  //loadDictionaries(ids) so a writer can select more than one at once (see spellcheck.js's
+  //getSpellchecker): one instance per selected dictionary, since nspell's own multi-dictionary
+  //support only honors the first entry's .aff. One round trip fetches every selected pair rather
+  //than one invoke per id - each pair is around a megabyte of text crossing the bridge.
+  //
+  //ids that are not on disk are skipped, and an ids that resolves to nothing at all - empty, absent,
+  //or every entry missing - falls back to SHARED_DICT_BASENAME. That is not defensiveness: it is the
+  //behaviour when a writer removes a dictionary they had selected, unticks everything, or copies
+  //user-settings.json to a machine an import does not exist on. The returned ids are what let the
+  //Dictionaries dialog say which dictionaries are genuinely in use rather than which were asked for.
+  loadDictionaries: { group: 'I', params: ['ids'], returns: '{ id, aff, dic }[]' },
+  //A dictionary is a .aff/.dic pair sharing a basename, and the basename is its id. Bundled
+  //dictionaries are read from paths.app/dictionaries; imported ones are written to and read from
+  //paths.userData/dictionaries, the directory personal.dic already lives in - paths.app is often
+  //read-only (Program Files, an app bundle) and is wiped by the next update. personal.dic is excluded
+  //by the pairing rule alone (it has no .aff), never as a special case.
+  listDictionaries: { group: 'I', params: [],
+    returns: '{ id, source: "bundled"|"imported", removable }[]' },
+  //Separate from importDictionary on purpose: import is validate-then-commit, so the renderer reads
+  //the pair, hands the text to nspell, and only calls importDictionary once nspell has parsed it.
+  //Nothing is ever written that spellcheck cannot then load.
+  //
+  //It is also the one piece of this that genuinely has to be native, and not for file access.
+  //Hunspell .aff files declare their own encoding on a SET line, and plenty of dictionaries in
+  //circulation are ISO8859-1, not UTF-8 - readTextFile (group F) decodes as UTF-8 unconditionally,
+  //which would mangle every accented word into replacement characters, and nspell would accept the
+  //mojibake as valid text. This reads bytes, decodes per the SET line, and returns UTF-8 strings with
+  //that line rewritten to say so - byte decoding is the OS-level job, and it is the only part of this
+  //feature that is.
+  //
+  //dicPath is the one that is always present - there is always a word list. affPath is the one that
+  //may be omitted, for a bare word list (a .txt or .dic of names with no affix file at all, which is
+  //what a writer importing "every character in my series" actually has) - with no .aff, `SET UTF-8\n`
+  //is generated as one. (Correction: the params these two names suggest by alphabetical habit would
+  //be backwards - affPath optional, dicPath required is the only shape a dictionary that must always
+  //carry a word list can take.)
+  readDictionaryFiles: { group: 'I', params: ['dicPath'], optional: ['affPath'],
+    returns: '{ id, aff, dic }' },
+  //Refused with ALREADY_EXISTS when the id collides with anything already listed, bundled or
+  //imported, rather than shadowing it - shadowing would mean removing an imported dictionary silently
+  //changes which words are correct, with no way to show that in a list.
+  importDictionary: { group: 'I', params: ['id', 'aff', 'dic'], returns: 'void' },
+  //Refuses anything under paths.app with INVALID_ARGUMENT - bundled dictionaries are not the writer's
+  //to delete. The `removable` flag listDictionaries returns is a UI hint, not the guard; this is.
+  removeDictionary: { group: 'I', params: ['id'], returns: 'void' },
   loadPersonalDictionary: { group: 'I', params: [], returns: 'string[]',
     note: 'Folds in the bootstrap write at spellcheck.js:38-44 - the caller stops knowing the file has to be created before it can be read.' },
   savePersonalDictionary: { group: 'I', params: ['words'], returns: 'void' },
@@ -362,6 +430,31 @@ var COMMANDS = {
   //additional shell commands (there is no shell: this is spawn(), not exec()) and behind a `--`
   //terminator so a path could not be read as an apt option either.
   installUpdate: { group: 'K', params: ['path', 'password'], returns: 'void' },
+  //Windows' own counterpart to downloadUpdate/installUpdate. Squirrel.Windows applies an update in
+  //place through Update.exe, already installed beside this app, so there is no installer for the
+  //writer to run and no privileged process for this backing to spawn - only Electron's built-in
+  //autoUpdater to drive, which is a main-process API and lives in index.js the way onSetTheme/
+  //onShowAppMenu/onConfirmExit already do (see the decisions at the top of the plan this pair
+  //implements).
+  //
+  //`tag` and not a URL, for the same reason downloadUpdate takes only `url` and not the `destPath`
+  //Phase 9c removed: the renderer does not get to name where this backing fetches from. It already
+  //has the tag from checkForUpdate's own response, and the backing composes the Squirrel feed URL
+  //from it against the same RELEASE_ASSET_HOSTNAME/RELEASE_ASSET_PATH_PREFIX constants
+  //downloadUpdate's allowlist is spelled from, so the two cannot drift apart. A tag that is not a
+  //plain vX.Y.Z is rejected INVALID_ARGUMENT before it can walk the composed URL out of that prefix.
+  //
+  //Both are win32-only and reject UNAVAILABLE everywhere else - the same distinction
+  //getBatteryCapacity already draws for "the facility itself is absent" (Squirrel.Windows is a
+  //Windows mechanism) rather than NOT_IMPLEMENTED, which would say the command itself does not
+  //exist on this backing.
+  //
+  //startSquirrelUpdate resolves as soon as the check is *started*, not once an update is ready -
+  //Squirrel's own download has no synchronous completion for this call to await and no progress to
+  //report, so the outcome arrives later as one of two events: 'app-update-downloaded', or
+  //'app-update-failed' carrying a message string.
+  startSquirrelUpdate: { group: 'K', params: ['tag'], returns: 'void' },
+  quitAndInstallUpdate: { group: 'K', params: [], returns: 'void' },
   //Takes SAVED_SECRET or a literal the writer just typed. This command is why getCredential does
   //not exist: the password never needed to reach the renderer, because the thing that consumes it
   //is also native.
@@ -417,7 +510,18 @@ var COMMANDS = {
   //the everyday result on every machine that is not a writerDeck. A battery that exists but cannot
   //be read (a spawn failure, non-numeric sysfs output) is IO_ERROR instead, so a caller can still
   //tell "there is nothing to report" apart from "something is actually wrong."
-  getBatteryCapacity: { group: 'K', params: [], returns: 'number' }
+  getBatteryCapacity: { group: 'K', params: [], returns: 'number' },
+  //Reboots the machine, not the app - the File > Reboot item index.js shows on Linux only. Group K
+  //rather than group A even though it ends the session the way confirmExit does: group A is the
+  //main-process-API group (app.getPath, nativeTheme, the menu, app.quit), and this is a spawn of a
+  //system binary, the same shape as its neighbours here.
+  //
+  //Rejects UNAVAILABLE off Linux and when systemctl is not installed, the same distinction
+  //startSquirrelUpdate draws off Windows: the facility is absent on this machine, which is not the
+  //same as the command not existing. A systemctl that runs and refuses (no polkit authorization for
+  //the session, say) is IO_ERROR carrying its own output, so "this build cannot reboot here" and
+  //"the machine would not let me" stay tellable apart.
+  rebootSystem: { group: 'K', params: [], returns: 'void (the machine goes down; nothing resolves after it)' }
 };
 
 //Wraps a backing in the contract: one async method per COMMANDS entry, every rejection a

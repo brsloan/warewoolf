@@ -5,6 +5,9 @@ const { checkBatteryMinutely, endAutocheck } = require('../controllers/battery-m
 function showBattery(){
     var batteryDiv = document.createElement('div');
     batteryDiv.id = 'battery-block';
+    batteryDiv.setAttribute('role', 'status');
+    batteryDiv.setAttribute('aria-live', 'polite');
+    batteryDiv.setAttribute('aria-label', 'Battery');
 
     var batteryText = document.createElement('p');
     batteryText.id = 'battery-text';

@@ -7,14 +7,34 @@ const newProject = require('./components/models/project');
 const autosaver = require('./components/controllers/autosave');
 const chapterList = require('./components/controllers/chapter-list');
 const { registerKeybindings } = require('./components/controllers/keybindings');
-const { addBindingsToQuill } = require('./components/controllers/quill-utils');
+const { applyQuillShortcuts, splitDeltaAtIndices } = require('./components/controllers/quill-utils');
+const { attachAutocorrect } = require('./components/controllers/autocorrect');
+const { registerFootnoteBlots } = require('./components/blots/footnotes');
+const {
+  applyStructuralFootnoteChanges,
+  containsFootnotes,
+  renumberFootnotes,
+  renumberFootnotesInPlace,
+  redistributeFootnotes
+} = require('./components/controllers/reconcile-footnotes');
+const {
+  footnoteEnterBinding,
+  attachFootnoteClipboard,
+  markerAt
+} = require('./components/controllers/footnote-navigation');
+const { resolveShortcuts } = require('./components/models/shortcuts');
+const { resolveAutocorrect } = require('./components/models/autocorrect');
+const { resolveFontStack } = require('./components/models/fonts');
+const { resolveLineHeight } = require('./components/models/line-heights');
+const { setSelectedDictionaries, setProjectWords, releaseSpellchecker } = require('./components/controllers/spellcheck');
+const { normalizeSlashes } = require('./components/controllers/path-utils');
 const { enableTypewriterMode, disableTypewriterMode } = require('./components/controllers/typewriter-mode');
 const {
   removeElementsByClass,
   disableSearchView
 } = require('./components/controllers/utils');
 const { showBattery } = require('./components/views/battery_display');
-const { renderChapterList, renameChapterInList } = require('./components/views/chapter-list_display');
+const { renderChapterList, renameChapterInList, scrollIntoViewIfNeeded } = require('./components/views/chapter-list_display');
 
 //The single boundary to the OS and the main process - see platform.js. getAppPaths/
 //getFileRequestedOnOpen used to be sendSync calls made here at module load; both are now regular
@@ -24,31 +44,102 @@ const { renderChapterList, renameChapterInList } = require('./components/views/c
 //As of Phase 9a this is the *only* platform instance this file has. Through Phase 8 there were two:
 //this one for group A, and a second node-backed one for everything that was plain fs and therefore
 //reachable from the renderer directly. The node backing now runs in the main process, so both
-//halves are this object, and the 36 menu channels come through it as well - render.js no longer
+//halves are this object, and the 37 menu channels come through it as well - render.js no longer
 //requires 'electron' at all.
 var platform = createPlatform(createIpcBacking());
+
+//Must run before either Quill instance below is constructed - scroll.js's whitelist (built from
+//the `formats` option) is what makes 'footnote'/'footnoteBody' insertable at all, and Parchment has
+//to know the blot/attributor exists before that whitelist can even name it.
+registerFootnoteBlots();
 
 var editorQuill = new Quill('#editor-container', {
   modules: {
     history: {
       userOnly: true
+    },
+    keyboard: {
+      bindings: quillBindingsToDisable()
     }
   },
   placeholder: '',
-  formats: ['bold', 'italic', 'strike', 'underline', 'blockquote', 'header', 'align', 'list', 'indent']
+  //footnote/footnoteBody are editor-only, deliberately absent from notesQuill's own list below - a
+  //footnote pasted into notes degrades to literal "[^N]" text instead (see setUpQuills), since a
+  //note has no chapter of its own for the body to belong to.
+  formats: ['bold', 'italic', 'strike', 'underline', 'blockquote', 'header', 'align', 'list', 'indent', 'footnote', 'footnoteBody', 'footnoteBodyCont']
 });
+
+//Quill's own Enter handler is added unconditionally after the named `options.bindings` loop (see
+//keyboard.js's constructor), which is why quillBindingsToDisable() cannot reach it - this has to be
+//unshifted directly onto the bindings array instead. Attached once, here, rather than from
+//setUpQuills(): unlike the formatting shortcuts, this one isn't tagged with a warewoolfAction, so
+//re-running the block that attaches it would stack a duplicate on every rebind.
+editorQuill.keyboard.bindings[13] = editorQuill.keyboard.bindings[13] || [];
+editorQuill.keyboard.bindings[13].unshift(footnoteEnterBinding(editorQuill));
+
+attachFootnoteClipboard(editorQuill);
+
+//Quill 1.x gives its contenteditable root no role and no name, so a screen reader lands in the
+//manuscript and hears only "editable" - not what it is editing. Named here, once, on the root
+//element Quill owns: the manuscript by a fixed label, the notes by the sidebar heading that
+//already says whether these are chapter notes or project notes (see refreshNotesDisplay), so the
+//two stay one text. aria-multiline is what turns "text box" into "document" for a reader's
+//navigation: Enter makes a paragraph here, it does not submit anything.
+function describeEditor(quill, labelOrHeadingId, byHeading){
+  quill.root.setAttribute('role', 'textbox');
+  quill.root.setAttribute('aria-multiline', 'true');
+  quill.root.setAttribute(byHeading ? 'aria-labelledby' : 'aria-label', labelOrHeadingId);
+}
+
+describeEditor(editorQuill, 'Manuscript');
 
 var notesQuill = new Quill('#notes-editor', {
   modules: {
     history: {
       userOnly: true
+    },
+    keyboard: {
+      bindings: quillBindingsToDisable()
     }
   },
   placeholder: 'Notes...',
   formats: ['bold', 'italic', 'strike', 'underline', 'blockquote', 'header', 'align', 'list', 'indent']
 });
 
+describeEditor(notesQuill, 'notes-header', true);
+
+//notesQuill's own `formats` above has no 'footnote' entry, so a pasted marker would otherwise be
+//silently dropped by scroll.js's whitelist check - the writer loses characters with no indication.
+//Degrading it to the literal reference text instead is what a writer would have typed by hand.
+notesQuill.clipboard.addMatcher('sup.ww-fnref', function(node, delta){
+  var Delta = Quill.import('delta');
+  return new Delta().insert('[^' + (node.getAttribute('data-n') || '') + ']');
+});
+
+//Quill binds Ctrl+B/I/U itself, and those three are in the Shortcuts popup's list like every other
+//formatting shortcut - so they have to be rebindable, which means Quill's own copies have to go.
+//A binding named in Quill's defaults and given a falsy value here is skipped when its keyboard
+//module is built (see Keyboard's constructor), which is the only supported way to drop one: there
+//is no removeBinding() in Quill 1.x. quill-utils.js adds all three back from the writer's own
+//bindings, along with the rest of the formatting shortcuts.
+function quillBindingsToDisable(){
+  return { bold: null, italic: null, underline: null };
+}
+
 var project = newProject();
+
+//The keyboard shortcuts in force: the defaults from models/shortcuts.js with the writer's saved
+//overrides over them. Replaced wholesale when a writer saves a change from the Shortcuts popup -
+//keybindings.js reads it through a getter on every keypress, so nothing there needs re-registering,
+//while Quill's own bindings do have to be re-applied (see applyShortcutChanges below).
+var shortcutBindings = resolveShortcuts(null);
+
+//The automatic substitutions in force - smart quotes, em dashes and the rest. Same shape and same
+//reasoning as shortcutBindings above: the defaults with the writer's saved changes over them,
+//replaced wholesale when Settings is saved, and read through a getter by the two editors so
+//nothing has to be re-attached when it changes. Empty while the master switch is off, which is how
+//"substitute nothing" is said to controllers/autocorrect.js.
+var autocorrectRules = resolveAutocorrect(null);
 
 //Populated by loadPlatformState() below, once getAppPaths()/getFileRequestedOnOpen() resolve.
 //Nothing above this line needs them; everything below runs from inside functions and reads these by
@@ -130,6 +221,12 @@ async function loadPlatformState(){
   platformInfo = await platform.getPlatform();
 
   userSettings = await getUserSettings(sysDirectories.userData + "/user-settings.json").load();
+  shortcutBindings = resolveShortcuts(userSettings.keyboardShortcuts);
+  autocorrectRules = resolveAutocorrectSetting();
+  //Whatever a writer ticked in the Dictionaries dialog last time - an empty array means "whatever
+  //the app ships as default", which is exactly what an empty selectedDictionaries already falls back
+  //to inside getSpellchecker().
+  setSelectedDictionaries(userSettings.spellcheckDictionaries);
   await migrateLegacyCredential();
 
   await initialize();
@@ -143,6 +240,9 @@ async function loadPlatformState(){
   //does not exist yet until the two lines above it in this function have run.
   var unregisterKeybindings = registerKeybindings({
     getProject: function(){ return project; },
+    //Read on every keypress rather than captured here, for the same reason getProject is a getter:
+    //this whole object is replaced when a writer rebinds something.
+    getShortcuts: function(){ return shortcutBindings; },
     userSettings: userSettings,
     editorQuill: editorQuill,
     notesQuill: notesQuill,
@@ -297,9 +397,40 @@ async function loadInitialProject(){
 }
 
 function setUpQuills(){
-  addBindingsToQuill(editorQuill);
-  addBindingsToQuill(notesQuill);
+  applyQuillShortcuts(editorQuill, shortcutBindings);
+  applyQuillShortcuts(notesQuill, shortcutBindings);
+  //Attached once and never re-attached: unlike Quill's own bindings, these read the rules through
+  //the getter below on every keystroke, so a change in Settings takes effect on the next character
+  //typed. The returned detach functions are dropped because both editors live as long as the
+  //window does - there is nothing here to tear down.
+  attachAutocorrect(editorQuill, getAutocorrectRules);
+  attachAutocorrect(notesQuill, getAutocorrectRules);
   disableTabbingToEditors();
+}
+
+function getAutocorrectRules(){
+  return autocorrectRules;
+}
+
+//The master switch is folded in here rather than checked on every keystroke: with it off there are
+//simply no rules, which is the same thing said in the shape controllers/autocorrect.js already
+//understands. The individual rules a writer chose are left in user settings untouched, so turning
+//it back on restores them rather than starting from the defaults.
+function resolveAutocorrectSetting(){
+  return userSettings.autocorrectEnabled ? resolveAutocorrect(userSettings.autocorrect) : {};
+}
+
+//What the Shortcuts popup calls when a writer saves a change. `overrides` is only what differs from
+//the defaults (see shortcuts.js diffFromDefaults), which is exactly what gets stored.
+//
+//The two editors need their bindings rebuilt because Quill owns those; nothing else does, since
+//keybindings.js reads the map on every keypress.
+function applyShortcutChanges(overrides){
+  userSettings.keyboardShortcuts = overrides;
+  shortcutBindings = resolveShortcuts(overrides);
+  applyQuillShortcuts(editorQuill, shortcutBindings);
+  applyQuillShortcuts(notesQuill, shortcutBindings);
+  return userSettings.save();
 }
 
 function disableTabbingToEditors(){
@@ -311,6 +442,8 @@ function disableTabbingToEditors(){
 
 function applyUserSettings(){
   updateFontSize();
+  updateFonts();
+  updateLineHeight();
   if(userSettings.typewriterMode)
     enableTypewriterMode(editorQuill)
   updateEditorWidth();
@@ -330,6 +463,29 @@ function updateFontSize(){
   document.documentElement.style.setProperty('--dialog-heading-size', (userSettings.fontSize + 2) + 'pt');
 }
 
+//The two typeface settings, resolved from the ids in user settings to the font-family stacks
+//index.css's --font-editor/--font-sidebar carry. Kept apart from updateFontSize() above because
+//the two are changed from different places - size by the Ctrl+/Ctrl- shortcuts, face only from
+//Settings - and neither needs to redo the other's work.
+//
+//resolveFontStack answers with the default face for an id it does not recognize, so there is
+//nothing to check here: whatever is in userSettings, both properties end up holding a real stack.
+function updateFonts(){
+  document.documentElement.style.setProperty('--font-editor', resolveFontStack(userSettings.editorFont));
+  document.documentElement.style.setProperty('--font-sidebar', resolveFontStack(userSettings.sidebarFont));
+}
+
+//The manuscript's line spacing, resolved from the id in user settings to the css value
+//index.css's --line-height-editor carries. Its own function alongside updateFonts() rather than
+//part of it because they are separate settings that happen to be changed from the same dialog -
+//nothing says a later version cannot put spacing on a shortcut the way font size already is.
+//
+//resolveLineHeight answers with the default spacing for an id it does not recognize, so there is
+//nothing to check here: whatever is in userSettings, the property ends up holding a real value.
+function updateLineHeight(){
+  document.documentElement.style.setProperty('--line-height-editor', resolveLineHeight(userSettings.editorLineHeight));
+}
+
 function updateEditorWidth(){
   document.documentElement.style.setProperty('--editor-width', userSettings.editorWidth + '%');
   document.documentElement.style.setProperty('--sidebar-width', ((100 - userSettings.editorWidth) / 2) + "%");
@@ -342,19 +498,50 @@ function setDarkMode(){
   });
 }
 
+//Anything living inside the installed app directory is shipped with the app, not the writer's to
+//edit: the Help doc, the bundled Frankenstein example, and whatever a later release adds beside
+//them. On a packaged install that directory is Program Files or the app bundle, so a save against
+//it dies with EACCES - and running from source it is this repository, where a save silently edits
+//the tracked file that ships to everyone.
+//
+//That was reachable three ways, all of which decided read-only-ness by not deciding it. Opening the
+//Help doc through File > Open Project loaded it writable AND recorded it as lastProject, so every
+//launch afterwards reopened it writable; a .woolf double-clicked in the file manager took the same
+//route; and loadInitialProject's lastProject branch called setProject with no `readOnly` at all.
+//The bundled-example branch guarded it and nothing else did.
+//
+//Lowercased on both sides because the install path arrives from app.getPath and the project path
+//from a dialog or a settings file, and Windows does not agree with itself about case. Two
+//directories differing only in case would be conflated on Linux, which is not a real layout, and
+//errs toward read-only if it ever happened.
+function isInsideInstallDirectory(filepath){
+  if(filepath == null || sysDirectories == null || sysDirectories.app == null)
+    return false;
+
+  var installDir = normalizeSlashes(sysDirectories.app).replace(/\/+$/, '') + '/';
+
+  return normalizeSlashes(filepath).toLowerCase().indexOf(installDir.toLowerCase()) === 0;
+}
+
 //`readOnly` has to be an argument rather than something the caller sets afterward, and that is not
 //a convenience. loadFile() clears the flag on every load, and convertLegacyProject() below ends in
 //an unconditional project.saveFile() - so a caller that opened a read-only copy and set the flag on
 //the way back would already have written to it. That is how the bundled example, opened from the
 //install directory because its copy out to userData failed, was saved over before anything knew it
 //was read-only.
+//
+//Omitting it now means "decide from where the file is" rather than "writable": a caller that knows
+//better (the bundled example, which knows whether its copy out to userData succeeded) still says
+//so explicitly, and a caller that has no opinion gets the safe answer instead of the unsafe one.
 async function setProject(filepath, readOnly){
   if(filepath && filepath != null){
     var missingChaps = await project.loadFile(filepath);
     if(await projectFailedToLoad(filepath))
       return;
     //Set before anything downstream can write. Nothing else in this function may run first.
-    project.isReadOnly = readOnly === true;
+    project.isReadOnly = readOnly === undefined
+      ? isInsideInstallDirectory(filepath)
+      : readOnly === true;
     if(missingChaps.length > 0){
       console.log('could not find all chapters.');
       const promptForMissingPups = require('./components/views/missing-pups_display');
@@ -427,6 +614,9 @@ async function convertLegacyProject(){
 }
 
 async function displayProject(){
+  //The one place that already knows the project changed, whether it was opened (setProject) or
+  //created fresh (createNewProject) - both funnel through here.
+  setProjectWords(project.projectDictionary);
   updateFileList();
   updateTitleBar();
   await refreshNotesDisplay();
@@ -444,9 +634,33 @@ async function setWordCountOnLoad(){
 
 function updateFileList(){
   renderChapterList(project, {
-    onSelect: displayChapterByIndex,
+    onSelect: selectChapterFromList,
     onRename: changeChapterTitle
   });
+}
+
+//A click from the sidebar loads the chapter, and that finishes asynchronously - after the file has
+//been read - by rebuilding every row in the list. A double-click fires both of its clicks before
+//the rename it means, so those rebuilds were still on their way when the rename box went into the
+//row, and tore it back out again a moment later: the box flashed up and disappeared before a title
+//could be typed into it. Selections made from the list are chained here so changeChapterTitle()
+//below can wait for them to be over first. A failed load is reported like any other detached
+//failure (nothing looks at what a click returns) and then treated as finished, since it is over
+//either way and the next click needs a chain that still resolves.
+var pendingListSelections = 0;
+var listSelectionsSettled = Promise.resolve();
+
+function selectChapterFromList(ind){
+  var selection = displayChapterByIndex(ind);
+
+  pendingListSelections++;
+  listSelectionsSettled = listSelectionsSettled.then(function(){
+    return selection.catch(reportDetachedFailure);
+  }).then(function(){
+    pendingListSelections--;
+  });
+
+  return selection;
 }
 
 async function displayChapterByIndex(ind){
@@ -490,13 +704,33 @@ async function displayChapterByIndex(ind){
     notes = correctNotesChap.notes;
   }
   else {
-    let savedNotes = await correctNotesChap.getNotesFile();
+    //getNotesContentOrFile() rather than getNotesFile(), because a chapter that has just been
+    //added and not yet saved has no filename to derive a notes filename from. Asking for the file
+    //anyway threw inside the platform layer and logged an error on every Ctrl+N, and again on
+    //every chapter change afterwards while the new chapter stayed unsaved.
+    let savedNotes = await correctNotesChap.getNotesContentOrFile();
     notes = savedNotes ? savedNotes : getEmptyDelta();
   }
 
   editorQuill.setContents(contents, 'api');
   notesQuill.setContents(notes, 'api');
   updateFileList();
+  announceChapter(chap);
+}
+
+//Says which chapter the manuscript now shows, for a screen reader. Changing chapters from inside
+//an editor (Ctrl+Up/Down, the menu) swaps the whole text under the caret, and nothing a
+//reader is listening to says so: focus has not moved, and the editor's name has not changed. The
+//polite live region in index.html is told the title, and a reader speaks it once the writer
+//stops typing. Skipped while focus is in the sidebar itself, where the listbox's active
+//descendant already announces the row it moved to - said twice, it would be noise.
+function announceChapter(chap){
+  var announcer = document.getElementById('chapter-announcer');
+  var sidebar = document.getElementById('chapter-list-sidebar');
+  if(!announcer || sidebar.contains(document.activeElement))
+    return;
+
+  announcer.textContent = chap.title != '' ? chap.title : '(untitled)';
 }
 
 function updateTitleBar(){
@@ -798,6 +1032,10 @@ function openAProject() {
       var missingChaps = await project.loadFile(filepath[0]);
       if(await projectFailedToLoad(filepath[0]))
         return;
+      //Before displayProject() below, for the same reason setProject sets it before anything else:
+      //a writer who browses to the bundled Help doc gets it read-only, exactly as Help > Open Help
+      //Document already gives them.
+      project.isReadOnly = isInsideInstallDirectory(filepath[0]);
       if(missingChaps.length > 0){
         const promptForMissingPups = require('./components/views/missing-pups_display');
         await promptForMissingPups(project, function(resp){
@@ -823,8 +1061,20 @@ function clearCurrentChapterIfUnchanged(){
   }
 };
 
+//Structural vs cosmetic footnote changes apply on different schedules and with different sources -
+//see docs/footnotes-plan.md's "Source discipline". A structural change (a marker's own deletion
+//cascading to its body, a pasted marker's payload materializing into a real body) is a real edit
+//and belongs in the same undo entry as whatever triggered it, so it runs synchronously here, with
+//source 'user'. Cosmetic renumbering/reordering is not itself a thing a writer should be able to
+//undo, so it is debounced and applied with source 'silent' below.
+var applyingFootnoteStructuralChange = false;
+var footnoteRenumberTimer = null;
+
 editorQuill.on('text-change', function(delta, oldDelta, source) {
   if(source == "user"){
+    if(!applyingFootnoteStructuralChange)
+      applyFootnoteStructuralChanges();
+
     //Guarded the same way the notes handler below already is: getActiveChapter() is undefined once
     //every chapter has been permanently deleted, and there is nothing to attach this text to.
     var chap = project.getActiveChapter();
@@ -833,14 +1083,141 @@ editorQuill.on('text-change', function(delta, oldDelta, source) {
       chap.hasUnsavedChanges = true;
       project.hasUnsavedChanges = true;
     }
+
+    scheduleFootnoteRenumber();
   }
 });
+
+//Applying this from inside the text-change handler re-enters it the moment updateContents() below
+//fires its own text-change - applyingFootnoteStructuralChange is what stops that from recursing
+//forever; the re-entrant call sees the now-clean content and finds nothing left to do regardless,
+//but the flag makes that a guarantee rather than something resting on this pass happening to be
+//idempotent.
+function applyFootnoteStructuralChanges(){
+  var Delta = Quill.import('delta');
+  var current = editorQuill.getContents();
+
+  //Checked here as well as inside applyStructuralFootnoteChanges, because the pass is only half
+  //the per-keystroke cost: diffing its result against the whole document is the other half, and a
+  //chapter with no footnotes in it pays that to be told nothing changed. Measured on a
+  //90k-character chapter, the two together are about a millisecond of every keystroke on a desktop
+  //- which is why this matters on the Pi the app is built for, where the same work costs several
+  //times that. containsFootnotes walks the ops once and allocates nothing.
+  if(!containsFootnotes(current))
+    return;
+
+  var structural = applyStructuralFootnoteChanges(current);
+  var diff = new Delta(current).diff(new Delta(structural));
+
+  if(diff.ops.length === 0)
+    return;
+
+  applyingFootnoteStructuralChange = true;
+  try{
+    editorQuill.updateContents(diff, 'user');
+  }
+  finally{
+    applyingFootnoteStructuralChange = false;
+  }
+
+  //Numbered here and now rather than left to the debounce below. A structural change is the one
+  //case where waiting is visible: it has just put a marker and a body on screen carrying whatever
+  //id materializePayloads picked for them, and both render their number straight from that id, so
+  //a second of debounce is a second of the writer watching the wrong number. Both updates land
+  //inside the same text-change, so the browser paints once, with the right number already in it.
+  //
+  //Unguarded by the caret check runFootnoteRenumber makes, deliberately: that check protects a
+  //writer mid-sentence in a note from an idle timer reordering the ground under them, which is not
+  //what this is - the writer just made an edit, and the reorder is part of it.
+  applyFootnoteRenumber();
+}
+
+function scheduleFootnoteRenumber(){
+  if(footnoteRenumberTimer)
+    clearTimeout(footnoteRenumberTimer);
+
+  footnoteRenumberTimer = setTimeout(runFootnoteRenumber, 1000);
+}
+
+//With the caret inside a footnote body, the *reorder* is skipped so it never yanks the ground out
+//from under someone mid-sentence in a note - deferred to save instead (see reconcile-footnotes.js's
+//callers), which runs the full pass regardless of where the caret is. The numbering still applies:
+//renumberFootnotesInPlace moves nothing, so there is no ground to yank, and holding it back was
+//what left the second paragraph of a note printing a number of its own - it is a continuation, and
+//this pass is what marks it as one - for as long as the writer stayed in the note.
+function runFootnoteRenumber(){
+  footnoteRenumberTimer = null;
+
+  //getFormat() with no arguments force-focuses the editor to find a selection (see Quill's own
+  //default parameter) - which is both pointless here (a debounced timer firing well after the
+  //editor lost focus has no caret to protect) and, against a torn-down or never-focused editor,
+  //throws rather than returning null. getSelection() alone never forces focus.
+  var range = editorQuill.getSelection();
+  if(range){
+    var format = editorQuill.getFormat(range);
+    if(format && format.footnoteBody != null){
+      applyFootnoteRenumber(renumberFootnotesInPlace);
+      return;
+    }
+  }
+
+  applyFootnoteRenumber();
+}
+
+//Silent, so it is not itself undoable and does not re-enter the text-change handler above. Quill
+//still hears about it through editor-change, which is what History listens on, so the undo stack
+//is transformed rather than left pointing at indices this has moved.
+function applyFootnoteRenumber(pass){
+  var Delta = Quill.import('delta');
+  var current = editorQuill.getContents();
+  var renumbered = (pass || renumberFootnotes)(current);
+  var diff = new Delta(current).diff(new Delta(renumbered));
+
+  if(diff.ops.length > 0)
+    editorQuill.updateContents(diff, 'silent');
+}
 
 editorQuill.on('selection-change', function(range, oldRange, source){
   if(range){
     project.textCursorPosition = range.index;
   }
+
+  updateActiveFootnoteHighlight(range);
 })
+
+//Highlights the marker and body that belong to each other. Only #editor-container - the element
+//Quill was constructed on, outside .ql-editor itself - is ever touched here; a dedicated <style>
+//element is what actually paints the highlight, via a plain, non-dynamic selector rebuilt on every
+//selection change, rather than mutating any node .ql-editor's own MutationObserver would see.
+var footnoteHighlightStyle = null;
+
+function updateActiveFootnoteHighlight(range){
+  if(footnoteHighlightStyle == null){
+    footnoteHighlightStyle = document.createElement('style');
+    document.head.appendChild(footnoteHighlightStyle);
+  }
+
+  var id = null;
+  if(range){
+    var format = editorQuill.getFormat(range);
+    id = (format && format.footnoteBody != null) ? String(format.footnoteBody) : markerAt(editorQuill, range.index);
+  }
+
+  var container = document.getElementById('editor-container');
+
+  if(id == null){
+    container.removeAttribute('data-active-footnote');
+    footnoteHighlightStyle.textContent = '';
+    return;
+  }
+
+  container.setAttribute('data-active-footnote', id);
+
+  var escaped = id.replace(/"/g, '\\"');
+  footnoteHighlightStyle.textContent =
+    '#editor-container .ww-fnref[data-n="' + escaped + '"], ' +
+    '#editor-container [data-footnote="' + escaped + '"] { background-color: rgba(255, 213, 79, 0.45); }';
+}
 
 notesQuill.on('text-change', function(delta, oldDelta, source){
   if(source == 'user'){
@@ -973,6 +1350,20 @@ async function restoreFromTrash(ind){
 }
 
 function changeChapterTitle(ind){
+  //Only a rename that follows a click has anything to wait for - see selectChapterFromList() above.
+  //A rename from the keyboard, or the one that opens on a chapter just added or split off, still
+  //runs straight through and puts its box in the row before returning.
+  if(pendingListSelections > 0){
+    listSelectionsSettled.then(function(){
+      openRenameBox(ind);
+    }).catch(reportDetachedFailure);
+    return;
+  }
+
+  openRenameBox(ind);
+}
+
+function openRenameBox(ind){
   var chap = chapterList.chapterAt(project, ind);
   if(!chap)
     return;
@@ -995,15 +1386,32 @@ function changeChapterTitle(ind){
   });
 }
 
+//A footnote's marker and its body must land on the same side of the split, wherever the marker
+//went - see reconcile-footnotes.js's redistributeFootnotes. Refused outright when the caret sits
+//inside a footnote body: any snapping rule would either produce an empty chapter or silently move
+//the split point the writer actually chose, and neither is better than asking them to move the
+//caret out of the note first.
 async function splitChapter(){
   var selection = editorQuill.getSelection(true);
-  if(selection){
-      var newChap = editorQuill.getContents(selection.index);
-      console.log("deleting " + selection.index + " to " + editorQuill.getLength());
-      editorQuill.deleteText(selection.index, editorQuill.getLength(), 'user');
-      await addImportedChapter(newChap, "untitled");
-      changeChapterTitle(project.activeChapterIndex);
+  if(!selection)
+    return;
+
+  var format = editorQuill.getFormat(selection);
+  if(format && format.footnoteBody != null){
+    const showBlockedActionAlert = require('./components/views/blocked-action_display');
+    showBlockedActionAlert('Cannot split a chapter inside a footnote. Move the caret out of the note first.');
+    return;
   }
+
+  var current = editorQuill.getContents();
+  var fragments = redistributeFootnotes(splitDeltaAtIndices(current, [selection.index]));
+
+  var Delta = Quill.import('delta');
+  var reconciledFirst = new Delta(fragments[0]);
+  editorQuill.updateContents(new Delta(current).diff(reconciledFirst), 'user');
+
+  await addImportedChapter(fragments[1], "untitled");
+  changeChapterTitle(project.activeChapterIndex);
 }
 
 function increaseEditorWidthSetting(){
@@ -1039,8 +1447,7 @@ function scrollChapterListToActiveChapter(){
   if(!activeChapter)
     return;
 
-  document.getElementById('chapter-list-sidebar').scrollTop =
-    activeChapter.offsetTop - (document.getElementById('chapters-header').offsetHeight * 3);
+  scrollIntoViewIfNeeded(document.getElementById('chapter-list-sidebar'), activeChapter);
 }
 
 //The Help doc is reference material, not the reader's own work: it has to describe the version
@@ -1064,16 +1471,33 @@ async function openHelpDoc(){
 }
 
 function exitApp(){
+  backupThenFinish(confirmExit, 'Exit Without Backup');
+}
+
+//File > Reboot, Linux only (see index.js). It takes the same route out as Exit rather than a
+//shorter one, and that is the whole point of it existing in the menu at all: unsaved work is
+//prompted for first (proceedOrConfirmSave, below), the auto-backup still has to finish before the
+//machine goes down, and only then does anything reach systemctl. A reboot from a terminal - the
+//only other way to get one on a writerDeck that boots straight into WareWoolf - skips all three.
+function rebootMachine(){
+  backupThenFinish(rebootSystem, 'Reboot Without Backup');
+}
+
+//Exit and Reboot differ only in what ends the session, so the part before that is shared: run the
+//auto-backup if one is configured and the project has somewhere to be backed up to, report its
+//progress, and hand over once it is done. `finish` is also what the alert's skip button calls, so
+//a backup that stalls does not strand a writer who wanted the machine off.
+function backupThenFinish(finish, skipLabel){
   if(userSettings.autoBackup == true && project.filename != ''){
-    alertBackupResult('Loading backup tools...', true);
+    alertBackupResult('Loading backup tools...', finish, skipLabel);
     const { backupProject, BACKUP_FINISHED } = require('./components/controllers/backup-project');
     backupProject(project, userSettings, sysDirectories.docs, function(update){
-      alertBackupResult(update, true);
+      alertBackupResult(update, finish, skipLabel);
       if(update == BACKUP_FINISHED)
-        confirmExit();
+        finish();
     });
   } else {
-      confirmExit();
+      finish();
   }
 }
 
@@ -1083,9 +1507,26 @@ function confirmExit(){
   });
 }
 
+//Nothing follows a successful call: the machine is on its way down. A rejection is the case worth
+//handling - no systemctl, or polkit refusing the session - and it is reported rather than only
+//logged, since the writer asked for a reboot and would otherwise be left watching a menu item that
+//did nothing at all.
+function rebootSystem(){
+  platform.rebootSystem().catch(function(err){
+    require('./components/controllers/error-log').logError(err);
+    const showBlockedActionAlert = require('./components/views/blocked-action_display');
+    showBlockedActionAlert('Could not reboot: ' + err.message);
+  });
+}
+
 //Adapts backup-project.js's stream of progress messages onto the alert popup: every message is
 //shown, and the one that means the run is over takes the popup down with it.
-function alertBackupResult(msg, allowExitWithoutBackup = false){
+//
+//`skipBackup` used to be a boolean meaning "and offer a button that quits anyway", with confirmExit
+//wired in here. It is the function itself now, because Reboot needs the same button to do something
+//else - a backup started from the menu still passes nothing and still gets no button at all
+//(backupProject calls this with the message alone), which is the case the flag existed to draw.
+function alertBackupResult(msg, skipBackup = null, skipLabel){
   const { showBackupAlert, hideBackupAlert } = require('./components/views/working_display');
   const { BACKUP_FINISHED } = require('./components/controllers/backup-project');
 
@@ -1094,7 +1535,7 @@ function alertBackupResult(msg, allowExitWithoutBackup = false){
     return;
   }
 
-  showBackupAlert(msg, allowExitWithoutBackup ? confirmExit : null);
+  showBackupAlert(msg, skipBackup, skipLabel);
 }
 
 async function addImportedChapter(chapDelta, title){
@@ -1154,7 +1595,7 @@ function proceedOrConfirmSave(continueFunc, refreshFileListFirst){
 //focus. Collecting them here means the focus guard - previously an ad-hoc `if(editorHasFocus())`
 //repeated at some call sites and not others, with no way to see the whole set at a glance - is now
 //one flag per entry, visible in one place. It does NOT change which channels currently have it:
-//convert-tabs/renumber-chapters/indent-all/center-all-heads all edit chapter content project-wide
+//convert-tabs/renumber-chapters/tab-indent-paragraphs/center-all-heads all edit chapter content
 //without requiring editor focus, exactly as before, even though convert-first-lines and
 //convert-italics (equally project-wide) do require it - a real inconsistency, left exactly as it
 //was rather than resolved here, since which behaviour is correct is a product decision.
@@ -1170,7 +1611,11 @@ const menuCommands = {
   'new-project-clicked': { run: function(){ createNewProject(); } },
   'import-clicked': { run: function(){
     const showImportOptions = require('./components/views/import_display');
-    showImportOptions(sysDirectories, detached(addImportedChapter), detached(async function(){
+    //The finish callback carries the imported book's own title and author when the format had any -
+    //only an epub does. applyBookMetadata (import.js) decides what to do with it.
+    const { applyBookMetadata } = require('./components/controllers/import');
+    showImportOptions(sysDirectories, detached(addImportedChapter), detached(async function(bookMetadata){
+      applyBookMetadata(project, bookMetadata);
       await displayChapterByIndex(project.activeChapterIndex);
       if(project.chapters.length > 0)
         editorQuill.enable();
@@ -1190,7 +1635,7 @@ const menuCommands = {
   } },
   'word-count-clicked': { run: function(){
     const showWordCount = require('./components/views/wordcount_display');
-    return showWordCount(project, editorQuill);
+    return showWordCount(project, editorQuill, userSettings);
   } },
   'find-replace-clicked': { requiresFocus: true, run: function(){
     const showFindReplace = require('./components/views/findreplace_display');
@@ -1199,8 +1644,9 @@ const menuCommands = {
   'spellcheck-clicked': { requiresFocus: true, run: function(){
     const showSpellcheck = require('./components/views/spellcheck_display');
     const { getBeginningOfCurrentWord } = require('./components/controllers/spellcheck');
+    const { getIndexableText } = require('./components/controllers/quill-utils');
     var currentIndex = editorQuill.getSelection(true).index;
-    var beginningOfWord = getBeginningOfCurrentWord(editorQuill.getText(), currentIndex);
+    var beginningOfWord = getBeginningOfCurrentWord(getIndexableText(editorQuill), currentIndex);
     return showSpellcheck(editorQuill, project, detached(displayChapterByIndex), beginningOfWord);
   } },
   'convert-first-lines-clicked': { requiresFocus: true, run: function(){
@@ -1225,11 +1671,15 @@ const menuCommands = {
   'restore-chapter-clicked': { requiresFocus: true, run: function(){ return restoreFromTrash(project.activeChapterIndex); } },
   'shortcuts-clicked': { run: function(isMac){
     const showShortcutsHelp = require('./components/views/shortcuts-help_display');
-    showShortcutsHelp(isMac);
+    showShortcutsHelp({
+      isMac: isMac,
+      bindings: shortcutBindings,
+      onSave: applyShortcutChanges
+    });
   } },
   'outliner-clicked': { run: function(){
     const showOutliner = require('./components/views/outliner_display');
-    return showOutliner(project);
+    return showOutliner(project, userSettings);
   } },
   'convert-tabs-clicked': { run: function(){
     const showTabOptions = require('./components/views/convert-tabs-display');
@@ -1237,11 +1687,20 @@ const menuCommands = {
       return displayChapterByIndex(project.activeChapterIndex);
     }));
   } },
+  'convert-substitutions-clicked': { run: function(){
+    const showSubstitutionOptions = require('./components/views/convert-substitutions_display');
+    showSubstitutionOptions(project, detached(function(){
+      return displayChapterByIndex(project.activeChapterIndex);
+    }));
+  } },
   'about-clicked': { run: function(appVersion){
     const showAbout = require('./components/views/about_display');
-    return showAbout(appVersion, platformInfo);
+    return showAbout(appVersion, platformInfo, proceedOrConfirmSave);
   } },
   'exit-app-clicked': { run: function(){ proceedOrConfirmSave(exitApp, true); } },
+  //Only ever sent on Linux - index.js does not put the menu item anywhere else. Same shape as Exit
+  //because it has the same consequence for unsaved work.
+  'reboot-clicked': { run: function(){ proceedOrConfirmSave(rebootMachine, true); } },
   'save-copy-clicked': { run: function(){ saveProjectCopy(); } },
   'help-doc-clicked': { run: function(){ return openHelpDoc(); } },
   'renumber-chapters-clicked': { run: function(){
@@ -1275,16 +1734,28 @@ const menuCommands = {
     const showSettings = require('./components/views/settings_display');
     return showSettings(userSettings, autosaver, sysDirectories, detached(autosaveProject), function(){
       setDarkMode();
+      updateFonts();
+      updateLineHeight();
+      autocorrectRules = resolveAutocorrectSetting();
     }, platformInfo);
+  } },
+  'dictionaries-clicked': { run: function(){
+    const showDictionaries = require('./components/views/dictionaries_display');
+    return showDictionaries(userSettings, project, function(){
+      setSelectedDictionaries(userSettings.spellcheckDictionaries);
+      setProjectWords(project.projectDictionary);
+      releaseSpellchecker();
+    });
   } },
   'corkboard-clicked': { run: function(){
     const showCorkboard = require('./components/views/corkboard_display');
     return showCorkboard(project, platformInfo);
   } },
-  'indent-all-clicked': { run: async function(){
-    const { indentAllParasInAllChaps } = require('./components/controllers/indent-all');
-    await indentAllParasInAllChaps(project);
-    await displayChapterByIndex(project.activeChapterIndex);
+  'tab-indent-paragraphs-clicked': { run: function(){
+    const showTabIndentParagraphs = require('./components/views/tab-indent-paragraphs_display');
+    showTabIndentParagraphs(project, detached(function(){
+      return displayChapterByIndex(project.activeChapterIndex);
+    }));
   } },
   'center-all-heads-clicked': { run: async function(){
     const { centerAllHeadingsInAllChaps } = require('./components/controllers/center-all-heads');
@@ -1325,6 +1796,9 @@ platform.on('file-opened-from-outside-warewoolf', detached(async function(fPath)
     var missingChaps = await project.loadFile(fPath);
     if(await projectFailedToLoad(fPath))
       return;
+    //A .woolf double-clicked in the file manager reaches this rather than openAProject, and a
+    //shipped one has to come up read-only here too.
+    project.isReadOnly = isInsideInstallDirectory(fPath);
     if(missingChaps.length > 0){
       const promptForMissingPups = require('./components/views/missing-pups_display');
       await promptForMissingPups(project, function(resp){

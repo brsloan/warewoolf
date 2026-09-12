@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { JSDOM } = require('jsdom');
+const { assertDialogDescribed, assertControlsNamed } = require('./helpers');
 
 const fileManagerDisplayPath = require.resolve('../src/components/views/file-manager_display');
 const fileManagerControllerPath = require.resolve('../src/components/controllers/file-manager');
@@ -426,4 +427,16 @@ test('Close removes the popup', async function(t){
 
   findButton('Close').onclick();
   assert.strictEqual(document.getElementsByClassName('popup').length, 0);
+});
+
+//Same shape as the file dialog: a named dialog whose lists have no visible labels, and whose new
+//directory and rename fields have label text that now points at them.
+test('the file manager is a named dialog and its lists and fields are labelled', async function(){
+  var showFileManager = freshFileManagerDisplay({ getFileList: async function(){ return []; } });
+
+  await showFileManager({ docs: '/proj/docs', home: '/proj/docs' }, '/proj/');
+
+  var popup = document.querySelector('.popup');
+  assertDialogDescribed(popup, 'dialog');
+  assert.ok(assertControlsNamed(popup) >= 2, 'the file manager should have lists to check');
 });

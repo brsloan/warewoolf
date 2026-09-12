@@ -17,8 +17,15 @@ function convertMdfcToMd(mdfText){
       return match.startsWith('\n') ? '\n\n' : '';
     });
 
-    converted = convertFootnotes(converted); 
-  
+    //A non-blank line directly after a quoted one is a lazy continuation in CommonMark and gets pulled
+    //into the blockquote, so a run of quoted lines is closed off with a blank line. Nothing is added
+    //before a run: a block quote is allowed to interrupt a paragraph, so the opening side is already
+    //unambiguous.
+    const blockquoteRunEnd = /^(>.*)\n(?=[^\n>])/gm;
+    converted = converted.replace(blockquoteRunEnd, '$1\n\n');
+
+    converted = convertFootnotes(converted);
+
     return converted;
   }
 

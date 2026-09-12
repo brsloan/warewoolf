@@ -1,4 +1,4 @@
-const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
+const { closePopups, createButton, removeElementsByClass, describeDialog } = require('../controllers/utils');
 const { createNewDirectory, renameFiles, moveFiles, copyFiles, getFileList, deleteFile, getParentDirectory } = require('../controllers/file-manager');
 
 function stopDefaultPropagation(keyEvent){
@@ -11,6 +11,7 @@ async function showFileManager(sysDir, projDir){
     removeElementsByClass('popup');
     var popup = document.createElement("div");
     popup.classList.add("popup");
+    describeDialog(popup, 'File Manager');
 
     var currentDirDisplay = document.createElement("p");
     currentDirDisplay.innerText = sysDir.docs;
@@ -22,6 +23,7 @@ async function showFileManager(sysDir, projDir){
 
     var dirShortcutSelect = document.createElement("select");
     dirShortcutSelect.classList.add("file-dir-shortcuts");
+    dirShortcutSelect.setAttribute('aria-label', 'Folder shortcuts');
     dirShortcutSelect.size = 20;
     selectFieldsContainer.appendChild(dirShortcutSelect);
     dirShortcutSelect.addEventListener('keydown', async function(e){
@@ -36,6 +38,7 @@ async function showFileManager(sysDir, projDir){
     var fileListSelect = document.createElement("select");
     fileListSelect.multiple = true;
     fileListSelect.classList.add("file-manager-list");
+    fileListSelect.setAttribute('aria-label', 'Files');
     selectFieldsContainer.appendChild(fileListSelect);
 
     popup.appendChild(document.createElement('br'));
@@ -45,10 +48,12 @@ async function showFileManager(sysDir, projDir){
 
     var newDirNameInLabel = document.createElement('label');
     newDirNameInLabel.innerText = "Name:";
+    newDirNameInLabel.htmlFor = 'new-dir-name-input';
     newDirInputPanel.appendChild(newDirNameInLabel);
 
     var newDirNameInput = document.createElement('input');
     newDirNameInput.type = "text";
+    newDirNameInput.id = 'new-dir-name-input';
     newDirNameInput.addEventListener("keydown", async function(e){
       if(e.key === 'Enter'){
         stopDefaultPropagation(e);
@@ -110,10 +115,12 @@ async function showFileManager(sysDir, projDir){
 
     var renameLabel = document.createElement('label');
     renameLabel.innerText = "New Name:";
+    renameLabel.htmlFor = 'rename-input';
     renamePanel.appendChild(renameLabel);
 
     var renameInput = document.createElement('input');
     renameInput.type = "text";
+    renameInput.id = 'rename-input';
     renameInput.addEventListener("keydown", async function(e){
       if(e.key === "Enter"){
         var selectedFiles = Array.from(fileListSelect.selectedOptions).map(({ value }) => value);

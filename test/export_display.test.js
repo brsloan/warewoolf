@@ -37,6 +37,13 @@ function sysDirectories(){
   return { docs: '/docs', home: '/home' };
 }
 
+//The real user settings object, minus everything this dialog never reads. It saves on submit now
+//(the scene-break box is remembered between exports), so a bare {} would throw where the app does
+//not.
+function makeUserSettings(overrides){
+  return Object.assign({ markSceneBreaks: false, save: function(){} }, overrides);
+}
+
 test.beforeEach(function(){
   const dom = new JSDOM('<!doctype html><html><body>' + bodyShell() + '</body></html>');
   global.window = dom.window;
@@ -58,7 +65,7 @@ test.afterEach(function(){
 //slow export runs) and only close once exportProject's own completion callback fires.
 test('the working indicator and popup stay up until exportProject actually finishes', function(t){
   var project = { title: 'My Novel', chapters: [] };
-  var userSettings = {};
+  var userSettings = makeUserSettings();
 
   var showFileDialog = function(dialogOptions, callback){
     callback('/docs/My Novel');
@@ -116,7 +123,7 @@ test('a nonzero error count from exportProject updates the working status before
     exportProject: function(project, userSettings, options, filepath, cback){ capturedExportCback = cback; }
   });
 
-  showExportOptions({ title: 'My Novel', chapters: [] }, {}, sysDirectories());
+  showExportOptions({ title: 'My Novel', chapters: [] }, makeUserSettings(), sysDirectories());
   document.querySelector('form').onsubmit({ preventDefault: function(){} });
 
   //Mock timers must be enabled before the code under test schedules its setTimeout, or that call
@@ -149,7 +156,7 @@ test('a single export failure is reported in the singular', function(t){
     exportProject: function(project, userSettings, options, filepath, cback){ capturedExportCback = cback; }
   });
 
-  showExportOptions({ title: 'My Novel', chapters: [] }, {}, sysDirectories());
+  showExportOptions({ title: 'My Novel', chapters: [] }, makeUserSettings(), sysDirectories());
   document.querySelector('form').onsubmit({ preventDefault: function(){} });
 
   //Enabled before scheduling (see the previous test) and ticked forward so the real setTimeout
@@ -173,9 +180,59 @@ test('cancelling the directory chooser closes the popup without exporting', func
     exportProject: function(){ exportProjectCalls++; }
   });
 
-  showExportOptions({ title: 'My Novel', chapters: [] }, {}, sysDirectories());
+  showExportOptions({ title: 'My Novel', chapters: [] }, makeUserSettings(), sysDirectories());
   document.querySelector('form').onsubmit({ preventDefault: function(){} });
 
   assert.strictEqual(exportProjectCalls, 0);
   assert.strictEqual(document.querySelector('.popup'), null);
+});
+
+test('the scene-break checkbox starts from the saved setting and is passed to exportProject', function(t){
+  var userSettings = makeUserSettings({ markSceneBreaks: true });
+  var savedCalls = 0;
+  userSettings.save = function(){ savedCalls++; };
+
+  var capturedOptions = null;
+
+  var showExportOptions = freshExportDisplay({
+    showFileDialog: function(dialogOptions, callback){ callback('/docs/My Novel'); },
+    showWorkingAndThen: function(status, cb){ cb(); },
+    hideWorking: function(){},
+    exportProject: function(project, settings, options, filepath, cback){
+      capturedOptions = options;
+      cback(0);
+    }
+  });
+
+  showExportOptions({ title: 'My Novel', chapters: [] }, userSettings, sysDirectories());
+
+  var check = document.getElementById('scene-break-check');
+  var label = document.querySelector('label[for="scene-break-check"]');
+
+  assert.ok(label, 'expected a label pointing at the scene-break checkbox');
+  assert.strictEqual(check.checked, true, 'the box should start from the saved setting');
+
+  document.querySelector('form').onsubmit({ preventDefault: function(){} });
+
+  assert.strictEqual(capturedOptions.markSceneBreaks, true);
+  assert.strictEqual(savedCalls, 1, 'the choice should be remembered for next time');
+});
+
+test('an unticked scene-break box exports without the mark', function(t){
+  var capturedOptions = null;
+
+  var showExportOptions = freshExportDisplay({
+    showFileDialog: function(dialogOptions, callback){ callback('/docs/My Novel'); },
+    showWorkingAndThen: function(status, cb){ cb(); },
+    hideWorking: function(){},
+    exportProject: function(project, settings, options, filepath, cback){
+      capturedOptions = options;
+      cback(0);
+    }
+  });
+
+  showExportOptions({ title: 'My Novel', chapters: [] }, makeUserSettings(), sysDirectories());
+  document.querySelector('form').onsubmit({ preventDefault: function(){} });
+
+  assert.strictEqual(capturedOptions.markSceneBreaks, false);
 });

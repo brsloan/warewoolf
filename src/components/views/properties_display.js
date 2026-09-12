@@ -1,4 +1,4 @@
-const { closePopups, createButton, removeElementsByClass, generateRow } = require('../controllers/utils');
+const { closePopups, createButton, removeElementsByClass, generateRow, describeDialog } = require('../controllers/utils');
 
 function showProperties(project, userSettings){
     removeElementsByClass('popup');
@@ -8,6 +8,7 @@ function showProperties(project, userSettings){
     var popupTitle = document.createElement('h1');
     popupTitle.innerText = 'Project Properties';
     popup.appendChild(popupTitle);
+    describeDialog(popup, popupTitle);
 
     var propForm = document.createElement("form");
 
@@ -102,6 +103,7 @@ function showProperties(project, userSettings){
 
     var pupDirInput = document.createElement('input');
     pupDirInput.type = "text";
+    pupDirInput.setAttribute('aria-label', 'Chapters directory');
     pupDirInput.value = project.chapsDirectory;
     advancedArea.appendChild(pupDirInput);
 

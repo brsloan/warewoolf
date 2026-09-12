@@ -13,9 +13,9 @@ function freshBatteryDisplay(){
   return require(batteryDisplayPath);
 }
 
-//The repo has no jsdom dependency, and battery_display.js only touches createElement,
-//body.appendChild, getElementById, classList and .remove() - so a small hand-rolled stand-in
-//is enough to exercise the real logic without pulling in a new dependency.
+//battery_display.js only touches createElement, body.appendChild, getElementById, classList,
+//setAttribute/getAttribute and .remove() - so a small hand-rolled stand-in is enough to exercise
+//the real logic, and predates the suite's jsdom setup.
 function makeFakeDocument(){
   var elementsById = {};
 
@@ -29,13 +29,15 @@ function makeFakeDocument(){
   }
 
   function makeElement(){
-    var el = { _id: null, classList: makeClassList() };
+    var el = { _id: null, classList: makeClassList(), _attributes: {} };
     Object.defineProperty(el, 'id', {
       get: function(){ return el._id; },
       set: function(v){ el._id = v; elementsById[v] = el; }
     });
     el.appendChild = function(){};
     el.remove = function(){ if(el._id != null) delete elementsById[el._id]; };
+    el.setAttribute = function(name, value){ el._attributes[name] = String(value); };
+    el.getAttribute = function(name){ return name in el._attributes ? el._attributes[name] : null; };
     return el;
   }
 
@@ -69,8 +71,14 @@ test('showBattery renders the battery block with a placeholder before the first 
   showBattery();
 
   const batteryText = document.getElementById('battery-text');
-  assert.ok(document.getElementById('battery-block'), 'battery-block should be added to the document');
+  const batteryBlock = document.getElementById('battery-block');
+  assert.ok(batteryBlock, 'battery-block should be added to the document');
   assert.strictEqual(batteryText.innerText, '--%');
+  //A polite live region, so a screen reader hears each new reading without being interrupted
+  //mid-sentence by it, and knows what the number is a reading of.
+  assert.strictEqual(batteryBlock.getAttribute('role'), 'status');
+  assert.strictEqual(batteryBlock.getAttribute('aria-live'), 'polite');
+  assert.strictEqual(batteryBlock.getAttribute('aria-label'), 'Battery');
 });
 
 test('a numeric reading is shown with the lightning bolt and marks emergency under 10%', function(t){

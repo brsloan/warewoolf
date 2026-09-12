@@ -91,7 +91,11 @@ function escapeBareAmpersands(str){
 //("<3"), or a name written as "<Empire>" - is the other common way real prose breaks XHTML
 //well-formedness (alongside a bare "&", above). Recognise exactly the tag shapes mdfc-to-html.js
 //emits and escape every other "<"/">" as literal text.
-const KNOWN_TAG = /<\/?(?:h[1-4](?: class="(?:center|right|center title)")?|p(?: class="(?:left|right|center|justified)")?|li(?: class="(?:ul|ul ul-two|ul ul-three|ol|ol ol-two|ol ol-three)")?|ul|ol|blockquote|b|i|u|del|sup|div(?: class="footnote" id="fnote_\d+")?|a(?: href="#fnote(?:Ref)?_\d+"(?: id="fnoteRef_\d+")?)?)\s*>|<br\s*\/>/g;
+//A list item or a blockquote can carry an alignment class of its own (mdfc-to-html.js renders one
+//wherever an alignment marker was written in front of the block marker), so both shapes are listed
+//here alongside the aligned <p>. Leaving them off would mean an aligned quote's own tags were
+//escaped as though a writer had typed them, which puts literal "&lt;blockquote&gt;" in the book.
+const KNOWN_TAG = /<\/?(?:h[1-4](?: class="(?:center|right|center title)")?|p(?: class="(?:left|right|center|justified)")?|li(?: class="(?:ul|ul ul-two|ul ul-three|ol|ol ol-two|ol ol-three|left|right|center|justified)")?|ul|ol|blockquote(?: class="(?:left|right|center|justified)")?|b|i|u|del|sup|div(?: class="footnote" id="fnote_\d+")?|a(?: href="#fnote(?:Ref)?_\d+"(?: id="fnoteRef_\d+")?)?)\s*>|<br\s*\/>/g;
 
 function escapeBareAngleBrackets(str){
     str = String(str);
@@ -259,6 +263,8 @@ function getCss(){
       "    } " +
       "    blockquote {" +
       "      white-space: pre-wrap;" +
+      "      margin-top: 0px;" +
+      "      margin-bottom: 0px;" +
       "    }" +
       "    .footnote {" +
       "      text-indent: 1em;" +

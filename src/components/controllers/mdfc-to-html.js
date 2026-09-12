@@ -25,21 +25,27 @@ function convertMdfcToHtml(str){
     let orderedListHtml = /((?:(?:<li|<ol) class="ol.*(?:<\/li>|<\/ol>)\n)+)/g
     let orderedListHtmlLvl2 = /((?:(?:<li|<ol) class="ol (?:ol-two|ol-three).*(?:<\/li>|<\/ol>)\n)+)/g;
     let orderedListHtmlLvl3 = /((?:(?:<li|<ol) class="ol ol-three".*(?:<\/li>|<\/ol>)\n)+)/g;
-    //[^"]* rather than .* so the match stops at the closing quote of the class attribute. A greedy
-    //.* runs on to the last quote on the line, which swallows the item's text whenever it contains
-    //dialogue.
-    let tempClasses = / class="(?:ol|ul)[^"]*"/g;
+    //The ul/ol classes are temporary - they exist only so the whole-list detection above can tell
+    //ordered items from unordered ones - but an alignment class written alongside them is not, so the
+    //grouping tokens are named exactly and any alignment that follows them is handed back to the
+    //replacement to keep. Spelling the tokens out also stops the match at the closing quote of the
+    //class attribute; a greedy .* ran on to the last quote on the line, which swallowed the item's
+    //text whenever it contained dialogue.
+    let tempClasses = / class="(?:ul|ol)(?: (?:ul|ol)-(?:two|three))?(?: (left|right|center|justified))?"/g;
 
-    let listUnordered = /^(?:-|\*|\+) (.*)/gm; 
-    let listUnorderedTwo = /^(\t)(?:-|\*|\+) (.*)/gm;
-    let listUnorderedThreePlus = /^(\t){2,}(?:-|\*|\+) (.*)/gm;
-    let listOrdered = /^((?:\d+|[a-z])\.) (.*)/gm;
-    let listOrderedTwo = /^(\t)((?:\d+|[a-z])\.) (.*)/gm;
-    let listOrderedThreePlus = /^(\t){2,}((?:\d+|[a-z])\.) (.*)/gm;
+    //An alignment marker is the outermost thing on a line and combines with the block marker after
+    //it (see parseLine in markdownFic.js), so every list and blockquote shape below reads an optional
+    //one off the front and renders it as the same class the aligned <p> shapes use.
+    let listUnordered = /^(?:\[>([lrcj])\] )?(?:-|\*|\+) (.*)/gm;
+    let listUnorderedTwo = /^(?:\[>([lrcj])\] )?(\t)(?:-|\*|\+) (.*)/gm;
+    let listUnorderedThreePlus = /^(?:\[>([lrcj])\] )?(\t){2,}(?:-|\*|\+) (.*)/gm;
+    let listOrdered = /^(?:\[>([lrcj])\] )?((?:\d+|[a-z])\.) (.*)/gm;
+    let listOrderedTwo = /^(?:\[>([lrcj])\] )?(\t)((?:\d+|[a-z])\.) (.*)/gm;
+    let listOrderedThreePlus = /^(?:\[>([lrcj])\] )?(\t){2,}((?:\d+|[a-z])\.) (.*)/gm;
     //(.*) rather than (.+), matching the header/alignment markers above, so a bare ">" marker with
     //no text after it (a blank blockquote line) produces an empty element instead of either leaking
     //the literal ">" into the output or capturing a stray space as its content.
-    let blockquote = /^>+ ?(.*)/gm;
+    let blockquote = /^(?:\[>([lrcj])\] )?>+ ?(.*)/gm;
     let alignLeft = /^\[>l] (.*)/gm;
     let alignRight = /^\[>r] (.*)/gm;
     let alignCenter = /^\[>c] (.*)/gm;
@@ -53,13 +59,13 @@ function convertMdfcToHtml(str){
   
 
     //Assign class to assist in discriminating between ordered and UL list items in whole list detection
-    str = str.replace(listUnorderedThreePlus, '<li class="ul ul-three">$2</li>');
-    str = str.replace(listUnorderedTwo, '<li class="ul ul-two">$2</li>');
-    str = str.replace(listUnordered, '<li class="ul">$1</li>');
-    str = str.replace(listOrderedThreePlus, '<li class="ol ol-three">$3</li>');
-    str = str.replace(listOrderedTwo, '<li class="ol ol-two">$3</li>');
-    str = str.replace(listOrdered, '<li class="ol">$2</li>');
-    
+    str = str.replace(listUnorderedThreePlus, function(match, align, tab, text){ return listItem('ul ul-three', align, text); });
+    str = str.replace(listUnorderedTwo, function(match, align, tab, text){ return listItem('ul ul-two', align, text); });
+    str = str.replace(listUnordered, function(match, align, text){ return listItem('ul', align, text); });
+    str = str.replace(listOrderedThreePlus, function(match, align, tab, marker, text){ return listItem('ol ol-three', align, text); });
+    str = str.replace(listOrderedTwo, function(match, align, tab, marker, text){ return listItem('ol ol-two', align, text); });
+    str = str.replace(listOrdered, function(match, align, marker, text){ return listItem('ol', align, text); });
+
 
     str = str.replace(centeredHeader1, '<h1 class="center">$1</h1>');
     str = str.replace(centeredHeader2, '<h2 class="center">$1</h2>');
@@ -73,11 +79,15 @@ function convertMdfcToHtml(str){
     str = str.replace(header2, '<h2>$1</h2>');
     str = str.replace(header3, '<h3>$1</h3>');
     str = str.replace(header4, '<h4>$1</h4>');
+    //Ahead of the four alignment-only shapes below, which would otherwise claim an aligned quote
+    //("[>c] > Quoted") for a centered <p> whose text began with a stray ">".
+    str = str.replace(blockquote, function(match, align, text){
+      return '<blockquote' + alignClass(align) + '>' + text + '</blockquote>';
+    });
     str = str.replace(alignLeft, '<p class="left">$1</p>');
     str = str.replace(alignRight, '<p class="right">$1</p>');
     str = str.replace(alignCenter, '<p class="center">$1</p>');
     str = str.replace(alignJustified, '<p class="justified">$1</p>');
-    str = str.replace(blockquote, '<blockquote>$1</blockquote>');
     str = str.replace(normal, '<p>$1</p>');
     str = str.replace(blankLines, '\n<br/>\n');
 
@@ -89,27 +99,62 @@ function convertMdfcToHtml(str){
     str = str.replace(orderedListHtmlLvl2, '<ol>$1</ol>\n');
     str = str.replace(orderedListHtmlLvl3, '<ol>$1</ol>\n');
 
-    //Clean up temp classes used for grouping lists
-    str = str.replace(tempClasses, '');
+    //Clean up temp classes used for grouping lists, keeping any alignment class written with them
+    str = str.replace(tempClasses, function(match, align){
+      return align ? ' class="' + align + '"' : '';
+    });
 
   
+    //Heading, alignment/blockquote and list escapes, stripped here rather than by tokenizeInline
+    //below: consumeEscape (markdownFic.js) only reads those three at the start of the text it is
+    //handed, and by this point in the conversion the start of a line has become the start of an
+    //element's text, which is not where tokenizeInline is looking. An escape only means anything
+    //where the marker itself would have been read - "a \> b" is a backslash followed by a
+    //greater-than sign, not an escaped quotation marker - so element start is where these are
+    //honoured, and a list marker after indent as well, since LIST_MARKER reads one there.
+    //
+    //Ahead of convertInlineStyles, not after it, because an escaped backslash ("\\", the writer's
+    //own backslash where the reader would otherwise take it for an escape) is one of the sequences
+    //tokenizeInline unwraps. Running that first would turn "\\#head" into "\#head" and leave this
+    //pass unable to tell it from an escaped heading marker, stripping a backslash the writer typed.
+    //A real "\\" in front of one of these markers fails to match here for the same reason
+    //consumeEscape passes it over: the character after the backslash is another backslash.
+    const elementStart = '(<(?:p|h[1-4]|li|blockquote)(?:\\s[^>]*)?>';
+
+    let escapedBlockMarkers = new RegExp(elementStart + ')\\\\(#|\\[>|>)', 'g');
+    str = str.replace(escapedBlockMarkers, '$1$2');
+
+    let escapedListMarkers = new RegExp(elementStart + '[\\t ]*)\\\\(-|\\+|(?:\\d+|[a-z])\\. )', 'g');
+    str = str.replace(escapedListMarkers, '$1$2');
+
     //Bold/italic/underline/strike share tokenizeInline with the MDF writer (markdownFic.js) rather
     //than being matched as four independent regexes. Independent regexes can't correctly handle
     //markers nested inside a *different* style that reuses the same character (e.g. italic inside
     //bold, since both use "*"): the outer marker's exclusion class can't span the inner marker, so
     //the whole outer span fails to match and its asterisks leak into the output as literal text.
+    //It takes the remaining escapes off as it goes - \**, \*, \~~, \__, \[^ and \\.
     str = convertInlineStyles(str);
 
-    //Bold/italic/underline/strike escapes (\**, \*, \~~, \__) are already stripped by
-    //convertInlineStyles above, via tokenizeInline. This handles what's left: headings, alignment/
-    //blockquote markers, footnote refs, and list markers. List markers are in this set to match
-    //markdownFic.js - without them a line of prose that happens to open with "- " or "1984. " keeps
-    //the backslash it was escaped with.
-    let escapedMarkers = /\\(#|\[>|>|\[\^|-|\+|(?:\d+|[a-z])\. )/g;
-    str = str.replace(escapedMarkers, '$1');
-  
     return str;
   }
+
+//The class each alignment marker renders as. "justified" rather than "justify" because that is the
+//class the aligned <p> shapes have always used, and the stylesheets are written against it.
+const ALIGN_CLASSES = { l: 'left', r: 'right', c: 'center', j: 'justified' };
+
+//`marker` is the letter captured from an optional "[>x] " prefix, and is undefined when the line
+//carried no alignment - in which case the element gets no class attribute at all, exactly as before.
+function alignClass(marker){
+  return marker ? ' class="' + ALIGN_CLASSES[marker] + '"' : '';
+}
+
+//A list item's alignment rides along in the same class attribute as the temporary ul/ol grouping
+//token, since an element gets only one. tempClasses strips the grouping half back off once the
+//whole-list detection has run, leaving the alignment behind.
+function listItem(groupingClasses, alignMarker, text){
+  var alignment = alignMarker ? ' ' + ALIGN_CLASSES[alignMarker] : '';
+  return '<li class="' + groupingClasses + alignment + '">' + text + '</li>';
+}
 
 const INLINE_STYLE_TAGS = { bold: 'b', italic: 'i', underline: 'u', strike: 'del' };
 const INLINE_STYLE_ORDER = ['bold', 'italic', 'underline', 'strike'];
@@ -166,9 +211,24 @@ function convertInlineStyles(str){
   return out;
 }
 
+//A backslash before the marker escapes it, the same as anywhere else a marker is read - and a
+//footnote reference is read anywhere in a line, so its escape is honoured anywhere (consumeEscape
+//in markdownFic.js). Without the guard the marker was converted regardless, so "\[^1]" typed as
+//prose came out as a real footnote link with the backslash still sitting in front of it, while the
+//editor showed the literal "[^1]" it was written to mean.
+//
+//The escaped marker is left as it stands. convertInlineStyles runs tokenizeInline over the result
+//further down, and that takes the backslash off, exactly as it does for an escaped "*" or "~~".
 function convertFootnoteReferences(text){
-    const footnoteRefMarker = /\[\^(\d+)\]/gm;
-    text = text.replace(footnoteRefMarker, '<sup><a href="#fnote_$1" id="fnoteRef_$1">$1</a></sup>');
+    const footnoteRefMarker = /(\\)?\[\^(\d+)\]/gm;
+
+    text = text.replace(footnoteRefMarker, function(match, escape, number){
+      if(escape)
+        return match;
+
+      return '<sup><a href="#fnote_' + number + '" id="fnoteRef_' + number + '">' + number + '</a></sup>';
+    });
+
     return text;
 }
 
@@ -268,6 +328,8 @@ function convertMdfcToHtmlPage(text, title, author = null, insertTitle = false){
       "    } " +
       "    blockquote {" +
       "      white-space: pre-wrap;" +
+      "      margin-top: 0px;" +
+      "      margin-bottom: 0px;" +
       "    }" +
       "    .footnote {" +
       "      text-indent: 1em;" +

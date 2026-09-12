@@ -6,8 +6,8 @@ before Phase 4, for groups D/E/I before Phase 5, for groups F/G/H before
 Phase 6, and for group J before Phase 7.
 
 **Phase 1 has since turned this into executable form.**
-`src/components/controllers/platform.js` is now the authoritative contract — 65
-commands and 36 events, with the shapes below — and this document is its prose
+`src/components/controllers/platform.js` is now the authoritative contract — 72
+commands and 40 events, with the shapes below — and this document is its prose
 companion. Where the two disagree, the file wins; the three places they disagreed
 at the end of Phase 1 are corrected here and marked **(corrected in Phase 1)**,
 the two Phase 4 found in group B are marked **(corrected in Phase 4)**, the one
@@ -399,6 +399,7 @@ itself is verified by mutation: removing its `fs.existsSync` check in
 | `readTextFile(path)` | `import.js:94`, `:156` (already async — these ported cheaply) |
 | `extractZip(zipPath, destPath?)` → `{ path }` | `file-manager.js:200-224` (`unzipper`) — line references drifted from the `:158-168` this table originally cited; the function (`unzipProject`) had moved and grown by the time Phase 5 deferred it |
 | `importDocx(path)` → `{ documentXml, footnotesXml }` | `docx-import.js:8`, `:22`, `:30-38` (`tempUnzipDocx`) |
+| `importEpub(path)` → `{ entries: { [path]: string } }` | new in the HTML/EPUB import work — nothing to replace |
 
 `unzipper` is Node-stream-only and has no browser path; under Tauri it becomes
 the `zip` crate. `importDocx` returns the XML *text*, not a temp directory — the
@@ -415,6 +416,39 @@ parameter of `docx-import.js`'s `importDocx()` at all — the native command own
 picking a temp location start to finish, which is what "the unzip destination
 must not leak across the boundary" means in practice, not just "don't return a
 path in the response object."
+
+**`importEpub` extracts nothing at all**, which is the one place it departs from
+`importDocx` rather than copying it. `unzipper.Open` reads the archive's central
+directory and pulls one entry's bytes at a time, so there is no temp directory to
+own, clean up, or leave behind if the process dies mid-import — and a hostile
+entry name (`../../..`) cannot write anywhere, because nothing is written.
+`importDocx` predates that approach and could be simplified the same way; it is
+left alone because its `finally{ cleanup(); }` is tested and working, and
+rewriting a shipped import path buys nothing a writer would notice.
+
+Two decisions the return shape encodes:
+
+- **Text entries only** — `xhtml/html/htm/xml/opf/ncx/css/txt`, plus the
+  extensionless `mimetype`. Selection is by extension rather than by the OPF's
+  declared media types, because the manifest is one of the things being read and
+  so cannot be consulted to decide what to read. This is the enforcement point
+  for "images are stripped": a cover jpeg is skipped before its bytes are ever
+  touched and cannot reach the renderer to be stripped later. `html-import.js`
+  dropping `<img>` is the second line of the same defence, for markup naming a
+  picture the archive no longer carries.
+- **Stylesheets are included, not just markup.** An epub *links* its CSS
+  (`<link rel="stylesheet" href="0.css">`) rather than inlining a `<style>`
+  block — every chapter of all three sample books in `test/fixtures/books`
+  does — so dropping `.css` here would mean every class-driven italic in the book
+  resolves to nothing on the renderer side, which is the exact failure
+  `html-import.js`'s style resolver exists to prevent.
+
+It does **not** check that the archive is a valid epub. "Has a container.xml
+naming a readable OPF" is format knowledge; the renderer reads those parts
+anyway, and a check here would be a second, worse copy of one that could only
+report failure less precisely. Same call as `loadCorkboard` (Phase 5) and
+`importDocx` (Phase 6): the boundary moves bytes, the webview knows what they
+mean.
 
 ---
 
@@ -488,13 +522,42 @@ callback-style signature and now delegates to the native command internally.
 
 ## I. Spellcheck
 
-`nspell` is pure JS and stays in the webview. Only dictionary loading crosses.
+`nspell` is pure JS and stays in the webview. Only dictionary loading and file
+handling crosses.
 
 | Command | Replaces |
 |---|---|
-| `loadDictionary()` → `{ aff, dic }` | `spellcheck.js:19-20` |
+| `loadDictionaries(ids)` → `{ id, aff, dic }[]` | `loadDictionary()` (Phase 9, this table's original entry); `spellcheck.js:19-20` |
+| `listDictionaries()` → `{ id, source, removable }[]` | new — the Dictionaries dialog's checklist |
+| `readDictionaryFiles(dicPath, affPath?)` → `{ id, aff, dic }` | new — import's validate step |
+| `importDictionary(id, aff, dic)` | new — import's commit step |
+| `removeDictionary(id)` | new |
 | `loadPersonalDictionary()` → `string[]` | `spellcheck.js:22`, `:93` |
 | `savePersonalDictionary(words)` | `spellcheck.js:105`; folds in the bootstrap at `:38-44` |
+
+**`loadDictionary` became `loadDictionaries(ids)`.** A writer may now select more
+than one dictionary at once — nspell's own multi-dictionary support only honors
+the first entry's `.aff`, so `spellcheck.js` builds one nspell instance per
+selected id instead (see its own header comment). One round trip fetches every
+selected pair. An `ids` that resolves to nothing on disk — empty, absent, or
+every entry missing — falls back to the shared default rather than leaving
+spellcheck broken.
+
+**`listDictionaries`/`readDictionaryFiles`/`importDictionary`/`removeDictionary`
+back the Dictionaries dialog's import flow.** A dictionary is a `.aff`/`.dic`
+pair sharing a basename, which is its id; bundled pairs live under
+`paths.app/dictionaries`, imported ones under `paths.userData/dictionaries`
+alongside `personal.dic` (excluded from every listing by the pairing rule
+alone — it has no `.aff`). `readDictionaryFiles` is the one piece of this that
+is native by necessity rather than convenience: Hunspell `.aff` files declare
+their own encoding on a `SET` line, and `readTextFile` (group F) decodes as
+UTF-8 unconditionally, which would mangle a non-UTF-8 dictionary into mojibake
+that nspell would still accept as valid. It reads bytes, decodes per the `SET`
+line, and returns UTF-8 strings with that line rewritten to say so.
+`importDictionary` only ever writes what `readDictionaryFiles` plus a
+renderer-side nspell parse have already validated, and refuses a colliding id
+rather than shadowing it. `removeDictionary` refuses anything under `paths.app`
+with `INVALID_ARGUMENT` — bundled dictionaries are not the writer's to delete.
 
 ---
 
@@ -607,6 +670,7 @@ phase's own work, the first time that was true since Phase 1 itself.
 | `checkForUpdate()` | `https.request` (`updates.js:40`) | `tauri-plugin-updater`, or `reqwest` |
 | `downloadUpdate(url)` | `updates.js:185-252` | same |
 | `installUpdate(path, password)` | `spawn('sudo', ['-S','apt','install'])` (`updates.js:259`) | same |
+| `startSquirrelUpdate(tag)` / `quitAndInstallUpdate()` | Electron's built-in `autoUpdater`, driven from `index.js` (the Windows in-app update plan) | no Tauri target — Squirrel.Windows is an Electron-era mechanism; a Tauri port would use `tauri-plugin-updater`'s own Windows path instead |
 | `sendEmail({service, sender, secret, receiver, attachments})` | `nodemailer` (`email-doc.js:190`) | `lettre` |
 | `wifiListNetworks()` / `wifiConnect(ssid, psk)` / `wifiGetAddress()` | `nmcli` and `hostname -I` spawns (`wifi-manager.js:13,62,91`) | `Command` or D-Bus |
 | `wifiGetConnectionState()` / `wifiGetStatus()` / `wifiEnable()` / `wifiDisable()` | `nmcli` spawns kept in `wifi-manager.js` itself until now (`getConnectionState`/`getWifiStatus`/`disableWifi`/`enableWifi`) — added after Phase 8, closing the gap that phase recorded rather than converted | `Command` or D-Bus, same as the three above |
@@ -819,6 +883,28 @@ shape here; the cancellation itself is mutation-tested in
 `isCurrent()` check or the one right after its `await` fails a test written
 for exactly that line, and nothing else.
 
+**`startSquirrelUpdate(tag)` / `quitAndInstallUpdate()` are Windows' own
+counterpart to `downloadUpdate`/`installUpdate`, added by the Windows in-app
+update plan rather than by Phase 8.** Squirrel.Windows applies an update in
+place through `Update.exe`, already installed beside the app, so there is no
+installer for the writer to run and no privileged process for this backing to
+spawn — only Electron's built-in `autoUpdater` to drive, which is a
+main-process API and lives in `index.js` alongside `nativeTheme`/the
+application menu/`app.quit()` rather than in `platform-node.js` itself, the
+same split group A already draws. `startSquirrelUpdate` takes `tag`, not a
+URL, for the same reason `downloadUpdate` takes only `url` and not the
+`destPath` the Phase 9c correction above removed: the renderer already has the
+tag from `checkForUpdate`'s own response, and the backing composes the
+Squirrel feed URL from it against the same `RELEASE_ASSET_HOSTNAME`/
+`RELEASE_ASSET_PATH_PREFIX` constants `downloadUpdate`'s allowlist is spelled
+from, so the two cannot drift apart. Both commands reject `UNAVAILABLE` off
+win32 — the same distinction `getBatteryCapacity` below draws for "the
+facility itself is absent" — and `startSquirrelUpdate` resolves as soon as the
+check is *started*, not once an update is ready: Squirrel's own download has
+no synchronous completion for this call to await and no progress to report, so
+the outcome arrives later as one of two new events, `app-update-downloaded` or
+`app-update-failed` (carrying a message string).
+
 `getBatteryCapacity()` folds `battery-monitor.js`'s old two-step
 `getBatteryName()` + `queryKernel()` into one native call, and both functions
 — along with `getBatteryPercent` — are gone from that file entirely; nothing
@@ -837,15 +923,27 @@ but not the ordinary absence of `nmcli`/a battery off a Pi.
 
 ## Summary
 
-**65 commands and 36 events**, as declared in `platform.js`. This document
+**72 commands and 40 events**, as declared in `platform.js`. This document
 originally estimated "~47" from its own tables; the real count came out of writing
 the contract down, mostly from group J growing and from load/save pairs listed on
-one row being two commands each. Per group: A 7, B 5, C 6, D 8, E 7, F 3, G 4,
-H 3, I 3, J 7, K 12. K grew from 8 to 12 after Phase 8 shipped, closing the
+one row being two commands each. Per group: A 7, B 5, C 6, D 8, E 7, F 4, G 4,
+H 3, I 7, J 7, K 14.
+
+This tally read "65 commands and 36 events" until the HTML/EPUB import work, and
+was stale by two features rather than one: group I grew from 3 to 7 when the
+Dictionaries tool landed (`listDictionaries`, `readDictionaryFiles`,
+`importDictionary`, `removeDictionary`), and group F from 3 to 4 with
+`importEpub`. `platform.js` is the authority and the suite pins the total in three
+places — `test/preload.test.js`, `test/platform-host.test.js` and
+`test/platform-ipc.test.js` all assert it — so the count here is prose that can
+drift and those are what actually catch a missed registration. K grew from 8 to 12 after Phase 8 shipped, closing the
 `wifi-manager.js` gap that phase's own write-up recorded rather than converted
 (`wifiGetConnectionState`, `wifiGetStatus`, `wifiEnable`, `wifiDisable`) —
 recorded in group K above, not folded into the Phase 8 write-up itself since it
-was done as a separate step ahead of Phase 9.
+was done as a separate step ahead of Phase 9. It grew again, from 12 to 14, with
+the Windows in-app update pair below (`startSquirrelUpdate`, `quitAndInstallUpdate`),
+and the same two events they added (`app-update-downloaded`, `app-update-failed`)
+took EVENTS from 38 to 40.
 
 By disposition:
 

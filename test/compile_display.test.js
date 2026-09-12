@@ -25,6 +25,7 @@ function makeUserSettings(overrides){
     compileChapMark: '***',
     compileInsertHeaders: false,
     compileGenTitlePage: true,
+    markSceneBreaks: false,
     save: function(){}
   }, overrides);
 }
@@ -149,4 +150,67 @@ test('the title-page checkbox is linked to its label via matching id/htmlFor', f
   var linkedCheckbox = document.getElementById(titlePageLabel.htmlFor);
   assert.ok(linkedCheckbox, 'label htmlFor should point at an existing element');
   assert.strictEqual(linkedCheckbox.type, 'checkbox');
+});
+
+test('the scene-break checkbox is linked to its label via matching id/htmlFor', function(t){
+  var showCompileOptions = freshCompileDisplay({
+    showFileDialog: function(){},
+    showWorking: function(){},
+    hideWorking: function(){},
+    compileProject: function(){}
+  });
+
+  showCompileOptions({ title: 'My Novel', chapters: [] }, { docs: '/docs', home: '/home' }, makeUserSettings());
+
+  var check = document.getElementById('scene-break-check');
+  var label = document.querySelector('label[for="scene-break-check"]');
+
+  assert.ok(check, 'expected a scene-break checkbox');
+  assert.ok(label, 'expected a label pointing at the scene-break checkbox');
+});
+
+test('the scene-break checkbox starts from the saved setting and is passed to compileProject', function(t){
+  var userSettings = makeUserSettings({ markSceneBreaks: true });
+  var savedCalls = 0;
+  userSettings.save = function(){ savedCalls++; };
+
+  var capturedOptions = null;
+
+  var showCompileOptions = freshCompileDisplay({
+    showFileDialog: function(dialogOptions, callback){ callback('/docs/My Novel.docx'); },
+    showWorking: function(){},
+    hideWorking: function(){},
+    compileProject: function(project, settings, options, filepath, cback){
+      capturedOptions = options;
+      cback();
+    }
+  });
+
+  showCompileOptions({ title: 'My Novel', chapters: [] }, { docs: '/docs', home: '/home' }, userSettings);
+
+  assert.strictEqual(document.getElementById('scene-break-check').checked, true, 'the box should start from the saved setting');
+
+  document.querySelector('form').onsubmit({ preventDefault: function(){} });
+
+  assert.strictEqual(capturedOptions.markSceneBreaks, true);
+  assert.strictEqual(savedCalls, 1, 'the choice should be remembered for next time');
+});
+
+//The mark is not alignment-only formatting: it puts a character into the text, so it applies to
+//every format, including the plain ones that have no way to center it.
+test('the scene-break checkbox is not disabled for the plain-text formats', function(t){
+  var showCompileOptions = freshCompileDisplay({
+    showFileDialog: function(){},
+    showWorking: function(){},
+    hideWorking: function(){},
+    compileProject: function(){}
+  });
+
+  showCompileOptions({ title: 'My Novel', chapters: [] }, { docs: '/docs', home: '/home' }, makeUserSettings({ compileType: '.txt' }));
+
+  var typeSelect = document.getElementById('filetype-select');
+  typeSelect.value = '.txt';
+  typeSelect.onchange();
+
+  assert.strictEqual(document.getElementById('scene-break-check').disabled, false);
 });

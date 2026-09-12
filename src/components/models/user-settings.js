@@ -1,4 +1,20 @@
 const { logError } = require('../controllers/error-log');
+const { sanitizeOverrides } = require('./shortcuts');
+const { sanitizeAutocorrect } = require('./autocorrect');
+const { sanitizeFontId, DEFAULT_FONT_ID, DEFAULT_SIDEBAR_FONT_ID } = require('./fonts');
+const { sanitizeLineHeightId, DEFAULT_LINE_HEIGHT_ID } = require('./line-heights');
+
+//Unlike sanitizeOverrides/sanitizeAutocorrect, there is no fixed id list to check entries against -
+//a valid id is whatever listDictionaries() (group I) finds on disk, which this module has no way to
+//ask. So this only enforces the shape (an array of non-empty strings) and leaves an id that no
+//longer exists to loadDictionaries' own skip-and-fall-back behavior rather than trying to catch it
+//here.
+function sanitizeDictionaryIds(raw){
+  if(!Array.isArray(raw))
+    return [];
+
+  return raw.filter(function(id){ return typeof id === 'string' && id !== ''; });
+}
 
 //Set once by render.js's loadPlatformState(), the same instance error-log.js uses. As of Phase 9a
 //that is the ipc-backed one: loadUserSettings()/saveUserSettings() were plain fs reachable straight
@@ -14,6 +30,14 @@ function setPlatform(p){
 //value survives), and a key that isn't listed here - including save/load/getSettingsFilepath - can
 //never be copied onto the live object. senderPass holds an {iv, content} blob before migration (see
 //credential-store.js migrateLegacyPassword) and is null afterward, hence the 'object' type.
+//
+//A field may also carry a `sanitize` function, for the cases a type name cannot describe:
+//keyboardShortcuts and autocorrect are maps whose every entry has to be checked in its own right,
+//since `object` would wave through an array, or a map of bindings no key could ever produce. Where
+//one is given it replaces the type check entirely and its return value is what lands on the object,
+//so it must be total - shortcuts.js's sanitizeOverrides and autocorrect.js's sanitizeAutocorrect
+//both answer with {} (meaning "all defaults") for anything they cannot make sense of, rather than
+//throwing or handing back a partial map.
 const SETTINGS_SCHEMA = {
   editorWidth: { type: 'number' },
   fontSize: { type: 'number' },
@@ -32,13 +56,25 @@ const SETTINGS_SCHEMA = {
   compileChapMark: { type: 'string' },
   compileInsertHeaders: { type: 'boolean' },
   compileGenTitlePage: { type: 'boolean' },
+  markSceneBreaks: { type: 'boolean' },
   backupDirectory: { type: 'string', nullable: true },
   autoBackup: { type: 'boolean' },
   backupsToKeep: { type: 'number' },
   autosaveIntMinutes: { type: 'number' },
   darkMode: { type: 'string' },
   showBattery: { type: 'boolean' },
-  displayChapNotes: { type: 'boolean' }
+  displayChapNotes: { type: 'boolean' },
+  keyboardShortcuts: { type: 'object', sanitize: sanitizeOverrides },
+  autocorrectEnabled: { type: 'boolean' },
+  autocorrect: { type: 'object', sanitize: sanitizeAutocorrect },
+  spellcheckDictionaries: { type: 'object', sanitize: sanitizeDictionaryIds },
+  wordsPerPage: { type: 'number' },
+  editorFont: { type: 'string', sanitize: sanitizeFontId },
+  //Its own sanitizer rather than sanitizeFontId itself, because the sidebars' default is not the
+  //manuscript's: an unreadable id here has to land on Sans, the face a fresh install's sidebars are
+  //drawn in, not on the serif the manuscript falls back to.
+  sidebarFont: { type: 'string', sanitize: function(raw){ return sanitizeFontId(raw, DEFAULT_SIDEBAR_FONT_ID); } },
+  editorLineHeight: { type: 'string', sanitize: sanitizeLineHeightId }
 };
 
 function getUserSettings(userSettingsFilepath){
@@ -60,6 +96,10 @@ function getUserSettings(userSettingsFilepath){
     compileChapMark: '',
     compileInsertHeaders: false,
     compileGenTitlePage: true,
+    //Shared by Compile and Export rather than named after either, since it is the same manuscript
+    //convention whichever way the book leaves WareWoolf - a writer who marks their scene breaks
+    //wants them marked in both. Off by default: a hash on a blank line is a change to the text.
+    markSceneBreaks: false,
     backupDirectory: null,
     autoBackup: true,
     backupsToKeep: 10,
@@ -67,6 +107,40 @@ function getUserSettings(userSettingsFilepath){
     darkMode: 'system',
     showBattery: false,
     displayChapNotes: true,
+    //Only the shortcuts a writer has actually changed, keyed by the action ids in shortcuts.js -
+    //never the whole map. An action missing from here is on its default, which is what lets a
+    //default changed in a later version reach a writer who never touched that shortcut.
+    keyboardShortcuts: {},
+    //The master switch for the editors' automatic substitutions - smart quotes, em dashes and the
+    //rest. On by default: a writer who wants none of it turns this off once rather than clearing
+    //every rule.
+    autocorrectEnabled: true,
+    //And, exactly like keyboardShortcuts above, only the individual rules a writer has actually
+    //changed, keyed by the ids in autocorrect.js. A rule missing from here is on its default.
+    autocorrect: {},
+    //Ids of the dictionaries a writer ticked in the Dictionaries dialog. Empty means "whatever the
+    //app ships as default" - see loadDictionaries' own fallback (platform.js, group I) - so a writer
+    //who never opens that dialog keeps working after an update that changes the bundled default.
+    spellcheckDictionaries: [],
+    //The divisor behind the Word Count dialog's page estimates. A writer's own manuscript format
+    //decides this - 300 is the standard double-spaced manuscript page - so it lives here rather
+    //than on the project, and follows the writer from one book to the next.
+    wordsPerPage: 300,
+    //Which of fonts.js's typefaces the manuscript and the sidebars are drawn in, by id. The
+    //manuscript starts on DEFAULT_FONT_ID, the face WareWoolf drew everything in before either of
+    //these existed, so the page a writer is actually reading looks exactly as it did. The sidebars
+    //start on Sans instead - see DEFAULT_SIDEBAR_FONT_ID in fonts.js - since a chapter list is
+    //glanced down rather than read. Both are stored as an id rather than a font-family string so
+    //that user-settings.json can never put arbitrary css into a declaration, and so that a later
+    //version may improve a stack's fallbacks for everyone.
+    editorFont: DEFAULT_FONT_ID,
+    sidebarFont: DEFAULT_SIDEBAR_FONT_ID,
+    //How far apart the manuscript's lines are set, by id - see models/line-heights.js. Only the
+    //manuscript: the chapter list and the notes are columns to glance down rather than prose to
+    //read, and they stay on the spacing index.css gives them. Starts on DEFAULT_LINE_HEIGHT_ID,
+    //which is the double spacing the editor was already drawn at, and is stored as an id for the
+    //same reasons the two font settings above are.
+    editorLineHeight: DEFAULT_LINE_HEIGHT_ID,
     save: save,
     load: load,
     getSettingsFilepath: getSettingsFilepath
@@ -97,11 +171,18 @@ function getUserSettings(userSettingsFilepath){
   //The schema is already the list of what may be persisted (see the note on it above: a key not
   //named there can never be copied back onto the live object on load), so this sends exactly that
   //and nothing else - which is also what makes the payload data rather than a live model object.
+  //A sanitized field is sanitized on the way out as well as in. Not defensiveness for its own
+  //sake: this payload has to survive a structured clone, and one unexpected value in
+  //keyboardShortcuts (a function, most obviously) would reject the save of every OTHER setting
+  //alongside it. The sanitizer only ever returns plain data, so running it here means that
+  //cannot happen whatever a caller has left on the live object.
   function persistableSettings(){
     var persistable = {};
 
     Object.keys(SETTINGS_SCHEMA).forEach(function(key){
-      persistable[key] = settings[key];
+      var schema = SETTINGS_SCHEMA[key];
+
+      persistable[key] = schema.sanitize ? schema.sanitize(settings[key]) : settings[key];
     });
 
     return persistable;
@@ -139,6 +220,14 @@ function getUserSettings(userSettingsFilepath){
         return;
       }
 
+      //A field with its own sanitizer is checked entry by entry rather than by type, and takes
+      //whatever that returns - including for a value the type check would have rejected outright,
+      //since the sanitizer's answer for those (an empty map) is the meaningful one.
+      if(schema.sanitize){
+        settings[key] = schema.sanitize(value);
+        return;
+      }
+
       if(typeof value === schema.type)
         settings[key] = value;
     });
@@ -152,3 +241,4 @@ function getUserSettings(userSettingsFilepath){
 
 module.exports = getUserSettings;
 module.exports.setPlatform = setPlatform;
+module.exports.sanitizeDictionaryIds = sanitizeDictionaryIds;

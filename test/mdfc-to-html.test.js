@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const { convertMdfcToHtml } = require('../src/components/controllers/mdfc-to-html');
+const { convertMdfcToHtml, convertMdfcToHtmlPage } = require('../src/components/controllers/mdfc-to-html');
 
 test('headings convert at every level', function(){
   assert.strictEqual(
@@ -86,6 +86,35 @@ test('escaped markers lose their backslash and stay out of their markup', functi
   assert.strictEqual(convertMdfcToHtml('\\+ not a list\n'), '<p>+ not a list</p>\n');
   assert.strictEqual(convertMdfcToHtml('\\1984. A year\n'), '<p>1984. A year</p>\n');
   assert.strictEqual(convertMdfcToHtml('\\# not a heading\n'), '<p># not a heading</p>\n');
+});
+
+//The other half of that rule, and the half the editor now agrees with: an escape means something
+//only where the marker would have been read, so a backslash mid-sentence is a backslash and has to
+//survive into the export exactly as it survives into the editor.
+test('a backslash mid-sentence is not read as an escape', function(){
+  assert.strictEqual(convertMdfcToHtml('Use File \\> Dictionaries.\n'), '<p>Use File \\> Dictionaries.</p>\n');
+  assert.strictEqual(convertMdfcToHtml('The C\\# language.\n'), '<p>The C\\# language.</p>\n');
+  assert.strictEqual(convertMdfcToHtml('An \\[>c] marker.\n'), '<p>An \\[>c] marker.</p>\n');
+});
+
+//A heading and a quotation are read with no tolerance for indent, so there is no marker to escape
+//behind one. A list marker is read after indent, so there is.
+test('indent puts a backslash at a list marker\'s position but not a heading\'s', function(){
+  assert.strictEqual(convertMdfcToHtml('\t\\> not an escape\n'), '<p>\t\\> not an escape</p>\n');
+  assert.strictEqual(convertMdfcToHtml('\t\\- an escaped dash\n'), '<p>\t- an escaped dash</p>\n');
+});
+
+//parseLine strips an alignment marker before it looks for a heading, so the escape is still at a
+//marker's position behind one.
+test('an escape behind an alignment marker is still honoured', function(){
+  assert.strictEqual(convertMdfcToHtml('[>c] \\# not a heading\n'), '<p class="center"># not a heading</p>\n');
+});
+
+//A heading's or a quotation's own text starts where parseLine has finished reading markers, so an
+//escape there is honoured too - which in the converted HTML is the start of the element's text.
+test('an escape at the start of a heading or quotation text is honoured', function(){
+  assert.strictEqual(convertMdfcToHtml('# \\# hash in a heading\n'), '<h1># hash in a heading</h1>\n');
+  assert.strictEqual(convertMdfcToHtml('> \\> arrow in a quotation\n'), '<blockquote>> arrow in a quotation</blockquote>\n');
 });
 
 test('windows line endings produce the same output as unix ones', function(){
@@ -185,4 +214,90 @@ test('a style that outlives an outer style it was nested in stays validly nested
 test('a bare blockquote marker produces an empty element, not literal text', function(){
   assert.strictEqual(convertMdfcToHtml('>\n'), '<blockquote></blockquote>\n');
   assert.strictEqual(convertMdfcToHtml('> \n'), '<blockquote></blockquote>\n');
+});
+
+//An alignment marker now combines with a list or blockquote marker (see markdownFic.js's parseLine),
+//so both shapes have to render it rather than leaving the literal "[>c] " in the output or claiming
+//the line for an aligned <p>.
+test('an aligned blockquote renders with its alignment class', function(){
+  assert.strictEqual(convertMdfcToHtml('[>c] > Quoted.\n'), '<blockquote class="center">Quoted.</blockquote>\n');
+  assert.strictEqual(convertMdfcToHtml('[>r] > Quoted.\n'), '<blockquote class="right">Quoted.</blockquote>\n');
+  assert.strictEqual(convertMdfcToHtml('[>j] > Quoted.\n'), '<blockquote class="justified">Quoted.</blockquote>\n');
+  assert.strictEqual(convertMdfcToHtml('[>c] > \n'), '<blockquote class="center"></blockquote>\n');
+});
+
+test('an unaligned blockquote still renders without a class attribute', function(){
+  assert.strictEqual(convertMdfcToHtml('> Quoted.\n'), '<blockquote>Quoted.</blockquote>\n');
+});
+
+//The alignment class shares the class attribute with the temporary ul/ol grouping token, so this
+//also covers tempClasses stripping the grouping half without taking the alignment with it.
+test('aligned list items keep their alignment and are still grouped into one list', function(){
+  assert.strictEqual(
+    convertMdfcToHtml('[>c] * One\n[>c] * Two\n'),
+    '<ul><li class="center">One</li>\n<li class="center">Two</li>\n</ul>\n'
+  );
+  assert.strictEqual(
+    convertMdfcToHtml('[>c] 1. One\n[>c] 2. Two\n'),
+    '<ol><li class="center">One</li>\n<li class="center">Two</li>\n</ol>\n'
+  );
+});
+
+test('a list mixing aligned and unaligned items groups as one list', function(){
+  assert.strictEqual(
+    convertMdfcToHtml('* One\n[>r] * Two\n'),
+    '<ul><li>One</li>\n<li class="right">Two</li>\n</ul>\n'
+  );
+});
+
+test('a nested aligned list item is still nested', function(){
+  assert.strictEqual(
+    convertMdfcToHtml('* One\n[>c] \t* Two\n'),
+    '<ul><li>One</li>\n<ul><li class="center">Two</li>\n</ul>\n</ul>\n'
+  );
+});
+
+//Regression: blockquote got white-space: pre-wrap but no margin reset, so it kept the browser
+//default 1em top/bottom margin - since each Quill line becomes its own <blockquote>, a multi-line
+//quote rendered with a visible gap between every line.
+test('the page stylesheet zeroes out blockquote\'s top and bottom margin', function(){
+  const page = convertMdfcToHtmlPage('> Quoted.\n', 'Title');
+  const blockquoteRule = /blockquote\s*\{([^}]*)\}/.exec(page);
+
+  assert.ok(blockquoteRule, 'expected a blockquote rule in the page stylesheet');
+  assert.match(blockquoteRule[1], /margin-top:\s*0px/);
+  assert.match(blockquoteRule[1], /margin-bottom:\s*0px/);
+});
+
+//Regression: escapeAnyMarkers used to escape every "[^" unconditionally, so a footnote authored in
+//WareWoolf saved as "\[^1]" and this converter's convertFootnotes anchors on the *unescaped*
+//"^\[\^\d+\]:" - it never matched, the backslash leaked into the exported HTML, and the body
+//paragraph never became a div.footnote. See the worked example at the top of
+//docs/footnotes-plan.md, reproduced here exactly.
+test('a footnote reference and its body convert without a leaked backslash', function(){
+  assert.strictEqual(
+    convertMdfcToHtml('See note[^1] here.\n[^1]: The note.\n'),
+    '<p>See note<sup><a href="#fnote_1" id="fnoteRef_1">1</a></sup> here.</p>\n'
+      + '<div class="footnote" id="fnote_1"><p><sup><a href="#fnoteRef_1">1</a></sup>The note.\n</p></div>\n'
+  );
+});
+
+//Regression: convertFootnoteReferences matched the marker whether or not a backslash escaped it, so
+//"\[^1]" typed as prose came out a real footnote link with the backslash still in front of it,
+//while the editor showed the literal "[^1]" it was written to mean. A reference is read anywhere in
+//a line, so its escape is honoured anywhere - unlike the block markers above.
+test('an escaped footnote reference stays literal instead of becoming a link', function(){
+  assert.strictEqual(convertMdfcToHtml('See note\\[^1] here.\n'), '<p>See note[^1] here.</p>\n');
+});
+
+test('an escaped footnote body marker stays an ordinary paragraph', function(){
+  assert.strictEqual(convertMdfcToHtml('\\[^1]: Not a note.\n'), '<p>[^1]: Not a note.</p>\n');
+});
+
+test('an escaped reference does not stop a real one in the same paragraph', function(){
+  assert.strictEqual(
+    convertMdfcToHtml('A real[^1] and a literal \\[^2] one.\n[^1]: The note.\n'),
+    '<p>A real<sup><a href="#fnote_1" id="fnoteRef_1">1</a></sup> and a literal [^2] one.</p>\n'
+      + '<div class="footnote" id="fnote_1"><p><sup><a href="#fnoteRef_1">1</a></sup>The note.\n</p></div>\n'
+  );
 });

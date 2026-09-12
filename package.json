@@ -1,7 +1,7 @@
 {
   "name": "warewoolf",
   "productName": "warewoolf",
-  "version": "2.5.0",
+  "version": "3.0.0",
   "description": "A simple novel writing system designed to be usable without a mouse.",
   "main": "src/index.js",
   "scripts": {
@@ -40,7 +40,24 @@
         "icon": "src/assets/icon",
         "extendInfo": "src/plist/Info.plist",
         "ignore": [
-          "^/test($|/)"
+          "^/test($|/)",
+          "^/docs($|/)",
+          "^/\\.github($|/)",
+          "^/\\.gitignore$",
+          "^/\\.vscode($|/)",
+          "^/README\\.md$",
+          "^/error_log\\.txt$",
+          "^/user-settings\\.json$",
+          "^/src/render\\.js$",
+          "^/src/preload\\.js$",
+          "\\.map$",
+          "^/src/components/(views|blots)($|/)",
+          "^/src/assets/screenshot_[^/]+$",
+          "^/src/assets/warewoolf_logo_small\\.png$",
+          "^/src/assets/icon\\.(ico|icns)$",
+          "^/src/examples/Frankenstein_Legacy_[^/]+($|/)",
+          "^/src/examples/markdownfic\\.[^/]+$",
+          "^/node_modules/nodemailer/dist/esm($|/)"
         ]
       },
       "makers": [
@@ -75,7 +92,7 @@
     "archiver": "^6.0.1",
     "docx": "^7.8.2",
     "electron-squirrel-startup": "^1.0.0",
-    "nodemailer": "^6.7.5",
+    "nodemailer": "10.0.7",
     "nspell": "^2.1.5",
     "quill": "^1.3.7",
     "unzipper": "^0.10.14"

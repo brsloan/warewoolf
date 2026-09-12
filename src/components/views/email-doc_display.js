@@ -1,4 +1,4 @@
-const { closePopups, createButton, removeElementsByClass, generateRow } = require('../controllers/utils');
+const { closePopups, createButton, removeElementsByClass, generateRow, describeDialog } = require('../controllers/utils');
 const { describeCredentialBackend, APP_PASSWORD_HINT } = require('../controllers/credential-help');
 const { prepareAndEmail } = require('../controllers/email-doc');
 const { logError } = require('../controllers/error-log');
@@ -30,6 +30,7 @@ async function showEmailOptions(project, userSettings, platform, editorQuill){
     var header = document.createElement('h1');
     header.innerText = "Send Via Email";
     popup.appendChild(header);
+    describeDialog(popup, header);
 
     var emailForm = document.createElement('form');
 

@@ -205,6 +205,6 @@ test('the built preload bundle publishes the same three functions', function(){
   assert.deepStrictEqual(Object.keys(bridge).sort(), ['invoke', 'off', 'on']);
   //The bundle carries its own copy of the contract table, so a stale bundle would validate against
   //a stale command list.
-  assert.strictEqual(EVENTS.length, 36);
-  assert.strictEqual(Object.keys(COMMANDS).length, 65);
+  assert.strictEqual(EVENTS.length, 41);
+  assert.strictEqual(Object.keys(COMMANDS).length, 73);
 });

@@ -1,0 +1,18 @@
+[>c] # Fonts
+
+Open **File > Settings** and look under **Appearance**. Below the light/dark choice are two dropdowns:
+* **Manuscript Font** — the face your chapters are written in, in the middle panel.
+* **Sidebar Font** — the face of the chapter list on the left and the notes on the right.
+The change takes effect the moment you press **Save**, and is remembered for every project you open afterwards.
+
+## What You Can Choose
+Serif, Sans Serif, Times, Garamond, Typewriter, Monospace, Atkinson Hyperlegible and OpenDyslexic.
+	Times and Garamond are there for writing that you want to look like the page you will eventually submit. Typewriter is Courier, which is wide and slow to read on purpose, and is the reason a lot of people draft in it. Atkinson Hyperlegible was drawn by the Braille Institute to keep letters that usually blur together—a capital I, a lowercase l, the numeral 1—clearly apart, and OpenDyslexic weights the bottom of each letter to stop it flipping. If you read more easily in either of those, use them.
+
+## The Sample Line
+Under each dropdown is a line of sample text in the font you have selected.
+	It is there because WareWoolf does not ship any fonts of its own. Bundling a set of typefaces would add several megabytes to a program whose whole point is starting instantly on a slow machine, so each choice above is really a short list of related faces, and your computer draws the first one it actually has installed. That means the same setting can look slightly different on a laptop and on a writerDeck.
+	The sample is the honest answer to "what will I get?" Whatever is drawn in that line is what the panel will be drawn in. If you pick Garamond and the sample does not look like Garamond, your machine does not have it, and something close is standing in. Installing the real one—through your system's font manager, as with any other program—and reopening Settings is all it takes for WareWoolf to start using it.
+
+## What This Does Not Change
+The font is a setting for your screen, not for your book. Compiling or exporting a manuscript produces the same file whichever face you chose, because the typeface of a submitted document is decided by whoever you are submitting it to. Font *size* is separate as well, and stays on **CMD/CTRL** + **-** or **+**.

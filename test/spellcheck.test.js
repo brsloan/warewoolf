@@ -7,7 +7,10 @@ const path = require('node:path');
 const { setPlatform } = require('../src/components/controllers/error-log');
 const { createPlatform } = require('../src/components/controllers/platform');
 const { createNodeBacking } = require('../src/components/controllers/platform-node');
-const { runSpellcheck, addWordToPersonalDictFile, getBeginningOfCurrentWord } = require('../src/components/controllers/spellcheck');
+const {
+  runSpellcheck, addWordToPersonalDictFile, addWordToProjectDictionary, getBeginningOfCurrentWord,
+  setSelectedDictionaries, setProjectWords, releaseSpellchecker
+} = require('../src/components/controllers/spellcheck');
 const { installBridge, uninstallBridge } = require('./fake-bridge');
 
 function tempDir(prefix){
@@ -20,10 +23,14 @@ function tempDir(prefix){
 const DICT_WORDS = ['the', 'cat', 'sat', 'on', 'mat', 'boys', 'shoes', 'are', 'here', 'she', 'said', 'stop', "don't"];
 
 function writeFixtureDictionary(appDir){
+  writeDictFixture(appDir, 'en_US-large', DICT_WORDS);
+}
+
+function writeDictFixture(appDir, id, words){
   var dictDir = path.join(appDir, 'dictionaries');
   fs.mkdirSync(dictDir, { recursive: true });
-  fs.writeFileSync(path.join(dictDir, 'en_US-large.aff'), 'SET UTF-8\n', 'utf8');
-  fs.writeFileSync(path.join(dictDir, 'en_US-large.dic'), DICT_WORDS.length + '\n' + DICT_WORDS.join('\n') + '\n', 'utf8');
+  fs.writeFileSync(path.join(dictDir, id + '.aff'), 'SET UTF-8\n', 'utf8');
+  fs.writeFileSync(path.join(dictDir, id + '.dic'), words.length + '\n' + words.join('\n') + '\n', 'utf8');
 }
 
 //spellcheck.js no longer takes sysDirectories: the dictionaries live under paths.app/userData,
@@ -42,14 +49,38 @@ function makeSysDirectories(){
   return useSysDirectories({ app: appDir, userData: userDataDir });
 }
 
-//spellcheck.js only ever calls getText() on the editor it's given, so a bare object stands in
-//fine - no need for a real Quill instance like findreplace.test.js uses.
+//Counts calls to one command crossing the bridge - the only way to see from out here whether
+//getSpellchecker() actually reused a cached instance list instead of rebuilding it.
+function countInvocations(name){
+  var original = globalThis.warewoolf.invoke;
+  var count = 0;
+
+  globalThis.warewoolf.invoke = function(cmdName, args){
+    if(cmdName === name)
+      count++;
+    return original(cmdName, args);
+  };
+
+  return { count: function(){ return count; } };
+}
+
+//spellcheck.js reads the editor through getIndexableText() (quill-utils.js), which calls
+//getContents() rather than getText() - so a bare object needs only that one method to stand in,
+//no real Quill instance like findreplace.test.js uses. getText() is kept too, for any assertion
+//in this file that still reads it directly.
 function makeEditorQuill(text){
-  return { getText: function(){ return text; } };
+  return {
+    getText: function(){ return text; },
+    getContents: function(){ return { ops: [ { insert: text } ] }; }
+  };
 }
 
 test.beforeEach(function(){
   setPlatform(createPlatform(createNodeBacking({ paths: { userData: tempDir('warewoolf-spellcheck-log-') } })));
+  //Module-level state - a test that selects dictionaries or project words must not leak them into
+  //the next one.
+  setSelectedDictionaries([]);
+  setProjectWords([]);
 });
 
 test.after(uninstallBridge);
@@ -195,4 +226,252 @@ test('getBeginningOfCurrentWord does not treat an internal apostrophe as a word 
 
 test('getBeginningOfCurrentWord returns 0 at the start of the text', function(){
   assert.strictEqual(getBeginningOfCurrentWord('hello', 0), 0);
+});
+
+//---------------------------------------------------------------------------
+// curly apostrophes
+//---------------------------------------------------------------------------
+
+//Regression: the word pattern only knew the straight apostrophe, so once the editors started
+//turning one into '’' as it was typed (see models/autocorrect.js) every contraction in the
+//manuscript tokenized as two words - "don" and "t" - and the writer was stopped on both.
+test('a contraction written with a curly apostrophe is not flagged', async function(){
+  makeSysDirectories();
+  var editorQuill = makeEditorQuill('she said don’t stop\n');
+
+  var result = await runSpellcheck(editorQuill);
+
+  assert.strictEqual(result, null);
+});
+
+test('a misspelling with a curly apostrophe is reported as it is written in the manuscript', async function(){
+  makeSysDirectories();
+  var editorQuill = makeEditorQuill('she said zxqzxq’t here\n');
+
+  var result = await runSpellcheck(editorQuill);
+
+  //The word carries the curly apostrophe, because the popup selects and replaces it by this
+  //string - it has to match the text on the page character for character.
+  assert.strictEqual(result.word, 'zxqzxq’t');
+  assert.strictEqual(result.index, 9);
+});
+
+//A suggestion arrives from the dictionary with a straight apostrophe, and accepting it would undo
+//the smart quote the writer just got.
+test('suggestions come back with the same apostrophe the misspelled word used', async function(){
+  makeSysDirectories();
+  var editorQuill = makeEditorQuill('she said don’tt here\n');
+
+  var result = await runSpellcheck(editorQuill);
+
+  assert.ok(result.suggestions.includes('don’t'),
+    'expected a curly-apostrophe suggestion in: ' + JSON.stringify(result.suggestions));
+  assert.ok(!result.suggestions.includes("don't"));
+});
+
+test('a word added to the personal dictionary is stored the way the dictionary spells it', async function(){
+  var userDataDir = tempDir('warewoolf-spellcheck-userdata-');
+  var dictDir = path.join(userDataDir, 'dictionaries');
+  fs.mkdirSync(dictDir, { recursive: true });
+  var personalPath = path.join(dictDir, 'personal.dic');
+  fs.writeFileSync(personalPath, 'WareWoolf\n', 'utf8');
+
+  useSysDirectories({ userData: userDataDir });
+  await addWordToPersonalDictFile('Ozy’mandias');
+
+  //Stored straight, so the flattened lookup every later spellcheck does actually finds it.
+  var contents = fs.readFileSync(personalPath, 'utf8');
+  assert.ok(contents.includes("Ozy'mandias"), 'expected a straight apostrophe in: ' + JSON.stringify(contents));
+});
+
+test('a word added with a curly apostrophe is not flagged the next time round', async function(){
+  var dirs = makeSysDirectories();
+  await addWordToPersonalDictFile('Ozy’mandias');
+
+  useSysDirectories(dirs);
+  var result = await runSpellcheck(makeEditorQuill('she said Ozy’mandias here\n'));
+
+  assert.strictEqual(result, null);
+});
+
+test('getBeginningOfCurrentWord treats an em dash as a word border', function(){
+  assert.strictEqual(getBeginningOfCurrentWord('wait—stop', 9), 5);
+});
+
+test('getBeginningOfCurrentWord does not treat a curly apostrophe as a word border', function(){
+  assert.strictEqual(getBeginningOfCurrentWord('don’t stop', 5), 0);
+});
+
+//---------------------------------------------------------------------------
+// multiple simultaneous dictionaries
+//---------------------------------------------------------------------------
+
+test('a word in the second selected dictionary is accepted', async function(){
+  var appDir = tempDir('warewoolf-spellcheck-app-');
+  writeDictFixture(appDir, 'en_US-large', DICT_WORDS);
+  writeDictFixture(appDir, 'fr_FR', ['bonjour', 'chat']);
+  useSysDirectories({ app: appDir, userData: tempDir('warewoolf-spellcheck-userdata-') });
+  setSelectedDictionaries(['en_US-large', 'fr_FR']);
+
+  var editorQuill = makeEditorQuill('the cat sat bonjour\n');
+
+  assert.strictEqual(await runSpellcheck(editorQuill), null);
+});
+
+test('a word in neither selected dictionary is not accepted', async function(){
+  var appDir = tempDir('warewoolf-spellcheck-app-');
+  writeDictFixture(appDir, 'en_US-large', DICT_WORDS);
+  writeDictFixture(appDir, 'fr_FR', ['bonjour', 'chat']);
+  useSysDirectories({ app: appDir, userData: tempDir('warewoolf-spellcheck-userdata-') });
+  setSelectedDictionaries(['en_US-large', 'fr_FR']);
+
+  var editorQuill = makeEditorQuill('the cat sat zxqzxq\n');
+  var result = await runSpellcheck(editorQuill);
+
+  assert.strictEqual(result.word, 'zxqzxq');
+});
+
+test('suggestions from two dictionaries are interleaved and deduped', async function(){
+  var appDir = tempDir('warewoolf-spellcheck-app-');
+  //Both dictionaries carry a word one edit away from "cta", so each contributes a suggestion.
+  writeDictFixture(appDir, 'first', ['cat']);
+  writeDictFixture(appDir, 'second', ['cot']);
+  useSysDirectories({ app: appDir, userData: tempDir('warewoolf-spellcheck-userdata-') });
+  setSelectedDictionaries(['first', 'second']);
+
+  var editorQuill = makeEditorQuill('cta\n');
+  var result = await runSpellcheck(editorQuill);
+
+  assert.strictEqual(result.word, 'cta');
+  assert.ok(result.suggestions.includes('cat'), JSON.stringify(result.suggestions));
+  assert.ok(result.suggestions.includes('cot'), JSON.stringify(result.suggestions));
+  assert.strictEqual(new Set(result.suggestions).size, result.suggestions.length);
+});
+
+test('project words are accepted and personal words still are', async function(){
+  var appDir = tempDir('warewoolf-spellcheck-app-');
+  var userDataDir = tempDir('warewoolf-spellcheck-userdata-');
+  writeFixtureDictionary(appDir);
+  var dictDir = path.join(userDataDir, 'dictionaries');
+  fs.mkdirSync(dictDir, { recursive: true });
+  fs.writeFileSync(path.join(dictDir, 'personal.dic'), 'WareWoolf\nnebulon\n', 'utf8');
+
+  useSysDirectories({ app: appDir, userData: userDataDir });
+  setProjectWords(['Aurelion']);
+
+  var editorQuill = makeEditorQuill('the cat sat nebulon Aurelion mat\n');
+
+  assert.strictEqual(await runSpellcheck(editorQuill), null);
+});
+
+test('the instance list is built once across a multi-word pass and rebuilt after releaseSpellchecker()', async function(){
+  makeSysDirectories();
+  var calls = countInvocations('loadDictionaries');
+
+  var editorQuill = makeEditorQuill('the cat sat on the mat\n');
+  await runSpellcheck(editorQuill);
+  await runSpellcheck(editorQuill, 4);
+  assert.strictEqual(calls.count(), 1);
+
+  releaseSpellchecker();
+  await runSpellcheck(editorQuill);
+  assert.strictEqual(calls.count(), 2);
+});
+
+test('nspell#add via addWordToPersonalDictFile takes effect without a rebuild', async function(){
+  makeSysDirectories();
+  var editorQuill = makeEditorQuill('the cat sat on the nebulon mat\n');
+
+  //Prime the cache.
+  var before = await runSpellcheck(editorQuill);
+  assert.strictEqual(before.word, 'nebulon');
+
+  var calls = countInvocations('loadDictionaries');
+  await addWordToPersonalDictFile('nebulon');
+  var after = await runSpellcheck(editorQuill);
+
+  assert.strictEqual(after, null);
+  assert.strictEqual(calls.count(), 0, 'expected no dictionary reparse');
+});
+
+test('an unknown id is skipped and an all-unknown selection falls back to the shared default', async function(){
+  makeSysDirectories();
+  setSelectedDictionaries(['nonexistent']);
+
+  var editorQuill = makeEditorQuill('the cat sat on the mat\n');
+
+  assert.strictEqual(await runSpellcheck(editorQuill), null);
+});
+
+//---------------------------------------------------------------------------
+// addWordToProjectDictionary
+//---------------------------------------------------------------------------
+
+test('addWordToProjectDictionary adds the word and marks the project unsaved', function(){
+  makeSysDirectories();
+  var project = { projectDictionary: [], hasUnsavedChanges: false };
+
+  addWordToProjectDictionary(project, 'Aurelion');
+
+  assert.deepStrictEqual(project.projectDictionary, ['Aurelion']);
+  assert.strictEqual(project.hasUnsavedChanges, true);
+});
+
+test('addWordToProjectDictionary does not add the same word twice', function(){
+  makeSysDirectories();
+  var project = { projectDictionary: [], hasUnsavedChanges: false };
+
+  addWordToProjectDictionary(project, 'Aurelion');
+  addWordToProjectDictionary(project, 'Aurelion');
+
+  assert.deepStrictEqual(project.projectDictionary, ['Aurelion']);
+});
+
+test('addWordToProjectDictionary stores the word the way the dictionary spells it', function(){
+  makeSysDirectories();
+  var project = { projectDictionary: [], hasUnsavedChanges: false };
+
+  addWordToProjectDictionary(project, 'Ozy’mandias');
+
+  assert.deepStrictEqual(project.projectDictionary, ["Ozy'mandias"]);
+});
+
+test('addWordToProjectDictionary does nothing when there is no project', function(){
+  makeSysDirectories();
+
+  assert.doesNotThrow(function(){
+    addWordToProjectDictionary(null, 'Aurelion');
+  });
+});
+
+test('nspell#add via addWordToProjectDictionary takes effect without a rebuild', async function(){
+  makeSysDirectories();
+  var editorQuill = makeEditorQuill('the cat sat on the aurelion mat\n');
+  var project = { projectDictionary: [], hasUnsavedChanges: false };
+
+  var before = await runSpellcheck(editorQuill);
+  assert.strictEqual(before.word, 'aurelion');
+
+  var calls = countInvocations('loadDictionaries');
+  addWordToProjectDictionary(project, 'aurelion');
+  var after = await runSpellcheck(editorQuill);
+
+  assert.strictEqual(after, null);
+  assert.strictEqual(calls.count(), 0, 'expected no dictionary reparse');
+});
+
+test('project words pushed via addWordToProjectDictionary survive a cache rebuild too', async function(){
+  makeSysDirectories();
+  var project = { projectDictionary: [], hasUnsavedChanges: false };
+  setProjectWords(project.projectDictionary);
+
+  var editorQuill = makeEditorQuill('the cat sat on the aurelion mat\n');
+  assert.strictEqual((await runSpellcheck(editorQuill)).word, 'aurelion');
+
+  //setProjectWords holds the array by reference, so a word pushed straight onto
+  //project.projectDictionary (as Add To Project does) is visible to a rebuild with no second call.
+  addWordToProjectDictionary(project, 'aurelion');
+  releaseSpellchecker();
+
+  assert.strictEqual(await runSpellcheck(editorQuill), null);
 });

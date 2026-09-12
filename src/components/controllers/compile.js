@@ -6,7 +6,9 @@ const { convertMdfcToHtmlPage, convertMdfcToHtml } = require('./mdfc-to-html');
 const { convertMdfcToMd } = require('./mdfc-to-md');
 const { htmlChaptersToEpub } = require('./epub');
 const { convertToPlainText } = require('./quill-utils');
+const { reconcileFootnotes, namespaceFootnotes } = require('./reconcile-footnotes');
 const { getTotalWordCount } = require('./wordcount');
+const { markSceneBreaks } = require('./mark-scene-breaks');
 const { createPlatform } = require('./platform');
 const { createIpcBacking } = require('./platform-ipc');
 
@@ -19,7 +21,12 @@ var platform = createPlatform(createIpcBacking());
 //asynchronously through archiver and always did, so callers already wait on cback rather than on
 //this function returning.
 async function compileProject(project, userSettings, options, filepath, cback = function(){}){
-    var allChaps = await compileChapterDeltas(project, options);
+    //Whole-project compile concatenates every chapter into one delta, so each chapter's own
+    //footnote numbers collide (a five-chapter book would otherwise emit five notes numbered "1" -
+    //duplicate id="fnote_1" anchors, wrong backlinks, delta-to-docx resolving every "[^1]" to the
+    //first chapter's body). Reconciling the concatenated copy renumbers globally and fixes that;
+    //the writer's own chapters, still separate deltas, are never touched.
+    var allChaps = reconcileFootnotes(await compileChapterDeltas(project, options));
 
     switch(options.type){
         case ".txt":
@@ -43,7 +50,7 @@ async function compileProject(project, userSettings, options, filepath, cback = 
             cback();
             break;
           case ".epub":
-            await compileEpub(filepath, project.chapters, project.title, project.author, options.generateTitlePage, options.insertHead, cback);
+            await compileEpub(filepath, project.chapters, project.title, project.author, options, cback);
             break;
         default:
             console.log("No valid filetype selected for compile.");
@@ -51,18 +58,18 @@ async function compileProject(project, userSettings, options, filepath, cback = 
     }
 }
 
-async function compileEpub(dir, chapters, title, author, insertTitle, insertHead, cback = function(){}){
+async function compileEpub(dir, chapters, title, author, options, cback = function(){}){
   try {
     var htmlChaps = [];
 
     for(let i = 0; i < chapters.length; i++){
       htmlChaps.push({
         title: chapters[i].title,
-        html: convertMdfcToHtml(convertDeltaToMDF(await chapterDeltaWithHeader(chapters[i], insertHead)))
+        html: convertMdfcToHtml(convertDeltaToMDF(await chapterDeltaWithHeader(chapters[i], options)))
       })
     }
 
-    htmlChaptersToEpub(title, author, htmlChaps, dir, insertTitle, function(resp){
+    htmlChaptersToEpub(title, author, htmlChaps, dir, options.generateTitlePage, function(resp){
       console.log('Conversion done: ' + resp);
       cback();
     })
@@ -114,24 +121,45 @@ async function compilePlainText(dir, allChaps){
   }
 }
 
-async function chapterDeltaWithHeader(chapter, insertHead){
+//Scene breaks are marked here, on one chapter at a time, rather than on the concatenated document
+//compileChapterDeltas builds - which is what keeps the promise the option makes about the ends of
+//chapters. Once every chapter is joined end to end, the blank lines a writer left trailing at the
+//bottom of chapter one sit between two ordinary paragraphs like any other gap, and would be marked.
+//Marked before the heading is prepended for the same reason: the heading is not part of the
+//chapter's own text, and a chapter that opens on a blank line has nothing above it either way.
+async function chapterDeltaWithHeader(chapter, options){
   var Delta = Quill.import('delta');
   var compiled = new Delta();
-  if(insertHead){
+  if(options.insertHead){
     compiled.insert(chapter.title);
     compiled.insert('\n', { header: 1 } );
   }
-  return compiled.concat(new Delta(await chapter.getContentsOrFile()));
+
+  var contents = await chapter.getContentsOrFile();
+
+  if(options.markSceneBreaks)
+    contents = markSceneBreaks(contents);
+
+  return compiled.concat(new Delta(contents));
 }
 
+//A single chapter numbers its own footnotes starting at 1, so two chapters concatenated as-is would
+//each contribute a marker/body pair literally named "1" - indistinguishable, once merged, from one
+//marker genuinely referenced twice. Each chapter's ids are namespaced by its own index before it
+//joins the concatenated delta, so they stay globally unique going into compileProject's reconcile
+//pass, which is what assigns the compiled document's real, sequential footnote numbers.
 async function compileChapterDeltas(project, options){
     var divider = options.insertStrng;
     var Delta = Quill.import('delta');
-    var compiled = new Delta().concat(await chapterDeltaWithHeader(project.chapters[0], options.insertHead));
+    var compiled = new Delta().concat(new Delta(
+      namespaceFootnotes(await chapterDeltaWithHeader(project.chapters[0], options), 'c0')
+    ));
 
     for(let i=1; i<project.chapters.length; i++){
         compiled.insert(divider + '\n');
-        compiled = compiled.concat(await chapterDeltaWithHeader(project.chapters[i], options.insertHead));
+        compiled = compiled.concat(new Delta(
+          namespaceFootnotes(await chapterDeltaWithHeader(project.chapters[i], options), 'c' + i)
+        ));
     }
 
     return compiled;

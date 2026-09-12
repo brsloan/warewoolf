@@ -118,6 +118,25 @@ test('showBackupAlert only offers a way out when the caller gives it something t
   assert.strictEqual(exited, true);
 });
 
+//The button used to be an exit and only an exit. File > Reboot (Linux) runs the same backup before
+//taking the machine down, so what it skips to is named by the caller now - and the label has to
+//follow a popup that is already up, since a message arrives every few hundred milliseconds and only
+//the first one creates the button.
+test('showBackupAlert labels the skip button as the caller asks, defaulting to Exit Without Backup', function(){
+  var { showBackupAlert } = require(workingDisplayPath);
+
+  showBackupAlert('Backing up project...', function(){});
+  assert.strictEqual(document.getElementById('backup-alert-exit').innerText, 'Exit Without Backup');
+
+  var rebooted = false;
+  showBackupAlert('Creating project archive...', function(){ rebooted = true; }, 'Reboot Without Backup');
+  var skipBtn = document.getElementById('backup-alert-exit');
+  assert.strictEqual(skipBtn.innerText, 'Reboot Without Backup');
+
+  skipBtn.onclick();
+  assert.strictEqual(rebooted, true, 'the button should call the action it was last given');
+});
+
 test('showBackupAlert takes the exit button away again when the alert is reused without one', function(){
   var { showBackupAlert } = require(workingDisplayPath);
 

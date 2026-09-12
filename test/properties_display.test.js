@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { JSDOM } = require('jsdom');
+const { assertDialogDescribed, assertControlsNamed } = require('./helpers');
 
 const propertiesDisplayPath = require.resolve('../src/components/views/properties_display');
 
@@ -174,4 +175,13 @@ test('opening the popup twice removes the first one instead of stacking popups',
   showProperties(makeProject(), makeUserSettings());
 
   assert.strictEqual(document.getElementsByClassName('popup').length, 1);
+});
+
+test('the properties popup is a dialog and every field is labelled', function(){
+  var showProperties = require(propertiesDisplayPath);
+  showProperties(makeProject(), makeUserSettings());
+
+  var popup = document.querySelector('.popup');
+  assertDialogDescribed(popup, 'dialog');
+  assert.ok(assertControlsNamed(popup) >= 3, 'the properties form should have fields to check');
 });

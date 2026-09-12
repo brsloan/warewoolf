@@ -15,21 +15,45 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-//Neither has a browser build (see the inventory's group F/G/H notes), which is why extractZip,
-//importDocx, buildEpub and archiveProject are native by necessity rather than by convenience.
-const unzipper = require('unzipper');
-const archiver = require('archiver');
-//Group K's own out-of-process dependencies. Required here, at module scope, rather than
-//destructured - createNodeBacking() below resolves `.request`/`.get`/`.spawn`/`.createTransport`
-//off these same module objects fresh on every call (options.X || httpsModule.X, not a captured
-//copy), so a test that mocks e.g. https.request via node:test's t.mock.method is seen by any
-//backing constructed afterward, and platform.test.js's own injected fakes (httpsRequest,
-//httpsGet, spawnProcess, createMailTransport) can override the same seam without either backing
-//behaving differently depending on which came first.
+//Deferred to first use, and that is a startup change rather than a tidy-up. index.js requires this
+//file at its own top level, so every require in it runs before app.whenReady(), and therefore before
+//there is a window to look at. These three pull in about 325 files between them and measured ~285ms
+//on a warm cache - a quarter second of empty screen spent loading a zip reader, a zip writer and an
+//SMTP client, on a launch that in the overwhelming majority of cases goes on to use none of them.
+//It costs most on the hardware that can least afford it: a writerDeck reading those files off an SD
+//card pays far more per file than a desktop does.
+//
+//Safe to defer because each is reachable only from a deliberate user action - importing an .epub or
+//.docx, exporting, backing up, emailing a document - so the load lands inside an operation that is
+//already doing real work and already slower than the load is. Nothing on the launch path touches
+//them, and nothing here changes what any of them do once loaded.
+//
+//unzipper and archiver still have no browser build (see the inventory's group F/G/H notes), which is
+//why extractZip, importDocx, buildEpub and archiveProject are native by necessity rather than by
+//convenience. That has not changed; only when the module arrives has.
+function lazyRequire(id){
+  var mod = null;
+  return function(){
+    if(mod === null)
+      mod = require(id);
+    return mod;
+  };
+}
+
+const loadUnzipper = lazyRequire('unzipper');
+const loadArchiver = lazyRequire('archiver');
+const loadNodemailer = lazyRequire('nodemailer');
+//Group K's own out-of-process dependencies. These three are required here, at module scope, rather
+//than destructured - createNodeBacking() below resolves `.request`/`.get`/`.spawn` off these same
+//module objects fresh on every call (options.X || httpsModule.X, not a captured copy), so a test
+//that mocks e.g. https.request via node:test's t.mock.method is seen by any backing constructed
+//afterward, and platform.test.js's own injected fakes (httpsRequest, httpsGet, spawnProcess,
+//createMailTransport) can override the same seam without either backing behaving differently
+//depending on which came first. They stay eager where the three above did not, because they are
+//built into node: requiring them opens no files and costs nothing measurable at startup.
 const httpsModule = require('https');
 const nodeCrypto = require('crypto');
 const childProcessModule = require('child_process');
-const nodemailer = require('nodemailer');
 const { CODES, PlatformError, fromNodeError, SAVED_SECRET } = require('./platform');
 const { sanitizeFilename } = require('./utils');
 //Only the legacy-format pair is needed here. Everything else about key handling - derivation,
@@ -59,13 +83,26 @@ const MAX_LOG_SIZE_BYTES = 1024 * 1024;
 const SETTINGS_FILENAME = 'user-settings.json';
 const CORKBOARD_FILENAME = 'project_corkboard.txt';
 const LICENSES_FILENAME = 'licenses.txt';
-//Group I: spellcheck dictionaries. The shared dictionary ships under the app directory; the
-//personal one is a per-user file under userData, seeded on first read exactly as
-//createPersonalDicIfNeeded() used to (spellcheck.js:35-51).
+//Group I: spellcheck dictionaries. Bundled pairs ship under the app directory; imported ones live
+//alongside the personal dictionary under userData, since paths.app is often read-only and is wiped
+//by the next update. SHARED_DICT_BASENAME is loadDictionaries' fallback when a selection resolves to
+//nothing at all, not the only dictionary any more. The personal one is a per-user file under
+//userData, seeded on first read exactly as createPersonalDicIfNeeded() used to (spellcheck.js:35-51).
 const DICTIONARIES_DIR = 'dictionaries';
 const SHARED_DICT_BASENAME = 'en_US-large';
 const PERSONAL_DICT_FILENAME = 'personal.dic';
 const PERSONAL_DICT_SEED = 'WareWoolf\n';
+//What a dictionary id may not contain - see isValidDictionaryId below for why an id is checked at
+//all. Module scope rather than inside createNodeBacking: everything in there below the `return` is
+//a hoisted function declaration, so a `var` initialized down beside its callers would never be
+//assigned at all.
+//
+//Deliberately structural rather than a character allowlist: a dictionary someone downloads may
+//legitimately be named with spaces or accents, and refusing those would reject a usable file for no
+//reason. What is refused is anything that could denote something other than a single name in the
+//directory being addressed - a separator of either kind, a drive-relative "C:name", or a control
+//character.
+const DICTIONARY_ID_FORBIDDEN = /[\/\\:\x00-\x1f]/;
 
 //Group H: backup archives. Timestamp shape and extension moved here verbatim from
 //backup-project.js's own getTimeStamp()/ARCHIVE_EXTENSION - allocating the archive's name is now
@@ -89,6 +126,11 @@ const RELEASE_ASSET_PATH_PREFIX = '/' + RELEASE_REPO + '/releases/download/';
 //climb out of the directory it allocated.
 const RELEASE_ASSET_NAME_PATTERN = /^[A-Za-z0-9_][A-Za-z0-9._+-]*$/;
 const UPDATE_DIR_PREFIX = 'warewoolf-update-';
+//What startSquirrelUpdate accepts for a tag before composing a feed URL out of it - a plain
+//"vX.Y.Z", exactly the shape checkForUpdate's own tag_name is in. Refused rather than encoded, the
+//same discipline RELEASE_ASSET_NAME_PATTERN follows: nothing that fails this can walk the composed
+//URL out of RELEASE_ASSET_PATH_PREFIX.
+const SQUIRREL_UPDATE_TAG_PATTERN = /^v\d+\.\d+\.\d+$/;
 //Linux-only sysfs path for battery state - absent by construction on Windows/macOS, which is what
 //makes getBatteryCapacity's UNAVAILABLE path exercisable in this test suite without a real Pi.
 const POWER_SUPPLY_PATH = '/sys/class/power_supply';
@@ -121,7 +163,16 @@ function createNodeBacking(deps){
   var httpsRequest = options.httpsRequest || httpsModule.request;
   var httpsGet = options.httpsGet || httpsModule.get;
   var spawnProcess = options.spawnProcess || childProcessModule.spawn;
-  var createMailTransport = options.createMailTransport || nodemailer.createTransport;
+  //The one of these four that is not a plain module-object read, because nodemailer is no longer
+  //loaded by the time this runs. Wrapped rather than resolved: an injected fake still wins outright
+  //and the module is then never loaded at all - which is every test, since all of them pass
+  //createMailTransport - while the real path resolves `.createTransport` off nodemailer at the
+  //moment a mail is actually sent. That is the same read as before, only later, so t.mock.method on
+  //the module is still honoured, and now even if the mock is installed after this backing was
+  //constructed. Called unbound, exactly as the bare property reference was.
+  var createMailTransport = options.createMailTransport || function(){
+    return loadNodemailer().createTransport.apply(null, arguments);
+  };
   //installUpdate's one guard: sudo apt install must never run against a path the renderer merely
   //asserts is an installer. This backing only trusts a path it produced itself, via a downloadUpdate
   //call against this same instance (session-scoped - the state disappears once the app or a test
@@ -139,6 +190,12 @@ function createNodeBacking(deps){
   //exercised on the machine this suite usually runs on. Read at call time, not captured here, so a
   //test that redefines process.platform after constructing a backing still sees it.
   var platformOverride = options.platform || null;
+  //The same kind of seam, for the same reason. windowsInstallKind() below decides installed-vs-
+  //portable by looking for Squirrel's Update.exe next to the running binary, and neither answer is
+  //reachable on the machine this suite usually runs on: process.execPath there is node's own. A
+  //test points this at a directory it built to look like one layout or the other, so what gets
+  //exercised is the real lookup rather than a flag standing in for it.
+  var execPathOverride = options.execPath || null;
 
   //Group A is the exception to this file's own rule. C and J are direct fs/crypto - exactly what
   //nodeIntegration already gives the renderer, so this backing can run inside it unchanged. None of
@@ -156,6 +213,12 @@ function createNodeBacking(deps){
   var onShowAppMenu = options.onShowAppMenu || function(){};
   var onConfirmExit = options.onConfirmExit || function(){};
   var onNotifyRendererReady = options.onNotifyRendererReady || function(){};
+  //Group K's Windows update pair. Not group A, despite living beside its neighbours here in the
+  //options destructuring - autoUpdater is a main-process API exactly like nativeTheme/the
+  //application menu/app.quit, so the same "inject the hook, default to a no-op for the test suite"
+  //shape applies, even though the commands themselves are declared in group K.
+  var onStartSquirrelUpdate = options.onStartSquirrelUpdate || function(){};
+  var onQuitAndInstallUpdate = options.onQuitAndInstallUpdate || function(){};
 
   //Stores are cached rather than rebuilt per call because a passphrase-derived session key lives in
   //the store's closure. Discarding the instance is therefore how lockCredential locks: the key has
@@ -212,6 +275,7 @@ function createNodeBacking(deps){
     readTextFile: readTextFile,
     extractZip: extractZip,
     importDocx: importDocx,
+    importEpub: importEpub,
 
     // --- G. Export and compile ----------------------------------------------------------
     ensureDirectory: ensureDirectory,
@@ -225,7 +289,11 @@ function createNodeBacking(deps){
     pruneBackups: pruneBackups,
 
     // --- I. Spellcheck -----------------------------------------------------------------------
-    loadDictionary: loadDictionary,
+    loadDictionaries: loadDictionaries,
+    listDictionaries: listDictionaries,
+    readDictionaryFiles: readDictionaryFiles,
+    importDictionary: importDictionary,
+    removeDictionary: removeDictionary,
     loadPersonalDictionary: loadPersonalDictionary,
     savePersonalDictionary: savePersonalDictionary,
 
@@ -247,6 +315,8 @@ function createNodeBacking(deps){
     checkForUpdate: checkForUpdate,
     downloadUpdate: downloadUpdate,
     installUpdate: installUpdate,
+    startSquirrelUpdate: startSquirrelUpdate,
+    quitAndInstallUpdate: quitAndInstallUpdate,
     sendEmail: sendEmail,
     wifiListNetworks: wifiListNetworks,
     wifiConnect: wifiConnect,
@@ -256,6 +326,7 @@ function createNodeBacking(deps){
     wifiEnable: wifiEnable,
     wifiDisable: wifiDisable,
     getBatteryCapacity: getBatteryCapacity,
+    rebootSystem: rebootSystem,
 
     on: on,
     off: off
@@ -291,12 +362,41 @@ function createNodeBacking(deps){
     return {
       platform: currentPlatform(),
       arch: process.arch,
-      electron: process.versions.electron || null
+      electron: process.versions.electron || null,
+      windowsInstall: windowsInstallKind()
     };
   }
 
   function currentPlatform(){
     return platformOverride || process.platform;
+  }
+
+  //Windows ships two builds of the same application: the Squirrel installer and a portable zip a
+  //writer unpacks wherever they like - a USB stick, a machine they cannot install software on. Which
+  //one is running decides both halves of the update path, so it is reported here beside platform and
+  //arch rather than worked out again at each place that needs it. updates.js needs it to pick which
+  //release asset this copy should be offered, and about_display.js to decide whether to offer an
+  //in-place install at all.
+  //
+  //Squirrel's own layout is what identifies an installed copy. It puts the app at
+  //<root>/app-<version>/warewoolf.exe with Update.exe one directory above, and that Update.exe is
+  //the program Electron's autoUpdater shells out to. So its absence is not a guess about where the
+  //app happens to sit - it is the update mechanism itself not being there, which is exactly the
+  //question being asked. It is also what electron-squirrel-startup (index.js:25) already relies on.
+  //
+  //null off Windows rather than 'portable': there is no Squirrel on linux or macOS, so neither
+  //answer would mean anything, and a real value there would invite a caller to branch on it.
+  function windowsInstallKind(){
+    if(currentPlatform() !== 'win32')
+      return null;
+
+    return fs.existsSync(path.resolve(path.dirname(currentExecPath()), '..', 'Update.exe'))
+      ? 'squirrel'
+      : 'portable';
+  }
+
+  function currentExecPath(){
+    return execPathOverride || process.execPath;
   }
 
   function getFileRequestedOnOpen(){
@@ -359,7 +459,51 @@ function createNodeBacking(deps){
     requireText(args.filename, 'filename');
     requireText(args.contents, 'contents');
 
-    fs.writeFileSync(args.directory + args.filename, args.contents, 'utf8');
+    writeFileAtomic(args.directory + args.filename, args.contents);
+  }
+
+  //The three whole-file rewrites the app makes - the .woolf index, user-settings.json, and the
+  //corkboard - all used to go through one writeFileSync in place. That call truncates the file
+  //before it writes a byte, so a power cut or a kill between the two (a writerDeck on a dying
+  //battery is the usual way) leaves an empty or half-written file behind. For the .woolf that is
+  //the index of the whole project beside a set of chapter files that are all still fine, which is
+  //the outcome project.js's loadError path exists for; for the other two it is every setting, or
+  //the whole outline, gone on the next launch.
+  //
+  //Written to a sibling temp file instead, flushed to disk, and renamed over the original: rename
+  //replaces the target as one operation on every filesystem this runs on (Node's rename maps to
+  //MoveFileEx with REPLACE_EXISTING on Windows), so the file on disk is always either the previous
+  //complete version or the new complete version, never a mix. A failed write leaves the original
+  //untouched and the temp file gone; a crash between the write and the rename leaves the original
+  //untouched and a stray .tmp beside it, which the next save overwrites. The temp name keeps the
+  //real extension out of last position so the file dialog's .woolf filter never lists it.
+  //
+  //fsync before the rename is what makes the rename mean anything after a power cut: without it
+  //the rename can reach the journal ahead of the data it points at, and the new name can come up
+  //empty on the next boot - the same truncation this exists to prevent, one step later.
+  function writeFileAtomic(filePath, contents){
+    var tempPath = filePath + '.tmp';
+    var fd = fs.openSync(tempPath, 'w');
+
+    try{
+      fs.writeSync(fd, contents, null, 'utf8');
+      fs.fsyncSync(fd);
+    }
+    catch(writeErr){
+      try{ fs.closeSync(fd); } catch(_){ }
+      try{ fs.unlinkSync(tempPath); } catch(_){ }
+      throw writeErr;
+    }
+
+    fs.closeSync(fd);
+
+    try{
+      fs.renameSync(tempPath, filePath);
+    }
+    catch(renameErr){
+      try{ fs.unlinkSync(tempPath); } catch(_){ }
+      throw renameErr;
+    }
   }
 
   //Save As, up to but not including the .woolf write - see the note on saveProject in platform.js
@@ -711,8 +855,13 @@ function createNodeBacking(deps){
 
   //JSON.stringify drops function-valued properties on its own, so passing the live settings object
   //(methods and all) writes exactly the same file user-settings.js's own save() used to.
+  //
+  //Atomic for the same reason the .woolf is (see writeFileAtomic): this file is rewritten on every
+  //pane toggle and every Save As, and a truncated one used to cost the writer every setting they
+  //had - shortcuts, autocorrect rules, the last project - on the next launch, since load() treats
+  //an unparseable file as "start from defaults".
   function saveUserSettings(args){
-    fs.writeFileSync(settingsPath(), JSON.stringify(args == null ? undefined : args.settings, null, '\t'), 'utf8');
+    writeFileAtomic(settingsPath(), JSON.stringify(args == null ? undefined : args.settings, null, '\t'));
   }
 
   //Raw text in, raw text out - see the correction note on these two in platform.js. `chaptersDir` is
@@ -726,11 +875,13 @@ function createNodeBacking(deps){
     return fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : null;
   }
 
+  //Atomic like the .woolf and the settings file: the corkboard is the writer's outline, saved
+  //whole on every edit, and nothing else on disk could rebuild a truncated one.
   function saveCorkboard(args){
     requireText(args == null ? undefined : args.chaptersDir, 'chaptersDir');
     requireText(args.contents, 'contents');
 
-    fs.writeFileSync(args.chaptersDir + CORKBOARD_FILENAME, args.contents, 'utf8');
+    writeFileAtomic(args.chaptersDir + CORKBOARD_FILENAME, args.contents);
   }
 
   //Silently empty rather than rejecting when the file (or the app directory itself) is missing -
@@ -835,7 +986,7 @@ function createNodeBacking(deps){
 
       fs.createReadStream(zipPath)
         .on('error', function(err){ reject(fromNodeError(err, { command: 'extractZip' })); })
-        .pipe(unzipper.Extract({ path: destPath }))
+        .pipe(loadUnzipper().Extract({ path: destPath }))
         .on('error', function(err){ reject(fromNodeError(err, { command: 'extractZip' })); })
         .on('close', function(){ resolve({ path: destPath }); });
     });
@@ -863,7 +1014,7 @@ function createNodeBacking(deps){
 
       fs.createReadStream(filepath)
         .on('error', function(err){ cleanup(); reject(fromNodeError(err, { command: 'importDocx' })); })
-        .pipe(unzipper.Extract({ path: unzipDestination }))
+        .pipe(loadUnzipper().Extract({ path: unzipDestination }))
         .on('error', function(err){ cleanup(); reject(fromNodeError(err, { command: 'importDocx' })); })
         .on('close', function(){
           try{
@@ -882,6 +1033,65 @@ function createNodeBacking(deps){
           }
         });
     });
+  }
+
+  //An epub's text, keyed by the path the archive stores it under. Unlike importDocx this never
+  //extracts anything: unzipper.Open reads the central directory and pulls one entry's bytes at a
+  //time, so there is no temp directory to own, clean up, or leave behind if the process dies
+  //mid-import - and no chance of a hostile entry name ("../../..") writing anywhere, because
+  //nothing is written at all.
+  //
+  //Only text entries are read. Everything else in a book - the cover jpeg, embedded fonts, audio -
+  //is skipped before its bytes are ever touched, so a 250KB cover image costs nothing and cannot
+  //reach the renderer. That is the enforcement point for "images are stripped"; html-import.js
+  //dropping <img> tags is the second line of the same defence, for markup that names a picture the
+  //archive no longer carries.
+  function importEpub(args){
+    var filepath = normalizePath(args == null ? undefined : args.path, 'path');
+
+    return loadUnzipper().Open.file(filepath).then(function(directory){
+      var entries = {};
+
+      var reads = directory.files.filter(function(entry){
+        return entry.type === 'File' && isEpubTextEntry(entry.path);
+      }).map(function(entry){
+        return entry.buffer().then(function(buffer){
+          //A BOM is legal at the head of an XML/CSS file and is not part of the content - left in,
+          //it becomes a stray character in front of the first tag and DOMParser reads the document
+          //as malformed.
+          entries[normalizeEntryPath(entry.path)] = stripBom(buffer.toString('utf8'));
+        });
+      });
+
+      return Promise.all(reads).then(function(){
+        return { entries: entries };
+      });
+    }).catch(function(err){
+      //A file that is not a zip at all rejects out of unzipper with no errno, so it lands on
+      //IO_ERROR rather than pretending to be a missing file. A genuinely missing path still carries
+      //ENOENT and still arrives as NOT_FOUND.
+      throw fromNodeError(err, { command: 'importEpub' });
+    });
+  }
+
+  //Written as the escape rather than the character itself so it stays visible in a diff.
+  function stripBom(text){
+    return text.charCodeAt(0) === 0xFEFF ? text.slice(1) : text;
+  }
+
+  //By extension, not by the OPF's declared media types: the manifest is one of the things being
+  //read, so it cannot be consulted to decide what to read. Everything an epub expresses in text is
+  //covered, plus the extensionless "mimetype" file the spec puts first in every archive.
+  function isEpubTextEntry(entryPath){
+    var name = normalizeEntryPath(entryPath);
+    return name === 'mimetype' || /\.(?:xhtml|html|htm|xml|opf|ncx|css|txt)$/i.test(name);
+  }
+
+  //Zip paths are stored with forward slashes, but not every writer obeys that, and a leading "./"
+  //is legal. Both are normalized away here so the renderer can resolve an OPF href against an entry
+  //name by plain string work.
+  function normalizeEntryPath(entryPath){
+    return String(entryPath).replaceAll('\\', '/').replace(/^\.\//, '');
   }
 
   // ------------------------------------------------------------------------------------------
@@ -926,7 +1136,7 @@ function createNodeBacking(deps){
       var entries = args.entries == null ? [] : args.entries;
 
       var output = createWriteStream(filepath);
-      var archive = archiver('zip', { zlib: { level: 9 } });
+      var archive = loadArchiver()('zip', { zlib: { level: 9 } });
       var settled = false;
 
       //An output-stream failure and archiver's own 'error' can both fire for the same underlying
@@ -1000,7 +1210,7 @@ function createNodeBacking(deps){
       var destPath = path.join(args.destDir, archiveName);
 
       var output = createWriteStream(destPath);
-      var archive = archiver('zip', { zlib: { level: 9 } });
+      var archive = loadArchiver()('zip', { zlib: { level: 9 } });
       var settled = false;
 
       function settle(action, value){
@@ -1052,16 +1262,217 @@ function createNodeBacking(deps){
   // Group I (spellcheck dictionaries)
   // ------------------------------------------------------------------------------------------
 
-  function loadDictionary(){
-    if(paths.app == null)
-      throw PlatformError(CODES.UNAVAILABLE, 'No app directory configured for the dictionary.');
+  function bundledDictDir(){
+    return paths.app == null ? null : normalizePath(paths.app, 'app') + '/' + DICTIONARIES_DIR;
+  }
 
-    var base = normalizePath(paths.app, 'app') + '/' + DICTIONARIES_DIR + '/' + SHARED_DICT_BASENAME;
+  function importedDictDir(){
+    return paths.userData == null ? null : normalizePath(paths.userData, 'userData') + '/' + DICTIONARIES_DIR;
+  }
 
+  //An id names one file in one of the two dictionary directories, and every id this app produces is
+  //a basename readDictionaryFiles already stripped of its directory. It still has to be checked
+  //here, because it is the one value in group I that arrives from the renderer and is then joined
+  //into a path: "../../x" would otherwise write and unlink outside the dictionaries directory
+  //entirely. That is not a privilege the renderer lacks - writeTextFile (group G) and deleteEntry
+  //(group E) are generic by design - but every other path in this group is composed natively, and
+  //rule 2 of the contract (see platform.js) is that a command takes identities rather than paths.
+  //An id is that identity, so it has to actually be one. See DICTIONARY_ID_FORBIDDEN above.
+  //
+  function isValidDictionaryId(id){
+    if(typeof id !== 'string' || id === '')
+      return false;
+    if(DICTIONARY_ID_FORBIDDEN.test(id))
+      return false;
+    //Also covers "." and "..", and keeps an id from producing a dotfile named for its extension
+    //alone - an empty id used to write files literally called ".aff" and ".dic".
+    return id.charAt(0) !== '.';
+  }
+
+  function requireDictionaryId(id){
+    if(!isValidDictionaryId(id))
+      throw PlatformError(CODES.INVALID_ARGUMENT,
+        'Not a usable dictionary name: "' + id + '".', { id: id });
+  }
+
+  //A dictionary is a .aff/.dic pair sharing a basename - that basename is its id, resolved bundled
+  //first so an id that (should never, but could on a hand-edited disk) exist in both places prefers
+  //the one a writer cannot delete out from under a selection.
+  //
+  //An unusable id answers null rather than throwing, so loadDictionaries skips it exactly as it
+  //skips one naming a dictionary that is simply not there - a saved selection is not worth failing
+  //a spellcheck over, whichever way it went bad. import/remove call requireDictionaryId instead,
+  //since those have to say why.
+  function dictionaryBaseFor(id){
+    if(!isValidDictionaryId(id))
+      return null;
+
+    var bundledDir = bundledDictDir();
+    if(bundledDir != null && fs.existsSync(bundledDir + '/' + id + '.aff') && fs.existsSync(bundledDir + '/' + id + '.dic'))
+      return bundledDir + '/' + id;
+
+    var importedDir = importedDictDir();
+    if(importedDir != null && fs.existsSync(importedDir + '/' + id + '.aff') && fs.existsSync(importedDir + '/' + id + '.dic'))
+      return importedDir + '/' + id;
+
+    return null;
+  }
+
+  function readDictionaryPairText(base, id){
     return {
+      id: id,
       aff: fs.readFileSync(base + '.aff', 'utf8'),
       dic: fs.readFileSync(base + '.dic', 'utf8')
     };
+  }
+
+  //ids that are not on disk are skipped rather than rejecting the whole call - a writer's saved
+  //selection outliving an import it names is not a failure. An ids that resolves to nothing at all
+  //falls back to SHARED_DICT_BASENAME so spellcheck never simply stops working.
+  function loadDictionaries(args){
+    var ids = (args == null || args.ids == null) ? [] : args.ids;
+    var loaded = [];
+
+    ids.forEach(function(id){
+      var base = dictionaryBaseFor(id);
+      if(base != null)
+        loaded.push(readDictionaryPairText(base, id));
+    });
+
+    if(loaded.length === 0){
+      var bundledDir = bundledDictDir();
+      if(bundledDir == null)
+        throw PlatformError(CODES.UNAVAILABLE, 'No app directory configured for the dictionary.');
+
+      loaded.push(readDictionaryPairText(bundledDir + '/' + SHARED_DICT_BASENAME, SHARED_DICT_BASENAME));
+    }
+
+    return loaded;
+  }
+
+  //Every .aff/.dic pair in both directories, bundled first. personal.dic is excluded by the pairing
+  //rule alone (it has no .aff) - never as a special case - and so is any lone .aff or .dic missing
+  //its other half.
+  function listDictionaries(){
+    return listDictionaryPairsIn(bundledDictDir(), 'bundled', false)
+      .concat(listDictionaryPairsIn(importedDictDir(), 'imported', true));
+  }
+
+  function listDictionaryPairsIn(dir, source, removable){
+    if(dir == null || !fs.existsSync(dir))
+      return [];
+
+    var files = fs.readdirSync(dir);
+
+    return files
+      .filter(function(name){ return name.endsWith('.aff'); })
+      .map(function(name){ return name.slice(0, -4); })
+      .filter(function(id){ return files.indexOf(id + '.dic') > -1; })
+      .sort()
+      .map(function(id){ return { id: id, source: source, removable: removable }; });
+  }
+
+  //Hunspell .aff files declare their own encoding on a SET line - this is deliberately narrow rather
+  //than a full charset table: every dictionary this app ships is UTF-8, and the one documented
+  //exception in circulation (ISO8859-1) is the one Node's Buffer already decodes natively as
+  //'latin1'. An encoding this cannot recognize decodes as UTF-8, same as no .aff at all.
+  function detectAffEncoding(buffer){
+    //Scanned as latin1 - a byte-preserving decode - rather than the (possibly different) declared
+    //encoding, since the SET line itself is always plain ASCII regardless of what the rest of the
+    //file is written in.
+    var scanned = buffer.toString('latin1');
+    var match = scanned.match(/^SET\s+(\S+)/m);
+
+    if(match == null)
+      return 'utf8';
+
+    var key = match[1].toUpperCase().replace(/[^A-Z0-9]/g, '');
+    var ENCODING_MAP = { UTF8: 'utf8', ISO88591: 'latin1' };
+
+    return ENCODING_MAP[key] || 'utf8';
+  }
+
+  function rewriteSetLine(affText, newSet){
+    if(/^SET\s+\S+/m.test(affText))
+      return affText.replace(/^SET\s+\S+/m, 'SET ' + newSet);
+
+    return 'SET ' + newSet + '\n' + affText;
+  }
+
+  //dicPath is the required half - there is always a word list. affPath may be omitted for a bare
+  //word list (a .txt or .dic of names with no affix file at all), in which case a generated
+  //'SET UTF-8\n' stands in for it. Decodes per the .aff's own declared encoding and returns UTF-8
+  //strings with the SET line rewritten to say so, matching what is actually being returned.
+  function readDictionaryFiles(args){
+    var dicPath = normalizePath(args == null ? undefined : args.dicPath, 'dicPath');
+    var affPath = (args == null || args.affPath == null) ? null : normalizePath(args.affPath, 'affPath');
+
+    var extIndex = dicPath.lastIndexOf('.');
+    var id = (extIndex > -1 ? dicPath.substring(0, extIndex) : dicPath).split('/').pop();
+
+    var encoding = 'utf8';
+    var affText = 'SET UTF-8\n';
+
+    if(affPath != null){
+      var affBytes = fs.readFileSync(affPath);
+      encoding = detectAffEncoding(affBytes);
+      affText = affBytes.toString(encoding);
+    }
+
+    return {
+      id: id,
+      aff: rewriteSetLine(affText, 'UTF-8'),
+      dic: fs.readFileSync(dicPath).toString(encoding)
+    };
+  }
+
+  //Refuses a colliding id (ALREADY_EXISTS) rather than shadowing it - shadowing would mean removing
+  //an imported dictionary silently changes which words are correct, with no way to show that in a
+  //list. `aff` is generated the same way readDictionaryFiles generates one for a bare word list, so
+  //this can be called directly with no affix text at all and still produce a usable pair.
+  function importDictionary(args){
+    var id = args == null ? undefined : args.id;
+    requireDictionaryId(id);
+    requireText(args.dic, 'dic');
+
+    if(paths.userData == null)
+      throw PlatformError(CODES.UNAVAILABLE, 'No userData directory configured for imported dictionaries.');
+
+    if(dictionaryBaseFor(id) != null)
+      throw PlatformError(CODES.ALREADY_EXISTS,
+        'A dictionary named "' + id + '" already exists.', { id: id });
+
+    var affText = (args.aff == null || args.aff === '') ? 'SET UTF-8\n' : args.aff;
+
+    var dir = importedDictDir();
+    if(!fs.existsSync(dir))
+      fs.mkdirSync(dir);
+
+    fs.writeFileSync(dir + '/' + id + '.aff', affText, 'utf8');
+    fs.writeFileSync(dir + '/' + id + '.dic', args.dic, 'utf8');
+  }
+
+  //Bundled dictionaries are not the writer's to delete - the `removable` flag listDictionaries
+  //returns is a UI hint, not the guard; this is. Idempotent past that guard, matching deleteEntry
+  //(group E): removing an id that is not actually on disk in userData is not a failure.
+  function removeDictionary(args){
+    var id = args == null ? undefined : args.id;
+    requireDictionaryId(id);
+
+    var bundledDir = bundledDictDir();
+    if(bundledDir != null && fs.existsSync(bundledDir + '/' + id + '.aff'))
+      throw PlatformError(CODES.INVALID_ARGUMENT,
+        'Cannot remove the bundled dictionary "' + id + '".', { id: id });
+
+    if(paths.userData == null)
+      throw PlatformError(CODES.UNAVAILABLE, 'No userData directory configured for imported dictionaries.');
+
+    var dir = importedDictDir();
+
+    if(fs.existsSync(dir + '/' + id + '.aff'))
+      fs.unlinkSync(dir + '/' + id + '.aff');
+    if(fs.existsSync(dir + '/' + id + '.dic'))
+      fs.unlinkSync(dir + '/' + id + '.dic');
   }
 
   //Seeds the personal dictionary on first read, folding in the bootstrap write
@@ -1576,6 +1987,55 @@ function createNodeBacking(deps){
     });
   }
 
+  //Shared guard for the pair below: Squirrel.Windows is a Windows mechanism, so off win32 the
+  //facility itself is absent - UNAVAILABLE, the same distinction getBatteryCapacity draws for "no
+  //battery present" rather than NOT_IMPLEMENTED, which would say the command does not exist here.
+  function requireWindowsUpdatePlatform(command){
+    if(currentPlatform() !== 'win32')
+      throw PlatformError(CODES.UNAVAILABLE,
+        'Squirrel updates are only available on Windows.', { command: command });
+
+    //A portable copy has no Update.exe beside it, so there is nothing for autoUpdater to shell out
+    //to. Refused here, with a message that says which build this is, rather than left to surface as
+    //whatever opaque error autoUpdater raises on a machine with no Squirrel - the same reason the
+    //--squirrel-firstrun case is refused in index.js before autoUpdater is touched. UNAVAILABLE and
+    //not INVALID_ARGUMENT: the caller asked for something reasonable, the facility is absent.
+    //
+    //about_display.js does not rely on this to make the decision - it reads windowsInstall and never
+    //offers an in-place install to a portable copy in the first place. This is the backing refusing
+    //to do a thing it cannot do, which is where that refusal belongs.
+    if(windowsInstallKind() !== 'squirrel')
+      throw PlatformError(CODES.UNAVAILABLE,
+        'This is the portable build of WareWoolf, which cannot update itself in place. ' +
+        'Download the latest portable zip and replace this folder.', { command: command });
+  }
+
+  //Validates and composes, then hands off to the injected hook - the same division downloadUpdate
+  //draws between checking a URL and fetching it. Nothing about the composed feed URL is
+  //renderer-supplied beyond the tag, and the tag has to be a plain vX.Y.Z before it can become part
+  //of one, so nothing here can walk the result out of RELEASE_ASSET_PATH_PREFIX.
+  //
+  //Resolves once the hook has been called, not once an update is ready - see the comment on this
+  //command in platform.js for why there is nothing else for this call to wait on.
+  function startSquirrelUpdate(args){
+    requireWindowsUpdatePlatform('startSquirrelUpdate');
+
+    var tag = args == null ? undefined : args.tag;
+    if(typeof tag !== 'string' || !SQUIRREL_UPDATE_TAG_PATTERN.test(tag))
+      throw PlatformError(CODES.INVALID_ARGUMENT,
+        'Refusing to start a Squirrel update for tag "' + tag + '": expected a plain vX.Y.Z release tag.',
+        { command: 'startSquirrelUpdate' });
+
+    onStartSquirrelUpdate('https://' + RELEASE_ASSET_HOSTNAME + RELEASE_ASSET_PATH_PREFIX + tag);
+  }
+
+  //Nothing left to validate by the time a writer clicks Restart - the hook (index.js) is the one
+  //that sets closeConfirmed and calls autoUpdater.quitAndInstall(), which closes every window.
+  function quitAndInstallUpdate(){
+    requireWindowsUpdatePlatform('quitAndInstallUpdate');
+    onQuitAndInstallUpdate();
+  }
+
   // ------------------------------------------------------------------------------------------
   // Group K (email)
   // ------------------------------------------------------------------------------------------
@@ -2066,6 +2526,75 @@ function createNodeBacking(deps){
           resolve(parsed);
       });
     });
+  }
+
+  //File > Reboot, which index.js only puts on the menu on Linux - a writerDeck that boots straight
+  //into WareWoolf has no other way to restart itself. The platform check is repeated here anyway:
+  //the menu is where the item is *shown*, this is where the command is *answered*, and a bridge is
+  //not a UI. UNAVAILABLE rather than NOT_IMPLEMENTED for both the wrong platform and a missing
+  //systemctl, the distinction requireWindowsUpdatePlatform already draws - the command exists, the
+  //facility it needs does not.
+  //
+  //`systemctl reboot` rather than `sudo reboot`: it asks logind, which grants a local active
+  //session the reboot without a password, so nothing here has to hold or prompt for one. Where
+  //polkit refuses, systemctl says so on stderr and exits non-zero, and that message is what comes
+  //back as IO_ERROR - a writer who is told "Interactive authentication required" can act on it,
+  //where a bare "reboot failed" leaves them nowhere.
+  //
+  //Success is best-effort by nature. systemctl returns as soon as logind accepts the request, so
+  //this usually resolves a moment before the machine goes down, and on a fast enough shutdown the
+  //'close' event never arrives at all. Nothing is scheduled after it either way.
+  function rebootSystem(){
+    return new Promise(function(resolve, reject){
+      if(currentPlatform() !== 'linux'){
+        reject(PlatformError(CODES.UNAVAILABLE,
+          'Reboot is only available on Linux.', { command: 'rebootSystem' }));
+        return;
+      }
+
+      var systemctl;
+      try{
+        systemctl = spawnProcess('systemctl', ['reboot']);
+      }
+      catch(spawnErr){
+        reject(rebootUnavailableOrIoError(spawnErr));
+        return;
+      }
+
+      var chunks = [];
+      var spawnFailed = false;
+
+      systemctl.stdout.on('data', function(data){ chunks.push(data); });
+      systemctl.stderr.on('data', function(data){ chunks.push(data); });
+
+      systemctl.on('error', function(err){
+        spawnFailed = true;
+        reject(rebootUnavailableOrIoError(err));
+      });
+
+      systemctl.on('close', function(exitCode){
+        if(spawnFailed) return;
+
+        if(exitCode === 0){
+          resolve(undefined);
+          return;
+        }
+
+        var output = Buffer.concat(chunks).toString().trim();
+        reject(PlatformError(CODES.IO_ERROR,
+          output || ('systemctl reboot exited with code ' + exitCode),
+          { command: 'rebootSystem', exitCode: exitCode }));
+      });
+    });
+  }
+
+  //unavailableOrIoError above names nmcli in its message, which would be the wrong binary to blame
+  //here. Same ENOENT rule, different missing thing.
+  function rebootUnavailableOrIoError(err){
+    return err != null && err.code === 'ENOENT'
+      ? PlatformError(CODES.UNAVAILABLE,
+        'Reboot needs systemctl, which is not installed on this machine.', { command: 'rebootSystem' })
+      : fromNodeError(err, { command: 'rebootSystem' });
   }
 
   // ------------------------------------------------------------------------------------------

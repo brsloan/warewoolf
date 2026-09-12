@@ -288,6 +288,128 @@ test('Ctrl+Enter toggles a card checked/unchecked', async function(t){
   assert.strictEqual(document.getElementById('card-checkmark1').classList.contains('card-checkmark-checked'), false);
 });
 
+//---------------------------------------------------------------------------
+// What a screen reader is told
+//---------------------------------------------------------------------------
+
+function announced(){
+  //A repeated announcement gets a zero-width space appended so the live region sees a change;
+  //it is not part of what is spoken, so it is not part of what is asserted.
+  return document.getElementById('corkboard-announcer').textContent.replace(/\u200B/g, '');
+}
+
+//The finished mark and the colour are both CSS classes, which a reader landing on a card's
+//fields cannot hear. Each field is described by a hidden span carrying the same state as words.
+test('each card field is described by its finished and colour state, and unused spots are hidden', async function(t){
+  var cards = [
+    { label: 'One', descr: '', color: 0, checked: false },
+    { label: 'Two', descr: '', color: '2', checked: true },
+    { label: 'Three', descr: '', color: '5', checked: false }
+  ];
+  var showCorkboard = freshCorkboardDisplay({ getCardsFromFile: function(){ return cards; }, saveCards: function(){} });
+  await showCorkboard(makeProject({ corkboardColumns: 2 }), platformInfo());
+
+  [1, 2, 3].forEach(function(n){
+    assert.strictEqual(document.getElementById('card-label' + n).getAttribute('aria-describedby'), 'card-status' + n);
+    assert.strictEqual(document.getElementById('card-descr' + n).getAttribute('aria-describedby'), 'card-status' + n);
+  });
+  assert.strictEqual(document.getElementById('card-status1').textContent, '');
+  assert.strictEqual(document.getElementById('card-status2').textContent, 'Finished. Color 2');
+  assert.strictEqual(document.getElementById('card-status3').textContent, 'Color 5');
+
+  assert.strictEqual(document.getElementById('card-checkmark2').getAttribute('role'), 'img');
+  assert.strictEqual(document.getElementById('card-checkmark2').getAttribute('aria-label'), 'Finished');
+
+  //Three cards over two columns leaves a fourth, empty spot.
+  assert.strictEqual(document.getElementById('card1').getAttribute('aria-hidden'), null);
+  assert.strictEqual(document.getElementById('card4').getAttribute('aria-hidden'), 'true');
+  assert.ok(document.getElementById('card4').classList.contains('corkboard-card-unused'));
+});
+
+test('the board has a polite live region that says what each shortcut did', async function(t){
+  var cards = [
+    { label: 'A', descr: '', color: 0, checked: false },
+    { label: 'B', descr: '', color: 0, checked: false }
+  ];
+  var showCorkboard = freshCorkboardDisplay({ getCardsFromFile: function(){ return cards; }, saveCards: function(){} });
+  var project = makeProject({ corkboardColumns: 1 });
+  await showCorkboard(project, platformInfo());
+
+  var announcer = document.getElementById('corkboard-announcer');
+  assert.strictEqual(announcer.getAttribute('aria-live'), 'polite');
+  assert.ok(announcer.classList.contains('visually-hidden'));
+  assert.ok(document.querySelector('.popup-corkboard').contains(announcer), 'the region lives in the popup, outside the board that is rebuilt');
+
+  keydown(document.getElementById('card1'), 'Enter', { ctrlKey: true });
+  assert.strictEqual(announced(), 'Card 1 finished');
+  assert.strictEqual(document.getElementById('card-status1').textContent, 'Finished');
+
+  keydown(document.getElementById('card1'), 'Enter', { ctrlKey: true });
+  assert.strictEqual(announced(), 'Card 1 not finished');
+  assert.strictEqual(document.getElementById('card-status1').textContent, '');
+
+  keydown(document.getElementById('card1'), '3', { ctrlKey: true });
+  assert.strictEqual(announced(), 'Card 1 color 3');
+  assert.strictEqual(document.getElementById('card-status1').textContent, 'Color 3');
+
+  keydown(document.getElementById('card1'), '0', { ctrlKey: true });
+  assert.strictEqual(announced(), 'Card 1 color cleared');
+  assert.strictEqual(document.getElementById('card-status1').textContent, '');
+
+  keydown(document.getElementById('card1'), 'i', { ctrlKey: true });
+  assert.strictEqual(announced(), 'Card 2 inserted');
+
+  keydown(document.getElementById('card2'), 'Backspace', { ctrlKey: true });
+  assert.strictEqual(announced(), 'Card 2 deleted');
+
+  keydown(document.getElementById('card1'), '.', { ctrlKey: true });
+  assert.strictEqual(announced(), '2 columns');
+  keydown(document.getElementById('card1'), ',', { ctrlKey: true });
+  assert.strictEqual(announced(), '1 column');
+});
+
+test('a move says where the card went, or that it stayed at the edge of the board', async function(t){
+  var cards = [
+    { label: 'A', descr: '', color: 0, checked: false },
+    { label: 'B', descr: '', color: 0, checked: false }
+  ];
+  var showCorkboard = freshCorkboardDisplay({ getCardsFromFile: function(){ return cards; }, saveCards: function(){} });
+  await showCorkboard(makeProject({ corkboardColumns: 1 }), platformInfo());
+
+  keydown(document.getElementById('card1'), 'ArrowRight', { ctrlKey: true, shiftKey: true });
+  assert.strictEqual(announced(), 'Moved to card 2');
+  assert.strictEqual(document.getElementById('card-label2').value, 'A');
+
+  keydown(document.getElementById('card2'), 'ArrowLeft', { ctrlKey: true, shiftKey: true });
+  assert.strictEqual(announced(), 'Moved to card 1');
+  assert.strictEqual(document.getElementById('card-label1').value, 'A');
+
+  keydown(document.getElementById('card1'), 'ArrowLeft', { ctrlKey: true, shiftKey: true });
+  assert.strictEqual(announced(), 'Card 1 did not move');
+});
+
+test('the same announcement twice running still changes the live region', async function(t){
+  var cards = [
+    { label: 'A', descr: '', color: 0, checked: false },
+    { label: 'B', descr: '', color: 0, checked: false },
+    { label: 'C', descr: '', color: 0, checked: false }
+  ];
+  var showCorkboard = freshCorkboardDisplay({ getCardsFromFile: function(){ return cards; }, saveCards: function(){} });
+  await showCorkboard(makeProject({ corkboardColumns: 1 }), platformInfo());
+  var announcer = document.getElementById('corkboard-announcer');
+
+  keydown(document.getElementById('card1'), 'Backspace', { ctrlKey: true });
+  var first = announcer.textContent;
+  keydown(document.getElementById('card1'), 'Backspace', { ctrlKey: true });
+  var second = announcer.textContent;
+
+  assert.strictEqual(announced(), 'Card 1 deleted');
+  assert.notStrictEqual(first, second);
+
+  keydown(document.getElementById('card1'), 'Backspace', { ctrlKey: true });
+  assert.strictEqual(announced(), 'The last card cannot be deleted');
+});
+
 test('Ctrl+<digit> sets the card color class and Ctrl+0 clears it', async function(t){
   var cards = [{ label: 'A', descr: '', color: 0, checked: false }];
   var showCorkboard = freshCorkboardDisplay({ getCardsFromFile: function(){ return cards; }, saveCards: function(){} });

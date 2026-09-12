@@ -183,7 +183,9 @@ test('saveFile regression: returns false instead of silently reporting success w
   proj.directory = dir;
   proj.filename = 'test.woolf';
   proj.chapsDirectory = '';
-  t.mock.method(fs, 'writeFileSync', function(){
+  //writeSync rather than writeFileSync: the .woolf is written to a temp file through an fd and
+  //renamed into place (platform-node.js's writeFileAtomic), so this is the call a full disk fails.
+  t.mock.method(fs, 'writeSync', function(){
     throw new Error('disk full');
   });
 
@@ -192,6 +194,7 @@ test('saveFile regression: returns false instead of silently reporting success w
   t.mock.restoreAll();
   assert.strictEqual(result, false, 'a caller checking the return value must be able to tell the save failed');
   assert.ok(!fs.existsSync(dir + 'test.woolf'));
+  assert.ok(!fs.existsSync(dir + 'test.woolf.tmp'), 'a failed write must not leave its temp file behind');
 });
 
 //---------------------------------------------------------------------------
@@ -616,6 +619,78 @@ test('saveAs as a copy leaves the open project pointing at its original location
   assert.strictEqual(chap.filename, 'chap.txt', 'the open project keeps pointing at its own files');
   assert.ok(fs.existsSync(newDir + 'Copy.woolf'), 'the copy is still written');
   assert.ok(fs.existsSync(newDir + 'Copy_chapters/chap.txt'));
+});
+
+//---------------------------------------------------------------------------
+// projectDictionary
+//---------------------------------------------------------------------------
+
+test('projectDictionary round-trips through save/load', async function(t){
+  const dir = tempDir(t);
+  const proj = newProject();
+  proj.directory = dir;
+  proj.filename = 'test.woolf';
+  proj.chapsDirectory = '';
+  proj.projectDictionary = ['Aurelion', 'Dorrigo'];
+  await proj.saveFile();
+
+  const reloaded = newProject();
+  await reloaded.loadFile(dir + 'test.woolf');
+
+  assert.deepStrictEqual(reloaded.projectDictionary, ['Aurelion', 'Dorrigo']);
+});
+
+//stringifyProject is a denylist, and Object.assign restores whatever the file carries - so a
+//.woolf saved by an older WareWoolf build, which never wrote this key at all, has to leave the
+//newProject() default in place rather than throwing or leaving the field undefined.
+test('projectDictionary defaults to an empty array when absent from an older .woolf', async function(t){
+  const dir = tempDir(t);
+  const legacyProject = { filename: '', directory: '', chapsDirectory: '', title: 'Old Book',
+    author: '', chapters: [], reference: [], filters: [], trash: [], activeChapterIndex: 0 };
+  fs.writeFileSync(dir + 'legacy.woolf', JSON.stringify(legacyProject), 'utf8');
+
+  const proj = newProject();
+  await proj.loadFile(dir + 'legacy.woolf');
+
+  assert.deepStrictEqual(proj.projectDictionary, []);
+});
+
+//The same hole the isReadOnly comment on project.js documents for a hand-edited .woolf - nothing
+//validates what Object.assign copies in, so a bad value has to be sanitized rather than trusted.
+test('a non-array projectDictionary value is sanitized to an empty array on load', async function(t){
+  const dir = tempDir(t);
+  const badProject = { filename: '', directory: '', chapsDirectory: '', title: 'Bad Book',
+    author: '', chapters: [], reference: [], filters: [], trash: [], activeChapterIndex: 0,
+    projectDictionary: 'Aurelion' };
+  fs.writeFileSync(dir + 'bad.woolf', JSON.stringify(badProject), 'utf8');
+
+  const proj = newProject();
+  await proj.loadFile(dir + 'bad.woolf');
+
+  assert.deepStrictEqual(proj.projectDictionary, []);
+});
+
+test('projectDictionary survives Save As and Save a Copy', async function(t){
+  const oldDir = tempDir(t);
+  const newDir = tempDir(t);
+  const copyDir = tempDir(t);
+  const proj = newProject();
+  proj.chapters = [];
+  proj.reference = [];
+  proj.trash = [];
+  proj.projectDictionary = ['Aurelion'];
+
+  await proj.saveAs(oldDir + 'Book.woolf');
+  assert.deepStrictEqual(
+    JSON.parse(fs.readFileSync(oldDir + 'Book.woolf', 'utf8')).projectDictionary, ['Aurelion']);
+
+  await proj.saveAs(newDir + 'Moved.woolf');
+  assert.deepStrictEqual(
+    JSON.parse(fs.readFileSync(newDir + 'Moved.woolf', 'utf8')).projectDictionary, ['Aurelion']);
+
+  await proj.saveAs(copyDir + 'Copy.woolf', true);
+  assert.deepStrictEqual(
+    JSON.parse(fs.readFileSync(copyDir + 'Copy.woolf', 'utf8')).projectDictionary, ['Aurelion']);
 });
 
 //---------------------------------------------------------------------------

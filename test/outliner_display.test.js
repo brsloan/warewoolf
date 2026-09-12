@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { JSDOM } = require('jsdom');
+const { assertDialogDescribed, assertControlsNamed } = require('./helpers');
 
 const outlinerDisplayPath = require.resolve('../src/components/views/outliner_display');
 
@@ -27,6 +28,10 @@ function makeProject(overrides){
   }, overrides);
 }
 
+function makeSettings(overrides){
+  return Object.assign({ wordsPerPage: 300 }, overrides);
+}
+
 test.beforeEach(function(){
   const dom = new JSDOM('<!doctype html><html><body>' + bodyShell() + '</body></html>');
   global.window = dom.window;
@@ -39,16 +44,50 @@ test.afterEach(function(){
   delete global.document;
 });
 
-test('renders a row per chapter with title, word count, and summary', async function(t){
+test('renders a row per chapter with title, word count, page estimate, and summary', async function(t){
   var showOutliner = require(outlinerDisplayPath);
   var chap = makeChap({ title: 'Intro', summary: 'An intro' });
   var project = makeProject({ chapters: [chap] });
 
-  await showOutliner(project);
+  await showOutliner(project, makeSettings());
 
   assert.strictEqual(document.querySelector('.outliner-title').innerText, 'Intro');
   assert.strictEqual(document.querySelector('.outliner-word-count').innerText, 3);
+  assert.strictEqual(document.querySelector('.outliner-page-count').innerText, '~0.0');
   assert.strictEqual(document.querySelector('.outliner-summary input').value, 'An intro');
+});
+
+//The same words-per-page value the Word Count dialog sets, but carried to a tenth of a page - the
+//column is there to be compared down its length, and whole pages would round neighbouring chapters
+//together and overshoot the project's own page estimate once every row had been rounded up.
+test('the page estimate uses the words-per-page setting and keeps a part-filled page as a fraction', async function(t){
+  var showOutliner = require(outlinerDisplayPath);
+  var chap = makeChap({ getContentsOrFile: function(){ return { ops: [{ insert: 'one two three four five' }] }; } });
+
+  await showOutliner(makeProject({ chapters: [chap] }), makeSettings({ wordsPerPage: 2 }));
+
+  assert.strictEqual(document.querySelector('.outliner-word-count').innerText, 5);
+  assert.strictEqual(document.querySelector('.outliner-page-count').innerText, '~2.5');
+});
+
+//A tenth is as fine as the column goes, so a chapter far shorter than that reads as ~0.0 rather
+//than being rounded up to a page it does not fill.
+test('a chapter shorter than a tenth of a page reads as ~0.0', async function(t){
+  var showOutliner = require(outlinerDisplayPath);
+
+  await showOutliner(makeProject(), makeSettings({ wordsPerPage: 300 }));
+
+  assert.strictEqual(document.querySelector('.outliner-page-count').innerText, '~0.0');
+});
+
+//0 words per page would make every chapter infinitely long, so there is no estimate to give -
+//the same case the Word Count dialog answers by falling back to the bare count.
+test('a words-per-page setting of 0 leaves the page cell empty instead of showing Infinity', async function(t){
+  var showOutliner = require(outlinerDisplayPath);
+
+  await showOutliner(makeProject(), makeSettings({ wordsPerPage: 0 }));
+
+  assert.strictEqual(document.querySelector('.outliner-page-count').innerText, '');
 });
 
 //Regression: chapter.js initializes new chapters with summary: null, and every existing .woolf
@@ -110,4 +149,16 @@ test('does not throw when the project has no chapters', function(t){
     await showOutliner(project);
   });
   assert.strictEqual(document.querySelectorAll('#outliner-table tr').length, 1, 'only the header row should be present');
+});
+
+//The outliner has no heading of its own, so it is named outright, and each summary box - a bare
+//field in a table cell - says which chapter it belongs to.
+test('the outliner is a named dialog and each summary field says which chapter it is for', async function(){
+  var showOutliner = require(outlinerDisplayPath);
+  await showOutliner(makeProject({ chapters: [makeChap({ title: 'Intro' })] }));
+
+  var popup = document.querySelector('.popup');
+  assertDialogDescribed(popup, 'dialog');
+  assert.strictEqual(popup.querySelector('.outliner-summary input').getAttribute('aria-label'), 'Summary of Intro');
+  assertControlsNamed(popup);
 });

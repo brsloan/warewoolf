@@ -1,5 +1,7 @@
-const { closePopups, createButton, removeElementsByClass, enableSearchView } = require('../controllers/utils');
-const { runSpellcheck, addWordToPersonalDictFile } = require('../controllers/spellcheck');
+const { closePopups, createButton, removeElementsByClass, enableSearchView, describeDialog } = require('../controllers/utils');
+const {
+  runSpellcheck, addWordToPersonalDictFile, addWordToProjectDictionary, releaseSpellchecker
+} = require('../controllers/spellcheck');
 const { replace, replaceAllInAllChapters } = require('../controllers/findreplace');
 
 //Async now that loading the dictionaries goes through the platform facade.
@@ -18,6 +20,7 @@ async function showSpellcheck(editorQuill, project, displayChapterByIndex, start
     var popupTitle = document.createElement('h1');
     popupTitle.innerText = 'Spell Check';
     popup.appendChild(popupTitle);
+    describeDialog(popup, popupTitle);
 
     var wordDisplay = document.createElement("h2");
     wordDisplay.innerText = invalidWord ? invalidWord.word : "*spellcheck finished*";
@@ -114,9 +117,7 @@ async function showSpellcheck(editorQuill, project, displayChapterByIndex, start
         selectedReplacement = customInput;
 
       if(invalidWord && selectedReplacement != null){
-        const caseSensitive = true;
-        const wholeWordOnly = true;
-        await replaceAllInAllChapters(project, invalidWord.word, selectedReplacement.value, caseSensitive, wholeWordOnly);
+        await replaceAllInAllChapters(project, invalidWord.word, selectedReplacement.value, { caseSensitive: true, wholeWordOnly: true });
         displayChapterByIndex(project.activeChapterIndex);
         return ignoreBtn.onclick();
       }
@@ -136,10 +137,35 @@ async function showSpellcheck(editorQuill, project, displayChapterByIndex, start
     addToDic.accessKey = "a";
     popup.appendChild(addToDic);
 
+    //The answer for a character name and the answer for a word the writer will use in every book
+    //are different, and only the writer knows which they are looking at. Keeping 'a' on the
+    //personal dictionary is deliberate even though Add To Project is the more common action for a
+    //novelist - silently repointing a key a writer already has in their fingers is worse than a
+    //suboptimal default.
+    var addToProject = createButton("Add To <span class='access-key'>P</span>roject");
+    addToProject.onclick = async function(){
+      if(invalidWord){
+        addWordToProjectDictionary(project, invalidWord.word);
+        return ignoreBtn.onclick();
+      }
+    }
+    addToProject.accessKey = "p";
+    //A project that cannot be saved (the read-only Help doc) has nothing to add the word to that
+    //would survive - see project.saveFile()'s own isReadOnly guard.
+    addToProject.disabled = project == null || project.isReadOnly;
+    popup.appendChild(addToProject);
+
     popup.appendChild(document.createElement('br'));
 
     var cancelBtn = createButton("Cancel");
+    //The pass is over, so the parsed dictionaries go with it. getSpellchecker() holds them for the
+    //length of one pass - which is what stops the reparse this popup used to do on every Ignore and
+    //Change click - but a parsed en_US-large is tens of megabytes, and two or three of those
+    //resident for the rest of the session to save a parse the writer takes minutes to trigger again
+    //is the wrong trade on a writerDeck. Escape does the same thing (keybindings.js), those being
+    //the two ways out of this dialog.
     cancelBtn.onclick = function(){
+      releaseSpellchecker();
       closePopups();
     }
     popup.appendChild(cancelBtn);

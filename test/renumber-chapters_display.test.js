@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { JSDOM } = require('jsdom');
+const { assertDialogDescribed, assertControlsNamed } = require('./helpers');
 
 const renumberDisplayPath = require.resolve('../src/components/views/renumber-chapters_display');
 
@@ -143,4 +144,13 @@ test('Submit shows an error and does not renumber when the start chapter is afte
   assert.strictEqual(chapB.title, 'Old B');
   assert.strictEqual(document.getElementsByClassName('popup').length, 1);
   assert.strictEqual(finished, false);
+});
+
+test('the renumber popup is a dialog and every field is labelled', function(){
+  var showRenumberChapters = require(renumberDisplayPath);
+  showRenumberChapters(makeProject([makeChap('Alpha'), makeChap('Beta')]), function(){});
+
+  var popup = document.querySelector('.popup');
+  assertDialogDescribed(popup, 'dialog');
+  assert.ok(assertControlsNamed(popup) >= 4, 'the renumber form should have fields to check');
 });

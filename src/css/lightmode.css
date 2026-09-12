@@ -1,105 +1,76 @@
-@media (prefers-color-scheme: light) {
+/* The light palette: warm paper and ink.
 
-  body {
-    background-color: #EDF2F4;
-  }
+   Defined on :root without a media query so it is also what the app wears when the system
+   expresses no preference; darkmode.css overrides every token below under
+   prefers-color-scheme: dark, which is what index.js's nativeTheme.themeSource drives.
 
-  #writing-field {
-    background-color: #ffffff;
-  }
+   Contrast, measured against WCAG 2.1 AA (see test/theme-contrast.test.js, which checks every
+   pairing this comment claims):
+     text / text-muted on bg, sheet, surface, surface-2, input-bg, selected-bg  >= 4.5:1
+     accent, link, success, danger, warning-text on their surfaces               >= 4.5:1
+     border-strong, focus, scrollbar against the surfaces they sit on            >= 3:1
+     progress fill (any hue) against the track                                   >= 3:1 */
 
-  ::-webkit-scrollbar {
-    background-color: none;
-  }
+:root {
+  --bg: #efe9de;
+  --sheet: #fbf8f2;
+  --surface: #f6f1e7;
+  --surface-2: #e9e2d4;
 
-  ::-webkit-scrollbar-thumb {
-    background: #aaa;
-  }
+  --text: #23201c;
+  --text-muted: #5c554b;
 
-  .popup, .popup-dialog, .working-popup {
-    background-color: #2B2D42;
-    color: white;
-  }
+  --border: #cbc2b2;
+  --border-strong: #7f7666;
 
-  .popup-outliner {
-    background-color: #2B2D42;
-    color: black;
-  }
+  --accent: #7a2e2e;
+  --accent-hover: #5c2020;
+  --on-accent: #ffffff;
+  --focus: #7a2e2e;
+  --link: #7a2e2e;
 
-  .popup-outliner th{
-    background-color: #EDF2F4;
-  }
+  --selection: #dcc9a4;
+  --selected-bg: #e6dcc8;
+  --hover-bg: #e9e2d4;
 
-  .popup-outliner td{
-    background-color: #EDF2F4;
-  }
+  --input-bg: #fffdf8;
+  --code-bg: #fffdf8;
 
-  .popup a{
-    color: white;
-  }
+  --btn-bg: #f1ebdf;
+  --btn-hover: #e6dcc8;
+  --btn-text: #23201c;
+  --btn-border: #7f7666;
 
-  button, input[type=submit] {
-    background-color: #EDF2F4;
-    color: black;
-  }
+  --success: #2c6636;
+  --success-mark: #2f7a3d;
+  --danger: #a3261f;
+  --danger-bg: #a3261f;
+  --on-danger: #ffffff;
+  --warning-text: #6b4a00;
+  --warning-bg: #f8efd3;
+  --warning-border: #9a7a26;
 
-  :focus {
-    outline-color: #EF233C;
-  }
+  --track: #ddd4c3;
+  --progress-sat: 65%;
+  --progress-light: 27%;
 
-  #chapter-list-sidebar:focus {
-    outline: none;
-  }
+  --scrollbar: #8f8571;
+  --scrollbar-hover: #7a2e2e;
 
-  .warning-text {
-    color: gold;
-  }
+  --sheet-shadow: 0 0 0 1px rgba(60, 50, 30, 0.04), 0 2px 18px rgba(60, 50, 30, 0.10);
+  --popup-shadow: 0 12px 40px rgba(40, 30, 15, 0.22), 0 2px 6px rgba(40, 30, 15, 0.10);
+  --card-shadow: 0 1px 3px rgba(40, 30, 15, 0.14);
+  --card-bg: #fbf8f2;
 
-  .corkboard-card {
-    background-color: white;
-    border: 1px solid black;
-  }
-
-  .corkboard-card-horiz {
-    border: 1px solid black;
-    background-color: white;
-  }
-
-  .card-num-label {
-    color: black;
-  }
-
-  .corkboard-color1 {
-    background-color: #ed553b;
-  }
-
-  .corkboard-color2 {
-    background-color: #20639b;
-  }
-
-  .corkboard-color3 {
-    background-color: #3caea3;
-  }
-
-  .corkboard-color4 {
-    background-color: #f6d55c;
-  }
-
-  .corkboard-color5 {
-    background-color: #8b3bed;
-  }
-
-  .corkboard-color6 {
-    background-color: #ed3bed;
-  }
-  .corkboard-color7 {
-    background-color: #ed733b;
-  }
-  .corkboard-color8 {
-    background-color: #3bedbe;
-  }
-  .corkboard-color9 {
-    background-color: #3b94ed;
-  }
-
+  /* Corkboard tints, light enough for the ink text on every card, with a deeper edge of the same
+     hue so a card's colour reads at a glance down a column. */
+  --cork-1: #f4d6d0; --cork-1-edge: #b5493d;
+  --cork-2: #d0dcec; --cork-2-edge: #2d5f95;
+  --cork-3: #cfe7e1; --cork-3-edge: #2a8a7c;
+  --cork-4: #f1e5b6; --cork-4-edge: #b0891a;
+  --cork-5: #e2d5f1; --cork-5-edge: #6d43b0;
+  --cork-6: #f1d1e6; --cork-6-edge: #b03d8a;
+  --cork-7: #f6dac4; --cork-7-edge: #c05a24;
+  --cork-8: #cfecd8; --cork-8-edge: #2f8a4a;
+  --cork-9: #d0e4f3; --cork-9-edge: #2f76b0;
 }

@@ -1,4 +1,4 @@
-const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
+const { closePopups, createButton, removeElementsByClass, describeDialog } = require('../controllers/utils');
 const { installUpdate } = require('../controllers/updates');
 
 function showInstallUpdate(filepath){
@@ -9,6 +9,7 @@ function showInstallUpdate(filepath){
   var popupTitle = document.createElement('h1');
   popupTitle.innerText = 'Install Update';
   popup.appendChild(popupTitle);
+  describeDialog(popup, popupTitle);
 
   var pathDisp = document.createElement('p');
   pathDisp.innerText = filepath;

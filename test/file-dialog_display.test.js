@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { JSDOM } = require('jsdom');
+const { assertDialogDescribed, assertControlsNamed } = require('./helpers');
 
 const fileDialogDisplayPath = require.resolve('../src/components/views/file-dialog_display');
 const fileManagerPath = require.resolve('../src/components/controllers/file-manager');
@@ -203,4 +204,17 @@ test('an unsaved project contributes no shortcut instead of throwing', async fun
   await assert.doesNotReject(function(){
     return showFileDialog(baseOptions({ bookmarkedPaths: ['/docs'], projectDirectory: undefined }), function(){});
   });
+});
+
+//The file dialog is a dialog named by the title the caller passed, and its two lists, the filename
+//field and the type filter each have a name - none of them has visible label text.
+test('the file dialog is named by its title and its lists and fields are labelled', async function(){
+  var showFileDialog = freshFileDialogDisplay({ getFileList: async function(){ return []; } });
+
+  await showFileDialog(baseOptions(), function(){});
+
+  var popup = document.querySelector('.popup-dialog');
+  assertDialogDescribed(popup, 'dialog');
+  assert.strictEqual(document.getElementById(popup.getAttribute('aria-labelledby')).innerText, 'Test dialog');
+  assert.ok(assertControlsNamed(popup) >= 3, 'the save dialog should have lists and a filename field to check');
 });

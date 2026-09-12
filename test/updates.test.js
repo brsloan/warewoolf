@@ -35,6 +35,15 @@ function freshUpdates(deps){
   return require(updatesPath);
 }
 
+//startWindowsUpdate/finishWindowsUpdate need the bridge itself, not just the module exports - the
+//events they subscribe to only exist as something a test can fire (bridge.emit) or count
+//(bridge.listenerCount) on that fake bridge, the same one platform.on/off talk to underneath.
+function freshUpdatesWithBridge(deps){
+  delete require.cache[updatesPath];
+  const bridge = installBridge(deps);
+  return { updates: require(updatesPath), bridge: bridge };
+}
+
 function tempDir(){
   return fs.mkdtempSync(path.join(os.tmpdir(), 'warewoolf-updates-'));
 }
@@ -66,6 +75,7 @@ function releaseJson(tag, overrides){
       { name: 'warewoolf_' + v + '_amd64.deb', browser_download_url: 'https://example.com/' + v + '/amd64.deb' },
       { name: 'warewoolf_' + v + '_arm64.deb', browser_download_url: 'https://example.com/' + v + '/arm64.deb' },
       { name: 'warewoolf_' + v + '_Windows_x64.zip', browser_download_url: 'https://example.com/' + v + '/win.zip' },
+      { name: 'warewoolf_' + v + '_Windows_Portable_x64.zip', browser_download_url: 'https://example.com/' + v + '/win-portable.zip' },
       { name: 'warewoolf_' + v + '_MacOS_Intel.zip', browser_download_url: 'https://example.com/' + v + '/mac-intel.zip' },
       { name: 'warewoolf_' + v + '_MacOS_AppleSilicon.zip', browser_download_url: 'https://example.com/' + v + '/mac-arm.zip' },
       { name: 'warewoolf_' + v + '_MacOS_Legacy.zip', browser_download_url: 'https://example.com/' + v + '/mac-legacy.zip' }
@@ -375,14 +385,35 @@ test('getUpdates regression: destroys the request once it times out', async func
 //lineages the build follows. Leaving it off a row is itself a case worth covering: that is this
 //suite's own situation, plain node with no process.versions.electron, and it has to read as
 //mainline rather than legacy.
+//Windows ships two builds of one app, and which one is running is decided by looking for Squirrel's
+//Update.exe one directory above the binary - so a win32 case here has to stand somewhere on disk
+//that looks like one layout or the other, rather than declare an answer. Both are built for real,
+//because this is what chooses between handing a writer the installer and handing them the portable
+//zip, and a fake that always agreed with the production code would not catch getting it backwards.
+function windowsLayout(t, kind){
+  const root = freshTempDir(t);
+  const appDir = path.join(root, kind === 'squirrel' ? 'app-2.0.0' : 'WareWoolf_2.0.0_Portable');
+  fs.mkdirSync(appDir);
+  if(kind === 'squirrel')
+    fs.writeFileSync(path.join(root, 'Update.exe'), 'not really Squirrel');
+  return path.join(appDir, 'warewoolf.exe');
+}
+
+//`windowsInstall` defaults to 'squirrel' on win32: the installer is what the overwhelming majority
+//of Windows writers run, and it is what every win32 case in this file meant before the portable
+//build existed.
 function asPlatform(t, c){
   const orig = {
     platform: Object.getOwnPropertyDescriptor(process, 'platform'),
     arch: Object.getOwnPropertyDescriptor(process, 'arch'),
+    execPath: Object.getOwnPropertyDescriptor(process, 'execPath'),
     electron: Object.getOwnPropertyDescriptor(process.versions, 'electron')
   };
   Object.defineProperty(process, 'platform', { value: c.platform, configurable: true });
   Object.defineProperty(process, 'arch', { value: c.arch, configurable: true });
+  if(c.platform === 'win32')
+    Object.defineProperty(process, 'execPath', {
+      value: windowsLayout(t, c.windowsInstall || 'squirrel'), configurable: true });
   if(c.electron)
     Object.defineProperty(process.versions, 'electron', { value: c.electron, configurable: true });
   else
@@ -391,6 +422,7 @@ function asPlatform(t, c){
   t.after(function(){
     Object.defineProperty(process, 'platform', orig.platform);
     Object.defineProperty(process, 'arch', orig.arch);
+    Object.defineProperty(process, 'execPath', orig.execPath);
     if(orig.electron)
       Object.defineProperty(process.versions, 'electron', orig.electron);
     else
@@ -402,6 +434,11 @@ function asPlatform(t, c){
   { platform: 'linux', arch: 'x64', expected: 'amd64' },
   { platform: 'linux', arch: 'arm64', expected: 'arm64' },
   { platform: 'win32', arch: 'x64', expected: 'Windows_x64' },
+  //The two Windows builds of one release. An installed copy updates in place via Squirrel and takes
+  //the installer when it has to fall back to downloading; a portable copy has no Squirrel and is
+  //replaced folder-and-all, so the zip is the only asset that is an update for it at all.
+  { platform: 'win32', arch: 'x64', windowsInstall: 'squirrel', expected: 'Windows_x64' },
+  { platform: 'win32', arch: 'x64', windowsInstall: 'portable', expected: 'Windows_Portable_x64' },
   { platform: 'darwin', arch: 'x64', expected: 'MacOS_Intel' },
   { platform: 'darwin', arch: 'arm64', expected: 'MacOS_AppleSilicon' },
   { platform: 'darwin', arch: 'x64', electron: '44.2.0', expected: 'MacOS_Intel' },
@@ -476,6 +513,53 @@ test('a legacy mac build finds no binary in a release that has no legacy asset',
   const latest = await new Promise(function(resolve){ getUpdates('1.0.0', resolve); });
   assert.ok(latest, 'an update is still announced');
   assert.strictEqual(latest.downloadInfo, undefined);
+});
+
+//Regression: Step 1 of the Windows autoupdate plan adds RELEASES and warewoolf-<version>-full.nupkg
+//to the assets a Windows release actually carries alongside the .exe. extractUpdateDownloadInfo
+//matches by bin.name.includes(binType) over a find(), so a release listing that includes them must
+//still hand win32 the .exe and not accidentally match one of the two new files (neither one
+//contains "Windows_x64", but this is the regression that would show it if a future rename broke
+//that).
+test('getUpdates regression: matches the Windows installer even when RELEASES and the .nupkg feed file are also listed as assets', async function(t){
+  mockReleaseResponse(t, { body: releaseJson('v2.0.0', { assets: [
+    { name: 'warewoolf_2.0.0_amd64.deb', browser_download_url: 'https://example.com/2.0.0/amd64.deb' },
+    { name: 'warewoolf_2.0.0_Windows_x64.exe', browser_download_url: 'https://example.com/2.0.0/win.exe' },
+    { name: 'RELEASES', browser_download_url: 'https://example.com/2.0.0/RELEASES' },
+    { name: 'warewoolf-2.0.0-full.nupkg', browser_download_url: 'https://example.com/2.0.0/warewoolf-2.0.0-full.nupkg' }
+  ] }) });
+  asPlatform(t, { platform: 'win32', arch: 'x64' });
+  const { getUpdates } = freshUpdates();
+
+  const latest = await new Promise(function(resolve){ getUpdates('1.0.0', resolve); });
+
+  assert.strictEqual(latest.downloadInfo.name, 'warewoolf_2.0.0_Windows_x64.exe');
+});
+
+//Regression, and the reason the portable Windows asset is not named Windows_x64_Portable. A
+//Windows release carries two builds of the same app now - the Squirrel installer and a portable
+//zip - and only one of them is what a writer running the installed copy should be handed. The
+//portable zip is listed first here, the ordering that would break a name carrying the substring,
+//for the same reason the mac ordering test lists the legacy asset first.
+test('the portable and installer Windows asset names cannot match each other by substring', function(){
+  assert.ok(!'warewoolf_2.0.0_Windows_Portable_x64.zip'.includes('Windows_x64'));
+  assert.ok(!'warewoolf_2.0.0_Windows_Portable_x64.zip'.includes('amd64'));
+  assert.ok(!'warewoolf_2.0.0_Windows_Portable_x64.zip'.includes('arm64'));
+});
+
+test('getUpdates regression: hands win32 the installer, not the portable zip, whatever order the assets are listed in', async function(t){
+  mockReleaseResponse(t, { body: releaseJson('v2.0.0', { assets: [
+    { name: 'warewoolf_2.0.0_Windows_Portable_x64.zip', browser_download_url: 'https://example.com/2.0.0/win-portable.zip' },
+    { name: 'warewoolf_2.0.0_Windows_x64.exe', browser_download_url: 'https://example.com/2.0.0/win.exe' },
+    { name: 'RELEASES', browser_download_url: 'https://example.com/2.0.0/RELEASES' },
+    { name: 'warewoolf-2.0.0-full.nupkg', browser_download_url: 'https://example.com/2.0.0/warewoolf-2.0.0-full.nupkg' }
+  ] }) });
+  asPlatform(t, { platform: 'win32', arch: 'x64' });
+  const { getUpdates } = freshUpdates();
+
+  const latest = await new Promise(function(resolve){ getUpdates('1.0.0', resolve); });
+
+  assert.strictEqual(latest.downloadInfo.name, 'warewoolf_2.0.0_Windows_x64.exe');
 });
 
 test('getUpdates regression: leaves downloadInfo undefined instead of throwing on an unsupported platform/arch combo', async function(t){
@@ -863,4 +947,103 @@ test('installUpdate regression: invokes the onDone callback with the process exi
   await new Promise(function(resolve){ setImmediate(resolve); });
 
   assert.deepStrictEqual(calls, [1]);
+});
+
+//---------------------------------------------------------------------------
+// startWindowsUpdate / finishWindowsUpdate
+//---------------------------------------------------------------------------
+
+test('startWindowsUpdate calls startSquirrelUpdate with the tag and subscribes to both outcome events', async function(t){
+  const seenTags = [];
+  const { updates, bridge } = freshUpdatesWithBridge({
+    platform: 'win32',
+    //An installed copy: these four commands are Squirrel's, and the backing refuses them to a
+    //portable one, which has no Squirrel to hand them to.
+    execPath: windowsLayout(t, 'squirrel'),
+    onStartSquirrelUpdate: function(feedUrl){ seenTags.push(feedUrl); }
+  });
+
+  updates.startWindowsUpdate('v2.6.0', function(){}, function(){});
+  await flushMicrotask();
+
+  assert.deepStrictEqual(seenTags, ['https://github.com/brsloan/warewoolf/releases/download/v2.6.0']);
+  assert.strictEqual(bridge.listenerCount('app-update-downloaded'), 1);
+  assert.strictEqual(bridge.listenerCount('app-update-failed'), 1);
+});
+
+test('startWindowsUpdate fires onDownloaded and unsubscribes both listeners when the download finishes', async function(t){
+  const { updates, bridge } = freshUpdatesWithBridge({
+    platform: 'win32',
+    //An installed copy: these four commands are Squirrel's, and the backing refuses them to a
+    //portable one, which has no Squirrel to hand them to.
+    execPath: windowsLayout(t, 'squirrel'),
+    onStartSquirrelUpdate: function(){}
+  });
+
+  let downloadedCalls = 0;
+  let failedCalls = 0;
+  updates.startWindowsUpdate('v2.6.0', function(){ downloadedCalls++; }, function(){ failedCalls++; });
+  await flushMicrotask();
+
+  bridge.emit('app-update-downloaded');
+
+  assert.strictEqual(downloadedCalls, 1);
+  assert.strictEqual(failedCalls, 0);
+  assert.strictEqual(bridge.listenerCount('app-update-downloaded'), 0,
+    'the downloaded listener must not be left behind');
+  assert.strictEqual(bridge.listenerCount('app-update-failed'), 0,
+    'the failed listener must not be left behind either, once either event has fired');
+});
+
+test('startWindowsUpdate fires onFailed with the message and unsubscribes both listeners when the update fails', async function(t){
+  const { updates, bridge } = freshUpdatesWithBridge({
+    platform: 'win32',
+    //An installed copy: these four commands are Squirrel's, and the backing refuses them to a
+    //portable one, which has no Squirrel to hand them to.
+    execPath: windowsLayout(t, 'squirrel'),
+    onStartSquirrelUpdate: function(){}
+  });
+
+  let downloadedCalls = 0;
+  const failedMessages = [];
+  updates.startWindowsUpdate('v2.6.0', function(){ downloadedCalls++; }, function(message){ failedMessages.push(message); });
+  await flushMicrotask();
+
+  bridge.emit('app-update-failed', 'Update failed: network is unreachable.');
+
+  assert.strictEqual(downloadedCalls, 0);
+  assert.deepStrictEqual(failedMessages, ['Update failed: network is unreachable.']);
+  assert.strictEqual(bridge.listenerCount('app-update-downloaded'), 0);
+  assert.strictEqual(bridge.listenerCount('app-update-failed'), 0);
+});
+
+//Regression coverage for the seam test/fake-bridge.js's listenerCount exists to catch: a writer who
+//clicks Install, hits an immediate rejection (a bad tag, or this off win32), and clicks again must
+//not accumulate listeners across attempts.
+test('startWindowsUpdate reports onFailed and leaves zero listeners behind when startSquirrelUpdate itself rejects', async function(t){
+  const { updates, bridge } = freshUpdatesWithBridge({ platform: 'linux' });
+
+  const failedMessages = [];
+  updates.startWindowsUpdate('v2.6.0', function(){}, function(message){ failedMessages.push(message); });
+  await flushMicrotask();
+
+  assert.strictEqual(failedMessages.length, 1);
+  assert.strictEqual(bridge.listenerCount('app-update-downloaded'), 0);
+  assert.strictEqual(bridge.listenerCount('app-update-failed'), 0);
+});
+
+test('finishWindowsUpdate calls quitAndInstallUpdate', async function(t){
+  let called = 0;
+  const { updates } = freshUpdatesWithBridge({
+    platform: 'win32',
+    //An installed copy: these four commands are Squirrel's, and the backing refuses them to a
+    //portable one, which has no Squirrel to hand them to.
+    execPath: windowsLayout(t, 'squirrel'),
+    onQuitAndInstallUpdate: function(){ called++; }
+  });
+
+  updates.finishWindowsUpdate();
+  await flushMicrotask();
+
+  assert.strictEqual(called, 1);
 });

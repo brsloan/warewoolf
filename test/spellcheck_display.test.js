@@ -22,7 +22,9 @@ function freshSpellcheckDisplay(mocks){
     loaded: true,
     exports: {
       runSpellcheck: mocks.runSpellcheck || function(){ return null; },
-      addWordToPersonalDictFile: mocks.addWordToPersonalDictFile || function(){}
+      addWordToPersonalDictFile: mocks.addWordToPersonalDictFile || function(){},
+      addWordToProjectDictionary: mocks.addWordToProjectDictionary || function(){},
+      releaseSpellchecker: mocks.releaseSpellchecker || function(){}
     }
   };
   require.cache[findReplaceControllerPath] = {
@@ -115,6 +117,81 @@ test('Add To Dictionary adds the current word and advances to the next one', asy
   assert.strictEqual(document.querySelector('h2').innerText, '*spellcheck finished*');
 });
 
+//---------------------------------------------------------------------------
+// Add To Project
+//---------------------------------------------------------------------------
+
+test('Add To Project is disabled with no project open', async function(){
+  var showSpellcheck = freshSpellcheckDisplay({
+    runSpellcheck: function(){ return { word: 'zxqzxq', index: 0, suggestions: [] }; }
+  });
+
+  await showSpellcheck(makeEditorQuill(), null, {}, function(){});
+
+  assert.strictEqual(getButtonByAccessKey('p').disabled, true);
+});
+
+//A project opened out of the read-only install directory (the Help doc) cannot be saved - see
+//project.saveFile()'s own isReadOnly guard - so there is nothing the word could be added to that
+//would survive.
+test('Add To Project is disabled for a read-only project', async function(){
+  var showSpellcheck = freshSpellcheckDisplay({
+    runSpellcheck: function(){ return { word: 'zxqzxq', index: 0, suggestions: [] }; }
+  });
+
+  await showSpellcheck(makeEditorQuill(), { isReadOnly: true, projectDictionary: [] }, {}, function(){});
+
+  assert.strictEqual(getButtonByAccessKey('p').disabled, true);
+});
+
+test('Add To Project adds the current word, sets hasUnsavedChanges, advances, and does not touch the personal dictionary', async function(){
+  var projectCalls = [];
+  var personalCalls = 0;
+  var callCount = 0;
+  var project = { isReadOnly: false, projectDictionary: [], hasUnsavedChanges: false };
+
+  var showSpellcheck = freshSpellcheckDisplay({
+    runSpellcheck: function(){
+      callCount++;
+      return callCount === 1 ? { word: 'Aurelion', index: 5, suggestions: [] } : null;
+    },
+    addWordToPersonalDictFile: function(){ personalCalls++; },
+    //Stands in for the real addWordToProjectDictionary (unit-tested directly in spellcheck.test.js)
+    //just enough to prove the wiring: called with the right word, and hasUnsavedChanges ends up set.
+    addWordToProjectDictionary: function(proj, word){
+      projectCalls.push(word);
+      proj.projectDictionary.push(word);
+      proj.hasUnsavedChanges = true;
+    }
+  });
+
+  await showSpellcheck(makeEditorQuill(), project, {}, function(){});
+
+  assert.strictEqual(getButtonByAccessKey('p').disabled, false);
+  await getButtonByAccessKey('p').onclick();
+
+  assert.deepStrictEqual(projectCalls, ['Aurelion']);
+  assert.strictEqual(project.hasUnsavedChanges, true);
+  assert.strictEqual(personalCalls, 0, 'Add To Project must not write the personal dictionary');
+  assert.strictEqual(callCount, 2, 'adding the word should re-run spellcheck from the next index');
+  assert.strictEqual(document.querySelector('h2').innerText, '*spellcheck finished*');
+});
+
+test('Add To Project does nothing when spellcheck has already finished', async function(){
+  var projectCalls = 0;
+  var showSpellcheck = freshSpellcheckDisplay({
+    runSpellcheck: function(){ return null; },
+    addWordToProjectDictionary: function(){ projectCalls++; }
+  });
+
+  await showSpellcheck(makeEditorQuill(), { isReadOnly: false, projectDictionary: [] }, {}, function(){});
+  await assert.doesNotReject(function(){
+    return getButtonByAccessKey('p').onclick();
+  });
+
+  assert.strictEqual(projectCalls, 0);
+});
+
 //Regression: suggestion <label>s had no htmlFor/id pairing, so clicking the label text (rather
 //than the tiny radio button itself) did nothing - unlike the Custom Replacement label right below
 //it, which was already wired up correctly.
@@ -153,4 +230,45 @@ test('displaying spellcheck replaces any existing popup and selects the first su
   assert.strictEqual(popups.length, 1, 'the stale popup should be removed');
   var firstRadio = document.querySelectorAll('input[name="suggestions"]')[0];
   assert.strictEqual(document.activeElement, firstRadio);
+});
+
+//---------------------------------------------------------------------------
+// Releasing the pass's dictionaries
+//---------------------------------------------------------------------------
+
+//getSpellchecker() holds the parsed dictionaries for the length of one pass - that is what stops
+//this popup reparsing 946KB on every Ignore and Change click. But a parsed en_US-large is tens of
+//megabytes, so the pass ending has to actually drop them rather than leaving them resident for the
+//session. Cancel is one of the two ways out; Escape is the other (keybindings.test.js).
+test('Cancel releases the dictionaries the pass parsed', async function(){
+  var released = 0;
+  var showSpellcheck = freshSpellcheckDisplay({
+    runSpellcheck: function(){ return { word: 'zxqzxq', index: 0, suggestions: [] }; },
+    releaseSpellchecker: function(){ released++; }
+  });
+
+  await showSpellcheck(makeEditorQuill(), {}, {}, function(){});
+  getButtonByText('Cancel').onclick();
+
+  assert.strictEqual(released, 1);
+  assert.strictEqual(document.querySelectorAll('.popup').length, 0);
+});
+
+//The counterpart that matters just as much: stepping through the pass must NOT release, or every
+//click would reparse and the caching would be for nothing.
+test('stepping through the pass does not release the dictionaries', async function(){
+  var released = 0;
+  var callCount = 0;
+  var showSpellcheck = freshSpellcheckDisplay({
+    runSpellcheck: function(){
+      callCount++;
+      return callCount === 1 ? { word: 'zxqzxq', index: 0, suggestions: [] } : null;
+    },
+    releaseSpellchecker: function(){ released++; }
+  });
+
+  await showSpellcheck(makeEditorQuill(), {}, {}, function(){});
+  await getButtonByText('Ignore').onclick();
+
+  assert.strictEqual(released, 0);
 });

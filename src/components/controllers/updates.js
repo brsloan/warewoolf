@@ -88,6 +88,23 @@ function isLegacyMacBuild(electronVersion){
     return !isNaN(major) && major <= LEGACY_MACOS_ELECTRON_MAJOR;
 }
 
+//Windows has the same two-lineage problem macOS does just above, arriving from the other direction.
+//There, one source is packaged twice and a running build has to sort itself onto the track its own
+//Electron belongs to. Here, one package is *distributed* twice - the Squirrel installer and a
+//portable zip - and a running copy has to stay on the track it was installed along. Handing a
+//portable copy the installer turns it into an installed one somewhere else on the disk, leaving the
+//folder the writer is running out of untouched and stale; handing an installed copy the portable zip
+//gives it a second WareWoolf in its Downloads folder and leaves the installed one behind.
+//
+//'Windows_Portable_x64' and 'Windows_x64' are each chosen so neither contains the other, for the
+//same find()-over-includes() reason MacOS_Legacy shares no substring with MacOS_Intel. release.yml
+//asserts that of the built asset names on every release, and updates.test.js of the names
+//themselves.
+function canUpdateInPlace(platformInfo){
+    return platformInfo != null && platformInfo.platform == 'win32'
+        && platformInfo.windowsInstall == 'squirrel';
+}
+
 function extractUpdateDownloadInfo(releaseData, platformInfo){
 
     var binType = 'unsupported';
@@ -100,7 +117,7 @@ function extractUpdateDownloadInfo(releaseData, platformInfo){
     }
     else if(platformInfo.platform == 'win32'){
         if(platformInfo.arch == 'x64')
-            binType = 'Windows_x64';
+            binType = platformInfo.windowsInstall == 'portable' ? 'Windows_Portable_x64' : 'Windows_x64';
     }
     else if(platformInfo.platform == 'darwin'){
         if(platformInfo.arch == 'x64'){
@@ -160,17 +177,27 @@ function isUpdateAvailable(latestTag, thisAppVersion = '1.0.0'){
 //
 //downloadInfo/callback are otherwise unchanged, and the extra getPlatform() round trip this used to
 //need for the temp-vs-downloads decision is gone with it.
-function downloadUpdate(downloadInfo, callback){
+//onFail is optional and new, and it exists because the two returns below used to leave the caller
+//waiting forever: about_display.js disables its button and sets it to "Downloading..." before
+//calling, so a download that ends by logging and returning left a writer watching a dead button with
+//no way to find out why. Reachable whenever a release carries no asset this copy can use - a legacy
+//mac build looking at a release older than that lineage, or a portable Windows copy looking at one
+//older than the portable zip (v2.5.0 and earlier) - and reachable on any network error.
+function downloadUpdate(downloadInfo, callback, onFail){
+    function fail(err){
+        logError(err);
+        if(typeof onFail === 'function')
+            onFail(err.message);
+    }
+
     if(!downloadInfo){
-        logError(new Error('No compatible update binary found for this platform/architecture.'));
+        fail(new Error('This release has no download for your platform. Please download it yourself from the releases page.'));
         return;
     }
 
     platform.downloadUpdate({ url: downloadInfo.url }).then(function(result){
         callback(result.path);
-    }).catch(function(err){
-        logError(err);
-    });
+    }).catch(fail);
 }
 
 //pass/filePath/statusElement/onDone is unchanged from before this conversion -
@@ -197,8 +224,46 @@ function installUpdate(pass, filePath, statusElement, onDone){
     });
 }
 
+//Windows' happy path: subscribe to both outcome events, start the Squirrel check, and unsubscribe
+//as soon as either one fires - a writer who clicks Install, hits an error, and clicks again must
+//not end up with two live listeners. test/fake-bridge.js's listenerCount exists to catch exactly
+//that leak.
+function startWindowsUpdate(tag, onDownloaded, onFailed){
+    var unsubscribeDownloaded, unsubscribeFailed;
+
+    function cleanUp(){
+        unsubscribeDownloaded();
+        unsubscribeFailed();
+    }
+
+    unsubscribeDownloaded = platform.on('app-update-downloaded', function(){
+        cleanUp();
+        onDownloaded();
+    });
+    unsubscribeFailed = platform.on('app-update-failed', function(message){
+        cleanUp();
+        onFailed(message);
+    });
+
+    platform.startSquirrelUpdate({ tag: tag }).catch(function(err){
+        cleanUp();
+        logError(err);
+        onFailed(err.message);
+    });
+}
+
+//The Restart button's other half, once the caller's own unsaved-work check has run.
+function finishWindowsUpdate(){
+    platform.quitAndInstallUpdate().catch(function(err){
+        logError(err);
+    });
+}
+
 module.exports = {
     getUpdates,
+    canUpdateInPlace,
     downloadUpdate,
-    installUpdate
+    installUpdate,
+    startWindowsUpdate,
+    finishWindowsUpdate
 };

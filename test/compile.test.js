@@ -166,6 +166,34 @@ test('compileProject does not throw when called without a callback (legacy call 
   });
 });
 
+//Regression: whole-project compile concatenates every chapter into one delta before converting it,
+//but each chapter numbers its own footnotes independently starting at 1 - so two chapters that each
+//had a "note 1" collided into duplicate id="fnote_1" anchors in the compiled HTML/EPUB, wrong
+//backlinks, and delta-to-docx resolving every "[^1]" reference to whichever chapter's body came
+//first. Reconciling the concatenated copy renumbers globally instead.
+test('compileProject renumbers footnotes across chapters instead of colliding on duplicate numbers', async function(t){
+  var chap1 = makeChapter({ ops: [
+    { insert: 'first chapter' }, { insert: { footnote: { n: '1' } } }, { insert: '\n' },
+    { insert: 'note in chapter one' }, { insert: '\n', attributes: { footnoteBody: '1' } }
+  ]});
+  var chap2 = makeChapter({ ops: [
+    { insert: 'second chapter' }, { insert: { footnote: { n: '1' } } }, { insert: '\n' },
+    { insert: 'note in chapter two' }, { insert: '\n', attributes: { footnoteBody: '1' } }
+  ]});
+  var project = makeTestProject([chap1, chap2]);
+  var options = { type: '.mdfc', insertStrng: '***', insertHead: false };
+  var filepath = tempFilePath(t, '.mdfc');
+
+  await compileProject(project, {}, options, filepath);
+
+  var text = fs.readFileSync(filepath, 'utf8');
+
+  assert.match(text, /first chapter\[\^1\]/);
+  assert.match(text, /\[\^1\]: note in chapter one/);
+  assert.match(text, /second chapter\[\^2\]/);
+  assert.match(text, /\[\^2\]: note in chapter two/);
+});
+
 test('compileChapterDeltas does not leak an implicit global "i"', async function(){
   delete global.i;
 
@@ -267,3 +295,76 @@ test('compileProject does not dump options/filepath to the console', async funct
   assert.ok(!loggedOptionsDirectly, 'compileProject still logs the raw options object');
   assert.ok(!loggedFilepathAlone, 'compileProject still logs the raw filepath');
 });
+
+//---- Mark scene breaks ----
+
+//The gap between two scenes is marked on each chapter separately, before they are joined, so the
+//blank lines a writer leaves trailing at the bottom of a chapter never end up looking like a gap
+//between two paragraphs once the next chapter is concatenated onto them.
+function sceneDelta(){
+  var ops = [];
+  Array.prototype.forEach.call(arguments, function(line){
+    if(line !== '')
+      ops.push({ insert: line });
+    ops.push({ insert: '\n' });
+  });
+  return { ops: ops };
+}
+
+test('compileChapterDeltas marks scene breaks when the option is on', async function(){
+  var chap = makeChapter(sceneDelta('One.', '', 'Two.'));
+  var project = makeTestProject([chap]);
+
+  var compiled = await compileChapterDeltas(project, { insertStrng: '', insertHead: false, markSceneBreaks: true });
+  var centered = compiled.ops.filter(function(op){ return op.attributes && op.attributes.align === 'center'; });
+
+  assert.strictEqual(centered.length, 1, 'expected the blank line between the two paragraphs to be centered');
+  assert.match(compiled.ops.map(function(op){ return op.insert; }).join(''), /One\.\n#\nTwo\./);
+});
+
+test('compileChapterDeltas leaves blank lines alone when the option is off', async function(){
+  var chap = makeChapter(sceneDelta('One.', '', 'Two.'));
+  var project = makeTestProject([chap]);
+
+  var compiled = await compileChapterDeltas(project, { insertStrng: '', insertHead: false, markSceneBreaks: false });
+
+  assert.strictEqual(compiled.ops.map(function(op){ return op.insert; }).join(''), 'One.\n\nTwo.\n');
+});
+
+test('compileChapterDeltas does not mark trailing blank lines once the next chapter follows them', async function(){
+  var chap1 = makeChapter(sceneDelta('One.', '', ''));
+  var chap2 = makeChapter(sceneDelta('Two.'));
+  var project = makeTestProject([chap1, chap2]);
+
+  var compiled = await compileChapterDeltas(project, { insertStrng: '', insertHead: false, markSceneBreaks: true });
+  var centered = compiled.ops.filter(function(op){ return op.attributes && op.attributes.align === 'center'; });
+
+  assert.strictEqual(centered.length, 0, 'the blank lines at the end of a chapter are not a scene break');
+});
+
+test('compileChapterDeltas does not mark the blank line under an inserted chapter heading', async function(){
+  var chap = makeChapter(sceneDelta('', 'One.', '', 'Two.'));
+  var project = makeTestProject([chap]);
+
+  var compiled = await compileChapterDeltas(project, { insertStrng: '', insertHead: true, markSceneBreaks: true });
+  var centered = compiled.ops.filter(function(op){ return op.attributes && op.attributes.align === 'center'; });
+
+  assert.strictEqual(centered.length, 1, 'only the gap between the two paragraphs should be marked');
+});
+
+test('compileProject writes the scene-break mark into an epub chapter', async function(t){
+  var chap = makeChapter(sceneDelta('One.', '', 'Two.'));
+  chap.title = 'Chapter One';
+  var project = makeTestProject([chap]);
+  var options = { type: '.epub', insertStrng: '', insertHead: false, generateTitlePage: false, markSceneBreaks: true };
+  var filepath = tempFilePath(t, '.epub');
+
+  await compileProject(project, { addressInfo: null }, options, filepath);
+
+  var dir = await waitForEpub(filepath, 2000);
+  var chapterEntry = dir.files.find(function(f){ return f.path === 'OEBPS/chapter_1.xhtml'; });
+  var chapterHtml = (await chapterEntry.buffer()).toString('utf8');
+
+  assert.match(chapterHtml, /class="center">#</);
+});
+

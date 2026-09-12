@@ -10,6 +10,8 @@ const { createNodeBacking } = require('../src/components/controllers/platform-no
 const getUserSettings = require('../src/components/models/user-settings');
 const { createFakeBridge } = require('./fake-bridge');
 const { createIpcBacking } = require('../src/components/controllers/platform-ipc');
+const { DEFAULT_FONT_ID, DEFAULT_SIDEBAR_FONT_ID } = require('../src/components/models/fonts');
+const { DEFAULT_LINE_HEIGHT_ID } = require('../src/components/models/line-heights');
 
 //loadUserSettings()/saveUserSettings() are parameterless on the contract - the backing decides
 //where the file lives, from paths.userData - so each test configures a node-backed platform
@@ -183,6 +185,169 @@ test('save() failing (e.g. an unwritable directory) is caught rather than thrown
   await assert.doesNotReject(function(){ return settings.save(); });
 });
 
+//---------------------------------------------------------------------------
+// keyboard shortcuts
+//---------------------------------------------------------------------------
+
+//Only the shortcuts a writer changed are stored (see shortcuts.js diffFromDefaults), so an empty
+//map is the everything-on-its-defaults state a new install starts in.
+test('keyboard shortcut overrides start empty and round-trip through the file', async function(t){
+  const dir = configurePlatform(t);
+  const settings = getUserSettings(settingsPath(dir));
+
+  assert.deepStrictEqual(settings.keyboardShortcuts, {});
+
+  settings.keyboardShortcuts = { formatBold: { key: 'W', mod: true, alt: false, shift: true } };
+  await settings.save();
+
+  const reloaded = await getUserSettings(settingsPath(dir)).load();
+
+  assert.deepStrictEqual(reloaded.keyboardShortcuts, {
+    formatBold: { key: 'W', mod: true, alt: false, shift: true }
+  });
+});
+
+//An action deliberately left unbound is stored as null, which has to survive the trip - it is not
+//the same as an action with no override, which falls back to its default.
+test('a shortcut cleared to nothing round-trips as null', async function(t){
+  const dir = configurePlatform(t);
+  const settings = getUserSettings(settingsPath(dir));
+
+  settings.keyboardShortcuts = { formatBold: null };
+  await settings.save();
+
+  const reloaded = await getUserSettings(settingsPath(dir)).load();
+
+  assert.strictEqual(reloaded.keyboardShortcuts.formatBold, null);
+  assert.ok('formatBold' in reloaded.keyboardShortcuts);
+});
+
+//A plain `type: 'object'` check would have waved all of this through, which is why the field
+//carries a sanitizer instead: an unknown action or an unusable binding is dropped, leaving that
+//shortcut on its default rather than bound to something that could never fire.
+test('shortcut overrides are sanitized entry by entry on load', async function(t){
+  const dir = configurePlatform(t);
+  fs.writeFileSync(settingsPath(dir), JSON.stringify({
+    keyboardShortcuts: {
+      formatBold: { key: 'w', mod: 1, alt: false, shift: false },
+      madeUpAction: { key: 'W', mod: true },
+      formatItalics: { key: 'Unidentified', mod: true }
+    }
+  }), 'utf8');
+
+  const settings = await getUserSettings(settingsPath(dir)).load();
+
+  assert.deepStrictEqual(settings.keyboardShortcuts, {
+    formatBold: { key: 'W', mod: true, alt: false, shift: false }
+  });
+});
+
+test('a shortcuts field that is not a map of overrides falls back to no overrides', async function(t){
+  const dir = configurePlatform(t);
+
+  for(const value of ['ctrl+b', 42, [], null]){
+    fs.writeFileSync(settingsPath(dir), JSON.stringify({ keyboardShortcuts: value }), 'utf8');
+    const settings = await getUserSettings(settingsPath(dir)).load();
+    assert.deepStrictEqual(settings.keyboardShortcuts, {}, JSON.stringify(value));
+  }
+});
+
+//The automatic substitutions carry the same shape as the shortcuts above: a master switch that is
+//on out of the box, and a map holding only the individual rules a writer has changed.
+test('automatic substitutions start on with no rules overridden', function(t){
+  const dir = configurePlatform(t);
+  const settings = getUserSettings(settingsPath(dir));
+
+  assert.strictEqual(settings.autocorrectEnabled, true);
+  assert.deepStrictEqual(settings.autocorrect, {});
+});
+
+test('the substitution settings round-trip through the file', async function(t){
+  const dir = configurePlatform(t);
+  const settings = getUserSettings(settingsPath(dir));
+
+  settings.autocorrectEnabled = false;
+  settings.autocorrect = { emDash: false };
+  await settings.save();
+
+  const reloaded = await getUserSettings(settingsPath(dir)).load();
+
+  assert.strictEqual(reloaded.autocorrectEnabled, false);
+  assert.deepStrictEqual(reloaded.autocorrect, { emDash: false });
+});
+
+//A plain `type: 'object'` check would have waved all of this through, which is why this field
+//carries a sanitizer too: an unknown rule or a value that is not a boolean is dropped, leaving
+//that rule on its default.
+test('substitution overrides are sanitized entry by entry on load', async function(t){
+  const dir = configurePlatform(t);
+  fs.writeFileSync(settingsPath(dir), JSON.stringify({
+    autocorrect: {
+      emDash: false,
+      madeUpRule: true,
+      ellipsis: 'no'
+    }
+  }), 'utf8');
+
+  const settings = await getUserSettings(settingsPath(dir)).load();
+
+  assert.deepStrictEqual(settings.autocorrect, { emDash: false });
+});
+
+test('a substitutions field that is not a map of overrides falls back to no overrides', async function(t){
+  const dir = configurePlatform(t);
+
+  for(const value of ['on', 42, [], null]){
+    fs.writeFileSync(settingsPath(dir), JSON.stringify({ autocorrect: value }), 'utf8');
+    const settings = await getUserSettings(settingsPath(dir)).load();
+    assert.deepStrictEqual(settings.autocorrect, {}, JSON.stringify(value));
+  }
+});
+
+//Empty means "whatever the app ships as default" (see loadDictionaries' own fallback, platform.js
+//group I) - a fresh install, or a writer who never opens the Dictionaries dialog, has to keep
+//spellchecking rather than starting from a selection nothing describes.
+test('spellcheckDictionaries starts empty', function(t){
+  const dir = configurePlatform(t);
+  const settings = getUserSettings(settingsPath(dir));
+
+  assert.deepStrictEqual(settings.spellcheckDictionaries, []);
+});
+
+test('the dictionary selection round-trips through the file', async function(t){
+  const dir = configurePlatform(t);
+  const settings = getUserSettings(settingsPath(dir));
+
+  settings.spellcheckDictionaries = ['en_US-large', 'fr_FR'];
+  await settings.save();
+
+  const reloaded = await getUserSettings(settingsPath(dir)).load();
+
+  assert.deepStrictEqual(reloaded.spellcheckDictionaries, ['en_US-large', 'fr_FR']);
+});
+
+//A plain `type: 'object'` check would wave through anything - the sanitizer is what enforces "an
+//array of non-empty strings" entry by entry.
+test('a dictionary selection that is not an array of non-empty strings is sanitized on load', async function(t){
+  const dir = configurePlatform(t);
+  fs.writeFileSync(settingsPath(dir),
+    JSON.stringify({ spellcheckDictionaries: ['en_US-large', '', 42, null, 'fr_FR'] }), 'utf8');
+
+  const settings = await getUserSettings(settingsPath(dir)).load();
+
+  assert.deepStrictEqual(settings.spellcheckDictionaries, ['en_US-large', 'fr_FR']);
+});
+
+test('a spellcheckDictionaries field that is not an array falls back to an empty selection', async function(t){
+  const dir = configurePlatform(t);
+
+  for(const value of ['en_US-large', 42, {}, null]){
+    fs.writeFileSync(settingsPath(dir), JSON.stringify({ spellcheckDictionaries: value }), 'utf8');
+    const settings = await getUserSettings(settingsPath(dir)).load();
+    assert.deepStrictEqual(settings.spellcheckDictionaries, [], JSON.stringify(value));
+  }
+});
+
 test('getSettingsFilepath returns the path the settings were constructed with', function(t){
   const dir = configurePlatform(t);
   const settings = getUserSettings(settingsPath(dir));
@@ -241,4 +406,160 @@ test('only the schema fields cross, never the object own methods', async functio
   assert.strictEqual(written.load, undefined);
   assert.strictEqual(written.getSettingsFilepath, undefined);
   assert.strictEqual(Object.keys(written).length, Object.keys(settings).length - 3);
+});
+
+//Same failure as the two tests above, reached through a different door: keyboardShortcuts is the
+//one field holding a map rather than a scalar, so it is the one a caller could leave something
+//unclonable inside. Structured clone throws on the whole payload, not on the offending key, so
+//without the sanitizer on the way out this would take every other setting's save down with it.
+test('an unclonable value inside the shortcuts map does not sink the whole save', async function(t){
+  const dir = bridgedPlatform(t);
+  const settings = getUserSettings(settingsPath(dir));
+
+  settings.fontSize = 21;
+  settings.keyboardShortcuts = {
+    formatBold: { key: 'W', mod: true },
+    formatItalics: function(){}
+  };
+
+  await settings.save();
+
+  const written = JSON.parse(fs.readFileSync(settingsPath(dir), 'utf8'));
+  assert.strictEqual(written.fontSize, 21);
+  assert.deepStrictEqual(written.keyboardShortcuts, {
+    formatBold: { key: 'W', mod: true, alt: false, shift: false }
+  });
+});
+
+//300 is the standard double-spaced manuscript page, and the Word Count dialog divides by this to
+//estimate pages - a fresh install has to open on something usable rather than on 0 (no estimate).
+test('wordsPerPage starts at 300', function(t){
+  const dir = configurePlatform(t);
+  const settings = getUserSettings(settingsPath(dir));
+
+  assert.strictEqual(settings.wordsPerPage, 300);
+});
+
+test('the words-per-page value round-trips through the file', async function(t){
+  const dir = configurePlatform(t);
+  const settings = getUserSettings(settingsPath(dir));
+
+  settings.wordsPerPage = 250;
+  await settings.save();
+
+  const reloaded = await getUserSettings(settingsPath(dir)).load();
+
+  assert.strictEqual(reloaded.wordsPerPage, 250);
+});
+
+//---------------------------------------------------------------------------
+// editor and sidebar fonts
+//---------------------------------------------------------------------------
+
+//The manuscript keeps the face WareWoolf drew everything in before either setting existed, so the
+//page a writer is actually reading looks exactly as it did; the sidebars start on their own default
+//instead, which is the sans face a chapter list is scanned fastest in.
+test('each panel starts on its own default face', function(t){
+  const dir = configurePlatform(t);
+  const settings = getUserSettings(settingsPath(dir));
+
+  assert.strictEqual(settings.editorFont, DEFAULT_FONT_ID);
+  assert.strictEqual(settings.sidebarFont, DEFAULT_SIDEBAR_FONT_ID);
+});
+
+test('a chosen font for each panel round-trips independently', async function(t){
+  const dir = configurePlatform(t);
+  const settings = getUserSettings(settingsPath(dir));
+
+  settings.editorFont = 'typewriter';
+  settings.sidebarFont = 'sans';
+  await settings.save();
+
+  const reloaded = await getUserSettings(settingsPath(dir)).load();
+
+  assert.strictEqual(reloaded.editorFont, 'typewriter');
+  assert.strictEqual(reloaded.sidebarFont, 'sans');
+});
+
+//A font id is the one setting whose value ends up inside a css font-family declaration, so a
+//`type: 'string'` check is not enough: it has to name a font fonts.js actually has a stack for.
+test('a font id that names no font WareWoolf has falls back to the default on load', async function(t){
+  const dir = configurePlatform(t);
+
+  for(const value of ['no-such-font', '', 42, null, [], { id: 'sans' }, 'constructor']){
+    fs.writeFileSync(settingsPath(dir), JSON.stringify({ editorFont: value, sidebarFont: value }), 'utf8');
+    const settings = await getUserSettings(settingsPath(dir)).load();
+    assert.strictEqual(settings.editorFont, DEFAULT_FONT_ID, JSON.stringify(value));
+    //Each to its own panel's default, not both to the manuscript's.
+    assert.strictEqual(settings.sidebarFont, DEFAULT_SIDEBAR_FONT_ID, JSON.stringify(value));
+  }
+});
+
+//Sanitized on the way out as well as in, so a bad value set on the live object never reaches disk
+//to be loaded back by a version whose sanitizer might read it differently.
+test('an unusable font left on the live object is written out as the default', async function(t){
+  const dir = configurePlatform(t);
+  const settings = getUserSettings(settingsPath(dir));
+
+  settings.editorFont = 'nonsense; color: red';
+  settings.sidebarFont = 'nonsense; color: red';
+  await settings.save();
+
+  const written = JSON.parse(fs.readFileSync(settingsPath(dir), 'utf8'));
+
+  assert.strictEqual(written.editorFont, DEFAULT_FONT_ID);
+  assert.strictEqual(written.sidebarFont, DEFAULT_SIDEBAR_FONT_ID);
+});
+
+
+//---------------------------------------------------------------------------
+// manuscript line spacing
+//---------------------------------------------------------------------------
+
+//The spacing the editor was already drawn at, so an existing writer who never opens the dropdown
+//sees exactly the manuscript they had.
+test('the manuscript line spacing starts on the default', function(t){
+  const dir = configurePlatform(t);
+  const settings = getUserSettings(settingsPath(dir));
+
+  assert.strictEqual(settings.editorLineHeight, DEFAULT_LINE_HEIGHT_ID);
+});
+
+test('a chosen line spacing round-trips', async function(t){
+  const dir = configurePlatform(t);
+  const settings = getUserSettings(settingsPath(dir));
+
+  settings.editorLineHeight = 'single';
+  await settings.save();
+
+  const reloaded = await getUserSettings(settingsPath(dir)).load();
+
+  assert.strictEqual(reloaded.editorLineHeight, 'single');
+});
+
+//Like a font id, this ends up inside a css declaration, so a `type: 'string'` check is not enough:
+//it has to name a spacing line-heights.js actually has a multiplier for. `2` and `'2'` are in the
+//list because a spacing is a number everywhere else it is written down, so they are what a hand
+//edit is likeliest to put there - and neither is an id.
+test('a line spacing that names nothing WareWoolf has falls back to the default on load', async function(t){
+  const dir = configurePlatform(t);
+
+  for(const value of ['no-such-spacing', '', 2, '2', null, [], { id: 'single' }, 'constructor']){
+    fs.writeFileSync(settingsPath(dir), JSON.stringify({ editorLineHeight: value }), 'utf8');
+    const settings = await getUserSettings(settingsPath(dir)).load();
+    assert.strictEqual(settings.editorLineHeight, DEFAULT_LINE_HEIGHT_ID, JSON.stringify(value));
+  }
+});
+
+//Sanitized on the way out as well as in, so a bad value set on the live object never reaches disk.
+test('an unusable line spacing left on the live object is written out as the default', async function(t){
+  const dir = configurePlatform(t);
+  const settings = getUserSettings(settingsPath(dir));
+
+  settings.editorLineHeight = 'nonsense; color: red';
+  await settings.save();
+
+  const written = JSON.parse(fs.readFileSync(settingsPath(dir), 'utf8'));
+
+  assert.strictEqual(written.editorLineHeight, DEFAULT_LINE_HEIGHT_ID);
 });

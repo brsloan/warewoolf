@@ -1,4 +1,4 @@
-const { closePopups, createButton, removeElementsByClass } = require('../controllers/utils');
+const { closePopups, createButton, removeElementsByClass, describeDialog } = require('../controllers/utils');
 
 //Shown when a .woolf file cannot be read at all - truncated by a power loss part-way through a
 //save, or not a project file in the first place. Distinct from missing-pups_display.js, which
@@ -14,6 +14,7 @@ function reportProjectLoadFailure(filepath, err){
   var title = document.createElement('h1');
   title.innerText = 'Could Not Open Project';
   popup.appendChild(title);
+  describeDialog(popup, title, 'alertdialog');
 
   var warning = document.createElement('h1');
   warning.innerText = 'This project file could not be read.';

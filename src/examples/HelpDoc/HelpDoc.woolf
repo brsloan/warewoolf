@@ -11,6 +11,12 @@
 			"summary": null
 		},
 		{
+			"title": "Automatic Substitutions",
+			"filename": "Automatic Substitutions.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
 			"title": "Backup / Auto-Backup",
 			"filename": "Backup  Auto-Backup.txt",
 			"filter": null,
@@ -35,6 +41,12 @@
 			"summary": null
 		},
 		{
+			"title": "Dictionaries",
+			"filename": "Dictionaries.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
 			"title": "Exporting and Compiling",
 			"filename": "Exporting and Compiling.txt",
 			"filter": null,
@@ -53,8 +65,38 @@
 			"summary": null
 		},
 		{
+			"title": "Find and Replace",
+			"filename": "Find and Replace.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Fonts",
+			"filename": "Fonts.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Footnotes",
+			"filename": "Footnotes.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
 			"title": "Importing Plaintext Files",
 			"filename": "Importing Plaintext Files.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Importing HTML and EPUB",
+			"filename": "Importing HTML and EPUB.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Line Spacing",
+			"filename": "Line Spacing.txt",
 			"filter": null,
 			"summary": null
 		},
@@ -95,6 +137,12 @@
 			"summary": null
 		},
 		{
+			"title": "Tab-Indent Paragraphs",
+			"filename": "Tab-Indent Paragraphs.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
 			"title": "Using WareWoolf For a WriterDeck",
 			"filename": "Using WareWoolf For a WriterDeck.txt",
 			"filter": null,
@@ -114,6 +162,7 @@
 		}
 	],
 	"reference": [],
+	"projectDictionary": [],
 	"filters": [],
 	"trash": [],
 	"activeChapterIndex": 0,

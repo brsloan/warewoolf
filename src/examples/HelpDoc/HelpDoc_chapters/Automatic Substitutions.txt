@@ -1,0 +1,14 @@
+[>c] # Automatic Substitutions
+
+As you type, WareWoolf quietly replaces a few things with what you almost certainly meant:
+* Straight quotes becomes curly ones: “Get out,” she said.
+* Apostrophes curl: “Don’t leave!”
+* Two hyphens become an em dash: “Wait—”.
+* Three periods become an ellipsis: “Well…”.
+If a substitution is not the one you wanted, press **Ctrl+Z** once. That puts back exactly what you typed. Press it again and you undo the typing itself, as usual.
+	You can switch any of this off in **File > Settings**, under **Automatic Substitutions**.
+	Two rules worth knowing about:
+	
+None of this touches writing you have already done.
+	To bring an older manuscript into line, use **Tools > Convert Straight Quotes Etc.** It runs the same substitutions over every chapter at once. Unlike a substitution made as you type, this one cannot be undone, so save first.
+	Searching is not affected either way: a straight quote typed into **Tools > Find/Replace** finds the curly ones as well, so looking for a line of dialogue still works whether or not the manuscript has been converted.

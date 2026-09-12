@@ -10,10 +10,13 @@ const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { EventEmitter } = require('events');
 
 const { createPlatform } = require('../src/components/controllers/platform');
 const { createNodeBacking } = require('../src/components/controllers/platform-node');
 const { createFakeBridge } = require('./fake-bridge');
+const { DEFAULT_FONT_ID, DEFAULT_SIDEBAR_FONT_ID, resolveFontStack } = require('../src/components/models/fonts');
+const { DEFAULT_LINE_HEIGHT_ID, resolveLineHeight } = require('../src/components/models/line-heights');
 
 const renderPath = require.resolve('../src/render');
 //keybindings.js builds its own platform instance at require-time, same as render.js itself - but it
@@ -68,10 +71,29 @@ var bootFailure = null;
 //`invoked` records every command name so a test can assert one was called without caring what it
 //resolved with. `handlers` is what render.js subscribed to per event channel - one handler each,
 //since render.js subscribes exactly once per channel.
+//Every process the renderer can reach is spawned through platform-node.js's one injectable seam,
+//so replacing it here covers the whole file at once - and it has to be replaced. rebootSystem runs
+//`systemctl reboot`, and the tests below drive the menu channel that reaches it: on a Linux machine,
+//CI included, a real spawn there would take the machine down in the middle of the run. What is
+//spawned is platform-node.js's business and is asserted in platform.test.js against its own
+//injected seam; here every child just exits cleanly.
+function fakeSpawn(){
+  var child = new EventEmitter();
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+  child.stdin = { write: function(){}, end: function(){} };
+  setImmediate(function(){
+    child.emit('close', 0);
+    child.stdout.emit('close', 0);
+  });
+  return child;
+}
+
 function makeBridge(){
   var handlers = {};
   var invoked = [];
   var inner = createFakeBridge(createPlatform(createNodeBacking({
+    spawnProcess: fakeSpawn,
     paths: {
       app: appDir,
       userData: userDataDir,
@@ -119,18 +141,19 @@ function flushMicrotasks(){
 //with getElementById needs to already be present before it's (re-)required, since setUpQuills()/
 //applyUserSettings() touch them synchronously at require-time.
 function bodyShell(){
-  return '<div id="chapter-list-sidebar" class="sidebar" tabindex="-1">' +
+  return '<div id="chapter-list-sidebar" class="sidebar" tabindex="-1" role="listbox" aria-label="Project contents">' +
       '<h1 id="chapters-header">Chapters</h1>' +
-      '<ul id="chapter-list"></ul>' +
+      '<ul id="chapter-list" role="group" aria-labelledby="chapters-header"></ul>' +
       '<h1 id="reference-header">Reference</h1>' +
-      '<ul id="reference-list"></ul>' +
+      '<ul id="reference-list" role="group" aria-labelledby="reference-header"></ul>' +
       "<h1 id='trash-header'>Trash</h1>" +
-      '<ul id="trash-list"></ul>' +
+      '<ul id="trash-list" role="group" aria-labelledby="trash-header"></ul>' +
     '</div>' +
-    '<div id="writing-field" class="writing-field-standard-view">' +
+    '<div id="chapter-announcer" class="visually-hidden" aria-live="polite"></div>' +
+    '<div id="writing-field" class="writing-field-standard-view" role="main" aria-label="Manuscript">' +
       '<div id="editor-container"></div>' +
     '</div>' +
-    '<div id="project-notes" class="sidebar">' +
+    '<div id="project-notes" class="sidebar" role="complementary" aria-labelledby="notes-header">' +
       '<h1 id="notes-header">Project Notes</h1>' +
       '<div id="notes-editor"></div>' +
     '</div>';
@@ -654,6 +677,40 @@ test('changeChapterTitle commits the new title and clears unsaved-rename state o
   assert.strictEqual(document.querySelector('#chapter-list li').textContent, 'New Title*');
 });
 
+//A double-click on a row fires both of its clicks before it, and each of those clicks loads the
+//chapter - which finishes a tick later, after the file has been read, by rebuilding every row in
+//the sidebar. The rename box the double-click opened has to survive that: it used to be torn out
+//again a moment after it appeared, so the box flashed up and vanished before a title could be
+//typed into it. Driven through the row's real click/dblclick handlers, since the ordering is the
+//whole point.
+test('double-clicking a row leaves a usable rename box behind once the click that came with it has finished loading the chapter', async function(){
+  var r = await freshRender();
+  var c1 = makeChap('c1');
+  r.project.chapters = [makeChap('c0'), c1];
+  r.updateFileList();
+  //Not in memory, so selecting it has to go to the file - which is what makes the load finish a
+  //tick after the double-click rather than during it.
+  c1.contents = null;
+
+  var row = document.querySelectorAll('#chapter-list li')[1];
+  row.dispatchEvent(new window.MouseEvent('click'));
+  row.dispatchEvent(new window.MouseEvent('click'));
+  row.dispatchEvent(new window.MouseEvent('dblclick'));
+
+  await flushMicrotasks();
+
+  var nameBox = document.querySelector('.name-box');
+  assert.ok(nameBox, 'the rename box should still be in the list');
+  assert.strictEqual(nameBox.parentElement, document.querySelectorAll('#chapter-list li')[1]);
+  assert.strictEqual(document.activeElement, nameBox);
+
+  nameBox.value = 'Renamed';
+  nameBox.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter' }));
+
+  assert.strictEqual(c1.title, 'Renamed');
+  assert.strictEqual(document.querySelectorAll('#chapter-list li')[1].textContent, 'Renamed*');
+});
+
 test('changeChapterTitle discards the edit on Escape', async function(){
   var r = await freshRender();
   var c0 = makeChap('Old Title');
@@ -784,11 +841,12 @@ var ALL_MENU_CHANNELS = [
   'find-replace-clicked', 'spellcheck-clicked', 'convert-first-lines-clicked',
   'headings-to-chaps-clicked', 'convert-italics-clicked', 'split-chapter-clicked',
   'add-chapter-clicked', 'delete-chapter-clicked', 'restore-chapter-clicked', 'shortcuts-clicked',
-  'outliner-clicked', 'convert-tabs-clicked', 'about-clicked', 'exit-app-clicked',
+  'outliner-clicked', 'convert-tabs-clicked', 'convert-substitutions-clicked',
+  'about-clicked', 'exit-app-clicked', 'reboot-clicked',
   'save-copy-clicked', 'help-doc-clicked', 'renumber-chapters-clicked', 'send-via-email-clicked',
   'view-error-log-clicked', 'file-manager-clicked', 'wifi-manager-clicked', 'save-backup-clicked',
   'settings-clicked', 'corkboard-clicked', 'file-opened-from-outside-warewoolf',
-  'indent-all-clicked', 'center-all-heads-clicked'
+  'tab-indent-paragraphs-clicked', 'center-all-heads-clicked', 'dictionaries-clicked'
 ];
 
 //The bridge set up for the current freshRender() call - the same object render.js subscribed its
@@ -823,8 +881,8 @@ test('a focus-gated command does nothing while the editor lacks focus, and runs 
 });
 
 //convert-tabs-clicked is project-wide, exactly like convert-first-lines-clicked and
-//convert-italics-clicked, but (like renumber-chapters/indent-all/center-all-heads) was never
-//focus-gated - preserved as-is per the comment above the table in render.js.
+//convert-italics-clicked, but (like renumber-chapters/tab-indent-paragraphs/center-all-heads) was
+//never focus-gated - preserved as-is per the comment above the table in render.js.
 test('a command with no focus guard runs regardless of where focus is', async function(){
   var r = await freshRender();
   //Empty project: showOutliner()'s project.chapters.forEach() then has nothing to iterate, so this
@@ -851,17 +909,57 @@ test('about-clicked forwards the app version it is sent to the About popup', asy
   assert.strictEqual(document.querySelector('.about-version').innerText, '9.9.9');
 });
 
+//The keys are buttons now, since the popup is where they are changed as well as where they are
+//listed - so the platform modifier is read off the buttons rather than the cells.
+function shortcutKeyLabels(){
+  return Array.from(document.querySelectorAll('.shortcuts-table button')).map(function(button){
+    return button.textContent;
+  });
+}
+
 test('shortcuts-clicked forwards isMac to render Mac- or Ctrl-style shortcut labels', async function(){
   await freshRender();
 
   currentBridge().handlers['shortcuts-clicked'](true);
-  var macLabels = Array.from(document.querySelectorAll('.shortcuts-table td'));
-  assert.ok(macLabels.some(function(td){ return td.innerText.includes('Cmd'); }));
+  assert.ok(shortcutKeyLabels().some(function(label){ return label.includes('Cmd'); }));
   removeAllPopups();
 
   currentBridge().handlers['shortcuts-clicked'](false);
-  var ctrlLabels = Array.from(document.querySelectorAll('.shortcuts-table td'));
-  assert.ok(ctrlLabels.some(function(td){ return td.innerText.includes('Ctrl'); }));
+  assert.ok(shortcutKeyLabels().some(function(label){ return label.includes('Ctrl'); }));
+});
+
+//The popup is opened with the bindings actually in force, not with the defaults - a writer who has
+//rebound something has to see what they rebound it to.
+test('shortcuts-clicked shows the shortcuts a writer has saved, and saving from it stores the change', async function(){
+  var r = await freshRender();
+
+  currentBridge().handlers['shortcuts-clicked'](false);
+
+  var boldRow = Array.from(document.querySelectorAll('.shortcuts-table tr')).find(function(row){
+    return row.cells[0].innerText === 'Bold';
+  });
+  var boldButton = boldRow.cells[1].querySelector('button');
+  assert.strictEqual(boldButton.textContent, 'Ctrl + B');
+
+  boldButton.onclick();
+  document.dispatchEvent(new window.KeyboardEvent('keydown', {
+    key: 'y', code: 'KeyY', ctrlKey: true, bubbles: true, cancelable: true
+  }));
+
+  Array.from(document.querySelectorAll('button')).find(function(button){
+    return button.textContent === 'Save';
+  }).onclick();
+
+  assert.deepStrictEqual(r.userSettings.keyboardShortcuts, {
+    formatBold: { key: 'Y', mod: true, alt: false, shift: false, code: 'KeyY' }
+  });
+
+  currentBridge().handlers['shortcuts-clicked'](false);
+  var reopened = Array.from(document.querySelectorAll('.shortcuts-table tr')).find(function(row){
+    return row.cells[0].innerText === 'Bold';
+  });
+  assert.strictEqual(reopened.cells[1].querySelector('button').textContent, 'Ctrl + Y');
+  removeAllPopups();
 });
 
 function removeAllPopups(){
@@ -924,6 +1022,37 @@ test('exit-app-clicked refreshes the sidebar and asks to save first when there a
   findButton('Continue Without Saving').onclick();
   await flushMicrotasks();
   assert.ok(currentBridge().invoked.includes('confirmExit'));
+});
+
+//reboot-clicked is only ever sent on Linux (index.js gates the menu item), but render.js subscribes
+//to it everywhere, so these run on any machine: what they check is that the channel routes through
+//the same unsaved-work prompt Exit does before anything reaches the platform. Whether the command
+//then finds a systemctl is platform-node.js's business, covered in platform.test.js.
+test('reboot-clicked reboots directly when there are no unsaved changes', async function(){
+  var r = await freshRender();
+  r.project.hasUnsavedChanges = false;
+  r.project.filename = ''; //no autoBackup path to route through
+
+  currentBridge().handlers['reboot-clicked']();
+  await flushMicrotasks();
+
+  assert.ok(currentBridge().invoked.includes('rebootSystem'));
+});
+
+test('reboot-clicked asks to save first when there are unsaved changes', async function(){
+  var r = await freshRender();
+  r.project.chapters = [makeChap('Unsaved', { hasUnsavedChanges: true })];
+  r.project.hasUnsavedChanges = true;
+
+  currentBridge().handlers['reboot-clicked']();
+
+  assert.ok(findButton('Continue Without Saving'));
+  assert.ok(!currentBridge().invoked.includes('rebootSystem'),
+    'should not take the machine down before the prompt is answered');
+
+  findButton('Continue Without Saving').onclick();
+  await flushMicrotasks();
+  assert.ok(currentBridge().invoked.includes('rebootSystem'));
 });
 
 //---------------------------------------------------------------------------
@@ -1930,4 +2059,348 @@ test('the Error Log dialog gets the same working platform, since it can send as 
 
   const described = await opened.platform.describeCredential({ service: 'email' });
   assert.strictEqual(described.hasPassword, false, 'nothing stored yet, from a clean credential store');
+});
+
+//---------------------------------------------------------------------------
+// automatic substitutions
+//---------------------------------------------------------------------------
+
+//One character at a time at the end of the document, which is as close to a keystroke as this gets
+//without a browser - see test/autocorrect-controller.test.js, which covers the rules themselves.
+//These are about the wiring: that setUpQuills() actually attached them to both editors, and that
+//the settings reach them.
+function typeInto(quill, text){
+  text.split('').forEach(function(character){
+    quill.insertText(quill.getLength() - 1, character, 'user');
+  });
+}
+
+test('typing in the editor gets the automatic substitutions', async function(){
+  var r = await freshRender();
+  r.project.chapters = [makeChap('')];
+  await r.displayChapterByIndex(0);
+  r.editorQuill.setText('\n');
+
+  typeInto(r.editorQuill, '"Wait--" she said...');
+
+  assert.strictEqual(r.editorQuill.getText().trim(), '“Wait—” she said…');
+});
+
+test('the notes pane gets them too', async function(){
+  var r = await freshRender();
+  r.notesQuill.setText('\n');
+
+  typeInto(r.notesQuill, 'wait--no');
+
+  assert.strictEqual(r.notesQuill.getText().trim(), 'wait—no');
+});
+
+//The substitution is a 'user' change of its own, so the chapter has to end up holding the
+//substituted text rather than the straight quotes that were typed.
+test('a substitution is saved onto the chapter like any other edit', async function(){
+  var r = await freshRender();
+  var c0 = makeChap('');
+  r.project.chapters = [c0];
+  await r.displayChapterByIndex(0);
+  r.editorQuill.setText('\n');
+
+  typeInto(r.editorQuill, 'wait--');
+
+  assert.strictEqual(c0.contents.ops[0].insert.trim(), 'wait—');
+  assert.strictEqual(c0.hasUnsavedChanges, true);
+});
+
+//Driven through the real menu command and the real Save button, so this covers the callback
+//render.js hands the popup as well as the popup itself.
+function settingsPopupSaveButton(){
+  return Array.from(document.querySelectorAll('.popup button')).find(function(b){
+    return b.textContent === 'Save';
+  });
+}
+
+function saveSettingsPopup(){
+  currentBridge().handlers['settings-clicked']();
+  settingsPopupSaveButton().onclick();
+}
+
+test('dictionaries-clicked opens the Dictionaries popup', async function(){
+  var r = await freshRender();
+
+  await currentBridge().handlers['dictionaries-clicked']();
+
+  var popup = document.querySelector('.popup');
+  assert.ok(popup, 'expected a popup to open');
+  assert.strictEqual(popup.querySelector('h1').innerText, 'Dictionaries');
+});
+
+test('switching the substitutions off in Settings stops them on the next keystroke', async function(){
+  var r = await freshRender();
+  r.editorQuill.setText('\n');
+
+  typeInto(r.editorQuill, '"');
+  r.userSettings.autocorrectEnabled = false;
+  saveSettingsPopup();
+  typeInto(r.editorQuill, '"');
+
+  assert.strictEqual(r.editorQuill.getText().trim(), '“"');
+});
+
+test('a single rule switched off in Settings leaves the others working', async function(){
+  var r = await freshRender();
+  r.editorQuill.setText('\n');
+
+  currentBridge().handlers['settings-clicked']();
+  document.getElementById('autocorrect-emDash').checked = false;
+  settingsPopupSaveButton().onclick();
+  typeInto(r.editorQuill, '"wait--"');
+
+  assert.strictEqual(r.editorQuill.getText().trim(), '“wait--”');
+});
+
+//---------------------------------------------------------------------------
+// editor and sidebar fonts
+//---------------------------------------------------------------------------
+
+function fontProperty(name){
+  return document.documentElement.style.getPropertyValue(name);
+}
+
+//The manuscript and the sidebars read --font-editor/--font-sidebar out of index.css; nothing else
+//turns a saved font id into a face, so if applyUserSettings() skips this at boot the app draws in
+//the stylesheet's fallback no matter what the writer chose.
+test('the saved fonts are on the page as soon as the app has booted', async function(){
+  var r = await freshRender();
+
+  assert.strictEqual(fontProperty('--font-editor'), resolveFontStack(r.userSettings.editorFont));
+  assert.strictEqual(fontProperty('--font-sidebar'), resolveFontStack(r.userSettings.sidebarFont));
+});
+
+//Through the real menu command and the real Save button, so this covers the callback render.js
+//hands the popup: a font that only took effect on the next launch would be a setting a writer
+//cannot watch themselves change.
+test('choosing fonts in Settings redraws both panels without a restart', async function(){
+  await freshRender();
+
+  currentBridge().handlers['settings-clicked']();
+  document.getElementById('editor-font-select').value = 'typewriter';
+  document.getElementById('sidebar-font-select').value = 'sans';
+  settingsPopupSaveButton().onclick();
+
+  assert.strictEqual(fontProperty('--font-editor'), resolveFontStack('typewriter'));
+  assert.strictEqual(fontProperty('--font-sidebar'), resolveFontStack('sans'));
+});
+
+//The two settings are independent - a writer who wants a typewriter manuscript beside a plain
+//chapter list gets exactly that.
+test('the two panels can be set to different fonts', async function(){
+  await freshRender();
+
+  currentBridge().handlers['settings-clicked']();
+  document.getElementById('editor-font-select').value = 'garamond';
+  settingsPopupSaveButton().onclick();
+
+  assert.strictEqual(fontProperty('--font-editor'), resolveFontStack('garamond'));
+  assert.strictEqual(fontProperty('--font-sidebar'), resolveFontStack(DEFAULT_SIDEBAR_FONT_ID));
+  assert.notStrictEqual(fontProperty('--font-editor'), fontProperty('--font-sidebar'));
+});
+
+//A settings file anything could have written to must not reach a font-family declaration intact.
+test('a font id that names nothing WareWoolf has draws the default face instead', async function(){
+  var r = await freshRender();
+
+  r.userSettings.editorFont = 'nonsense; color: red';
+  saveSettingsPopup();
+
+  assert.strictEqual(fontProperty('--font-editor'), resolveFontStack(DEFAULT_FONT_ID));
+  assert.strictEqual(r.userSettings.editorFont, DEFAULT_FONT_ID);
+});
+
+//---------------------------------------------------------------------------
+// manuscript line spacing
+//---------------------------------------------------------------------------
+
+//The manuscript reads --line-height-editor out of index.css; nothing else turns a saved spacing id
+//into a css value, so if applyUserSettings() skips this at boot the editor is set at the
+//stylesheet's fallback no matter what the writer chose.
+test('the saved line spacing is on the page as soon as the app has booted', async function(){
+  var r = await freshRender();
+
+  assert.strictEqual(fontProperty('--line-height-editor'), resolveLineHeight(r.userSettings.editorLineHeight));
+});
+
+//Through the real menu command and the real Save button, so this covers the callback render.js
+//hands the popup: spacing that only took effect on the next launch would be a setting a writer
+//cannot watch themselves change.
+test('choosing a line spacing in Settings re-spaces the manuscript without a restart', async function(){
+  await freshRender();
+
+  currentBridge().handlers['settings-clicked']();
+  document.getElementById('editor-line-height-select').value = 'single';
+  settingsPopupSaveButton().onclick();
+
+  assert.strictEqual(fontProperty('--line-height-editor'), resolveLineHeight('single'));
+});
+
+//A settings file anything could have written to must not reach a line-height declaration intact.
+test('a line spacing that names nothing WareWoolf has sets the default instead', async function(){
+  var r = await freshRender();
+
+  r.userSettings.editorLineHeight = 'nonsense; color: red';
+  saveSettingsPopup();
+
+  assert.strictEqual(fontProperty('--line-height-editor'), resolveLineHeight(DEFAULT_LINE_HEIGHT_ID));
+  assert.strictEqual(r.userSettings.editorLineHeight, DEFAULT_LINE_HEIGHT_ID);
+});
+
+//The sidebars are columns to glance down rather than prose, and index.css sets them closer on
+//purpose - a writer who spaces their manuscript out has not asked for a taller chapter list.
+test('the line spacing setting leaves the sidebars alone', async function(){
+  await freshRender();
+
+  currentBridge().handlers['settings-clicked']();
+  document.getElementById('editor-line-height-select').value = 'two-and-a-half';
+  settingsPopupSaveButton().onclick();
+
+  assert.strictEqual(fontProperty('--line-height-editor'), resolveLineHeight('two-and-a-half'));
+  //One property, and it is the manuscript's. Nothing was set for a sidebar to read.
+  assert.strictEqual(fontProperty('--line-height-sidebar'), '');
+});
+
+//The conversion itself is covered in convert-substitutions.test.js, and the popup's own behaviour
+//in convert-substitutions_display.test.js. This is about the wiring between them: that the menu
+//command reaches the right module and hands it the open project. It stops short of submitting the
+//form, because the real working indicator waits on an image jsdom will never load.
+test('Convert Straight Quotes Etc. opens its popup with every substitution offered', async function(){
+  var r = await freshRender();
+  r.project.chapters = [makeChap('c0')];
+  await r.displayChapterByIndex(0);
+
+  currentBridge().handlers['convert-substitutions-clicked']();
+
+  var popup = document.querySelector('.popup');
+  assert.ok(popup, 'expected the conversion popup to open');
+  assert.strictEqual(popup.querySelector('h1').innerText, 'Convert Straight Quotes Etc.');
+
+  require('../src/components/models/autocorrect').getAutocorrectDefs().forEach(function(def){
+    var check = document.getElementById('convert-' + def.id);
+    assert.ok(check, 'expected a checkbox for ' + def.id);
+    assert.strictEqual(check.checked, true);
+  });
+});
+
+//---------------------------------------------------------------------------
+// Anything shipped inside the install directory opens read-only
+//---------------------------------------------------------------------------
+
+//Help > Open Help Document has always set the flag itself (above). These are the three routes that
+//did not, all of which decided read-only-ness by never deciding it - so the shipped Help doc came
+//up writable and the next save wrote it. Running from source that directory is the repository, so
+//it was the tracked HelpDoc.woolf that got edited; on a packaged install it is Program Files or the
+//app bundle, where the same save dies with EACCES instead.
+test('a lastProject inside the install directory is reopened read-only', async function(t){
+  const bundled = withBundledHelpDoc(t);
+  const helpDocPath = bundled.helpDocPath.split(path.sep).join('/');
+
+  var r = await renderWithLastProject(helpDocPath);
+
+  assert.strictEqual(r.module.project.title, 'WareWoolf Help', 'the project should still open');
+  assert.strictEqual(r.module.project.isReadOnly, true);
+});
+
+//The route that put it in lastProject to begin with: browsing to the shipped Help doc through
+//File > Open Project, which loads it directly rather than through setProject. render.js requires
+//the file dialog lazily inside openAProject(), so priming require.cache just before the handler
+//runs is enough to stand in for the writer picking that file.
+test('a project browsed to inside the install directory opens read-only', async function(t){
+  const bundled = withBundledHelpDoc(t);
+  const helpDocPath = bundled.helpDocPath.split(path.sep).join('/');
+  var r = await freshRender();
+  r.project.hasUnsavedChanges = false;
+
+  const fileDialogPath = require.resolve('../src/components/views/file-dialog_display');
+  const realDialog = require.cache[fileDialogPath];
+  require.cache[fileDialogPath] = {
+    id: fileDialogPath, filename: fileDialogPath, loaded: true,
+    exports: function(options, callback){ return callback([helpDocPath]); }
+  };
+  t.after(function(){
+    if(realDialog) require.cache[fileDialogPath] = realDialog;
+    else delete require.cache[fileDialogPath];
+  });
+
+  await currentBridge().handlers['open-clicked']();
+  await flushMicrotasks();
+
+  assert.strictEqual(r.project.title, 'WareWoolf Help');
+  assert.strictEqual(r.project.isReadOnly, true);
+});
+
+//And the same file double-clicked in the file manager, which reaches its own handler rather than
+//either of the two above.
+test('a project opened from outside the app inside the install directory opens read-only', async function(t){
+  const bundled = withBundledHelpDoc(t);
+  const helpDocPath = bundled.helpDocPath.split(path.sep).join('/');
+  var r = await freshRender();
+
+  await currentBridge().handlers['file-opened-from-outside-warewoolf'](helpDocPath);
+
+  assert.strictEqual(r.project.title, 'WareWoolf Help');
+  assert.strictEqual(r.project.isReadOnly, true);
+});
+
+//The other half of the guard: an ordinary project must stay writable, or Ctrl+S would start
+//offering Save As for every project a writer owns.
+test('a project outside the install directory stays writable', async function(t){
+  withBundledHelpDoc(t);
+  const ordinary = path.join(userDataDir, 'Ordinary.woolf');
+  fs.writeFileSync(ordinary, JSON.stringify({
+    title: 'An Ordinary Novel', author: '', chapsDirectory: '',
+    chapters: [], reference: [], trash: []
+  }), 'utf8');
+
+  var r = await renderWithLastProject(ordinary.split(path.sep).join('/'));
+
+  assert.strictEqual(r.module.project.title, 'An Ordinary Novel');
+  assert.strictEqual(r.module.project.isReadOnly, false);
+});
+
+//Quill 1.x leaves its contenteditable root with no role and no name. render.js names both editors
+//on construction: the manuscript outright, the notes by the sidebar heading that already changes
+//between "Chapter Notes" and "Project Notes".
+test('both editors are named multiline text boxes for assistive technology', async function(){
+  var r = await freshRender();
+
+  assert.strictEqual(r.editorQuill.root.getAttribute('role'), 'textbox');
+  assert.strictEqual(r.editorQuill.root.getAttribute('aria-multiline'), 'true');
+  assert.strictEqual(r.editorQuill.root.getAttribute('aria-label'), 'Manuscript');
+  assert.strictEqual(r.notesQuill.root.getAttribute('role'), 'textbox');
+  assert.strictEqual(r.notesQuill.root.getAttribute('aria-multiline'), 'true');
+  assert.strictEqual(r.notesQuill.root.getAttribute('aria-labelledby'), 'notes-header');
+});
+
+//Changing chapters from inside an editor swaps the text under the caret without moving focus or
+//changing the editor's name, so nothing a screen reader listens to says it happened. The live
+//region in index.html is told the new chapter's title - unless focus is in the sidebar, whose
+//listbox already announces the row it moved to.
+test('opening a chapter from the editor announces its title in the live region', async function(){
+  var r = await freshRender();
+  r.project.chapters = [makeChap('One'), makeChap('Two'), makeChap('')];
+  r.editorQuill.focus();
+
+  await r.displayChapterByIndex(1);
+  assert.strictEqual(document.getElementById('chapter-announcer').textContent, 'Two');
+
+  await r.displayChapterByIndex(2);
+  assert.strictEqual(document.getElementById('chapter-announcer').textContent, '(untitled)');
+});
+
+test('opening a chapter while focus is in the sidebar leaves the live region alone', async function(){
+  var r = await freshRender();
+  r.project.chapters = [makeChap('One'), makeChap('Two')];
+  document.getElementById('chapter-list-sidebar').focus();
+
+  await r.displayChapterByIndex(1);
+
+  assert.strictEqual(document.getElementById('chapter-announcer').textContent, '');
+  assert.strictEqual(document.getElementById('chapter-list-sidebar').getAttribute('aria-activedescendant'), 'chapter-row-1');
 });

@@ -1,5 +1,6 @@
 const { logError } = require('../controllers/error-log');
 const { parseMDF, convertDeltaToMDF } = require('../controllers/markdownFic');
+const { reconcileFootnotes } = require('../controllers/reconcile-footnotes');
 
 //Group C of the platform contract (see platform.js). This module used to be the largest single
 //user of `fs` in the renderer; it now knows nothing about where a chapter lives on disk beyond the
@@ -158,7 +159,7 @@ function newChapter(parentProject){
           projectDir: where.projectDir,
           chapsDir: where.chapsDir,
           title: chap.title,
-          mdfc: convertDeltaToMDF(chap.contents)
+          mdfc: convertDeltaToMDF(reconcileFootnotes(chap.contents))
         });
 
         //Only point the chapter at the new file once the write has actually succeeded
@@ -194,7 +195,7 @@ function newChapter(parentProject){
           chapsDir: where.chapsDir,
           oldFilename: chap.filename,
           title: chap.title,
-          mdfc: convertDeltaToMDF(chap.contents),
+          mdfc: convertDeltaToMDF(reconcileFootnotes(chap.contents)),
           //Notes ride along in the same call because their filename is derived from the chapter's:
           //saving them separately would leave a window where they sat under the old name.
           notesMdfc: chap.notes != null ? convertDeltaToMDF(chap.notes) : null

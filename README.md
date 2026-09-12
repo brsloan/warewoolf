@@ -1,21 +1,21 @@
 <p align="center">
 	<img src="./src/assets/logo.png" style="width: 280px"/>
 </p>
-<p align="center">v2.5.0</p>
+<p align="center">v3.0.0</p>
 <p align="center">"The only writing software I use." -Virginia Woolf</p>
 
-WareWoolf is designed for one thing: writing fiction. It is intentionally simplified: you cannot change the font, line spacing, or color. But it has everything you need to organize, edit, and revise a novel--and you don't even need a mouse.
+WareWoolf is designed for one thing: writing fiction. It is intentionally simplified: beyond a choice of typeface for the manuscript and the sidebars, and light or dark, there is nothing to fiddle with--no line spacing, no colors, no styles. But it has everything you need to organize, edit, and revise a novel--and you don't even need a mouse.
 
 It is composed of three simple text-based panels with no icons: Chapters, Editor, and Notes.
 
-That's it. There is no toolbar with twenty buttons cluttering the screen. There isn't even a file menu unless you summon it by pressing Alt. All formatting is done with shortcuts. (But don't worry, there aren't many to memorize, and you can always press **CTRL** + **H** to show them all in the Shortcut Helper. It's not like you do a lot of formatting when writing fiction anyway.)
+That's it. There is no toolbar with twenty buttons cluttering the screen. There isn't even a file menu unless you summon it by pressing Alt. All formatting is done with shortcuts. (But don't worry, there aren't many to memorize, and you can always press **CTRL** + **H** to show them all in the Shortcut Helper--where you can also change any of them to keys you prefer. It's not like you do a lot of formatting when writing fiction anyway.)
 
 What it does have is an array of tools for importing plaintext and docx files and converting them into proper manuscript format, as well as features such as self-emailing drafts at the press of a button, a built-in file manager, a wi-fi manager, and a battery monitor for easy use in standalone writing devices ("writerDecks") without access to any other software.
 
-Dark Mode:
-![screenshot of dark mode of program described](src/assets/screenshot_darkmode.png?raw=true "WareWoolf")
 Light Mode:
 ![screenshot of program described](src/assets/screenshot_lightmode.png?raw=true "WareWoolf")
+Dark Mode:
+![screenshot of dark mode of program described](src/assets/screenshot_darkmode.png?raw=true "WareWoolf")
 Corkboard:
 ![screenshot of program described](src/assets/screenshot_corkboard.png?raw=true "WareWoolf")
 
@@ -24,7 +24,9 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 ## Features
 
 * All-keyboard navigation designed for pleasant use without a mouse.
+   * Accessibility named/labeled for screen readers (not yet tested with one)
 * Distraction-free writing: Each of the three panels can be toggled on/off at the press of a button. Write with only your manuscript visible.
+* The formatting fiction actually needs, all of it on a shortcut and none of it on a toolbar: bold, italics, underline, strikethrough, four levels of heading, left/right/center/justified alignment, bulleted and numbered lists, and blockquotes as well as footnotes.
 * Plain text import/conversion tools
    * Options to parse a simplified version of Markdown (MarkdownFic) or interpret custom markers for detecting italics, headings, etc.
    * Detect custom strings marking chapter breaks or break text into chapters at each heading, etc.
@@ -36,20 +38,28 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 * Built In File Manager: Rename, delete, copy, move, and organize files within WareWoolf (for use in a writerDeck).
 * Built In Wi-Fi Manager: turn wi-fi on/off, connect to new networks, etc. (Linux only, for use in a writerDeck).
 * Built In Battery Monitor: display battery percentage (Linux only, for use in a writerDeck)
+* File > Reboot: restart the machine from inside the app, after the usual save prompt and auto-backup (Linux only, for use in a writerDeck).
 * Word Counts / Goal: See total count, chapter count, session count, and set a goal to see a progress bar showing how close you are to completion.
 * Each chapter is saved as an individual file only loaded when you are working on that chapter. This keeps very long novels from slowing the application at all, even with low-memory computers such as a Raspberry Pi.
 * Outliner.
 * Corkboard that saves as a markdown file that doubles as an outline.
 * Adjust width of text editor and how large text is displayed.
-* Spellcheck, but it must be run after writing (no form of auto-correct or red squiggles or godawful grammar advice).
+* Choose a typeface for the manuscript and another for the sidebars (File > Settings), from serif and sans through Times, Garamond and a typewriter face to Atkinson Hyperlegible and OpenDyslexic. A sample under each dropdown shows what your machine will actually draw.
+* Customizable keyboard shortcuts: rebind any shortcut in the Shortcut Helper (Ctrl+H), or restore the defaults, and your choices are remembered.
+* Automatic substitutions as you type: smart quotes, em dashes from two hyphens, and an ellipsis from three periods. Ctrl+Z undoes any one of them, and the whole thing can be switched off in Settings. A Tools item applies the same conversions to an existing manuscript in one pass.
+* Spellcheck, but it must be run after writing (no red squiggles or godawful grammar advice). Check against any number of dictionaries at once (File > Dictionaries), import your own, and keep a personal word list alongside a per-project one for character and place names that shouldn't follow you into your next book.
 * Word .docx support for import/export
 * Auto-saving and auto-backup options
 * Saves chapters as .txt files with light Markdown-style formatting, so even if WareWoolf disappears you will always be able to read/edit the documents you create with it. This is also widely considered the most "archival" file format, so people will still be able to open your files in 100 years (if people still read then).
 * Export as plain text, markdownFic, standard markdown, docx, HTML, or .epub 
+* Import HTML files and EPUB ebooks, splitting a whole book into chapters as it reads - at headings or horizontal rules for HTML, and by the ebook's own table of contents for EPUB.
 
 ## Installation
 
-Binaries of the current release for Windows, MacOS, Debian AMD64, and Debian ARM64 (Raspberry Pi) are available in the [releases page](https://github.com/brsloan/warewoolf/releases).
+Binaries of the current release for Windows (installer and portable), MacOS, Debian AMD64, and Debian ARM64 (Raspberry Pi) are available in the [releases page](https://github.com/brsloan/warewoolf/releases).
+
+> [!NOTE]
+> **Can't install anything on the machine you write on?** The Windows download comes in two forms. `warewoolf_<version>_Windows_x64.exe` is the ordinary installer, and it is the one to take if you can: it puts WareWoolf in your Start Menu and can update itself in place. `warewoolf_<version>_Windows_Portable_x64.zip` is the same application as a folder you unzip and run — nothing is installed, nothing is written outside it but your settings, and deleting the folder removes it. Good for a USB stick, a shared or locked-down machine, or trying WareWoolf without committing to it. Check For Updates works in both: the portable build is offered the next portable zip rather than the installer, and updating it means replacing the folder with the one inside.
 
 > [!NOTE]
 > **On an older Mac?** The main MacOS builds are packaged against Electron 44, which needs macOS 13 "Ventura" or newer. If you are on macOS 10.15 "Catalina" through 12 "Monterey" — as many of the older laptops people turn into writerdecks are — download `warewoolf_<version>_MacOS_Legacy.dmg` instead. It is the same WareWoolf, built from the same source, packaged against Electron 32: the last release line that runs on those systems. It is an Intel build, so on Apple Silicon it runs under Rosetta. Electron 32 no longer receives Chromium security updates, so take a mainline build instead if your Mac can run one.
@@ -73,104 +83,6 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 
 ## Status
 
-2026-09-07: v2.5.0. Chages made:
-* Security improvements
-* Fixed bug wifi manager did not show network names
+The current release is **v2.5.0**, with unreleased changes on the `dev` branch.
 
-2026-09-06: v2.4.0. Changes made:
-* Upgraded Electron from 18.2.3 to the latest stable (44.2.0) for security and performance enhancements.
-* NOTE: That upgrade raises the minimum OS requirements. This release needs Debian 11 "Bullseye" or newer (including Raspberry Pi OS Bullseye/Bookworm), 64-bit Windows 10 or newer, and macOS 13 "Ventura" or newer. Electron 44 no longer builds for 32-bit Windows or 32-bit (armv7l) Raspberry Pi OS. If you are on an older system, stay on v2.3.1.
-* Fixed bug where opening a damaged/corrupted .woolf file could leave you stuck with a frozen window that only Task Manager could close
-* Fixed bug where restoring a chapter from Trash didn't update which chapter was open in the editor, causing your next edits to save over the wrong file
-* Fixed bug where restoring a Reference document from Trash sent it back to Chapters instead of Reference
-* Fixed bug where missing chapter/reference/trash files weren't always caught by the project repair screen
-* Fixed bug where deleting every chapter and reopening a project could leave the editor locked
-* Fixed bug where .docx export falsely reported errors on projects with no corkboard
-* Fixed bug where Ctrl/Cmd+Shift+Left while renaming a chapter could restart the rename and discard what you'd typed
-* Updated in-app Help doc for EPUB export, .docx import, bullet/numbered lists, corkboard shortcuts, and the new secure email credential storage
-* Help doc now opens read-only so it always reflects the installed version; use Save As if you want to keep your own annotated copy
-* Fixed bug where editing the bundled Frankenstein example silently failed to save; it's now copied to your own project folder on first open
-
-2026-09-05: v2.3.1. Changes made:
-* Massive refactor fixed bugs in virtually every feature
-* Replaced regex markdownFic parsing with a tokenizer
-* Highly recommend immediate upgrade
-
-2026-09-03: v2.3.0. Changes made:
-* Bullets and numbered lists now supported.
-* Indent all paragraphs tool
-* Center all headings tool
-* Import option to generate chapter labels from filename or first line of files
-* Find/Replace Whole Word Only option
-* Saved email password is now protected by the OS keystore (Windows DPAPI / macOS Keychain / Linux libsecret) or an opt-in passphrase, instead of a hardcoded encryption key.
-* Added "Exit Without Backup" button to the backup dialog on quit.
-* Fixed bug centered blank lines not parsed properly
-* Fixed bug spellcheck change all did not limit to whole words
-* Fixed bug exported .docx numbered lists renumbered incorrectly / merged with the previous list's sequence
-* Fixed bug "Exit Without Backup" button wrongly appeared during manual (menu-triggered) backups, skipping the unsaved-work check
-* Fixed bug single-paragraph footnotes lost their anchor link / produced duplicate IDs on export
-* Fixed bug first paragraph of a chapter kept a stray indent tab in exports
-* Fixed bug HTML export could swallow list-item text containing dialogue, and blank centered/aligned lines leaked stray markers into HTML export
-
-2025-10-09: v2.2.1. Changes made:
-* This is a patch to fix a couple bugs I introduced/missed in last update which broke restoring chapters from trash and creating new projects. (Obviously these are embarrassing to have released and I plan to implement testing scripts to catch these issues in future. I've gotten a little too excited about releasing new features this month and was careless.)
-* Added an alert that updates on progress when backing up files on close so it doesn't seem to freeze momentarily.
-* Refactored code for readability.
-
-2025-10-07: v2.2.0. Changes made:
-* .epub export/compile. Meant for quickly generating .epub ebook files for sharing with first readers, etc.
-* "Reference" function lets you keep non-compiling documents in your project for planning, notes, etc. Move any chapter to end of chapter list, then move down one more space, and it will shift into "Reference" section and no longer count toward word count or be included in compile. Can move back into compiling chapters in same way (moving up).
-* Chapter Notes added. Notes panel can be toggled between the old Project Notes, which stays the same as you change chapters, and the new Chapter Notes, which are attached to each individual chapter and update as you cycle through.
-* Project/Chapter Notes now save as separate .txt files just like the chapters do.
-* Corkboard exports with rest of project
-* Various bug fixes, including that corkboard feature was broken in Windows (oops) and now works.
-
-2025-09-28: v2.1.0! Changes made:
-* Corkboard feature for pre-planning/outlining novels. Displays as color-coded digital index cards but saves as plain text "project_corkboard.txt" markdown document, so can be edited/prewritten in other apps.
-* Export/Compile as standard Markdown or HTML
-* Can now open .woolf files directly (user must set WareWoolf to default program in Windows, but it is automatic on MacOS)
-* Battery Charge Display option (Linux only, for use in writerdecks)
-* Custom PageDown key behavior. Now scrolls in perfect intervals so that you can seamlessly read long chapters. When you press Page Down, it will jump forward so that the line after the last line visible will be at the top of the text editor. Default behavior would only scroll far enough for the next line to move up to 1/3rd down in the text editor, breaking reading flow because you had to re-find where you were each time.
-* Various bug fixes.
-
-2024-03-30: v2.0.0! I know that's a quick version jump, but this has some fundamental changes, primarily the switch to saving chapters as plain text .txt files with MarkdownFic markdown for formatting. This is better than the previous ".pup" json files because even if you and WareWoolf both die and your tech illiterate uncle is your executor, he will still be able to open the .txt chapter files of your manuscript and publish it so that history can remember you as the genius no one recognized while you were alive. Also you can edit them in any other text editor and as long you don't change the filename WareWoolf will load them as normal. Changes Made:
-* Completely new MarkdownFic parsing algorithm (about 1000x faster)
-* Now saves chapters as plain text .txt files with MarkdownFic markup for formatting rather than Delta ".pup" JSON files. 
-  * Can still open legacy files, just will silently save over old file format with new at open.
-* Autogenerated subdirectory for chapter files now named "[filename]_chapters" instead of "[filename]_pups".
-* Chapter files now saved as "[title].txt" rather than arbitrary numbers. Filename updates when you change chapter titles in WareWoolf.
-* Now supports MacOS
-* Missing Chapters tool rewritten/expanded
-* Can now toggle full screen on Windows/Mac
-* Can now export single chapter or all
-* Bug fixes
-
-2024-03-16: v1.1.0. Changes made:
-* Download and install updates in-app through About screen
-  * Only checks for updates on user request.
-* File Manager filters out hidden files/directories
-* Refactored entire codebase to use proper isolated modules for maintainability
-* Wi-Fi Manager now shows IP Address
-* Bug fixes
-
-2024-03-03: We have reached version 1.0.0! All the basic features I had originally envisioned are now implemented and working. I use it daily for my own novel writing. Features added/changed since last release:
-* Built-in Wi-Fi Manager (on Linux) for use as writerDeck
-* Import .docx files
-* Footnote support (import and export/compile)
-* Auto-save at set intervals (if desired)
-* Auto-backup with single zip file on close
-* Email zipped project file
-* Built-in File Manager now can unzip zip files
-* Dark Mode support/options
-* Markdown improvements
-* Docx export drastically improved, with automatic cover page generation, page number headers in Standard Manuscript Format, etc. Can now export ready-to-submit manuscript documents
-* Retains more settings user sets for email attachments, etc.
-* Replaced native file dialogs with custom in-app for better keyboard-only workflow
-* Bug fixes
-* 70% less ugly
-
-2023-06-11: Releasing v0.10.0-beta. Improvements: built-in file manager, Properties tool now allows altering project's chapters directory location. About now shows license. Minor fixes.
-
-2023-05-28: After testing and improving the alpha version for almost a year and writing 30,000 words on a new novel with WareWoolf, I have finally decided it is ready for a beta release. I am numbering it v0.9.0. Now I just have to figure out how to go about "releasing" it...
-
-2022-07-09: WareWoolf is currently in the alpha stage, which is to say I'm using it myself and ironing out the bugs I come across. I hope to do a beta release soon.
+For the full release history - every version back to the v0.9.0 beta, plus the pre-release development that led to it - see [CHANGELOG.md](CHANGELOG.md).

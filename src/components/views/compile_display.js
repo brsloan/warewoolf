@@ -1,4 +1,4 @@
-const { closePopups, createButton, removeElementsByClass, generateRow } = require('../controllers/utils');
+const { closePopups, createButton, removeElementsByClass, generateRow, describeDialog } = require('../controllers/utils');
 const showFileDialog = require('./file-dialog_display');
 const { showWorking, hideWorking } = require('./working_display');
 const { compileProject } = require('../controllers/compile');
@@ -12,6 +12,7 @@ function showCompileOptions(project, sysDirectories, userSettings){
     var popupTitle = document.createElement('h1');
     popupTitle.innerText = 'Compile Project';
     popup.appendChild(popupTitle);
+    describeDialog(popup, popupTitle);
 
     var compileForm = document.createElement("form");
 
@@ -67,6 +68,17 @@ function showCompileOptions(project, sysDirectories, userSettings){
 
     compTbl.appendChild(generateRow(titlePageLabel, titlePageCheck));
 
+    var sceneBreakLabel = document.createElement('label');
+    sceneBreakLabel.innerText = 'Mark scene breaks with a centered #: ';
+    sceneBreakLabel.htmlFor = 'scene-break-check';
+
+    var sceneBreakCheck = document.createElement('input');
+    sceneBreakCheck.type = 'checkbox';
+    sceneBreakCheck.id = 'scene-break-check';
+    sceneBreakCheck.checked = userSettings.markSceneBreaks;
+
+    compTbl.appendChild(generateRow(sceneBreakLabel, sceneBreakCheck));
+
     compileForm.appendChild(compTbl);
 
     var compileBtn = document.createElement("input");
@@ -95,6 +107,7 @@ function showCompileOptions(project, sysDirectories, userSettings){
       userSettings.compileInsertHeaders = insertHeadCheck.checked;
       userSettings.compileChapMark = insertStrInput.value;
       userSettings.compileGenTitlePage = titlePageCheck.checked;
+      userSettings.markSceneBreaks = sceneBreakCheck.checked;
       userSettings.save();
 
       var options = {
@@ -102,6 +115,7 @@ function showCompileOptions(project, sysDirectories, userSettings){
         insertStrng: insertStrInput.value,
         insertHead: insertHeadCheck.checked,
         generateTitlePage: titlePageCheck.checked,
+        markSceneBreaks: sceneBreakCheck.checked,
         styleHeadingAsChapter: true
       }
       getCompileFilepath(project, userSettings, options, sysDirectories, function(){

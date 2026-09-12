@@ -1,6 +1,9 @@
-const { closePopups, createButton, removeElementsByClass, convertFilepath, generateRow } = require('../controllers/utils');
+const { closePopups, createButton, removeElementsByClass, convertFilepath, generateRow, describeDialog } = require('../controllers/utils');
 const { showBattery, removeBattery } = require('./battery_display');
 const showFileDialog = require('./file-dialog_display');
+const { getAutocorrectDefs, resolveAutocorrect, diffFromDefaults } = require('../models/autocorrect');
+const { getFontDefs, resolveFontStack, sanitizeFontId, DEFAULT_SIDEBAR_FONT_ID } = require('../models/fonts');
+const { getLineHeightDefs, resolveLineHeight, sanitizeLineHeightId } = require('../models/line-heights');
 
 function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, callback, platformInfo){
   removeElementsByClass('popup');
@@ -10,6 +13,7 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
   var settingsHeader = document.createElement('h1');
   settingsHeader.innerText = "Settings";
   popup.appendChild(settingsHeader);
+  describeDialog(popup, settingsHeader);
 
   var settingsForm = document.createElement('form');
 
@@ -20,10 +24,12 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
 
   var defAuthLab = document.createElement('label');
   defAuthLab.innerText = 'Default Author: ';
+  defAuthLab.htmlFor = 'default-author-input';
   infoSet.appendChild(defAuthLab);
 
   var defAuthIn = document.createElement('input');
   defAuthIn.type = 'text';
+  defAuthIn.id = 'default-author-input';
   defAuthIn.value = userSettings.defaultAuthor;
   infoSet.appendChild(defAuthIn);
 
@@ -31,6 +37,7 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
 
   var addressLab = document.createElement('label');
   addressLab.innerText = 'Address Info (for cover page export): ';
+  addressLab.htmlFor = 'address-info-input';
   infoSet.appendChild(addressLab);
 
   var addressIn = document.createElement('textarea');
@@ -49,6 +56,7 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
 
   var backupDirLabel = document.createElement('label');
   backupDirLabel.innerText = "Backups Directory: ";
+  backupDirLabel.htmlFor = 'backup-dir-input';
   saveSet.appendChild(backupDirLabel);
 
   saveSet.appendChild(document.createElement('br'));
@@ -75,17 +83,21 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
 
   var autoBackupLabel = document.createElement('label');
   autoBackupLabel.innerText = 'Auto Backup On Close: ';
+  autoBackupLabel.htmlFor = 'auto-backup-check';
 
   var autoBackupCheck = document.createElement('input');
   autoBackupCheck.type = 'checkbox';
+  autoBackupCheck.id = 'auto-backup-check';
   autoBackupCheck.checked = userSettings.autoBackup;
 
   backupTbl.appendChild(generateRow(autoBackupLabel, autoBackupCheck));
 
   var backupsLimitLabel = document.createElement('label');
   backupsLimitLabel.innerText = 'Latest backups to keep (0=infinite): ';
+  backupsLimitLabel.htmlFor = 'backups-to-keep-input';
 
   var backupLimitInput = document.createElement('input');
+  backupLimitInput.id = 'backups-to-keep-input';
   backupLimitInput.type = 'number';
   backupLimitInput.min = 0;
   backupLimitInput.value = userSettings.backupsToKeep;
@@ -95,8 +107,10 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
 
   var autosaveLabel = document.createElement('label');
   autosaveLabel.innerText = 'Autosave every X minutes (0=never): ';
+  autosaveLabel.htmlFor = 'autosave-interval-input';
 
   var autosaveIntervalInput = document.createElement('input');
+  autosaveIntervalInput.id = 'autosave-interval-input';
   autosaveIntervalInput.type = 'number';
   autosaveIntervalInput.min = 0;
   autosaveIntervalInput.value = userSettings.autosaveIntMinutes;
@@ -106,6 +120,52 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
 
   saveSet.appendChild(backupTbl);
   settingsForm.appendChild(saveSet);
+
+  var substitutionSet = document.createElement('fieldset');
+  var substitutionLeg = document.createElement('legend');
+  substitutionLeg.innerText = 'Automatic Substitutions';
+  substitutionSet.appendChild(substitutionLeg);
+
+  var substitutionTbl = document.createElement('table');
+
+  var autocorrectLabel = document.createElement('label');
+  autocorrectLabel.innerText = 'Substitute As I Type: ';
+  autocorrectLabel.htmlFor = 'autocorrect-check';
+
+  var autocorrectCheck = document.createElement('input');
+  autocorrectCheck.type = 'checkbox';
+  autocorrectCheck.id = 'autocorrect-check';
+  autocorrectCheck.checked = userSettings.autocorrectEnabled;
+
+  substitutionTbl.appendChild(generateRow(autocorrectLabel, autocorrectCheck));
+
+  //Shown as what is in force - the defaults with the writer's saved changes over them - rather
+  //than as the stored overrides, which are only the handful that differ.
+  var rules = resolveAutocorrect(userSettings.autocorrect);
+  var ruleChecks = {};
+
+  getAutocorrectDefs().forEach(function(def){
+    var ruleLabel = document.createElement('label');
+    ruleLabel.innerText = def.label + ' (' + def.example + '): ';
+    ruleLabel.htmlFor = 'autocorrect-' + def.id;
+
+    var ruleCheck = document.createElement('input');
+    ruleCheck.type = 'checkbox';
+    ruleCheck.id = 'autocorrect-' + def.id;
+    ruleCheck.checked = rules[def.id];
+
+    ruleChecks[def.id] = ruleCheck;
+    substitutionTbl.appendChild(generateRow(ruleLabel, ruleCheck));
+  });
+
+  //A rule means nothing while the master switch is off, so the list greys out rather than sitting
+  //there looking as though it still decides something. Disabled, not cleared: a writer who turns
+  //substitutions back on gets the rules they had chosen, since Save reads .checked either way.
+  autocorrectCheck.onchange = updateRuleAvailability;
+  updateRuleAvailability();
+
+  substitutionSet.appendChild(substitutionTbl);
+  settingsForm.appendChild(substitutionSet);
 
   var appearanceSet = document.createElement('fieldset');
   var appearanceLeg = document.createElement('legend');
@@ -164,6 +224,23 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
   darkModeLightLabel.htmlFor = 'dark-mode-light';
   appearanceSet.appendChild(darkModeLightLabel);
 
+  appearanceSet.appendChild(document.createElement('hr'));
+
+  var fontTbl = document.createElement('table');
+
+  //Two pickers rather than one, because the two columns are read differently: the manuscript is
+  //read the way the finished book will be, and the sidebars are scanned for a chapter title. A
+  //writer who wants one face everywhere still only has to set the same thing twice, once.
+  var editorFontSelect = addFontPicker(fontTbl, 'editor-font', 'Manuscript Font: ', userSettings.editorFont);
+  var sidebarFontSelect = addFontPicker(fontTbl, 'sidebar-font', 'Sidebar Font (chapter list and notes): ', userSettings.sidebarFont, DEFAULT_SIDEBAR_FONT_ID);
+
+  //Only the manuscript, so it sits under the manuscript's own settings. The chapter list and the
+  //notes are columns to glance down rather than prose to read a chapter of, and index.css sets
+  //them closer on purpose.
+  var lineHeightSelect = addLineHeightPicker(fontTbl, 'editor-line-height', 'Manuscript Line Spacing: ', userSettings.editorLineHeight, editorFontSelect);
+
+  appearanceSet.appendChild(fontTbl);
+
   settingsForm.appendChild(appearanceSet);
 
   var batterySet = document.createElement('fieldset');
@@ -198,8 +275,19 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
     userSettings.backupsToKeep = Number(backupLimitInput.value) || 0;
     userSettings.autosaveIntMinutes = Number(autosaveIntervalInput.value) || 0;
     userSettings.darkMode = document.querySelector('input[type=radio][name=dark-mode]:checked').value;
+    //Through sanitizeFontId on the way out as well as on the way in: the value of a <select> is a
+    //string from the DOM, and this is the one field whose value goes straight into a css
+    //font-family declaration.
+    userSettings.editorFont = sanitizeFontId(editorFontSelect.value);
+    userSettings.sidebarFont = sanitizeFontId(sidebarFontSelect.value, DEFAULT_SIDEBAR_FONT_ID);
+    //And for the same reason: a <select>'s value is a string from the DOM, and this one ends up in
+    //a css line-height declaration.
+    userSettings.editorLineHeight = sanitizeLineHeightId(lineHeightSelect.value);
     userSettings.defaultAuthor = defAuthIn.value;
     userSettings.addressInfo = addressIn.value;
+    userSettings.autocorrectEnabled = autocorrectCheck.checked;
+    //Stored as only what differs from the defaults - see diffFromDefaults in models/autocorrect.js.
+    userSettings.autocorrect = diffFromDefaults(checkedRules());
     if(platformInfo.platform == 'linux'){
       if(userSettings.showBattery && batteryDisplayCheck.checked == false){
         userSettings.showBattery = batteryDisplayCheck.checked;
@@ -227,6 +315,162 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
   document.body.appendChild(popup);
 
   defAuthIn.focus();
+
+  function updateRuleAvailability(){
+    Object.keys(ruleChecks).forEach(function(id){
+      ruleChecks[id].disabled = !autocorrectCheck.checked;
+    });
+  }
+
+  //One setting: a labelled dropdown of every face fonts.js knows, and directly beneath it a line of
+  //sample text in whichever is chosen. Two rows rather than one, the sample spanning both columns,
+  //so a sample sits under the picker it belongs to instead of the pair of them collecting at the
+  //bottom where neither says which is which. Returns the select, which is what Save reads.
+  function addFontPicker(table, idPrefix, labelText, selected, fallbackId){
+    var select = buildFontSelect(idPrefix + '-select', selected, fallbackId);
+    var label = document.createElement('label');
+    label.innerText = labelText;
+    label.htmlFor = select.id;
+    table.appendChild(generateRow(label, select));
+
+    var sampleRow = document.createElement('tr');
+    var sampleCell = document.createElement('td');
+    sampleCell.colSpan = 2;
+    sampleCell.appendChild(buildFontSample(idPrefix + '-sample', select));
+    sampleRow.appendChild(sampleCell);
+    table.appendChild(sampleRow);
+
+    return select;
+  }
+
+  //A dropdown of every face in fonts.js, with each option drawn in the face it names so the list
+  //itself is the specimen sheet. `selected` is whatever is in user settings, run through
+  //sanitizeFontId so an id this version does not know lands on the default rather than leaving the
+  //select showing its first option while the app is drawn in something else. `fallbackId` says
+  //which default that is, so the sidebar picker falls back to the same face the sidebars would
+  //actually be drawn in; omitted, it is the manuscript's.
+  function buildFontSelect(id, selected, fallbackId){
+    var select = document.createElement('select');
+    select.id = id;
+
+    getFontDefs().forEach(function(def){
+      var option = document.createElement('option');
+      option.value = def.id;
+      option.innerText = def.label;
+      option.style.fontFamily = def.stack;
+      select.appendChild(option);
+    });
+
+    select.value = sanitizeFontId(selected, fallbackId);
+
+    return select;
+  }
+
+  //WareWoolf ships no font files, so a face is only ever the best one of its stack a writer happens
+  //to have installed, and there is no honest way to say which that is in the dropdown. The sample
+  //answers it by showing the result: whatever is drawn here is what the panel will be drawn in.
+  //
+  //A pangram, because what is being shown is the shape of the letters and a pangram is the shortest
+  //way to show all of them. Marked aria-hidden: it is the same information the selected option
+  //already carries by name, and read aloud it is a sentence about a fox.
+  function buildFontSample(id, select){
+    var sample = document.createElement('p');
+    sample.id = id;
+    sample.classList.add('font-sample');
+    sample.innerText = 'The quick brown fox jumps over the lazy dog.';
+    sample.setAttribute('aria-hidden', 'true');
+
+    select.addEventListener('change', updateSample);
+    updateSample();
+
+    return sample;
+
+    function updateSample(){
+      sample.style.fontFamily = resolveFontStack(select.value);
+    }
+  }
+
+  //The manuscript's line spacing: the same shape as a font picker - a labelled dropdown with a
+  //sample directly beneath it - since it is the same kind of choice about the same panel, and a
+  //writer setting up their screen should not have to learn two layouts to do it.
+  //
+  //`fontSelect` is the manuscript's own font picker. The sample is drawn in whatever face that is
+  //currently showing, so the two settings are previewed together rather than each against a face
+  //the editor is not in - spacing that reads well in Courier is not the spacing that reads well in
+  //Garamond, which is the whole reason a writer is looking at this. Returns the select, which is
+  //what Save reads.
+  function addLineHeightPicker(table, idPrefix, labelText, selected, fontSelect){
+    var select = buildLineHeightSelect(idPrefix + '-select', selected);
+    var label = document.createElement('label');
+    label.innerText = labelText;
+    label.htmlFor = select.id;
+    table.appendChild(generateRow(label, select));
+
+    var sampleRow = document.createElement('tr');
+    var sampleCell = document.createElement('td');
+    sampleCell.colSpan = 2;
+    sampleCell.appendChild(buildLineHeightSample(idPrefix + '-sample', select, fontSelect));
+    sampleRow.appendChild(sampleCell);
+    table.appendChild(sampleRow);
+
+    return select;
+  }
+
+  //`selected` is whatever is in user settings, run through sanitizeLineHeightId so an id this
+  //version does not know lands on the default rather than leaving the select showing its first
+  //option - which is the tightest one - while the manuscript is drawn double spaced.
+  function buildLineHeightSelect(id, selected){
+    var select = document.createElement('select');
+    select.id = id;
+
+    getLineHeightDefs().forEach(function(def){
+      var option = document.createElement('option');
+      option.value = def.id;
+      option.innerText = def.label;
+      select.appendChild(option);
+    });
+
+    select.value = sanitizeLineHeightId(selected);
+
+    return select;
+  }
+
+  //Several sentences rather than the fonts' one pangram: line spacing is the gap between one line
+  //and the next, and a single line has no next line to show a gap to. Prose rather than a
+  //specimen sentence for the same reason - what is being judged is how a paragraph of the book
+  //will sit, so the sample is a paragraph.
+  //
+  //Marked aria-hidden: it says nothing the selected option's own name does not, and read aloud it
+  //is three sentences of filler.
+  function buildLineHeightSample(id, select, fontSelect){
+    var sample = document.createElement('p');
+    sample.id = id;
+    sample.classList.add('line-height-sample');
+    sample.innerText = 'She read the page again, more slowly this time. The words were the same words. ' +
+      'It was the space between them that had changed, and with it the speed at which she could think.';
+    sample.setAttribute('aria-hidden', 'true');
+
+    select.addEventListener('change', updateSample);
+    fontSelect.addEventListener('change', updateSample);
+    updateSample();
+
+    return sample;
+
+    function updateSample(){
+      sample.style.lineHeight = resolveLineHeight(select.value);
+      sample.style.fontFamily = resolveFontStack(fontSelect.value);
+    }
+  }
+
+  function checkedRules(){
+    var checked = {};
+
+    Object.keys(ruleChecks).forEach(function(id){
+      checked[id] = ruleChecks[id].checked;
+    });
+
+    return checked;
+  }
 }
 
 function promptToChooseDirectory(defPath, sysDirectories, cback){

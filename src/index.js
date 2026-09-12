@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, nativeTheme, safeStorage } = require('electron');
+const { app, BrowserWindow, Menu, nativeTheme, safeStorage, autoUpdater } = require('electron');
 const path = require('path');
 const { ipcMain } = require('electron');
 const { COMMANDS, createPlatform } = require('./components/controllers/platform');
@@ -200,8 +200,12 @@ const createWindow = () => {
           }
         },
         {
+          //No accelerator: Ctrl/Cmd+Shift+B is the editor's Bullets/Numbered List shortcut, and a
+          //menu accelerator is handled natively before the page ever sees the keydown - so for as
+          //long as Backup claimed it, the bullets shortcut the Shortcuts popup documents could
+          //not fire. Backup stays reachable from this menu, where it is not competing for a key
+          //a writer presses mid-sentence.
           label: 'Backup',
-          accelerator: 'CmdOrCtrl+Shift+B',
           click(item, focusWindow){
             mainWindow.webContents.send('save-backup-clicked');
           }
@@ -250,6 +254,14 @@ const createWindow = () => {
             mainWindow.webContents.send('settings-clicked');
           }
         },
+        {
+          //No accelerator: this is a dialog opened rarely and does not need to spend a chord - see
+          //the note on Backup above.
+          label: 'Dictionaries',
+          click(item, focusWindow){
+            mainWindow.webContents.send('dictionaries-clicked');
+          }
+        },
         {type: 'separator'},
         {
           label: 'File Manager',
@@ -258,6 +270,24 @@ const createWindow = () => {
           },
           accelerator: 'CmdOrCtrl+Shift+F'
         },
+        ...(isLinux ? [
+          {type: 'separator'},
+          {
+            //A writerDeck item, not a desktop one, which is why it is gated the same way the
+            //Wi-Fi Manager is: on a Pi that boots straight into WareWoolf with no desktop behind
+            //it, this menu is the whole machine's interface, and there is no panel, launcher or
+            //terminal to reach a reboot from. On a machine that has all three it would only be a
+            //worse copy of them.
+            //
+            //No accelerator, deliberately, and for a stronger version of the reason Backup and
+            //Dictionaries do without one: every other item on this menu can be undone or
+            //answered, and a chord that takes the machine down cannot.
+            label: 'Reboot',
+            click(item, focusWindow){
+              mainWindow.webContents.send('reboot-clicked');
+            }
+          }
+        ] : []),
         {type: 'separator'},
         {
           label: 'Exit',
@@ -397,6 +427,12 @@ const createWindow = () => {
             mainWindow.webContents.send('convert-tabs-clicked');
           }
         },
+        {
+          label: 'Convert Straight Quotes Etc.',
+          click(item, focusWindow){
+            mainWindow.webContents.send('convert-substitutions-clicked');
+          }
+        },
         { type: 'separator' },
         {
           label: 'Break Headings Into Chapters',
@@ -405,9 +441,9 @@ const createWindow = () => {
           }
         },
         {
-          label: 'Indent All Paragraphs',
+          label: 'Tab-Indent Paragraphs',
           click(item, focusWindow){
-            mainWindow.webContents.send('indent-all-clicked');
+            mainWindow.webContents.send('tab-indent-paragraphs-clicked');
           }
         },
         {
@@ -526,6 +562,40 @@ app.on('window-all-closed', () => {
 //platform-ipc.js unwraps it. See either file for why that is not optional.
 var commandHost = null;
 
+//Registered once, the first time a writer clicks Install, rather than once per call - a writer who
+//hits an error and clicks again must not end up with two listeners and two 'app-update-downloaded'
+//events for one download. autoUpdater itself has no way to ask "am I already listening?", so this
+//flag is what stands in for one.
+var squirrelListenersRegistered = false;
+
+//Channel names are written out literally at each send() call site below, rather than through a
+//shared helper taking a channel argument - test/platform.test.js's own channel guard greps index.js
+//for a literal quoted string following webContents.send(, so a name reached only through a variable
+//would not be seen and could drift from EVENTS silently.
+function registerSquirrelListeners(){
+  if(squirrelListenersRegistered)
+    return;
+  squirrelListenersRegistered = true;
+
+  autoUpdater.on('update-downloaded', function(){
+    if(currentWindow && !currentWindow.isDestroyed())
+      currentWindow.webContents.send('app-update-downloaded');
+  });
+  //Squirrel finding nothing here means the feed disagreed with the checkForUpdate call that already
+  //told the writer an update exists - a broken feed, not a genuine "no update" the writer never
+  //asked about. Reported as a failure rather than left to time out, so the writer is not left
+  //watching "Downloading update..." forever.
+  autoUpdater.on('update-not-available', function(){
+    if(currentWindow && !currentWindow.isDestroyed())
+      currentWindow.webContents.send('app-update-failed',
+        'WareWoolf found an update a moment ago, but the update feed cannot find it now. Please try again in a moment.');
+  });
+  autoUpdater.on('error', function(err){
+    if(currentWindow && !currentWindow.isDestroyed())
+      currentWindow.webContents.send('app-update-failed', err == null ? 'The update failed.' : err.message);
+  });
+}
+
 //Built on the first command rather than at module load. app.getPath() wants a ready app, and
 //`fileRequestedOnOpen` is still being written to by argv parsing and the macOS 'open-file' event at
 //that point - both settled by the time a renderer can ask for anything.
@@ -559,6 +629,28 @@ function host(){
       onConfirmExit: function(){
         closeConfirmed = true;
         app.quit();
+      },
+      //Squirrel holds a file lock on its own directory immediately after installing, and a check
+      //made in that window fails in a way that looks like a bug rather than "you just installed
+      //this." Refused here, before autoUpdater is ever touched, rather than let it surface as a
+      //generic autoUpdater 'error'.
+      onStartSquirrelUpdate: function(feedUrl){
+        if(process.argv.indexOf('--squirrel-firstrun') !== -1){
+          if(currentWindow && !currentWindow.isDestroyed())
+            currentWindow.webContents.send('app-update-failed',
+              'WareWoolf was just installed. Please try checking for updates again in a moment.');
+          return;
+        }
+
+        registerSquirrelListeners();
+        autoUpdater.setFeedURL({ url: feedUrl });
+        autoUpdater.checkForUpdates();
+      },
+      //quitAndInstall() closes every window itself; without setting this first the 'close' handler
+      //above would treat that as an unconfirmed close and re-prompt the writer mid-update.
+      onQuitAndInstallUpdate: function(){
+        closeConfirmed = true;
+        autoUpdater.quitAndInstall();
       },
       //Sent by render.js as the last thing it does, once every handler is registered.
       onNotifyRendererReady: function(){

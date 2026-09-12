@@ -1,4 +1,4 @@
-const { closePopupDialogs, createButton, sanitizeFilenameWithExt } = require('../controllers/utils');
+const { closePopupDialogs, createButton, sanitizeFilenameWithExt, describeDialog } = require('../controllers/utils');
 const { getFileList, getParentDirectory } = require('../controllers/file-manager');
 
 function stopDefaultPropagation(keyEvent){
@@ -16,6 +16,7 @@ async function showFileDialog(options, callback){
 
     var dialogTitle = document.createElement('h3');
     dialogTitle.innerText = options.title;
+    describeDialog(popup, dialogTitle);
     popup.appendChild(dialogTitle);
 
     var currentDirDisplay = document.createElement("p");
@@ -28,6 +29,7 @@ async function showFileDialog(options, callback){
 
     var dirShortcutSelect = document.createElement("select");
     dirShortcutSelect.classList.add("file-dir-shortcuts");
+    dirShortcutSelect.setAttribute('aria-label', 'Folder shortcuts');
     dirShortcutSelect.size = 20;
     selectFieldsContainer.appendChild(dirShortcutSelect);
     dirShortcutSelect.addEventListener('keydown', async function(e){
@@ -42,10 +44,12 @@ async function showFileDialog(options, callback){
     var fileListSelect = document.createElement("select");
     fileListSelect.multiple = true;
     fileListSelect.classList.add("file-manager-list");
+    fileListSelect.setAttribute('aria-label', 'Files');
     selectFieldsContainer.appendChild(fileListSelect);
 
     var filenameIn = document.createElement('input');
     filenameIn.classList.add('save-input');
+    filenameIn.setAttribute('aria-label', 'File name');
 
     if(options.dialogType == 'save'){
       //Only append filenameInput if in save mode
@@ -252,6 +256,7 @@ async function populateFileList(directoryPath, listElement, currentDirDisplay, f
 
 function getFilterSelect(filters){
   var filterSelect = document.createElement('select');
+  filterSelect.setAttribute('aria-label', 'File type');
 
   if(filters == null || filters.length == 0){
     var filterOp = document.createElement('option');
