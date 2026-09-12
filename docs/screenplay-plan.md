@@ -309,19 +309,22 @@ element cycle, applied when the caret is at the end of the line:
 
 | On | Enter, line has text | Enter, line empty | Tab |
 | --- | --- | --- | --- |
-| scene | new action | stays scene | fills `INT. ` if empty |
+| scene | new action | becomes action | fills `INT. ` if empty |
 | action | new action; if the line reads as a scene heading or transition, convert it first | new action | becomes character |
 | character | new dialogue | becomes action | new parenthetical `()` with the caret inside |
-| parenthetical | new dialogue | becomes dialogue | new dialogue |
+| parenthetical | new dialogue | becomes action | new dialogue |
 | dialogue | new character | becomes action | new parenthetical `()` |
 | transition | new scene | becomes action | becomes scene |
-| anything else | new action | new action | becomes action |
+| anything else | new action | becomes action | becomes action |
 
-Enter with the caret at the start of a non-empty line pushes the line down and
-leaves an empty line above it; that new line becomes action. Enter mid-line or
-with a selection falls through to Quill, which splits the line and copies the
-type, which is right for a split. Shift+Enter inserts a new line of the same
-type with `tight` set.
+Enter on an empty line of any type but action makes it action: the way out of
+a type chosen by mistake, and the double-Enter after a speech that gets from
+the next cue to action. Enter with the caret at the start of a non-empty line
+pushes the line down and leaves an empty action line above it. Enter mid-line
+splits the line into two of the same type, with the dual and tight marks
+cleared on the second. A selection falls through to Quill. Shift+Enter inserts
+a new line of the same type with `tight` set. A line that becomes a heading,
+cue or transition has its text upper-cased, so the file needs no force marker.
 
 The auto-detection on Enter after an action line reuses the codec's classifier
 on that one line, so "CUT TO:" and "INT. KITCHEN - DAY" typed as plain action

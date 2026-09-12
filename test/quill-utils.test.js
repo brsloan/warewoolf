@@ -207,6 +207,25 @@ test('every formatting shortcut is bound on its default key with the platform mo
   assert.ok(q.applied().every(function(binding){ return binding.shortKey === true; }));
 });
 
+//docs/screenplay-plan.md, Phase 4: the mode decides which of the table is bound, so a script gets
+//the elements on Ctrl+1..6 and none of the prose formatting that shares those keys.
+test('in screenplay mode the element shortcuts are bound and the prose-only ones are not', function(){
+  var q = recordingQuill();
+  applyQuillShortcuts(q, shortcutsModel.resolveShortcuts(null), 'screenplay');
+
+  assert.deepStrictEqual(q.applied().map(function(binding){ return binding.warewoolfAction; }).sort(), [
+    'elementAction', 'elementCentered', 'elementCharacter', 'elementDialogue', 'elementParenthetical',
+    'elementScene', 'elementTransition',
+    'formatBold', 'formatItalics', 'formatStrikethrough', 'formatUnderline'
+  ]);
+
+  //And back: re-applying for prose strips the elements and restores the headings.
+  applyQuillShortcuts(q, shortcutsModel.resolveShortcuts(null), 'prose');
+  var ids = q.applied().map(function(binding){ return binding.warewoolfAction; });
+  assert.ok(ids.indexOf('formatHeading1') !== -1);
+  assert.ok(ids.indexOf('elementScene') === -1);
+});
+
 //Quill matches a keypress on its keyCode, so that is what a binding has to carry - a key's name
 //would never match anything.
 test('a binding carries the key code of the key it is bound to', function(){

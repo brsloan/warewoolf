@@ -183,7 +183,7 @@ const RESERVED_KEYS = {
 //"Shift".
 const MODIFIER_KEY_NAMES = ['Control', 'Shift', 'Alt', 'Meta', 'AltGraph', 'CapsLock', 'OS'];
 
-const SECTIONS = ['Navigation', 'Alteration', 'Formatting', 'Display'];
+const SECTIONS = ['Navigation', 'Alteration', 'Formatting', 'Screenplay', 'Display'];
 
 function makeBinding(key, flags){
   return buildBinding(normalizeKeyName(key), flags);
@@ -331,30 +331,34 @@ const MENU_KEY_BINDING = makeBinding('M', { mod: true });
 //           acts on whichever of the three has focus.
 //  quill  - Quill's own keyboard module, added to both editors by quill-utils.js.
 const SHORTCUT_DEFS = [
-  { id: 'previousChapter', label: 'View Previous Chapter', section: 'Navigation', target: 'pane', defaultBinding: makeBinding('ArrowUp', { mod: true }) },
-  { id: 'nextChapter', label: 'View Next Chapter', section: 'Navigation', target: 'pane', defaultBinding: makeBinding('ArrowDown', { mod: true }) },
+  //Chapter or scene: the same key moves between whichever the active document is made of.
+  { id: 'previousChapter', label: 'View Previous Chapter / Scene', section: 'Navigation', target: 'pane', defaultBinding: makeBinding('ArrowUp', { mod: true }) },
+  { id: 'nextChapter', label: 'View Next Chapter / Scene', section: 'Navigation', target: 'pane', defaultBinding: makeBinding('ArrowDown', { mod: true }) },
   { id: 'focusEditor', label: 'Shift Focus To Editor', section: 'Navigation', target: 'global', defaultBinding: makeBinding('ArrowLeft', { mod: true }) },
   { id: 'focusNotes', label: 'Shift Focus To Notes', section: 'Navigation', target: 'global', defaultBinding: makeBinding('ArrowRight', { mod: true }) },
 
-  { id: 'moveChapterUp', label: 'Move Chapter Up', section: 'Alteration', target: 'pane', defaultBinding: makeBinding('ArrowUp', { mod: true, shift: true }) },
-  { id: 'moveChapterDown', label: 'Move Chapter Down', section: 'Alteration', target: 'pane', defaultBinding: makeBinding('ArrowDown', { mod: true, shift: true }) },
+  { id: 'moveChapterUp', label: 'Move Chapter / Scene Up', section: 'Alteration', target: 'pane', defaultBinding: makeBinding('ArrowUp', { mod: true, shift: true }) },
+  { id: 'moveChapterDown', label: 'Move Chapter / Scene Down', section: 'Alteration', target: 'pane', defaultBinding: makeBinding('ArrowDown', { mod: true, shift: true }) },
   { id: 'changeChapterLabel', label: 'Change Chapter Label', section: 'Alteration', target: 'pane', defaultBinding: makeBinding('ArrowLeft', { mod: true, shift: true }) },
 
-  { id: 'formatTitle', label: 'Title (Heading 1, Centered)', section: 'Formatting', target: 'quill', defaultBinding: makeBinding('T', { mod: true }) },
-  { id: 'formatHeading1', label: 'Heading 1', section: 'Formatting', target: 'quill', defaultBinding: makeBinding('1', { mod: true }) },
-  { id: 'formatHeading2', label: 'Heading 2', section: 'Formatting', target: 'quill', defaultBinding: makeBinding('2', { mod: true }) },
-  { id: 'formatHeading3', label: 'Heading 3', section: 'Formatting', target: 'quill', defaultBinding: makeBinding('3', { mod: true }) },
-  { id: 'formatHeading4', label: 'Heading 4', section: 'Formatting', target: 'quill', defaultBinding: makeBinding('4', { mod: true }) },
-  { id: 'formatClearHeading', label: 'Clear Heading', section: 'Formatting', target: 'quill', defaultBinding: makeBinding('0', { mod: true }) },
-  { id: 'formatList', label: 'Bullets/Numbered List', section: 'Formatting', target: 'quill', defaultBinding: makeBinding('B', { mod: true, shift: true }) },
-  { id: 'formatBlockquote', label: 'Blockquote', section: 'Formatting', target: 'quill', defaultBinding: makeBinding('Q', { mod: true, shift: true }) },
+  //The prose-only formatting: headings, lists, quotations, footnotes and alignment mean nothing
+  //in a script, whose lines are elements (below), so these are bound only while the editor shows
+  //prose and may share a key with a screenplay shortcut - see the note on `mode` above.
+  { id: 'formatTitle', label: 'Title (Heading 1, Centered)', section: 'Formatting', target: 'quill', mode: 'prose', defaultBinding: makeBinding('T', { mod: true }) },
+  { id: 'formatHeading1', label: 'Heading 1', section: 'Formatting', target: 'quill', mode: 'prose', defaultBinding: makeBinding('1', { mod: true }) },
+  { id: 'formatHeading2', label: 'Heading 2', section: 'Formatting', target: 'quill', mode: 'prose', defaultBinding: makeBinding('2', { mod: true }) },
+  { id: 'formatHeading3', label: 'Heading 3', section: 'Formatting', target: 'quill', mode: 'prose', defaultBinding: makeBinding('3', { mod: true }) },
+  { id: 'formatHeading4', label: 'Heading 4', section: 'Formatting', target: 'quill', mode: 'prose', defaultBinding: makeBinding('4', { mod: true }) },
+  { id: 'formatClearHeading', label: 'Clear Heading', section: 'Formatting', target: 'quill', mode: 'prose', defaultBinding: makeBinding('0', { mod: true }) },
+  { id: 'formatList', label: 'Bullets/Numbered List', section: 'Formatting', target: 'quill', mode: 'prose', defaultBinding: makeBinding('B', { mod: true, shift: true }) },
+  { id: 'formatBlockquote', label: 'Blockquote', section: 'Formatting', target: 'quill', mode: 'prose', defaultBinding: makeBinding('Q', { mod: true, shift: true }) },
   //Not Ctrl+Shift+F: that is already File Manager (see MENU_ACCELERATORS above). Ctrl+Alt+T
   //(Typewriter Mode, below) is the precedent for the Ctrl+Alt row.
-  { id: 'insertFootnote', label: 'Insert Footnote', section: 'Formatting', target: 'quill', defaultBinding: makeBinding('F', { mod: true, alt: true }) },
-  { id: 'formatAlignLeft', label: 'Left Align', section: 'Formatting', target: 'quill', defaultBinding: makeBinding('L', { mod: true }) },
-  { id: 'formatAlignRight', label: 'Right Align', section: 'Formatting', target: 'quill', defaultBinding: makeBinding('R', { mod: true }) },
-  { id: 'formatAlignCenter', label: 'Center Align', section: 'Formatting', target: 'quill', defaultBinding: makeBinding('E', { mod: true }) },
-  { id: 'formatAlignJustify', label: 'Justify Align', section: 'Formatting', target: 'quill', defaultBinding: makeBinding('J', { mod: true }) },
+  { id: 'insertFootnote', label: 'Insert Footnote', section: 'Formatting', target: 'quill', mode: 'prose', defaultBinding: makeBinding('F', { mod: true, alt: true }) },
+  { id: 'formatAlignLeft', label: 'Left Align', section: 'Formatting', target: 'quill', mode: 'prose', defaultBinding: makeBinding('L', { mod: true }) },
+  { id: 'formatAlignRight', label: 'Right Align', section: 'Formatting', target: 'quill', mode: 'prose', defaultBinding: makeBinding('R', { mod: true }) },
+  { id: 'formatAlignCenter', label: 'Center Align', section: 'Formatting', target: 'quill', mode: 'prose', defaultBinding: makeBinding('E', { mod: true }) },
+  { id: 'formatAlignJustify', label: 'Justify Align', section: 'Formatting', target: 'quill', mode: 'prose', defaultBinding: makeBinding('J', { mod: true }) },
   { id: 'formatStrikethrough', label: 'Strikethrough', section: 'Formatting', target: 'quill', defaultBinding: makeBinding('K', { mod: true }) },
   { id: 'formatItalics', label: 'Italics', section: 'Formatting', target: 'quill', defaultBinding: makeBinding('I', { mod: true }) },
   { id: 'formatBold', label: 'Bold', section: 'Formatting', target: 'quill', defaultBinding: makeBinding('B', { mod: true }) },
@@ -376,7 +380,18 @@ const SHORTCUT_DEFS = [
   //moved "Toggle Notes Display" onto Ctrl+F3 would have had two handlers fire and no way to see
   //why.
   { id: 'toggleChapterNotes', label: 'Toggle Chapter Notes', section: 'Display', target: 'global', defaultBinding: makeBinding('F3', { mod: true }) },
-  { id: 'typewriterMode', label: 'Typewriter Mode', section: 'Display', target: 'global', defaultBinding: makeBinding('T', { mod: true, alt: true }) }
+  { id: 'typewriterMode', label: 'Typewriter Mode', section: 'Display', target: 'global', defaultBinding: makeBinding('T', { mod: true, alt: true }) },
+
+  //Screenplay elements (docs/screenplay-plan.md, Phase 4), bound only while the editor shows a
+  //script. Ctrl+1..6 in the order Final Draft uses, which is also what the abandoned first
+  //attempt shipped; they share those keys with the prose headings, which is why `mode` exists.
+  { id: 'elementScene', label: 'Scene Heading', section: 'Screenplay', target: 'quill', mode: 'screenplay', defaultBinding: makeBinding('1', { mod: true }) },
+  { id: 'elementAction', label: 'Action', section: 'Screenplay', target: 'quill', mode: 'screenplay', defaultBinding: makeBinding('2', { mod: true }) },
+  { id: 'elementCharacter', label: 'Character', section: 'Screenplay', target: 'quill', mode: 'screenplay', defaultBinding: makeBinding('3', { mod: true }) },
+  { id: 'elementParenthetical', label: 'Parenthetical', section: 'Screenplay', target: 'quill', mode: 'screenplay', defaultBinding: makeBinding('4', { mod: true }) },
+  { id: 'elementDialogue', label: 'Dialogue', section: 'Screenplay', target: 'quill', mode: 'screenplay', defaultBinding: makeBinding('5', { mod: true }) },
+  { id: 'elementTransition', label: 'Transition', section: 'Screenplay', target: 'quill', mode: 'screenplay', defaultBinding: makeBinding('6', { mod: true }) },
+  { id: 'elementCentered', label: 'Centered Text', section: 'Screenplay', target: 'quill', mode: 'screenplay', defaultBinding: makeBinding('E', { mod: true }) }
 ];
 
 //Returns the canonical name for a key, or null for anything that may not be stored: an empty or
@@ -597,14 +612,25 @@ function describeCode(code){
 
 function getShortcutDefs(){
   return SHORTCUT_DEFS.map(function(def){
-    return {
+    var copy = {
       id: def.id,
       label: def.label,
       section: def.section,
       target: def.target,
       defaultBinding: copyBinding(def.defaultBinding)
     };
+    if(def.mode)
+      copy.mode = def.mode;
+    return copy;
   });
+}
+
+//Whether two actions can ever both be bound at once. Each may carry a `mode` - 'prose' or
+//'screenplay' - meaning it is only bound while the editor shows that kind of document; two with
+//different modes never meet, so they may share a key, which is how Ctrl+1 is Heading 1 in a novel
+//and Scene Heading in a script. An action with no mode is bound in both and meets everything.
+function modesOverlap(a, b){
+  return a == null || b == null || a === b;
 }
 
 function getShortcutDef(id){
@@ -825,8 +851,15 @@ function findConflict(binding, actionId, bindings){
   if(binding == null || bindings == null)
     return null;
 
+  var own = getShortcutDef(actionId);
+
   var conflictingId = Object.keys(bindings).find(function(id){
-    return id !== actionId && bindingsEqual(bindings[id], binding);
+    if(id === actionId || !bindingsEqual(bindings[id], binding))
+      return false;
+
+    //A shortcut bound only in the other mode is never in force at the same time - see modesOverlap.
+    var other = getShortcutDef(id);
+    return other == null || own == null || modesOverlap(own.mode, other.mode);
   });
 
   return conflictingId ? getShortcutDef(conflictingId) : null;

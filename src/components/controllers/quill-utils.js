@@ -1,4 +1,4 @@
-const { codeForKey } = require('../models/shortcuts');
+const { codeForKey, getShortcutDef } = require('../models/shortcuts');
 
 function getTempQuill(){
   const Quill = require('quill');
@@ -271,8 +271,27 @@ const QUILL_HANDLERS = {
   insertFootnote: function(){
     const { insertOrJumpFootnote } = require('./footnote-navigation');
     insertOrJumpFootnote(this.quill);
-  }
+  },
+
+  //The screenplay elements (docs/screenplay-plan.md, Phase 4). In the same table as the prose
+  //formatting so applyQuillShortcuts has one list to walk; which of them are bound is decided by
+  //each definition's `mode` in shortcuts.js. Required lazily for the same reason insertFootnote is:
+  //screenplay-editor.js requires this module for parseDelta.
+  elementScene: elementHandler('scene'),
+  elementAction: elementHandler('action'),
+  elementCharacter: elementHandler('character'),
+  elementParenthetical: elementHandler('parenthetical'),
+  elementDialogue: elementHandler('dialogue'),
+  elementTransition: elementHandler('transition'),
+  elementCentered: elementHandler('centered')
 };
+
+function elementHandler(type){
+  return function(){
+    const { setElement } = require('./screenplay-editor');
+    setElement(this.quill, type);
+  };
+}
 
 function headingHandler(level){
   return function(){
@@ -327,10 +346,19 @@ const KEY_CODES = {
 //Bold/italic/underline are in the table too, though Quill binds those itself by default. They are
 //in the popup's list, so they have to be rebindable like everything else - which means Quill's own
 //three are switched off where the editors are built (see render.js) and re-added from here.
-function applyQuillShortcuts(q, bindings){
+//`mode` is which kind of document the editor is showing - 'prose' (the default, and the only mode
+//the notes pane has) or 'screenplay' - and decides which of the handlers are bound: an action whose
+//definition carries a mode is bound only in that one, so the prose headings and the screenplay
+//elements can share Ctrl+1..6. Re-applied when the mode changes, which the tagging makes cheap.
+function applyQuillShortcuts(q, bindings, mode){
   removeAppliedBindings(q);
+  mode = mode || 'prose';
 
   Object.keys(QUILL_HANDLERS).forEach(function(id){
+    var def = getShortcutDef(id);
+    if(def && def.mode && def.mode !== mode)
+      return;
+
     var binding = toQuillBinding(bindings ? bindings[id] : null);
 
     if(binding == null)

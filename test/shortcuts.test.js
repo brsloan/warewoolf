@@ -58,6 +58,34 @@ test('no two default shortcuts share a binding', function(){
   });
 });
 
+//docs/screenplay-plan.md, Phase 4: a shortcut bound only while the editor shows one kind of
+//document never meets one bound only for the other, so the two may share a key.
+test('the screenplay elements share their keys with the prose headings, and only with those', function(){
+  var defaults = shortcuts.getDefaultBindings();
+  var defs = shortcuts.getShortcutDefs();
+  var byId = function(id){ return defs.find(function(def){ return def.id === id; }); };
+
+  assert.strictEqual(byId('elementScene').mode, 'screenplay');
+  assert.strictEqual(byId('formatHeading1').mode, 'prose');
+  assert.strictEqual(byId('formatBold').mode, undefined, 'bound in both modes');
+  assert.ok(shortcuts.bindingsEqual(defaults.elementScene, defaults.formatHeading1));
+  assert.ok(shortcuts.bindingsEqual(defaults.elementCentered, defaults.formatAlignCenter));
+
+  assert.strictEqual(shortcuts.findConflict(defaults.elementScene, 'elementScene', defaults), null);
+  assert.strictEqual(shortcuts.findConflict(defaults.formatHeading1, 'formatHeading1', defaults), null);
+
+  //A key held by a shortcut with no mode is taken in both.
+  var conflict = shortcuts.findConflict(defaults.formatBold, 'elementScene', defaults);
+  assert.strictEqual(conflict && conflict.id, 'formatBold');
+  //And a screenplay key is still taken from another screenplay shortcut.
+  assert.strictEqual(shortcuts.findConflict(defaults.elementAction, 'elementScene', defaults).id, 'elementAction');
+
+  //Ctrl+T is the prose Title shortcut, so a script may take it; Ctrl+2 is Action and may not.
+  assert.deepStrictEqual(shortcuts.validateBinding(defaults.formatTitle, 'elementScene', defaults), { valid: true });
+  assert.strictEqual(shortcuts.validateBinding(defaults.formatHeading2, 'elementScene', defaults).valid, false);
+  assert.strictEqual(shortcuts.validateBinding(defaults.formatBold, 'elementScene', defaults).valid, false);
+});
+
 test('action ids are unique', function(){
   var ids = shortcuts.getShortcutDefs().map(function(def){ return def.id; });
   assert.strictEqual(new Set(ids).size, ids.length);

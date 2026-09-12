@@ -11,7 +11,7 @@ const { applyQuillShortcuts, splitDeltaAtIndices } = require('./components/contr
 const { attachAutocorrect } = require('./components/controllers/autocorrect');
 const { registerFootnoteBlots } = require('./components/blots/footnotes');
 const { registerScreenplayFormats, SCREENPLAY_FORMATS } = require('./components/blots/screenplay');
-const { loadScreenplayDelta } = require('./components/controllers/screenplay-editor');
+const { loadScreenplayDelta, attachScreenplayKeys } = require('./components/controllers/screenplay-editor');
 const {
   applyStructuralFootnoteChanges,
   containsFootnotes,
@@ -403,8 +403,11 @@ async function loadInitialProject(){
 }
 
 function setUpQuills(){
-  applyQuillShortcuts(editorQuill, shortcutBindings);
+  applyEditorShortcuts();
   applyQuillShortcuts(notesQuill, shortcutBindings);
+  //Enter, Shift+Enter, Tab and Shift+Tab for a script. Attached once: each asks editorMode() when
+  //it fires and hands the key back to Quill while the editor shows prose.
+  attachScreenplayKeys(editorQuill, editorMode);
   //Attached once and never re-attached: unlike Quill's own bindings, these read the rules through
   //the getter below on every keystroke, so a change in Settings takes effect on the next character
   //typed. The returned detach functions are dropped because both editors live as long as the
@@ -434,7 +437,7 @@ function resolveAutocorrectSetting(){
 function applyShortcutChanges(overrides){
   userSettings.keyboardShortcuts = overrides;
   shortcutBindings = resolveShortcuts(overrides);
-  applyQuillShortcuts(editorQuill, shortcutBindings);
+  applyEditorShortcuts();
   applyQuillShortcuts(notesQuill, shortcutBindings);
   return userSettings.save();
 }
@@ -742,7 +745,23 @@ function editorMode(){
 }
 
 function applyEditorMode(){
-  document.getElementById('editor-container').classList.toggle('screenplay', editorMode() === 'screenplay');
+  var mode = editorMode();
+  document.getElementById('editor-container').classList.toggle('screenplay', mode === 'screenplay');
+
+  //The prose headings and the screenplay elements share Ctrl+1..6, so which set Quill holds
+  //follows the mode - rebuilt only when it changes, not on every chapter.
+  if(mode !== shortcutsAppliedFor)
+    applyEditorShortcuts();
+}
+
+//The manuscript editor's Quill-owned shortcuts, for the mode it is in. shortcutsAppliedFor is what
+//lets applyEditorMode skip the rebuild when nothing changed; a rebind from the Shortcuts popup
+//comes through here too, whatever the mode.
+var shortcutsAppliedFor = null;
+
+function applyEditorShortcuts(){
+  shortcutsAppliedFor = editorMode();
+  applyQuillShortcuts(editorQuill, shortcutBindings, shortcutsAppliedFor);
 }
 
 //Says which chapter the manuscript now shows, for a screen reader. Changing chapters from inside

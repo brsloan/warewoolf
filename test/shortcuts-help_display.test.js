@@ -97,7 +97,7 @@ test('renders a table of shortcuts per section using Cmd on Mac and Ctrl elsewhe
   var showShortcutsHelp = require(shortcutsHelpDisplayPath);
 
   showShortcutsHelp({ isMac: true });
-  assert.match(document.querySelector('.shortcuts-table td').innerText, /^View Previous Chapter$/);
+  assert.match(document.querySelector('.shortcuts-table td').innerText, /^View Previous Chapter \/ Scene$/);
   assert.match(document.querySelectorAll('.shortcuts-table td')[1].innerText, /^Cmd \+ Up$/);
 
   showShortcutsHelp({ isMac: false });
@@ -116,7 +116,7 @@ test('every rebindable shortcut has a row showing the binding in force', functio
   });
 
   assert.strictEqual(keyButtonFor('Bold').textContent, 'Ctrl + Shift + W');
-  assert.strictEqual(keyButtonFor('View Previous Chapter').textContent, 'Ctrl + Up');
+  assert.strictEqual(keyButtonFor('View Previous Chapter / Scene').textContent, 'Ctrl + Up');
 });
 
 //Escape, Tab and the menu key are the app's own structural keys - the popup documents them, but
