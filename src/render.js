@@ -10,6 +10,8 @@ const { registerKeybindings } = require('./components/controllers/keybindings');
 const { applyQuillShortcuts, splitDeltaAtIndices } = require('./components/controllers/quill-utils');
 const { attachAutocorrect } = require('./components/controllers/autocorrect');
 const { registerFootnoteBlots } = require('./components/blots/footnotes');
+const { registerScreenplayFormats, SCREENPLAY_FORMATS } = require('./components/blots/screenplay');
+const { loadScreenplayDelta } = require('./components/controllers/screenplay-editor');
 const {
   applyStructuralFootnoteChanges,
   containsFootnotes,
@@ -52,6 +54,7 @@ var platform = createPlatform(createIpcBacking());
 //the `formats` option) is what makes 'footnote'/'footnoteBody' insertable at all, and Parchment has
 //to know the blot/attributor exists before that whitelist can even name it.
 registerFootnoteBlots();
+registerScreenplayFormats();
 
 var editorQuill = new Quill('#editor-container', {
   modules: {
@@ -66,7 +69,9 @@ var editorQuill = new Quill('#editor-container', {
   //footnote/footnoteBody are editor-only, deliberately absent from notesQuill's own list below - a
   //footnote pasted into notes degrades to literal "[^N]" text instead (see setUpQuills), since a
   //note has no chapter of its own for the body to belong to.
-  formats: ['bold', 'italic', 'strike', 'underline', 'blockquote', 'header', 'align', 'list', 'indent', 'footnote', 'footnoteBody', 'footnoteBodyCont']
+  //The screenplay formats are editor-only too, and absent from notesQuill's list for the same
+  //reason: a script pasted into notes degrades to plain paragraphs.
+  formats: ['bold', 'italic', 'strike', 'underline', 'blockquote', 'header', 'align', 'list', 'indent', 'footnote', 'footnoteBody', 'footnoteBodyCont'].concat(SCREENPLAY_FORMATS)
 });
 
 //Quill's own Enter handler is added unconditionally after the named `options.bindings` loop (see
@@ -291,6 +296,7 @@ async function loadPlatformState(){
     splitChapter,
     editorHasFocus,
     editorIsVisible,
+    editorMode,
     _unregisterKeybindings: unregisterKeybindings
   });
 }
@@ -676,6 +682,7 @@ async function displayChapterByIndex(ind){
     project.activeChapterIndex = 0;
     editorQuill.disable();
     editorQuill.setText("");
+    applyEditorMode();
     updateFileList();
     return;
   }
@@ -712,10 +719,30 @@ async function displayChapterByIndex(ind){
     notes = savedNotes ? savedNotes : getEmptyDelta();
   }
 
-  editorQuill.setContents(contents, 'api');
+  //The one place a document goes into the editor, so the one place its mode is applied: the
+  //container class the screenplay CSS hangs on, and the load path. A script is loaded by building
+  //its HTML rather than through setContents - see screenplay-editor.js for why.
+  applyEditorMode();
+  if(editorMode() === 'screenplay')
+    loadScreenplayDelta(editorQuill, contents);
+  else
+    editorQuill.setContents(contents, 'api');
   notesQuill.setContents(notes, 'api');
   updateFileList();
   announceChapter(chap);
+}
+
+//Whether the editor is showing a screenplay or prose. A function of the active document - a
+//.fountain chapter is a script, anything else is prose - and never a flag of its own, so nothing
+//has to be told when a project changes. Project type is policy (what New Project creates, what the
+//sidebar shows); this is mechanism. See docs/screenplay-plan.md, "The editor".
+function editorMode(){
+  var chap = project.getActiveChapter();
+  return chap && newChapter.isFountainChapter(chap) ? 'screenplay' : 'prose';
+}
+
+function applyEditorMode(){
+  document.getElementById('editor-container').classList.toggle('screenplay', editorMode() === 'screenplay');
 }
 
 //Says which chapter the manuscript now shows, for a screen reader. Changing chapters from inside

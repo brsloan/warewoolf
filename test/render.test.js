@@ -502,6 +502,33 @@ test('displayChapterByIndex clamps an out-of-range index to the last chapter', a
   assert.strictEqual(r.editorQuill.getText().trim(), 'c1');
 });
 
+//docs/screenplay-plan.md, Phase 3: the editor's mode follows the active document's file, and a
+//script goes in through the HTML load path rather than setContents.
+test('displaying a .fountain chapter puts the editor in screenplay mode, and a .txt one takes it out', async function(){
+  var r = await freshRender();
+  var scriptDelta = { ops: [
+    { insert: 'INT. HOUSE - DAY' }, { insert: '\n', attributes: { element: 'scene' } },
+    { insert: 'BOB' }, { insert: '\n', attributes: { element: 'character' } },
+    { insert: 'Hi.' }, { insert: '\n', attributes: { element: 'dialogue' } }
+  ] };
+  var script = makeChap('Script', { contents: scriptDelta });
+  script.filename = 'Script.fountain';
+  var prose = makeChap('Notes');
+  prose.filename = 'Notes.txt';
+  r.project.chapters = [script, prose];
+
+  await r.displayChapterByIndex(0);
+  assert.strictEqual(r.editorMode(), 'screenplay');
+  assert.ok(document.getElementById('editor-container').classList.contains('screenplay'));
+  assert.deepStrictEqual(r.editorQuill.getContents().ops, scriptDelta.ops);
+  assert.strictEqual(script.hasUnsavedChanges, false, 'a load is not an edit');
+
+  await r.displayChapterByIndex(1);
+  assert.strictEqual(r.editorMode(), 'prose');
+  assert.ok(!document.getElementById('editor-container').classList.contains('screenplay'));
+  assert.strictEqual(r.editorQuill.getText().trim(), 'Notes');
+});
+
 //The core editing loop: type in a chapter, look at a different one, come back. If this regresses,
 //edits are silently lost the moment the writer glances at another chapter - about the worst
 //possible failure mode for this app.

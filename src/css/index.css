@@ -505,6 +505,95 @@ hr {
 }
 
 /* ------------------------------------------------------------------------------------------
+   Screenplay mode - blots/screenplay.js, docs/screenplay-plan.md
+   ------------------------------------------------------------------------------------------
+   Gated on the `screenplay` class render.js puts on the container while a .fountain document is
+   displayed, so a prose chapter is untouched. The layout is a script page's: Courier, a blank
+   line between elements and none inside a dialogue group, dialogue indented rather than centred.
+   Capitals for headings, cues and transitions are drawn here; the text keeps its own case, and
+   the codec forces any line whose case would not read back. */
+
+#editor-container.screenplay .ql-editor {
+  font-family: "Courier Prime", "Courier New", Courier, "Nimbus Mono PS", "Liberation Mono", monospace;
+  line-height: 1.25;
+}
+
+#editor-container.screenplay .ql-editor p {
+  margin-top: 1em;
+}
+
+#editor-container.screenplay .ql-editor p:first-child,
+#editor-container.screenplay .ql-editor .sp-character + .sp-parenthetical,
+#editor-container.screenplay .ql-editor .sp-character + .sp-dialogue,
+#editor-container.screenplay .ql-editor .sp-character + .sp-lyric,
+#editor-container.screenplay .ql-editor .sp-parenthetical + .sp-dialogue,
+#editor-container.screenplay .ql-editor .sp-parenthetical + .sp-lyric,
+#editor-container.screenplay .ql-editor .sp-dialogue + .sp-parenthetical,
+#editor-container.screenplay .ql-editor .sp-dialogue + .sp-lyric,
+#editor-container.screenplay .ql-editor .sp-lyric + .sp-dialogue,
+#editor-container.screenplay .ql-editor .sp-lyric + .sp-parenthetical,
+#editor-container.screenplay .ql-editor p[data-sp-tight] {
+  margin-top: 0;
+}
+
+.ql-editor .sp-scene {
+  text-transform: uppercase;
+  margin-top: 2em;
+}
+
+.ql-editor .sp-character {
+  text-transform: uppercase;
+  margin-left: 40%;
+}
+
+.ql-editor .sp-parenthetical {
+  margin-left: 30%;
+  margin-right: 25%;
+}
+
+.ql-editor .sp-dialogue {
+  margin-left: 20%;
+  margin-right: 20%;
+}
+
+.ql-editor .sp-lyric {
+  margin-left: 20%;
+  margin-right: 20%;
+  font-style: italic;
+}
+
+.ql-editor .sp-transition {
+  text-transform: uppercase;
+  text-align: right;
+}
+
+.ql-editor .sp-centered {
+  text-align: center;
+}
+
+.ql-editor .sp-section,
+.ql-editor .sp-synopsis,
+.ql-editor .sp-note,
+.ql-editor .sp-boneyard {
+  color: var(--text-muted);
+}
+
+.ql-editor .sp-section {
+  font-weight: bold;
+}
+
+.ql-editor .sp-pagebreak {
+  border-top: 1px dashed var(--border);
+  color: var(--text-muted);
+}
+
+/* The dual-dialogue marker, drawn rather than typed, so the cue's text stays the cue. */
+.ql-editor p[data-sp-dual]::after {
+  content: " ^";
+  color: var(--text-muted);
+}
+
+/* ------------------------------------------------------------------------------------------
    Popups
    ------------------------------------------------------------------------------------------ */
 
