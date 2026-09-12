@@ -24,7 +24,7 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 ## Features
 
 * All-keyboard navigation designed for pleasant use without a mouse.
-   * Named and labelled for screen readers (not yet tested with one)
+   * Accessibility named/labeled for screen readers (not yet tested with one)
 * Distraction-free writing: Each of the three panels can be toggled on/off at the press of a button. Write with only your manuscript visible.
 * The formatting fiction actually needs, all of it on a shortcut and none of it on a toolbar: bold, italics, underline, strikethrough, four levels of heading, left/right/center/justified alignment, bulleted and numbered lists, and blockquotes as well as footnotes.
 * Plain text import/conversion tools
