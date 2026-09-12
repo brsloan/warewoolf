@@ -791,7 +791,9 @@ hr {
   font-family: var(--font-serif);
 }
 
-.outliner-word-count {
+/* Qualified by the popup and the cell so these outrank .popup td's blanket left alignment - as a
+   bare class they lose to it on specificity and the numbers ragged-left against their columns. */
+.popup-outliner td.outliner-word-count, .popup-outliner td.outliner-page-count {
   text-align: right;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;

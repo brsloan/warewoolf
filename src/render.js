@@ -1625,7 +1625,7 @@ const menuCommands = {
   } },
   'outliner-clicked': { run: function(){
     const showOutliner = require('./components/views/outliner_display');
-    return showOutliner(project);
+    return showOutliner(project, userSettings);
   } },
   'convert-tabs-clicked': { run: function(){
     const showTabOptions = require('./components/views/convert-tabs-display');
