@@ -268,7 +268,7 @@ hr {
 }
 
 .sidebar li {
-  padding: 0.22em 0.65em 0.22em 0.55em;
+  padding: 0.22em 0.65em 0.11em 0.55em;
   margin: 1px 0;
   border-left: 3px solid transparent;
   border-radius: 0 var(--radius) var(--radius) 0;
