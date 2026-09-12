@@ -190,6 +190,12 @@ function createNodeBacking(deps){
   //exercised on the machine this suite usually runs on. Read at call time, not captured here, so a
   //test that redefines process.platform after constructing a backing still sees it.
   var platformOverride = options.platform || null;
+  //The same kind of seam, for the same reason. windowsInstallKind() below decides installed-vs-
+  //portable by looking for Squirrel's Update.exe next to the running binary, and neither answer is
+  //reachable on the machine this suite usually runs on: process.execPath there is node's own. A
+  //test points this at a directory it built to look like one layout or the other, so what gets
+  //exercised is the real lookup rather than a flag standing in for it.
+  var execPathOverride = options.execPath || null;
 
   //Group A is the exception to this file's own rule. C and J are direct fs/crypto - exactly what
   //nodeIntegration already gives the renderer, so this backing can run inside it unchanged. None of
@@ -356,12 +362,41 @@ function createNodeBacking(deps){
     return {
       platform: currentPlatform(),
       arch: process.arch,
-      electron: process.versions.electron || null
+      electron: process.versions.electron || null,
+      windowsInstall: windowsInstallKind()
     };
   }
 
   function currentPlatform(){
     return platformOverride || process.platform;
+  }
+
+  //Windows ships two builds of the same application: the Squirrel installer and a portable zip a
+  //writer unpacks wherever they like - a USB stick, a machine they cannot install software on. Which
+  //one is running decides both halves of the update path, so it is reported here beside platform and
+  //arch rather than worked out again at each place that needs it. updates.js needs it to pick which
+  //release asset this copy should be offered, and about_display.js to decide whether to offer an
+  //in-place install at all.
+  //
+  //Squirrel's own layout is what identifies an installed copy. It puts the app at
+  //<root>/app-<version>/warewoolf.exe with Update.exe one directory above, and that Update.exe is
+  //the program Electron's autoUpdater shells out to. So its absence is not a guess about where the
+  //app happens to sit - it is the update mechanism itself not being there, which is exactly the
+  //question being asked. It is also what electron-squirrel-startup (index.js:25) already relies on.
+  //
+  //null off Windows rather than 'portable': there is no Squirrel on linux or macOS, so neither
+  //answer would mean anything, and a real value there would invite a caller to branch on it.
+  function windowsInstallKind(){
+    if(currentPlatform() !== 'win32')
+      return null;
+
+    return fs.existsSync(path.resolve(path.dirname(currentExecPath()), '..', 'Update.exe'))
+      ? 'squirrel'
+      : 'portable';
+  }
+
+  function currentExecPath(){
+    return execPathOverride || process.execPath;
   }
 
   function getFileRequestedOnOpen(){
@@ -1959,6 +1994,20 @@ function createNodeBacking(deps){
     if(currentPlatform() !== 'win32')
       throw PlatformError(CODES.UNAVAILABLE,
         'Squirrel updates are only available on Windows.', { command: command });
+
+    //A portable copy has no Update.exe beside it, so there is nothing for autoUpdater to shell out
+    //to. Refused here, with a message that says which build this is, rather than left to surface as
+    //whatever opaque error autoUpdater raises on a machine with no Squirrel - the same reason the
+    //--squirrel-firstrun case is refused in index.js before autoUpdater is touched. UNAVAILABLE and
+    //not INVALID_ARGUMENT: the caller asked for something reasonable, the facility is absent.
+    //
+    //about_display.js does not rely on this to make the decision - it reads windowsInstall and never
+    //offers an in-place install to a portable copy in the first place. This is the backing refusing
+    //to do a thing it cannot do, which is where that refusal belongs.
+    if(windowsInstallKind() !== 'squirrel')
+      throw PlatformError(CODES.UNAVAILABLE,
+        'This is the portable build of WareWoolf, which cannot update itself in place. ' +
+        'Download the latest portable zip and replace this folder.', { command: command });
   }
 
   //Validates and composes, then hands off to the injected hook - the same division downloadUpdate

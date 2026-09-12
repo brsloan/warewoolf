@@ -474,7 +474,37 @@ test('getPlatform reports this process\'s own platform and arch', async function
   assert.deepStrictEqual(await platform.getPlatform(), {
     platform: process.platform,
     arch: process.arch,
-    electron: process.versions.electron || null
+    electron: process.versions.electron || null,
+    //Whatever this suite's own host is. Off win32 that is null by construction; on a Windows dev
+    //machine the suite runs under node, whose execPath has no Squirrel above it, so 'portable'.
+    windowsInstall: process.platform === 'win32' ? 'portable' : null
+  });
+});
+
+//The Windows build a copy belongs to is not a preference or a build-time flag - it is whether
+//Squirrel's Update.exe is sitting one directory above the running binary, which is the same thing
+//Electron's autoUpdater needs in order to work at all. Both layouts are built on disk here rather
+//than faked, because the value decides which release asset a writer is handed and getting it
+//backwards hands them the wrong build of WareWoolf.
+test('getPlatform reports the installed Windows build as squirrel when Update.exe sits above the binary', async function(t){
+  const platform = wrap(createNodeBacking({ platform: 'win32', execPath: squirrelLayout(t) }));
+
+  assert.strictEqual((await platform.getPlatform()).windowsInstall, 'squirrel');
+});
+
+test('getPlatform reports the portable Windows build when there is no Update.exe above the binary', async function(t){
+  const platform = wrap(createNodeBacking({ platform: 'win32', execPath: portableLayout(t) }));
+
+  assert.strictEqual((await platform.getPlatform()).windowsInstall, 'portable');
+});
+
+//null rather than 'portable' off Windows: there is no Squirrel on linux or macOS, so neither answer
+//would mean anything, and a real value would invite a caller to branch on it.
+['linux', 'darwin'].forEach(function(plat){
+  test('getPlatform reports a null windowsInstall on ' + plat, async function(t){
+    const platform = wrap(createNodeBacking({ platform: plat, execPath: portableLayout(t) }));
+
+    assert.strictEqual((await platform.getPlatform()).windowsInstall, null);
   });
 });
 
@@ -3018,8 +3048,29 @@ test('installUpdate resolves once apt closes with exit code 0', async function(t
 //around downloadUpdate's httpsGet/paths seams) - what these two commands need is the `platform`
 //test seam and, for the happy path, the injected onStartSquirrelUpdate/onQuitAndInstallUpdate
 //hooks, the same shape platform.test.js already uses for onSetTheme/onShowAppMenu/onConfirmExit.
+//
+//A win32 backing also needs an execPath, because both commands now refuse a copy with no Squirrel
+//beside it. The directory below is the layout Squirrel actually installs into - the app one level
+//down in app-<version>, Update.exe at the root - so what these tests exercise is the real lookup.
+function squirrelLayout(t){
+  const root = tempDir(t);
+  fs.mkdirSync(path.join(root, 'app-2.5.0'));
+  fs.writeFileSync(path.join(root, 'Update.exe'), 'not really Squirrel');
+  return path.join(root, 'app-2.5.0', 'warewoolf.exe');
+}
+
+//The portable build: the same files, with no Update.exe above them, because nothing installed it.
+function portableLayout(t){
+  const root = tempDir(t);
+  fs.mkdirSync(path.join(root, 'WareWoolf_2.5.0_Portable'));
+  return path.join(root, 'WareWoolf_2.5.0_Portable', 'warewoolf.exe');
+}
+
 function squirrelPlatform(t, deps){
-  return wrap(createNodeBacking(Object.assign({}, deps)));
+  const withExecPath = Object.assign({}, deps);
+  if(withExecPath.platform === 'win32' && withExecPath.execPath == null)
+    withExecPath.execPath = squirrelLayout(t);
+  return wrap(createNodeBacking(withExecPath));
 }
 
 test('startSquirrelUpdate rejects UNAVAILABLE off win32, without calling the hook', async function(t){
@@ -3100,6 +3151,35 @@ test('quitAndInstallUpdate calls its injected hook on win32', async function(t){
   await platform.quitAndInstallUpdate();
 
   assert.strictEqual(called, 1);
+});
+
+//The portable build is on Windows and has every reason to think these commands apply to it, which
+//is exactly why they have to refuse rather than try: there is no Update.exe for autoUpdater to shell
+//out to, and letting it find that out itself surfaces an opaque error mid-update instead of a
+//sentence saying which build this is. about_display.js never offers an in-place install to a
+//portable copy in the first place - this is the backing declining to do what it cannot, which is
+//where the refusal belongs.
+//
+//UNAVAILABLE, not INVALID_ARGUMENT: the caller asked for something reasonable and the facility is
+//absent - the same distinction the off-win32 case above draws, and getBatteryCapacity before it.
+[
+  { command: 'startSquirrelUpdate', call: function(p){ return p.startSquirrelUpdate({ tag: 'v2.6.0' }); },
+    hook: 'onStartSquirrelUpdate' },
+  { command: 'quitAndInstallUpdate', call: function(p){ return p.quitAndInstallUpdate(); },
+    hook: 'onQuitAndInstallUpdate' }
+].forEach(function(c){
+  test(c.command + ' rejects UNAVAILABLE on the portable Windows build, without calling the hook', async function(t){
+    let called = 0;
+    const deps = { platform: 'win32', execPath: portableLayout(t) };
+    deps[c.hook] = function(){ called++; };
+    const platform = wrap(createNodeBacking(deps));
+
+    const err = await rejection(c.call(platform));
+
+    assert.strictEqual(err.code, CODES.UNAVAILABLE);
+    assert.match(err.message, /portable/i, 'the message has to say which build this is');
+    assert.strictEqual(called, 0);
+  });
 });
 
 // ---------------------------------------------------------------------------------------------

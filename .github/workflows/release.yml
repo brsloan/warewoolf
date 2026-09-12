@@ -10,6 +10,7 @@ name: Release
 #   warewoolf_<version>_MacOS_AppleSilicon.dmg
 #   warewoolf_<version>_MacOS_Legacy.dmg
 #   warewoolf_<version>_Windows_x64.exe
+#   warewoolf_<version>_Windows_Portable_x64.zip
 #
 # The amd64/arm64/Windows_x64 substrings are load-bearing: the in-app updater
 # (src/components/controllers/updates.js) picks the right asset by matching
@@ -38,6 +39,29 @@ name: Release
 # Add/Remove Programs - under the same asset name. v2.3.0 through v2.5.0 shipped
 # that way. The zip wrapper is gone with the manual upload that needed it, so the
 # installer is now the asset itself.
+#
+# Windows_Portable_x64.zip is the second Windows asset, and is a deliberate one
+# rather than a return of that accident: the packaged app folder, zipped under a
+# name that says what it is, for writers who run WareWoolf off a USB stick or on
+# a machine they cannot install software on. Two things separate it from what
+# v2.3.0-v2.5.0 shipped. It is named "Portable" instead of impersonating the
+# installer, and it unzips into a single WareWoolf_<version>_Portable folder
+# instead of scattering ~200 loose files into whatever directory it was opened
+# in - which is what maker-zip does here, since cross-zip calls .NET's
+# CreateFromDirectory on the package folder and that puts its *contents* at the
+# zip root. The zip is built by hand below for that reason; maker-zip is not
+# used, and is not in package.json's makers list.
+#
+# It is a bin type of the updater's own, not just an extra file on the release
+# page: a running copy reports which of the two Windows builds it is (Squirrel's
+# Update.exe beside it, or not - see getPlatform in platform-node.js), and a
+# portable copy is offered this zip where an installed one is offered the .exe.
+# So the two names must each match exactly one asset, and the right one. The
+# name avoids the "Windows_x64" substring for the same reason AppleSilicon
+# avoids arm64 and MacOS_Legacy avoids MacOS_Intel: the updater's find() takes
+# the first name that merely *includes* the bin type, so an overlap would hand
+# whichever GitHub listed first to both kinds of writer. A step below asserts
+# that against every bin type the updater knows.
 
 on:
   push:
@@ -241,7 +265,115 @@ jobs:
             exit 1
           fi
           echo "$exe is a PE binary, with RELEASES naming $(basename "$nupkg") beside it"
-      # Neither warewoolf-<version>-full.nupkg nor RELEASES may contain amd64/arm64/Windows_x64/
+      # The packaged app folder electron-forge left behind for maker-squirrel to read, zipped as
+      # the portable asset. Built from out/warewoolf-win32-x64 rather than by a second forge run
+      # against maker-zip: the folder is already there, and maker-zip would produce a zip whose
+      # root is the app's own ~200 files rather than a folder to drag somewhere.
+      #
+      # CreateFromDirectory is pointed at a staging directory holding one folder, so that folder -
+      # not its contents - is what the zip root holds. It is .NET's own, present on any runner,
+      # rather than 7-Zip or Compress-Archive.
+      - name: Build the portable Windows zip
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = '${{ needs.check-version.outputs.version }}'
+          $packaged = 'out/warewoolf-win32-x64'
+          if (-not (Test-Path $packaged)) {
+            Write-Output "::error::$packaged is missing - electron-forge did not leave a packaged app to zip"
+            exit 1
+          }
+
+          $staging = Join-Path $env:RUNNER_TEMP 'portable-staging'
+          $folder = Join-Path $staging "WareWoolf_${version}_Portable"
+          if (Test-Path $staging) { Remove-Item -Recurse -Force $staging }
+          New-Item -ItemType Directory -Path $folder -Force | Out-Null
+          Copy-Item -Recurse -Force "$packaged/*" $folder
+
+          # The portable build has no Squirrel beside it, so the in-app updater's install-in-place
+          # path cannot work for these writers: it fails, and the About panel drops them onto its
+          # own fallback of downloading the installer. That is a reasonable place to land but a
+          # confusing one to arrive at unwarned, so the folder says so up front.
+          #
+          # Written as an array rather than a PowerShell here-string: a here-string's closing "@
+          # has to sit at column 0, and a column-0 line ends the YAML block scalar this whole
+          # script lives in.
+          $readme = @(
+            "WareWoolf $version - portable build for Windows (64-bit)",
+            "",
+            "This is the whole application in one folder. Nothing is installed: put the",
+            "folder wherever you like - a USB stick, a Documents folder, a machine you",
+            "cannot install software on - and run warewoolf.exe inside it. Delete the",
+            "folder to remove it.",
+            "",
+            "Your projects are yours and live wherever you save them. WareWoolf's own",
+            "settings still live in your Windows user profile, not in this folder, so a",
+            "copy carried to another machine starts with default settings.",
+            "",
+            "Updates: Help > About > Check For Updates works here and knows this is",
+            "the portable build. Download gives you the next portable zip, not the",
+            "installer. Unzip it and replace this folder with the one inside - that is",
+            "the whole update. Releases are also at:",
+            "",
+            "  https://github.com/brsloan/warewoolf/releases"
+          )
+          Set-Content -Path (Join-Path $folder 'READ ME - Portable.txt') -Value $readme -Encoding utf8
+
+          New-Item -ItemType Directory -Path 'out/make/portable' -Force | Out-Null
+          $zip = "out/make/portable/warewoolf_${version}_Windows_Portable_x64.zip"
+          if (Test-Path $zip) { Remove-Item -Force $zip }
+          # .NET Framework needed this loaded by hand; on the .NET that pwsh 7 runs, ZipFile is
+          # already there and the facade may or may not resolve by name. Either outcome is fine,
+          # so a failure here is not one worth stopping the release over - the CreateFromDirectory
+          # call below is what actually has to work.
+          try { Add-Type -AssemblyName System.IO.Compression.FileSystem } catch {}
+          [IO.Compression.ZipFile]::CreateFromDirectory(
+            $staging,
+            (Join-Path $PWD $zip),
+            [IO.Compression.CompressionLevel]::Optimal,
+            $false)
+          Write-Output "Built $zip"
+      # Checks the artifact rather than trusting the step above, the same way every other platform
+      # here checks its own. Three failures are worth catching, and all three would otherwise only
+      # show up on a writer's machine, after the release.
+      #
+      # Separators first: the zip spec says entry names use forward slashes, and .NET Framework's
+      # CreateFromDirectory famously wrote backslashes instead - a bug fixed in .NET Core, which is
+      # what the pwsh above runs on. A zip carrying backslash names extracts as one file per
+      # directory with a literal backslash in its name under many tools, so it is checked rather
+      # than assumed from the shell the step declares.
+      #
+      # Then the layout: a zip whose root is the app's own files scatters them into whatever
+      # directory the writer opened it in. Then the contents: the folder has to be a WareWoolf
+      # that runs, not just a folder.
+      - name: Verify the portable zip unpacks into one folder with the app in it
+        shell: bash
+        run: |
+          set -euo pipefail
+          zip="out/make/portable/warewoolf_${{ needs.check-version.outputs.version }}_Windows_Portable_x64.zip"
+          folder="WareWoolf_${{ needs.check-version.outputs.version }}_Portable"
+          test -f "$zip"
+          entries="$(unzip -Z1 "$zip")"
+          if echo "$entries" | grep -q '\\'; then
+            echo "::error::$zip has backslashes in its entry names; many extractors will unpack it as a heap of oddly-named files"
+            echo "$entries" | grep '\\' | head -5
+            exit 1
+          fi
+          roots="$(echo "$entries" | cut -d/ -f1 | sort -u)"
+          if [ "$roots" != "$folder" ]; then
+            echo "::error::$zip does not unpack into a single $folder directory; its root holds $(echo "$roots" | wc -l) entries, starting with:"
+            echo "$roots" | head -5
+            exit 1
+          fi
+          for required in "$folder/warewoolf.exe" "$folder/resources/app/src/index.js"; do
+            if ! echo "$entries" | grep -qxF "$required"; then
+              echo "::error::$zip is missing $required - this is not a runnable portable build"
+              exit 1
+            fi
+          done
+          echo "$zip unpacks into $folder/ with warewoolf.exe inside"
+      # None of the Windows assets that are not the installer - RELEASES, warewoolf-<version>-full
+      # .nupkg, the portable zip - may contain amd64/arm64/Windows_x64/
       # MacOS_Intel/MacOS_AppleSilicon/MacOS_Legacy - extractUpdateDownloadInfo
       # (src/components/controllers/updates.js) matches a release asset to this platform/arch by
       # bin.name.includes(binType) over a find(), so an asset whose name happened to contain one of
@@ -249,19 +381,51 @@ jobs:
       # depending on asset ordering. This is the same hazard the macOS job's AppleSilicon/
       # MacOS_Legacy naming already avoids; checked here so a future asset name is caught before it
       # ships rather than discovered on a writer's machine.
-      - name: Verify the Squirrel feed files don't collide with an updater bin-type match
+      - name: Verify each Windows bin type matches exactly one asset
         shell: bash
         run: |
           set -euo pipefail
-          dir="out/make/squirrel.windows/x64"
-          for name in RELEASES "warewoolf-${{ needs.check-version.outputs.version }}-full.nupkg"; do
-            for binType in amd64 arm64 Windows_x64 MacOS_Intel MacOS_AppleSilicon MacOS_Legacy; do
+          version="${{ needs.check-version.outputs.version }}"
+          # Every file this job uploads. extractUpdateDownloadInfo runs its find() over the whole
+          # release, so the question is not whether each asset looks right on its own but which one
+          # each bin type lands on when they sit side by side - which is what the loop below asks.
+          names=(RELEASES
+                 "warewoolf-${version}-full.nupkg"
+                 "warewoolf_${version}_Windows_x64.exe"
+                 "warewoolf_${version}_Windows_Portable_x64.zip")
+          # Every bin type the updater can ask for, not just this platform's: an asset here carrying
+          # a linux or mac substring would be offered to those writers instead of their own build.
+          # Windows_Portable_x64 is the portable build's, added when the portable asset was.
+          for binType in amd64 arm64 Windows_x64 Windows_Portable_x64 \
+                         MacOS_Intel MacOS_AppleSilicon MacOS_Legacy; do
+            matches=()
+            for name in "${names[@]}"; do
               if [[ "$name" == *"$binType"* ]]; then
-                echo "::error::$name contains \"$binType\", which the in-app updater matches on - rename it"
-                exit 1
+                matches+=("$name")
               fi
             done
+
+            case "$binType" in
+              # The two Windows bin types must each land on exactly one asset, and on the right one.
+              # More than one match means asset ordering decides what a writer is handed; the wrong
+              # one means an installed copy is offered a zip it cannot install, or a portable copy an
+              # installer that would leave its folder stale somewhere on disk.
+              Windows_x64)          expected="warewoolf_${version}_Windows_x64.exe" ;;
+              Windows_Portable_x64) expected="warewoolf_${version}_Windows_Portable_x64.zip" ;;
+              # Nothing this job uploads may match any other platform's bin type at all.
+              *)                    expected="" ;;
+            esac
+
+            if [ "${#matches[@]}" -gt 1 ]; then
+              echo "::error::$binType matches ${#matches[@]} Windows assets (${matches[*]}) - the updater's find() would pick whichever GitHub listed first"
+              exit 1
+            fi
+            if [ "${matches[0]-}" != "$expected" ]; then
+              echo "::error::$binType matches \"${matches[0]-<nothing>}\"; expected \"${expected:-<nothing>}\""
+              exit 1
+            fi
           done
+          echo "Windows_x64 and Windows_Portable_x64 each match exactly their own asset, and nothing here matches another platform's"
       - uses: actions/upload-artifact@v4
         with:
           name: release-asset-windows-x64
@@ -269,6 +433,7 @@ jobs:
             out/make/squirrel.windows/x64/warewoolf_*_Windows_x64.exe
             out/make/squirrel.windows/x64/warewoolf-*-full.nupkg
             out/make/squirrel.windows/x64/RELEASES
+            out/make/portable/warewoolf_*_Windows_Portable_x64.zip
           if-no-files-found: error
 
   release:

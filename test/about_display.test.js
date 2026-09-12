@@ -8,6 +8,11 @@ const updatesControllerPath = require.resolve('../src/components/controllers/upd
 const installUpdateDisplayPath = require.resolve('../src/components/views/install-update_display');
 const { installBridge, uninstallBridge } = require('./fake-bridge');
 
+//Captured once, before anything starts swapping fakes into require.cache for that module, and held
+//for the life of the file - see the note on it in freshAboutDisplay below.
+const realCanUpdateInPlace = require(updatesControllerPath).canUpdateInPlace;
+delete require.cache[updatesControllerPath];
+
 //about_display.js destructures getUpdates/downloadUpdate from the updates controller and requires
 //install-update_display directly, both at require-time, so these mocks only take effect if the
 //cache is primed before about_display.js is (re-)required - same pattern as
@@ -22,6 +27,11 @@ function freshAboutDisplay(mocks){
     loaded: true,
     exports: {
       getUpdates: mocks.getUpdates || function(){},
+      //Not stubbed by default, and deliberately the real one: it is a pure read of the platformInfo
+      //this view is already handed, and it decides whether a Windows writer is offered an in-place
+      //install or a download. A stub here would let the view and the controller disagree about which
+      //Windows build is running while every test still passed.
+      canUpdateInPlace: mocks.canUpdateInPlace || realCanUpdateInPlace,
       downloadUpdate: mocks.downloadUpdate || function(){},
       startWindowsUpdate: mocks.startWindowsUpdate || function(){},
       finishWindowsUpdate: mocks.finishWindowsUpdate || function(){}
@@ -46,8 +56,16 @@ function bodyShell(){
 //Phase 8: about_display.js reads platformInfo.platform (render.js's own platform.getPlatform()
 //result, threaded in as a third argument) instead of process.platform directly - this just builds
 //the shape showAbout expects rather than patching a global.
-function platformInfo(platform){
-  return { platform: platform, arch: 'x64' };
+//`windowsInstall` defaults to 'squirrel' on win32 - the installed build, which is what every win32
+//case in this file meant before the portable zip existed and what the overwhelming majority of
+//Windows writers run. A test that wants the portable build asks for it by name; nothing here
+//defaults to it, because 'portable' is the branch that must not be reached by accident.
+function platformInfo(platform, windowsInstall){
+  return {
+    platform: platform,
+    arch: 'x64',
+    windowsInstall: platform === 'win32' ? (windowsInstall || 'squirrel') : null
+  };
 }
 
 //Stands in for render.js's own proceedOrConfirmSave: runs the continuation straight through, as if
@@ -489,4 +507,120 @@ test('View License shows empty text when the licenses file does not exist', asyn
   await findButton('View License').onclick();
 
   assert.strictEqual(document.querySelector('pre').innerText, '');
+});
+
+//---------------------------------------------------------------------------
+// win32 portable: the build that cannot install anything, including itself
+//---------------------------------------------------------------------------
+
+//What getUpdates hands a portable copy: extractUpdateDownloadInfo matched the portable zip for it,
+//because 'Windows_Portable_x64' is the bin type that build asks for. The point of these tests is
+//that the view never puts that zip through the Squirrel path, and never puts a portable copy in
+//front of the installer.
+function portableLatest(){
+  return {
+    tag: 'v2.4.0', date: '2026-01-15T00:00:00Z', description: 'desc',
+    downloadInfo: {
+      name: 'warewoolf_2.4.0_Windows_Portable_x64.zip',
+      url: 'https://example.com/x.zip'
+    }
+  };
+}
+
+test('on the portable win32 build, an available update shows Download rather than Install Update', function(t){
+  t.mock.method(fs, 'existsSync', function(){ return false; });
+  var showAbout = freshAboutDisplay({
+    getUpdates: function(version, cb){ cb(portableLatest()); }
+  });
+
+  showAbout('2.3.1', platformInfo('win32', 'portable'), immediateConfirm);
+  findButton('Check For Updates').onclick();
+
+  //textContent, not innerText: the label the portable build keeps is the one createButton gave it,
+  //and nothing relabels it - which is the assertion. jsdom's innerText is only ever what this view
+  //assigned, so it is undefined here exactly because the Install Update line did not run.
+  assert.strictEqual(updatesButton().textContent, 'Download');
+  assert.strictEqual(updatesButton().innerText, undefined);
+});
+
+//The regression this whole change exists for. Before it, every Windows copy took the Squirrel
+//branch: a portable one has no Update.exe to hand the job to, so it failed, and the failure path
+//offered to download the *installer* - which installs a second WareWoolf somewhere else and leaves
+//the folder the writer is actually running from untouched and stale.
+test('on the portable win32 build, clicking Download never starts a Squirrel update', function(t){
+  t.mock.method(fs, 'existsSync', function(){ return false; });
+  var startCalls = 0;
+  var downloaded = [];
+  var showAbout = freshAboutDisplay({
+    getUpdates: function(version, cb){ cb(portableLatest()); },
+    startWindowsUpdate: function(){ startCalls++; },
+    downloadUpdate: function(info, cb){ downloaded.push(info.name); cb('C:/Users/w/Downloads/' + info.name); }
+  });
+
+  showAbout('2.3.1', platformInfo('win32', 'portable'), immediateConfirm);
+  findButton('Check For Updates').onclick();
+  updatesButton().onclick();
+
+  assert.strictEqual(startCalls, 0, 'the portable build has no Squirrel to start');
+  assert.deepStrictEqual(downloaded, ['warewoolf_2.4.0_Windows_Portable_x64.zip']);
+});
+
+//A zip sitting in Downloads is not an update until the writer swaps their folder for it, and
+//nothing else in the app is going to say so.
+test('on the portable win32 build, a finished download says to replace the folder', function(t){
+  t.mock.method(fs, 'existsSync', function(){ return false; });
+  var showAbout = freshAboutDisplay({
+    getUpdates: function(version, cb){ cb(portableLatest()); },
+    downloadUpdate: function(info, cb){ cb('C:/Users/w/Downloads/' + info.name); }
+  });
+
+  showAbout('2.3.1', platformInfo('win32', 'portable'), immediateConfirm);
+  findButton('Check For Updates').onclick();
+  updatesButton().onclick();
+
+  assert.strictEqual(updatesButton().innerText, 'Downloaded Into Downloads Folder');
+  assert.match(document.querySelector('.updates-status').innerText, /replace your WareWoolf folder/);
+});
+
+//The installed build is untouched by any of this: it still gets the in-place install it had, and
+//the installer as the asset behind it.
+test('the installed win32 build still gets Install Update and the Squirrel path', function(t){
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  t.mock.method(fs, 'existsSync', function(){ return false; });
+  var startCalls = [];
+  var showAbout = freshAboutDisplay({
+    getUpdates: function(version, cb){ cb(win32Latest()); },
+    startWindowsUpdate: function(tag){ startCalls.push(tag); }
+  });
+
+  showAbout('2.3.1', platformInfo('win32', 'squirrel'), immediateConfirm);
+  findButton('Check For Updates').onclick();
+  assert.strictEqual(updatesButton().innerText, 'Install Update');
+
+  updatesButton().onclick();
+  assert.deepStrictEqual(startCalls, ['v2.4.0']);
+});
+
+//downloadUpdate's new onFail, from the view's side. A release with no asset this copy can use -
+//a portable copy looking at v2.5.0 or earlier, which predates the portable zip - used to leave the
+//button disabled and reading "Downloading..." forever, because downloadUpdate logged and returned
+//without calling anything back.
+test('a release with no usable asset re-enables the button and says so instead of hanging', function(t){
+  t.mock.method(fs, 'existsSync', function(){ return false; });
+  var noAsset = portableLatest();
+  delete noAsset.downloadInfo;
+  //The real downloadUpdate, whose missing-downloadInfo branch is what this is about, reduced to the
+  //one call it makes on that path.
+  var showAbout = freshAboutDisplay({
+    getUpdates: function(version, cb){ cb(noAsset); },
+    downloadUpdate: function(info, cb, onFail){ onFail('This release has no download for your platform.'); }
+  });
+
+  showAbout('2.3.1', platformInfo('win32', 'portable'), immediateConfirm);
+  findButton('Check For Updates').onclick();
+  updatesButton().onclick();
+
+  assert.strictEqual(updatesButton().disabled, false, 'the writer must be able to try again');
+  assert.strictEqual(updatesButton().innerText, 'Download Failed');
+  assert.match(document.querySelector('.updates-status').innerText, /no download for your platform/);
 });

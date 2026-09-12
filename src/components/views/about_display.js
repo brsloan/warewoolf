@@ -1,5 +1,5 @@
 const { closePopups, createButton, removeElementsByClass, describeDialog } = require('../controllers/utils');
-const { getUpdates, downloadUpdate, startWindowsUpdate, finishWindowsUpdate } = require('../controllers/updates');
+const { getUpdates, canUpdateInPlace, downloadUpdate, startWindowsUpdate, finishWindowsUpdate } = require('../controllers/updates');
 const { logError } = require('../controllers/error-log');
 const showInstallUpdate = require('./install-update_display');
 const { createPlatform } = require('../controllers/platform');
@@ -89,17 +89,34 @@ function showAbout(appVersion, platformInfo, confirmBeforeContinuing){
         updatesPanel.style.display = 'block';
         checkUpdatesBtn.innerText = 'Updates Available!';
 
-        if(platformInfo.platform == 'win32')
+        //Only the installed Windows build can apply an update to itself. The portable build is a
+        //folder the writer put somewhere and can move or delete at will, with no Squirrel beside it
+        //to hand the job to - so it keeps the plain Download button every other platform gets, and
+        //is told below what to do with what it downloads. Offering it "Install Update" would promise
+        //something that cannot happen: before this, that button ran the Squirrel path, failed, and
+        //dropped the writer onto the fallback that downloads the *installer* - which would install a
+        //second copy elsewhere and leave the folder they were running from stale.
+        if(canUpdateInPlace(platformInfo))
           downloadBtn.innerText = 'Install Update';
 
-        //Falls back to the manual downloadUpdate path both on its own (the else branch, for
-        //linux/mac) and as what a failed Windows install-in-place drops the writer into - the
-        //happy path is not the only one, per the plan this implements.
+        //Falls back to the manual downloadUpdate path on its own (the else branch - linux/mac, and
+        //the portable Windows build, which gets the portable zip matched for it by
+        //extractUpdateDownloadInfo), and as what a failed Windows install-in-place drops the writer
+        //into - the happy path is not the only one, per the plan this implements.
         function useManualDownload(){
           downloadBtn.innerText = 'Downloading...';
           downloadBtn.disabled = true;
           downloadUpdate(latest.downloadInfo, function(fpath){
             downloadBtn.innerText = "Downloaded Into Downloads Folder";
+            //The portable build's one extra step, and the reason this branch says anything at all.
+            //A .zip in Downloads is not an update until the writer swaps their folder for it, and
+            //nothing else in the app is going to tell them so.
+            if(platformInfo.platform == 'win32')
+              updatesStatus.innerText = 'Unzip it and replace your WareWoolf folder with the one inside. Your projects and settings are not in that folder and are not affected.';
+          }, function(message){
+            downloadBtn.disabled = false;
+            downloadBtn.innerText = 'Download Failed';
+            updatesStatus.innerText = message;
           });
         }
 
@@ -107,9 +124,13 @@ function showAbout(appVersion, platformInfo, confirmBeforeContinuing){
           if(platformInfo.platform == 'linux'){
             downloadBtn.innerText = 'Downloading...';
             downloadBtn.disabled = true;
-            downloadUpdate(latest.downloadInfo, showInstallUpdate);
+            downloadUpdate(latest.downloadInfo, showInstallUpdate, function(message){
+              downloadBtn.disabled = false;
+              downloadBtn.innerText = 'Download Failed';
+              updatesStatus.innerText = message;
+            });
           }
-          else if(platformInfo.platform == 'win32'){
+          else if(canUpdateInPlace(platformInfo)){
             downloadBtn.disabled = true;
             //No download-progress event exists on Electron's built-in autoUpdater, so there is
             //nothing to put in a progress bar - be honest about the wait rather than pretend one.

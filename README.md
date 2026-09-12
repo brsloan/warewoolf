@@ -56,7 +56,10 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 
 ## Installation
 
-Binaries of the current release for Windows, MacOS, Debian AMD64, and Debian ARM64 (Raspberry Pi) are available in the [releases page](https://github.com/brsloan/warewoolf/releases).
+Binaries of the current release for Windows (installer and portable), MacOS, Debian AMD64, and Debian ARM64 (Raspberry Pi) are available in the [releases page](https://github.com/brsloan/warewoolf/releases).
+
+> [!NOTE]
+> **Can't install anything on the machine you write on?** The Windows download comes in two forms. `warewoolf_<version>_Windows_x64.exe` is the ordinary installer, and it is the one to take if you can: it puts WareWoolf in your Start Menu and can update itself in place. `warewoolf_<version>_Windows_Portable_x64.zip` is the same application as a folder you unzip and run — nothing is installed, nothing is written outside it but your settings, and deleting the folder removes it. Good for a USB stick, a shared or locked-down machine, or trying WareWoolf without committing to it. Check For Updates works in both: the portable build is offered the next portable zip rather than the installer, and updating it means replacing the folder with the one inside.
 
 > [!NOTE]
 > **On an older Mac?** The main MacOS builds are packaged against Electron 44, which needs macOS 13 "Ventura" or newer. If you are on macOS 10.15 "Catalina" through 12 "Monterey" — as many of the older laptops people turn into writerdecks are — download `warewoolf_<version>_MacOS_Legacy.dmg` instead. It is the same WareWoolf, built from the same source, packaged against Electron 32: the last release line that runs on those systems. It is an Intel build, so on Apple Silicon it runs under Rosetta. Electron 32 no longer receives Chromium security updates, so take a mainline build instead if your Mac can run one.
