@@ -1,7 +1,5 @@
 [>c] # Footnotes
 
-WareWoolf has first-class footnotes: a numbered marker in your text, and the note itself at the bottom of the chapter, kept in step with each other so that you never have to number anything yourself.
-
 # Adding a Note
 Put the caret where you want the marker and press Ctrl+Alt+F (Cmd+Alt+F on Mac). That drops in a numbered marker and jumps you straight into an empty note at the bottom of the chapter, ready to type. It is one action, and one step to undo.
 
@@ -9,16 +7,7 @@ Put the caret where you want the marker and press Ctrl+Alt+F (Cmd+Alt+F on Mac).
 Ctrl+Alt+F does double duty as a jump:
 * with the caret just before a marker, it jumps to that note;
 * from inside a note, it jumps back to its marker.
-
 Enter does the same forward jump when the caret sits just before a marker. Wherever the caret is, a marker and its note are highlighted together, so you can always see which note you are in.
-
-# Numbering
-Numbers are assigned and reassigned for you. Add a note in the middle of a chapter and the ones after it renumber; delete one and the rest close up; move a paragraph and its notes reorder to match the text. You never type a number yourself.
-
-Deleting a marker deletes its note along with it, as a single undo step, so a note is never left stranded at the bottom of a chapter with nothing pointing at it.
-
-# Multiple Paragraphs
-Just keep typing. Pressing Enter inside a note starts a new paragraph of the same note, rather than ending it.
 
 # Copying and Pasting
 Copying or cutting a marker carries its note along with it, so pasting a passage into another chapter brings its footnotes too. The pasted notes are renumbered to suit their new home.
@@ -28,5 +17,4 @@ A marker and its note always end up on the same side of a split, wherever the ma
 
 # Compiling and Exporting
 Compiling a whole project numbers every chapter’s notes into one sequence, so a five-chapter book does not come out with five notes numbered 1.
-
-Notes then survive export in whatever form the format has for them: real Word footnotes in .docx, linked notes in HTML and EPUB, and \[^1] markers in Markdown and MarkdownFic. That last is a syntax you can also write by hand — see the MarkdownFic chapter — and a file written that way reads back in as real footnotes.
+	Notes then survive export in whatever form the format has for them: real Word footnotes in .docx, linked notes in HTML and EPUB, and \[^1] markers in Markdown and MarkdownFic. That last is a syntax you can also write by hand — see the MarkdownFic chapter — and a file written that way reads back in as real footnotes.

@@ -1,8 +1,7 @@
 [>c] # Tab-Indent Paragraphs
 
 Fiction is set with an indent at the start of each paragraph, where a blog or a business letter puts a blank line between paragraphs instead. Tab-Indent Paragraphs, under the “Tools” menu, puts that indent in for you across a whole project at once — useful for a manuscript written flush left, one imported from somewhere that did not indent, or one indented by hand and only half consistently.
-
-What it inserts is a real tab character typed into your text, not a paragraph style you can switch off later. That is deliberate: it is what MarkdownFic keeps, what every export format carries out, and what you would have typed yourself. It also means the tool cannot be undone once it has run, so save your project first. If the result is not what you wanted, close without saving and open the project again.
+	What it inserts is a real tab character typed into your text, not a paragraph style you can switch off later. That is deliberate: it is what MarkdownFic keeps, what every export format carries out, and what you would have typed yourself. It also means the tool cannot be undone once it has run, so save your project first. If the result is not what you wanted, close without saving and open the project again.
 
 # Do Not Indent After
 
@@ -14,19 +13,15 @@ Typography does not indent every paragraph. The tab is there to mark the break b
 * Lists — prose picking up again after a bulleted or numbered list.
 
 Untick any of them and those paragraphs take the tab like any other. Untick all five and every paragraph is indented, which is what this tool did when it was called Indent All Paragraphs.
-
-Headings, list items and block quotations are never indented themselves, whatever is ticked. A list item carries its own indenting, and a block quotation gets its marker when you export. The boxes only say what a paragraph may not be indented after.
+	Headings, list items and block quotations are never indented themselves, whatever is ticked. A list item carries its own indenting, and a block quotation gets its marker when you export. The boxes only say what a paragraph may not be indented after.
 
 # Correct Current Tabs
 
 Ticked by default. As well as adding the tabs that are missing, the tool takes away the ones that should not be there: a paragraph sitting under a heading that was indented by hand, or by the older version of this tool, has its tab removed. Untick the box and the tool only ever adds.
-
-It corrects paragraphs, so a tab at the start of a heading, a list item or a block quotation is left exactly where it is.
+	It corrects paragraphs, so a tab at the start of a heading, a list item or a block quotation is left exactly where it is.
 
 # Remove Blank Lines Between Paragraphs
 
 Unticked by default, because unlike the rest of the tool this one deletes lines. Tick it and the blank line between one paragraph and the next is closed up, while a wider gap of two or more blank lines is condensed down to a single one.
-
-This is the quick way to turn a blog-styled document into a book-styled one. Such a document separates every paragraph with a blank line; ticking this box replaces that separation with the indent instead. The blank lines go first and the indenting follows, so a paragraph that has just lost the blank line above it gets its tab in the same pass.
-
-Only a gap with an ordinary paragraph on both sides is closed up. The blank line under a heading, the ones around a quotation or a list, and any at the very top or bottom of a chapter are left alone — those are layout rather than blog styling. A scene break marked by a wider gap survives as a gap, for the same reason.
+	This is the quick way to turn a blog-styled document into a book-styled one. Such a document separates every paragraph with a blank line; ticking this box replaces that separation with the indent instead. The blank lines go first and the indenting follows, so a paragraph that has just lost the blank line above it gets its tab in the same pass.
+	Only a gap with an ordinary paragraph on both sides is closed up. The blank line under a heading, the ones around a quotation or a list, and any at the very top or bottom of a chapter are left alone — those are layout rather than blog styling. A scene break marked by a wider gap survives as a gap, for the same reason.

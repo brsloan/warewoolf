@@ -162,9 +162,10 @@
 		}
 	],
 	"reference": [],
+	"projectDictionary": [],
 	"filters": [],
 	"trash": [],
-	"activeChapterIndex": 0,
+	"activeChapterIndex": 1,
 	"wordGoal": "0",
 	"textCursorPosition": 0,
 	"corkboardColumns": 4

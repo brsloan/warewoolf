@@ -3,34 +3,16 @@
 **File > Dictionaries** is where you manage everything the spellchecker knows: which dictionaries it checks against, the words you have personally taught it, and the words that belong to this manuscript alone.
 
 ## Spellcheck Dictionaries
-
 The top section lists every dictionary available to WareWoolf—the ones it ships with, and any you have imported yourself—with a checkbox next to each. Tick as many as you like at once. If you tick two, a word is accepted the moment either dictionary recognizes it, which is looser than most writers expect: a French dictionary ticked alongside the English one will happily accept French words sitting in an English manuscript. That is deliberate—it is what makes writing in two languages at once possible—but it does mean this is not as strict a second-language check as a single dictionary would be.
-
-If you untick every dictionary, or the one you had selected has gone missing, WareWoolf falls back to its own shipped default rather than refusing to spellcheck at all.
-
-**Import...** lets you add a dictionary of your own—a Hunspell .aff/.dic pair, or even a bare word list with no .aff file at all, which is handy for something like a list of character or place names someone else already compiled. Imported dictionaries are stored in your user data directory, not inside the WareWoolf program folder, so they survive the next update—a bundled dictionary, by contrast, is replaced along with the rest of the app when you update. **Remove** deletes an imported dictionary for good; a bundled one cannot be removed from here.
+	If you untick every dictionary, or the one you had selected has gone missing, WareWoolf falls back to its own shipped default rather than refusing to spellcheck at all.
+	**Import...** lets you add a dictionary of your own—a Hunspell .aff/.dic pair, or even a bare word list with no .aff file at all, which is handy for something like a list of character or place names someone else already compiled. Imported dictionaries are stored in your user data directory, not inside the WareWoolf program folder, so they survive the next update—a bundled dictionary, by contrast, is replaced along with the rest of the app when you update. **Remove** deletes an imported dictionary for good; a bundled one cannot be removed from here.
 
 ## Personal Dictionary and Project Dictionary
-
 These two lists look identical—one field that doubles as filter and new-word box, the list itself, and Add, Edit and Delete beside it—but they mean different things:
-
 * The **Personal Dictionary** belongs to you. Every word in it is accepted in every project you open, on this machine, forever. It is the right place for words you will use again and again across everything you write: your own invented spellings, technical terms, and the like.
 * The **Project Dictionary** belongs to this manuscript. It travels with the .woolf file itself, so opening the project on another machine brings the words with it—and, just as importantly, a character named “Aurelion” in this novel does not turn up as “correctly spelled” in the next one you start.
-
-Which list a word should go in is really the same question **Add To Dictionary** and **Add To Project** ask you in the spellcheck popup: is this a word you will want everywhere, or a word that belongs to this story? Add To Dictionary keeps its accelerator key (**Alt+A**), since that is the more familiar path; the newer **Add To Project** answers to **Alt+P**, and is greyed out whenever there is no project open to hold the word.
-
-## Working the Lists
-
-Both lists are built to be worked from the keyboard, without reaching for the mouse.
-
-The field at the top of each is labeled **Filter/Word**, because it is both. Type into it and the list narrows to whatever contains what you typed, with a count beside it showing how much of the list is still showing. When the count reaches nothing at all, **Enter** adds what you typed as a new word—the reasoning being that if nothing is left to narrow to, what you have typed can only be a word the list does not have yet. While matches remain you are still narrowing, so Enter leaves the list alone. The **Add** button is looser, since clicking it says plainly what you meant.
-
-Select a word and choose **Edit** and it appears in the same field for retyping, with **Add** turning into **Save** for as long as the edit lasts. **Enter** saves it, and **Escape**, or simply moving off the field, abandons the edit and leaves the word as it was. Filtering pauses while you are editing, so the list will not shift about underneath you.
-
-**Delete** removes every word you have selected, and you can select a run of them at once—handy for clearing out a few typos added by an over-eager **Add To Dictionary**.
+Which list a word should go in is really the same question **Add To Dictionary** and **Add To Project** ask you in the spellcheck popup: is this a word you will want everywhere, or a word that belongs to this story?
 
 ## Import Word List...
-
 The Project Dictionary carries one extra button the Personal Dictionary does not: **Import Word List...**, which reads a plain text file—one word per line—and adds every line to the project’s list at once. It is the fast way to bring in a series bible’s worth of character and place names rather than typing them in one at a time.
-
-Nothing in either dialog is saved until you click **Save**. Closing the dialog instead throws away whatever you changed.
+	Nothing in either dialog is saved until you click **Save**. Closing the dialog instead throws away whatever you changed.

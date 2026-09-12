@@ -1,20 +1,16 @@
 [>c] # Line Spacing
 
 Open **File > Settings**, look under **Appearance**, and below the two font dropdowns is a third: **Manuscript Line Spacing**. It sets how far apart the lines of your chapters are set in the middle panel. There are four settings—Single, One and a Half, Double and Two and a Half—and the change takes effect the moment you press **Save**.
-
-It starts on Double, which is what WareWoolf has always drawn the manuscript at, so if you never open this dropdown nothing about your screen changes.
+	It starts on Double, which is what WareWoolf has always drawn the manuscript at, so if you never open this dropdown nothing about your screen changes.
 
 ## Why You Might Move It
 Double spacing is standard manuscript format, and there is a good argument for drafting in the shape you will submit in. There is an equally good argument against it. On a small writerDeck screen, double spacing can mean four or five lines of your book visible at a time, and a paragraph you cannot see the whole of is a paragraph you cannot judge the rhythm of. Tightening to Single roughly doubles what fits.
-
-Going the other way is usually about editing rather than drafting. Two and a Half leaves room to see each line on its own, which is useful in the pass where you are weighing sentences one at a time rather than reading for flow.
-
-Spacing also interacts with the face you have chosen. A wide, loose typeface like Courier already has air around it and often reads better set tighter than Garamond does. That is why the sample under this dropdown is drawn in whichever manuscript font you have selected above: the two settings are worth judging together, because together is how you will read them.
+	Going the other way is usually about editing rather than drafting. Two and a Half leaves room to see each line on its own, which is useful in the pass where you are weighing sentences one at a time rather than reading for flow.
+	Spacing also interacts with the face you have chosen. A wide, loose typeface like Courier already has air around it and often reads better set tighter than Garamond does. That is why the sample under this dropdown is drawn in whichever manuscript font you have selected above: the two settings are worth judging together, because together is how you will read them.
 
 ## The Sample Paragraph
 Under the dropdown is a short paragraph set at the spacing you have chosen. It is a paragraph rather than the single line the font samples use, for the obvious reason—one line has no next line to show you the gap to.
 
 ## What This Does Not Change
 Only the manuscript. The chapter list on the left and the notes on the right are set closer, deliberately: they are columns you glance down to find something, not prose you read a chapter of, and a taller chapter list would just mean fewer chapters on screen.
-
-And, exactly like the font settings, this is a setting for your screen and not for your book. Compiling or exporting produces the same file whatever spacing you write at, because the leading of a submitted document is decided by whoever you are submitting it to. Line *width* is separate and stays on **CMD/CTRL** + **<** or **>**; font *size* stays on **CMD/CTRL** + **-** or **+**.
+	And, exactly like the font settings, this is a setting for your screen and not for your book. Compiling or exporting produces the same file whatever spacing you write at, because the leading of a submitted document is decided by whoever you are submitting it to. Line *width* is separate and stays on **CMD/CTRL** + **<** or **>**; font *size* stays on **CMD/CTRL** + **-** or **+**.

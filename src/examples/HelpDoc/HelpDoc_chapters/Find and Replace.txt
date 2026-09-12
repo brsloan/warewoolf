@@ -1,25 +1,18 @@
 [>c] # Find and Replace
 
-Find/Replace sits under the “Tools” menu, or Ctrl+F (Cmd+F on Mac). Type what you are looking for in the top box and what should take its place in the lower one.
-
-Find moves to the next match and highlights it; press it again for the one after. Replace swaps the highlighted match for the contents of the Replace box and then finds the next, so you can step through a manuscript deciding one at a time. Replace All does the lot without asking. Enter in the Find box does a Find, and Enter in the Replace box does a Replace, so the whole thing can be worked without reaching for the mouse.
-
-Replace All cannot be undone as one action, and across a whole project it cannot be undone chapter by chapter either. Save first.
+Find/Replace sits under the “Tools” menu, or Ctrl+F (Cmd+F on Mac).
+	Note that Replace All cannot be undone as one action, and across a whole project it cannot be undone chapter by chapter either. Save first.
 
 # The Four Boxes
-
 * Case Sensitive — off to begin with, so “cat” finds “Cat” as well. Tick it where the difference matters.
 * Whole Word Only — “cat” stops matching inside “concatenate”. A term made of punctuation works here too, so “--” and “’tis” can be looked for as whole words.
 * Use Regex — reads the Find box as a pattern rather than as text. See below.
 * In All Chapters — searches, and replaces, right across the project instead of only the chapter you are in. Reference chapters are included.
-
 A straight quote you type finds the curly one in your manuscript, so searching for “don't” finds “don’t” however it is written. A curly quote you type means that exact quote, which is how you hunt down one particular one.
 
 # Use Regex
-
 A regular expression is a pattern rather than a piece of text: it says what a match looks like instead of spelling it out. What a novelist mostly wants one for is finding something whose exact wording varies — every double space, every paragraph that ends in a comma, every “said Somebody” — or swapping two things around.
-
-These are the characters that mean something inside a pattern. Everything else stands for itself.
+	These are the characters that mean something inside a pattern. Everything else stands for itself.
 * ‘.’ — any one character.
 * ‘\w’ a letter or a digit, ‘\d’ a digit, ‘\s’ a space or a tab.
 * ‘\W’, ‘\D’ and ‘\S’ — the opposite of each: anything that is not one of those.
@@ -32,19 +25,14 @@ These are the characters that mean something inside a pattern. Everything else s
 * ‘|’ — or, as in ‘cat|dog’.
 * ‘^’ and ‘$’ — the start and the end of a line.
 * A backslash in front of any of these means the character itself, so ‘\.’ is a full stop and ‘\\\*’ an asterisk.
-
 So ‘  +’ finds every run of two or more spaces, ‘,$’ every paragraph ending in a comma, and ‘said \w+’ every “said” with a name after it.
 
 # Referring Back To What Was Found
-
 In the Replace box, ‘$1’ stands for whatever the first bracketed group matched, ‘$2’ for the second, and so on up to ‘$9’. ‘$&’ stands for the whole match, and ‘$$’ for a plain dollar sign.
-
-So to turn every “Smith, John” into “John Smith”, find ‘(\w+), (\w+)’ and replace with ‘$2 $1’.
-
-This only happens with Use Regex ticked. Without it a dollar sign is a dollar sign, and replacing with ‘$5’ puts $5 in your text.
+	So to turn every “Smith, John” into “John Smith”, find ‘(\w+), (\w+)’ and replace with ‘$2 $1’.
+	This only happens with Use Regex ticked. Without it a dollar sign is a dollar sign, and replacing with ‘$5’ puts $5 in your text.
 
 # Things Worth Knowing
-
 * Case Sensitive and Whole Word Only still apply to a pattern. Whole Word wraps the pattern entire, so ‘cat|dog’ with it ticked matches neither “dogged” nor “catty”.
 * ‘^’ and ‘$’ mean the start and end of a line, not of the chapter.
 * ‘.’ stops at the end of a line. To match across a paragraph break, ask for the break itself with ‘\n’.
