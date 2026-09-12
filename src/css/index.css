@@ -23,11 +23,12 @@
   --font-mono: "Cascadia Mono", Consolas, "SF Mono", Menlo, "DejaVu Sans Mono", monospace;
 
   /* The two faces a writer chooses in Settings > Appearance, set by updateFonts() in render.js
-     from the stacks in models/fonts.js. They default to the serif stack above, which is what the
-     app drew everything in before the setting existed - so the defaults here are not a placeholder
-     to be overwritten like the sizes are, they are the real fallback if user settings never load. */
+     from the stacks in models/fonts.js. These are not placeholders to be overwritten like the sizes
+     are, they are the real fallback if user settings never load, so each matches the default its
+     setting starts on in models/fonts.js: the manuscript on the serif the app drew everything in
+     before the setting existed, the sidebars on the sans they now start in. */
   --font-editor: var(--font-serif);
-  --font-sidebar: var(--font-serif);
+  --font-sidebar: var(--font-sans);
 
   /* How far apart the manuscript's lines are set, chosen in Settings > Appearance and filled in by
      updateLineHeight() in render.js from the multipliers in models/line-heights.js. Double, like

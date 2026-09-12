@@ -2,7 +2,7 @@ const { closePopups, createButton, removeElementsByClass, convertFilepath, gener
 const { showBattery, removeBattery } = require('./battery_display');
 const showFileDialog = require('./file-dialog_display');
 const { getAutocorrectDefs, resolveAutocorrect, diffFromDefaults } = require('../models/autocorrect');
-const { getFontDefs, resolveFontStack, sanitizeFontId } = require('../models/fonts');
+const { getFontDefs, resolveFontStack, sanitizeFontId, DEFAULT_SIDEBAR_FONT_ID } = require('../models/fonts');
 const { getLineHeightDefs, resolveLineHeight, sanitizeLineHeightId } = require('../models/line-heights');
 
 function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, callback, platformInfo){
@@ -232,7 +232,7 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
   //read the way the finished book will be, and the sidebars are scanned for a chapter title. A
   //writer who wants one face everywhere still only has to set the same thing twice, once.
   var editorFontSelect = addFontPicker(fontTbl, 'editor-font', 'Manuscript Font: ', userSettings.editorFont);
-  var sidebarFontSelect = addFontPicker(fontTbl, 'sidebar-font', 'Sidebar Font (chapter list and notes): ', userSettings.sidebarFont);
+  var sidebarFontSelect = addFontPicker(fontTbl, 'sidebar-font', 'Sidebar Font (chapter list and notes): ', userSettings.sidebarFont, DEFAULT_SIDEBAR_FONT_ID);
 
   //Only the manuscript, so it sits under the manuscript's own settings. The chapter list and the
   //notes are columns to glance down rather than prose to read a chapter of, and index.css sets
@@ -279,7 +279,7 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
     //string from the DOM, and this is the one field whose value goes straight into a css
     //font-family declaration.
     userSettings.editorFont = sanitizeFontId(editorFontSelect.value);
-    userSettings.sidebarFont = sanitizeFontId(sidebarFontSelect.value);
+    userSettings.sidebarFont = sanitizeFontId(sidebarFontSelect.value, DEFAULT_SIDEBAR_FONT_ID);
     //And for the same reason: a <select>'s value is a string from the DOM, and this one ends up in
     //a css line-height declaration.
     userSettings.editorLineHeight = sanitizeLineHeightId(lineHeightSelect.value);
@@ -326,8 +326,8 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
   //sample text in whichever is chosen. Two rows rather than one, the sample spanning both columns,
   //so a sample sits under the picker it belongs to instead of the pair of them collecting at the
   //bottom where neither says which is which. Returns the select, which is what Save reads.
-  function addFontPicker(table, idPrefix, labelText, selected){
-    var select = buildFontSelect(idPrefix + '-select', selected);
+  function addFontPicker(table, idPrefix, labelText, selected, fallbackId){
+    var select = buildFontSelect(idPrefix + '-select', selected, fallbackId);
     var label = document.createElement('label');
     label.innerText = labelText;
     label.htmlFor = select.id;
@@ -346,8 +346,10 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
   //A dropdown of every face in fonts.js, with each option drawn in the face it names so the list
   //itself is the specimen sheet. `selected` is whatever is in user settings, run through
   //sanitizeFontId so an id this version does not know lands on the default rather than leaving the
-  //select showing its first option while the app is drawn in something else.
-  function buildFontSelect(id, selected){
+  //select showing its first option while the app is drawn in something else. `fallbackId` says
+  //which default that is, so the sidebar picker falls back to the same face the sidebars would
+  //actually be drawn in; omitted, it is the manuscript's.
+  function buildFontSelect(id, selected, fallbackId){
     var select = document.createElement('select');
     select.id = id;
 
@@ -359,7 +361,7 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
       select.appendChild(option);
     });
 
-    select.value = sanitizeFontId(selected);
+    select.value = sanitizeFontId(selected, fallbackId);
 
     return select;
   }

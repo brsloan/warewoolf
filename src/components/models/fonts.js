@@ -65,10 +65,16 @@ const FONT_DEFS = [
   }
 ];
 
-//What both settings fall back to - the face WareWoolf drew everything in before either setting
-//existed. Named rather than written as 'serif' at each of the four or five places that need it, so
-//that "what an unset/unreadable font setting means" is one decision in one place.
+//What the manuscript falls back to - the face WareWoolf drew everything in before either setting
+//existed - and the last resort anywhere a caller names no other. Named rather than written as
+//'serif' at each of the four or five places that need it, so that "what an unset/unreadable font
+//setting means" is one decision in one place.
 const DEFAULT_FONT_ID = 'serif';
+
+//The sidebars start on Sans instead. They are columns to glance down for a chapter title rather
+//than prose to read, and a sans face is what the short strings at that size are legible in; the
+//manuscript, which is read the way the finished book will be, keeps the serif above.
+const DEFAULT_SIDEBAR_FONT_ID = 'sans';
 
 //Object.create(null), not {}: the ids that reach this table come off disk, and against a plain
 //object 'constructor' and 'toString' would both look up to a function from Object.prototype - so
@@ -101,15 +107,23 @@ function resolveFontStack(id){
 //meaningful if it names a font we actually have a stack for. Anything else - a wrong type, an id
 //from a later version that dropped back to an earlier one, a typo from a hand edit - becomes the
 //default rather than being passed through to land in a font-family declaration as garbage.
-function sanitizeFontId(raw){
+//
+//`fallbackId` is which default: the two settings no longer share one, and an unreadable sidebarFont
+//should land on the face a fresh install's sidebars are drawn in rather than on the manuscript's.
+//It is itself checked, so a caller passing something unknown gets DEFAULT_FONT_ID rather than
+//having its own bad id waved through as this function's answer.
+function sanitizeFontId(raw, fallbackId){
+  var fallback = getFontDef(fallbackId) == null ? DEFAULT_FONT_ID : fallbackId;
+
   if(typeof raw !== 'string' || getFontDef(raw) == null)
-    return DEFAULT_FONT_ID;
+    return fallback;
 
   return raw;
 }
 
 module.exports = {
   DEFAULT_FONT_ID,
+  DEFAULT_SIDEBAR_FONT_ID,
   getFontDefs,
   getFontDef,
   resolveFontStack,

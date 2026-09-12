@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { JSDOM } = require('jsdom');
 const { assertDialogDescribed, assertControlsNamed } = require('./helpers');
-const { DEFAULT_FONT_ID, getFontDefs, resolveFontStack } = require('../src/components/models/fonts');
+const { DEFAULT_FONT_ID, DEFAULT_SIDEBAR_FONT_ID, getFontDefs, resolveFontStack } = require('../src/components/models/fonts');
 const { DEFAULT_LINE_HEIGHT_ID, getLineHeightDefs, resolveLineHeight } = require('../src/components/models/line-heights');
 
 const settingsDisplayPath = require.resolve('../src/components/views/settings_display');
@@ -40,7 +40,7 @@ function makeUserSettings(overrides){
     autocorrectEnabled: true,
     autocorrect: {},
     editorFont: DEFAULT_FONT_ID,
-    sidebarFont: DEFAULT_FONT_ID,
+    sidebarFont: DEFAULT_SIDEBAR_FONT_ID,
     editorLineHeight: DEFAULT_LINE_HEIGHT_ID,
     save: function(){}
   }, overrides);
@@ -291,7 +291,9 @@ test('a font id this version does not know falls back to the default rather than
   openSettings(makeUserSettings({ editorFont: 'some-font-from-the-future', sidebarFont: null }));
 
   assert.strictEqual(document.getElementById('editor-font-select').value, DEFAULT_FONT_ID);
-  assert.strictEqual(document.getElementById('sidebar-font-select').value, DEFAULT_FONT_ID);
+  //The sidebar picker falls back to the sidebars' default, which is the face the app would draw
+  //them in for that same unusable id.
+  assert.strictEqual(document.getElementById('sidebar-font-select').value, DEFAULT_SIDEBAR_FONT_ID);
 });
 
 test('Save writes both font choices back to user settings', function(){

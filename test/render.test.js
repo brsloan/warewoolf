@@ -15,7 +15,7 @@ const { EventEmitter } = require('events');
 const { createPlatform } = require('../src/components/controllers/platform');
 const { createNodeBacking } = require('../src/components/controllers/platform-node');
 const { createFakeBridge } = require('./fake-bridge');
-const { DEFAULT_FONT_ID, resolveFontStack } = require('../src/components/models/fonts');
+const { DEFAULT_FONT_ID, DEFAULT_SIDEBAR_FONT_ID, resolveFontStack } = require('../src/components/models/fonts');
 const { DEFAULT_LINE_HEIGHT_ID, resolveLineHeight } = require('../src/components/models/line-heights');
 
 const renderPath = require.resolve('../src/render');
@@ -2165,7 +2165,7 @@ test('the two panels can be set to different fonts', async function(){
   settingsPopupSaveButton().onclick();
 
   assert.strictEqual(fontProperty('--font-editor'), resolveFontStack('garamond'));
-  assert.strictEqual(fontProperty('--font-sidebar'), resolveFontStack(DEFAULT_FONT_ID));
+  assert.strictEqual(fontProperty('--font-sidebar'), resolveFontStack(DEFAULT_SIDEBAR_FONT_ID));
   assert.notStrictEqual(fontProperty('--font-editor'), fontProperty('--font-sidebar'));
 });
 

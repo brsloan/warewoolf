@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const { DEFAULT_FONT_ID, getFontDefs, getFontDef, resolveFontStack, sanitizeFontId } = require('../src/components/models/fonts');
+const { DEFAULT_FONT_ID, DEFAULT_SIDEBAR_FONT_ID, getFontDefs, getFontDef, resolveFontStack, sanitizeFontId } = require('../src/components/models/fonts');
 
 test('every font definition has an id, a label and a stack', function(){
   const defs = getFontDefs();
@@ -51,6 +51,13 @@ test('the default font id names a real definition', function(){
   assert.notStrictEqual(getFontDef(DEFAULT_FONT_ID), null);
 });
 
+//The sidebars' own default, which is a different face from the manuscript's and must equally be one
+//this table has a stack for.
+test('the sidebar default font id names a real definition, and is not the manuscript default', function(){
+  assert.notStrictEqual(getFontDef(DEFAULT_SIDEBAR_FONT_ID), null);
+  assert.notStrictEqual(DEFAULT_SIDEBAR_FONT_ID, DEFAULT_FONT_ID);
+});
+
 test('getFontDefs hands back a copy, so a caller cannot reorder the table', function(){
   const defs = getFontDefs();
   defs.length = 0;
@@ -88,6 +95,23 @@ test('sanitizeFontId turns anything else into the default', function(){
   assert.strictEqual(sanitizeFontId(12), DEFAULT_FONT_ID);
   assert.strictEqual(sanitizeFontId({ id: 'sans' }), DEFAULT_FONT_ID);
   assert.strictEqual(sanitizeFontId(['sans']), DEFAULT_FONT_ID);
+});
+
+//Which default an unusable id lands on is the caller's to say, so that an unreadable sidebarFont
+//becomes the face the sidebars are actually drawn in rather than the manuscript's serif.
+test('sanitizeFontId falls back to the id the caller names', function(){
+  assert.strictEqual(sanitizeFontId('comic-sans-forever', DEFAULT_SIDEBAR_FONT_ID), DEFAULT_SIDEBAR_FONT_ID);
+  assert.strictEqual(sanitizeFontId(null, DEFAULT_SIDEBAR_FONT_ID), DEFAULT_SIDEBAR_FONT_ID);
+  //A known id still wins over the fallback.
+  assert.strictEqual(sanitizeFontId('garamond', DEFAULT_SIDEBAR_FONT_ID), 'garamond');
+});
+
+//The fallback comes from a caller, so it gets the same treatment as the value itself rather than
+//being handed back as this function's answer unchecked.
+test('sanitizeFontId ignores a fallback that names no font either', function(){
+  assert.strictEqual(sanitizeFontId('comic-sans-forever', 'also-not-a-font'), DEFAULT_FONT_ID);
+  assert.strictEqual(sanitizeFontId('comic-sans-forever', 'constructor'), DEFAULT_FONT_ID);
+  assert.strictEqual(sanitizeFontId('comic-sans-forever', 42), DEFAULT_FONT_ID);
 });
 
 //Object.prototype keys reach a plain {} lookup, so 'constructor' or 'toString' would resolve to a

@@ -1,7 +1,7 @@
 const { logError } = require('../controllers/error-log');
 const { sanitizeOverrides } = require('./shortcuts');
 const { sanitizeAutocorrect } = require('./autocorrect');
-const { sanitizeFontId, DEFAULT_FONT_ID } = require('./fonts');
+const { sanitizeFontId, DEFAULT_FONT_ID, DEFAULT_SIDEBAR_FONT_ID } = require('./fonts');
 const { sanitizeLineHeightId, DEFAULT_LINE_HEIGHT_ID } = require('./line-heights');
 
 //Unlike sanitizeOverrides/sanitizeAutocorrect, there is no fixed id list to check entries against -
@@ -70,7 +70,10 @@ const SETTINGS_SCHEMA = {
   spellcheckDictionaries: { type: 'object', sanitize: sanitizeDictionaryIds },
   wordsPerPage: { type: 'number' },
   editorFont: { type: 'string', sanitize: sanitizeFontId },
-  sidebarFont: { type: 'string', sanitize: sanitizeFontId },
+  //Its own sanitizer rather than sanitizeFontId itself, because the sidebars' default is not the
+  //manuscript's: an unreadable id here has to land on Sans, the face a fresh install's sidebars are
+  //drawn in, not on the serif the manuscript falls back to.
+  sidebarFont: { type: 'string', sanitize: function(raw){ return sanitizeFontId(raw, DEFAULT_SIDEBAR_FONT_ID); } },
   editorLineHeight: { type: 'string', sanitize: sanitizeLineHeightId }
 };
 
@@ -123,13 +126,15 @@ function getUserSettings(userSettingsFilepath){
     //decides this - 300 is the standard double-spaced manuscript page - so it lives here rather
     //than on the project, and follows the writer from one book to the next.
     wordsPerPage: 300,
-    //Which of fonts.js's typefaces the manuscript and the sidebars are drawn in, by id. Both start
-    //on DEFAULT_FONT_ID, which is the face WareWoolf drew everything in before either of these
-    //existed - a writer who never opens the dropdowns sees no change at all. Stored as an id rather
-    //than a font-family string so that user-settings.json can never put arbitrary css into a
-    //declaration, and so that a later version may improve a stack's fallbacks for everyone.
+    //Which of fonts.js's typefaces the manuscript and the sidebars are drawn in, by id. The
+    //manuscript starts on DEFAULT_FONT_ID, the face WareWoolf drew everything in before either of
+    //these existed, so the page a writer is actually reading looks exactly as it did. The sidebars
+    //start on Sans instead - see DEFAULT_SIDEBAR_FONT_ID in fonts.js - since a chapter list is
+    //glanced down rather than read. Both are stored as an id rather than a font-family string so
+    //that user-settings.json can never put arbitrary css into a declaration, and so that a later
+    //version may improve a stack's fallbacks for everyone.
     editorFont: DEFAULT_FONT_ID,
-    sidebarFont: DEFAULT_FONT_ID,
+    sidebarFont: DEFAULT_SIDEBAR_FONT_ID,
     //How far apart the manuscript's lines are set, by id - see models/line-heights.js. Only the
     //manuscript: the chapter list and the notes are columns to glance down rather than prose to
     //read, and they stay on the spacing index.css gives them. Starts on DEFAULT_LINE_HEIGHT_ID,
