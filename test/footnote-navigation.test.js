@@ -57,6 +57,13 @@ function pressEnterAt(quill, index){
   return footnoteEnterBinding(quill).handler({ index: index, length: 0 });
 }
 
+//Every marker's number, in document order - getContents() hands the ops back in that order.
+function markerNumbers(quill){
+  return quill.getContents().ops
+    .filter(function(op){ return op.insert && op.insert.footnote; })
+    .map(function(op){ return String(op.insert.footnote.n); });
+}
+
 function plainText(quill){
   return quill.getContents().ops
     .map(function(op){ return typeof op.insert === 'string' ? op.insert : '[marker]'; })
@@ -224,4 +231,46 @@ test('a body paragraph renders its note id, and only a continuation is marked as
     bodies.map(function(el){ return el.matches('[data-footnote-cont]'); }),
     [false, true, false]
   );
+});
+
+//Regression: the new marker is numbered highest + 1 at the point it is built, so a note inserted
+//between two others starts life spelled "3" with its body at the bottom of the region. Neither of
+//render.js's renumber passes used to correct that - the immediate one runs only after a structural
+//change, and the debounced one is skipped by the very caret this function parks in the new body -
+//so the writer watched the wrong number until they typed outside the note or saved the project.
+test('a note inserted between two others is numbered and ordered as it lands', function(){
+  var quill = makeEditor([
+    { insert: 'One' }, { insert: { footnote: { n: '1' } } },
+    { insert: ' two' }, { insert: { footnote: { n: '2' } } }, { insert: '\n' },
+    { insert: 'First note.' },  { insert: '\n', attributes: { footnoteBody: '1' } },
+    { insert: 'Second note.' }, { insert: '\n', attributes: { footnoteBody: '2' } }
+  ]);
+
+  //So the undo assertion below sees only the insertion, rather than an entry setContents merged
+  //itself into: History records an 'api' change too, and merges anything within its 1s delay.
+  quill.history.clear();
+  var before = quill.getContents();
+
+  //Index 6 is mid-word in ' two', between the two markers - and not immediately before the second
+  //one, which the shortcut would read as a request to jump rather than to insert.
+  quill.setSelection(6, 0);
+  insertOrJumpFootnote(quill);
+
+  assert.deepStrictEqual(markerNumbers(quill), ['1', '2', '3'], 'markers number in document order');
+
+  var bodies = [].slice.call(quill.root.querySelectorAll('[data-footnote]'));
+  assert.deepStrictEqual(bodies.map(function(el){ return el.getAttribute('data-footnote'); }), ['1', '2', '3']);
+  assert.deepStrictEqual(
+    bodies.map(function(el){ return el.textContent; }),
+    ['First note.', '', 'Second note.'],
+    'the new body sits between the notes it now falls between'
+  );
+
+  var format = quill.getFormat(quill.getSelection());
+  assert.strictEqual(String(format.footnoteBody), '2', 'the caret follows the body to where it moved');
+
+  //The renumbering is part of the insertion, not a separate cosmetic sweep, so one undo takes the
+  //whole thing back out - including the number the old second note was given.
+  quill.history.undo();
+  assert.deepStrictEqual(quill.getContents().ops, before.ops);
 });

@@ -6,6 +6,7 @@ const {
   applyStructuralFootnoteChanges,
   containsFootnotes,
   renumberFootnotes,
+  renumberFootnotesInPlace,
   namespaceFootnotes,
   redistributeFootnotes
 } = require('../src/components/controllers/reconcile-footnotes');
@@ -463,4 +464,70 @@ test('the early-out does not change what the structural pass does to a document 
     { insert: 'See' }, marker('1'), { insert: '\n' },
     ...body('kept, its marker is still there', '1')
   ]});
+});
+
+//The live editor runs this one while the caret is inside a note: the writer is mid-sentence in a
+//body, so nothing may move, but the numbers still have to be right - see render.js's
+//runFootnoteRenumber.
+test('renumberFootnotesInPlace numbers every marker and body without moving a line', function(){
+  var delta = { ops: [
+    { insert: 'a' }, marker('9'), { insert: 'b' }, marker('3'), { insert: '\n' },
+    ...body('ninth originally', '9'),
+    ...body('third originally', '3')
+  ]};
+
+  //Marker 9 comes first in the prose, so it becomes 1 - and its body stays below the other one,
+  //where the full pass would have swapped them.
+  assert.deepStrictEqual(renumberFootnotesInPlace(delta), { ops: [
+    { insert: 'a' }, marker('1'), { insert: 'b' }, marker('2'), { insert: '\n' },
+    ...body('ninth originally', '1'),
+    ...body('third originally', '2')
+  ]});
+});
+
+//The case the caret guard used to swallow whole: pressing Enter inside a note body leaves a second
+//paragraph carrying the same id and no continuation mark, so it printed a number of its own until
+//the writer left the note and the full pass finally ran.
+test('renumberFootnotesInPlace marks a note\'s second paragraph as a continuation', function(){
+  var delta = { ops: [
+    { insert: 'a' }, marker('1'), { insert: '\n' },
+    { insert: 'the note' },        { insert: '\n', attributes: { footnoteBody: '1' } },
+    { insert: 'a new paragraph' }, { insert: '\n', attributes: { footnoteBody: '1' } }
+  ]};
+
+  assert.deepStrictEqual(renumberFootnotesInPlace(delta), { ops: [
+    { insert: 'a' }, marker('1'), { insert: '\n' },
+    { insert: 'the note' },        { insert: '\n', attributes: { footnoteBody: '1' } },
+    { insert: 'a new paragraph' },
+    { insert: '\n', attributes: { footnoteBody: '1', footnoteBodyCont: true } }
+  ]});
+});
+
+//Same rule as the full pass: a body with no marker is not the in-place pass's to number either.
+test('renumberFootnotesInPlace leaves an orphaned body alone', function(){
+  var delta = { ops: [
+    { insert: 'no more reference here' }, { insert: '\n' },
+    ...body('orphaned note', '7')
+  ]};
+
+  assert.deepStrictEqual(renumberFootnotesInPlace(delta), delta);
+});
+
+//Every number it assigns is one embed swapped for another and one line attribute changed, never an
+//insertion or a deletion of text - which is what lets render.js apply it under a caret that is
+//sitting in one of the very bodies being relabelled.
+test('renumberFootnotesInPlace is length-neutral', function(){
+  var delta = { ops: [
+    { insert: 'a' }, marker('4'), { insert: 'b' }, marker('2'), { insert: '\n' },
+    ...body('one', '4'),
+    ...body('two', '2')
+  ]};
+
+  function length(d){
+    return d.ops.reduce(function(sum, op){
+      return sum + (typeof op.insert === 'string' ? op.insert.length : 1);
+    }, 0);
+  }
+
+  assert.strictEqual(length(renumberFootnotesInPlace(delta)), length(delta));
 });

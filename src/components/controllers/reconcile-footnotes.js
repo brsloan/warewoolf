@@ -163,13 +163,13 @@ function pruneOrphanBodies(lines){
   });
 }
 
-//Steps 1 and 2: numbers every marker 1..n in document order, and relocates each body group to sit
-//after the prose, in that same order - multi-paragraph notes moving as one unit, since every line
-//in the group is carried along together. A body whose marker is gone (pruneOrphanBodies wasn't run
-//first, or the id was never valid to begin with) has no number to sort by, so it is left exactly
-//where it already sits rather than invented a place in the footnote region - see the decision on
-//pre-existing orphans in docs/footnotes-plan.md.
-function renumberAndReorder(lines){
+//Step 1's own two halves, shared by the two passes below: the old-id-to-new-number mapping every
+//marker and body is relabelled through, and the marker rewrite itself. Numbers run 1..n in marker
+//document order, so a marker with no entry here is one that does not exist - a body whose id is
+//missing from the map is an orphan, and every caller below leaves those alone rather than
+//inventing a number or a place for them (see the decision on pre-existing orphans in
+//docs/footnotes-plan.md).
+function footnoteIdMap(lines){
   var orderedOldIds = [];
 
   lines.forEach(function(l){
@@ -183,6 +183,10 @@ function renumberAndReorder(lines){
   var idMap = {};
   orderedOldIds.forEach(function(oldId, i){ idMap[oldId] = String(i + 1); });
 
+  return idMap;
+}
+
+function renumberMarkers(lines, idMap){
   lines.forEach(function(l){
     l.content.forEach(function(op){
       var id = footnoteMarkerId(op);
@@ -190,6 +194,63 @@ function renumberAndReorder(lines){
         op.insert = { footnote: { n: idMap[id] } };
     });
   });
+}
+
+//Only a note's opening paragraph prints its number, so every paragraph after it in the same group
+//is marked as continuing it - and the opening one has any stale mark cleared, since a group's
+//paragraphs can have been reordered or its first one deleted since this last ran. See
+//blots/footnotes.js for why the document has to carry this rather than the stylesheet working it
+//out.
+function relabelledBody(line, newId, isContinuation){
+  var attributes = Object.assign({}, line.attributes, { footnoteBody: newId });
+
+  if(isContinuation)
+    attributes.footnoteBodyCont = true;
+  else
+    delete attributes.footnoteBodyCont;
+
+  return Object.assign({}, line, { attributes: attributes });
+}
+
+//Step 1 without step 2: every marker and body takes its right number, and not one line moves.
+//
+//This is what the live editor runs while the caret sits inside a note - see render.js. Reordering
+//there would pull the paragraph out from under someone mid-sentence in it, but *numbering* was
+//never the part that needed holding back, and deferring it along with the reorder is what used to
+//leave a second paragraph of a note printing its own number (nothing had marked it as a
+//continuation yet) until the writer left the note. The diff this produces is length-neutral by
+//construction - a marker whose number changed is one embed for another, a body's relabelling is
+//attribute-only - so applying it cannot move the caret, which is what makes it safe to run where
+//the full pass is not.
+function renumberInPlace(lines){
+  var idMap = footnoteIdMap(lines);
+  var seen = {};
+
+  renumberMarkers(lines, idMap);
+
+  lines.forEach(function(l){
+    var oldId = footnoteBodyId(l.line);
+    if(oldId == null || idMap[oldId] == null)
+      return;
+
+    //Grouped by document order rather than by position in a relocated group, which comes to the
+    //same thing: the reorder below never changes the order of paragraphs *within* a note.
+    l.line = relabelledBody(l.line, idMap[oldId], !!seen[oldId]);
+    seen[oldId] = true;
+  });
+
+  return lines;
+}
+
+//Steps 1 and 2: numbers every marker 1..n in document order, and relocates each body group to sit
+//after the prose, in that same order - multi-paragraph notes moving as one unit, since every line
+//in the group is carried along together. A body whose marker is gone (pruneOrphanBodies wasn't run
+//first, or the id was never valid to begin with) has no number to sort by, so it is left exactly
+//where it already sits rather than invented a place in the footnote region.
+function renumberAndReorder(lines){
+  var idMap = footnoteIdMap(lines);
+
+  renumberMarkers(lines, idMap);
 
   var proseLines = [];
   var groupsByOldId = {};
@@ -215,19 +276,7 @@ function renumberAndReorder(lines){
     .sort(function(a, b){ return Number(idMap[a]) - Number(idMap[b]); })
     .forEach(function(oldId){
       groupsByOldId[oldId].forEach(function(l, indexInGroup){
-        var attributes = Object.assign({}, l.line.attributes, { footnoteBody: idMap[oldId] });
-
-        //Only a note's opening paragraph prints its number, so every paragraph after it in the
-        //same group is marked as continuing it - and the opening one has any stale mark cleared,
-        //since a group's paragraphs can have been reordered or its first one deleted since this
-        //last ran. See blots/footnotes.js for why the document has to carry this rather than the
-        //stylesheet working it out.
-        if(indexInGroup > 0)
-          attributes.footnoteBodyCont = true;
-        else
-          delete attributes.footnoteBodyCont;
-
-        l.line = Object.assign({}, l.line, { attributes: attributes });
+        l.line = relabelledBody(l.line, idMap[oldId], indexInGroup > 0);
         bodyLines.push(l);
       });
     });
@@ -284,6 +333,13 @@ function applyStructuralFootnoteChanges(delta){
 
 function renumberFootnotes(delta){
   var lines = renumberAndReorder(toLines((delta && delta.ops) || []));
+  return finalizeDelta(fromLines(lines));
+}
+
+//The numbering half alone, for the one caller that cannot afford the reorder: the live editor with
+//the caret inside a note.
+function renumberFootnotesInPlace(delta){
+  var lines = renumberInPlace(toLines((delta && delta.ops) || []));
   return finalizeDelta(fromLines(lines));
 }
 
@@ -385,6 +441,7 @@ module.exports = {
   applyStructuralFootnoteChanges,
   containsFootnotes,
   renumberFootnotes,
+  renumberFootnotesInPlace,
   namespaceFootnotes,
   redistributeFootnotes,
   toLines,

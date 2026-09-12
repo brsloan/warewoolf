@@ -14,6 +14,7 @@ const {
   applyStructuralFootnoteChanges,
   containsFootnotes,
   renumberFootnotes,
+  renumberFootnotesInPlace,
   redistributeFootnotes
 } = require('./components/controllers/reconcile-footnotes');
 const {
@@ -1071,9 +1072,12 @@ function scheduleFootnoteRenumber(){
   footnoteRenumberTimer = setTimeout(runFootnoteRenumber, 1000);
 }
 
-//Skipped while the caret sits inside a footnote body, so a reorder never yanks the ground out from
-//under someone mid-sentence in a note - deferred to save instead (see reconcile-footnotes.js's
-//callers), which runs the full pass regardless of where the caret is.
+//With the caret inside a footnote body, the *reorder* is skipped so it never yanks the ground out
+//from under someone mid-sentence in a note - deferred to save instead (see reconcile-footnotes.js's
+//callers), which runs the full pass regardless of where the caret is. The numbering still applies:
+//renumberFootnotesInPlace moves nothing, so there is no ground to yank, and holding it back was
+//what left the second paragraph of a note printing a number of its own - it is a continuation, and
+//this pass is what marks it as one - for as long as the writer stayed in the note.
 function runFootnoteRenumber(){
   footnoteRenumberTimer = null;
 
@@ -1084,8 +1088,10 @@ function runFootnoteRenumber(){
   var range = editorQuill.getSelection();
   if(range){
     var format = editorQuill.getFormat(range);
-    if(format && format.footnoteBody != null)
+    if(format && format.footnoteBody != null){
+      applyFootnoteRenumber(renumberFootnotesInPlace);
       return;
+    }
   }
 
   applyFootnoteRenumber();
@@ -1094,10 +1100,10 @@ function runFootnoteRenumber(){
 //Silent, so it is not itself undoable and does not re-enter the text-change handler above. Quill
 //still hears about it through editor-change, which is what History listens on, so the undo stack
 //is transformed rather than left pointing at indices this has moved.
-function applyFootnoteRenumber(){
+function applyFootnoteRenumber(pass){
   var Delta = Quill.import('delta');
   var current = editorQuill.getContents();
-  var renumbered = renumberFootnotes(current);
+  var renumbered = (pass || renumberFootnotes)(current);
   var diff = new Delta(current).diff(new Delta(renumbered));
 
   if(diff.ops.length > 0)

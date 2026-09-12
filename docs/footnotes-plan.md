@@ -72,7 +72,7 @@ from marker order.
 | --- | --- |
 | Deleting a marker | Deletes its body, as one undo entry |
 | Cut/paste a marker | Body travels with it, across chapters too (Phase 7) |
-| Marker/body order divergence | Auto-reorder bodies to marker order on save |
+| Marker/body order divergence | Auto-reorder bodies to marker order, deferred to save only while the caret is in a note |
 | `.mdfc` line-marker order | alignment > footnote > list/blockquote/header |
 | Existing projects | Migrate on load, by teaching `parseMDF` the markers |
 | Caret inside a note when splitting | Refuse the split, say why |
@@ -120,9 +120,31 @@ for an embed whose value changed), so the stack's indices hold even where
 `transform` is a no-op.
 
 **When it runs on the live editor:** debounced after a user `text-change`
-(`render.js:894`), and synchronously before serialization. Step 2 (reorder) is
-skipped while the caret sits inside the footnote region and deferred to save, so
-it can never yank the ground out from under someone editing a note.
+(`render.js`'s `scheduleFootnoteRenumber`), and synchronously before
+serialization. Two edits do not wait for the debounce, because in both of them
+the delay is on screen — a marker and a body are already rendering whatever
+number they were built with, straight from their id:
+
+- A *structural* change renumbers immediately after applying, in the same
+  `text-change`, so the browser paints once with the right number in it. That is
+  what a paste is.
+- *Inserting* a note renumbers as part of its own delta, before it is applied
+  (`footnote-navigation.js`'s `insertNewFootnote`). It cannot rely on either
+  path above: it is not a structural change, and the caret it leaves in the new
+  body is exactly what the guard below holds the debounce back for. The new
+  marker is built as `highest + 1`, so without this a note inserted between
+  notes 1 and 2 reads "3", with its body at the bottom of the region, until the
+  writer typed outside the note or saved. Renumbering inside the insertion's own
+  delta also makes it one undo entry rather than an undoable cosmetic sweep of
+  its own — this is the one place a renumber is not cosmetic.
+
+While the caret sits inside the footnote region, only **step 2 (reorder)** is
+held back, and deferred to save, so it can never yank the ground out from under
+someone editing a note. Step 1 still applies, through
+`renumberFootnotesInPlace`: it moves no line, so there is nothing to yank, and
+holding it back too meant a second paragraph of a note — which is a
+continuation, and step 1 is what marks it as one — printed a number of its own
+for as long as the writer stayed in the note.
 
 ---
 
@@ -183,6 +205,12 @@ overloading a key that already means something:
 - caret immediately before a marker → jump to that note's body
 - caret inside a note body → jump back to its marker
 - otherwise → insert a marker, append an empty body, put the caret in it
+
+The insertion renumbers the whole document inside its own delta before applying
+it, so a note created between two others is numbered and its body is in place
+from the first paint — see "When it runs on the live editor" above. The caret
+is then placed by looking the new body up by id, since the reorder has very
+likely moved it up past the notes that now follow it.
 
 **Enter to jump forward.** Quill's default Enter handler is added
 unconditionally in the Keyboard constructor (`modules/keyboard.js:40`), *after*

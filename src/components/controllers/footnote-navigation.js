@@ -1,5 +1,5 @@
 const { isFootnoteMarker } = require('./quill-utils');
-const { toLines } = require('./reconcile-footnotes');
+const { toLines, renumberFootnotes } = require('./reconcile-footnotes');
 
 //Ctrl+Alt+F (SHORTCUT_DEFS's insertFootnote). Context-sensitive, which gives the back-jump a home
 //without overloading a key that already means something - see docs/footnotes-plan.md's Phase 3:
@@ -132,23 +132,42 @@ function insertNewFootnote(quill, index){
   var Quill = require('quill');
   var Delta = Quill.import('delta');
   var n = nextFootnoteNumber(quill);
+  var current = quill.getContents();
   var originalLength = quill.getLength();
 
-  //One delta, one undo entry: the marker goes in inline at the caret, and a fresh empty body is
-  //appended at the true end of the document (retaining all the way through the original trailing
-  //'\n' before inserting again is what lands the new line's own attributed '\n' after it, rather
-  //than stealing the caret's own paragraph as the body).
-  var delta = new Delta()
+  //The marker goes in inline at the caret, and a fresh empty body is appended at the true end of
+  //the document (retaining all the way through the original trailing '\n' before inserting again
+  //is what lands the new line's own attributed '\n' after it, rather than stealing the caret's own
+  //paragraph as the body).
+  var inserted = new Delta(current).compose(new Delta()
     .retain(index)
     .insert({ footnote: { n: n } })
     .retain(originalLength - index)
-    .insert('\n', { footnoteBody: n });
+    .insert('\n', { footnoteBody: n }));
 
-  quill.updateContents(delta, 'user');
+  //Renumbered before it is applied rather than after, which is what makes a note inserted between
+  //two existing ones read right from its first paint. nextFootnoteNumber can only hand out
+  //highest + 1, so inserting between notes 1 and 2 spells the new marker "3" and leaves its body
+  //at the bottom of the region until a renumber pass fixes both - and neither of render.js's two
+  //passes reaches this case. The immediate one runs only after a *structural* change, and an
+  //insertion is not one (nothing to materialize, nothing orphaned), so it returns on its
+  //empty-diff check first. The debounced one is then skipped by the caret guard, because the caret
+  //this function leaves in the new body is precisely what that guard protects - and it does not
+  //reschedule, so the wrong number survived until the writer typed outside the note, or saved.
+  //
+  //One delta, one undo entry, covering both halves: the renumbering here is part of the insertion
+  //rather than the cosmetic sweep the 'silent' source exists for, so undo takes the new note back
+  //out and restores the old numbering in a single step.
+  var renumbered = new Delta(renumberFootnotes(inserted));
+  quill.updateContents(new Delta(current).diff(renumbered), 'user');
 
-  var newBodyIndex = originalLength + 1;
-  quill.setSelection(newBodyIndex, 0, 'user');
-  scrollIntoView(quill, newBodyIndex);
+  //Found by id rather than by arithmetic: the renumber above has very likely moved the new body up
+  //past the notes that now follow it, so originalLength + 1 is no longer where it lives. The
+  //marker itself has not moved - renumbering a marker is length-neutral, and the reorder only ever
+  //touches lines below the prose - so the caret's own index still names it.
+  var id = markerAt(quill, index);
+  if(id != null)
+    jumpToFootnoteBody(quill, id);
 }
 
 function nextFootnoteNumber(quill){
