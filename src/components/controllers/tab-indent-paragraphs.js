@@ -11,6 +11,9 @@ const DO_NOT_INDENT_AFTER = [
     { id: 'lists', label: 'Lists' }
 ];
 
+//Tabs and spaces only, with or without the line's closing newline.
+const WHITESPACE_ONLY_LINE = /^[\t ]+\n?$/;
+
 function getDoNotIndentAfterDefs(){
     return DO_NOT_INDENT_AFTER.slice();
 }
@@ -101,7 +104,7 @@ function applyIndents(tempQuill, opts){
         var insertIndex = tempQuill.getIndex(line);
         var leadingTabs = countLeadingTabs(tempQuill, line, insertIndex);
 
-        if(shouldBeIndented(tempQuill, line, previousLine, opts.doNotIndentAfter)){
+        if(shouldBeIndented(tempQuill, line, previousLine, opts)){
             if(leadingTabs == 0){
                 tempQuill.insertText(insertIndex, '\t');
                 changes++;
@@ -126,8 +129,10 @@ function applyIndents(tempQuill, opts){
 //between one paragraph and the next, so a paragraph with nothing above it to be separated from -
 //the first of a chapter, the first after a heading, a blank line, a quotation or a list - is set
 //flush at the margin. Unticking a box puts those paragraphs back in the indent.
-function shouldBeIndented(tempQuill, line, previousLine, doNotIndentAfter){
-    if(!isProse(line) || isBlank(tempQuill, line))
+function shouldBeIndented(tempQuill, line, previousLine, opts){
+    var doNotIndentAfter = opts.doNotIndentAfter;
+
+    if(!isProse(line) || isBlank(tempQuill, line) || isWhitespaceOnly(tempQuill, line))
         return false;
 
     if(!previousLine)
@@ -144,7 +149,7 @@ function shouldBeIndented(tempQuill, line, previousLine, doNotIndentAfter){
     if(previousBlot == 'blockquote')
         return !doNotIndentAfter.blockquotes;
 
-    if(isBlank(tempQuill, previousLine))
+    if(readsAsBlank(tempQuill, previousLine, opts))
         return !doNotIndentAfter.blankLines;
 
     return true;
@@ -201,6 +206,29 @@ function firstCharacterOf(tempQuill, line){
 function isBlank(tempQuill, line){
     var firstCharacter = firstCharacterOf(tempQuill, line);
     return firstCharacter == '\n' || firstCharacter == '';
+}
+
+//A line the writer left empty may still hold the tabs or spaces an old typing habit put there. It
+//looks blank on the page and there is no first word on it to set in from the margin, so it is never
+//given a tab - the same reason a truly blank line is not.
+//
+//Whether the paragraph BELOW it opens a block is the question Correct Current Tabs answers. With the
+//box ticked the whitespace already in the document is the tool's to fix: the stray tabs come off the
+//line, what is left of it reads as the blank line it looks like, and the paragraph under it is set
+//flush at the margin. Unticked, the tool leaves existing whitespace where it is, and a line with
+//whitespace on it goes on counting as a line with something on it.
+function readsAsBlank(tempQuill, line, opts){
+    if(isBlank(tempQuill, line))
+        return true;
+
+    return opts.correctCurrentTabs && isWhitespaceOnly(tempQuill, line);
+}
+
+//The line's newline is the one character in it that the writer did not put there, and line.length()
+//counts it, so it is allowed for rather than weighed.
+function isWhitespaceOnly(tempQuill, line){
+    var text = tempQuill.getText(tempQuill.getIndex(line), line.length());
+    return WHITESPACE_ONLY_LINE.test(text);
 }
 
 function isProse(line){

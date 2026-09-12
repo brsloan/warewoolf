@@ -19,6 +19,7 @@ Untick any of them and those paragraphs take the tab like any other. Untick all 
 
 Ticked by default. As well as adding the tabs that are missing, the tool takes away the ones that should not be there: a paragraph sitting under a heading that was indented by hand, or by the older version of this tool, has its tab removed. Untick the box and the tool only ever adds.
 	It corrects paragraphs, so a tab at the start of a heading, a list item or a block quotation is left exactly where it is.
+	It also settles what a line holding nothing but tabs or spaces counts as. Such a line looks blank on the page, so with this box ticked that is how it is read: the stray tabs come off it, and the paragraph below it is treated as the first after a blank line rather than as prose carrying on. Untick the box and the whitespace stays where it is, and so does the older reading of it — a line with a tab or a space on it counts as a line with something on it, and the paragraph under it takes the indent.
 
 # Remove Blank Lines Between Paragraphs
 

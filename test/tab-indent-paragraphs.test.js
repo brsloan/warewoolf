@@ -191,6 +191,34 @@ test('Correct Current Tabs does not strip tabs from headings, list items or bloc
   assert.deepStrictEqual(lines(result.delta), ['\tA Header', '\tItem', '\tA quoted line.']);
 });
 
+//A line holding nothing but tabs or spaces looks blank on the page, and with Correct Current Tabs on
+//that is how it is read: its own whitespace is the tool's to fix, and the paragraph under it opens a
+//block rather than following prose.
+test('Correct Current Tabs empties a line of nothing but tabs', function(){
+  var result = tabIndentParas(delta('Opening.', '\t\t', 'Second paragraph.'));
+  assert.strictEqual(result.changed, 1);
+  assert.deepStrictEqual(lines(result.delta), ['Opening.', '', 'Second paragraph.']);
+});
+
+test('a paragraph after a line of nothing but spaces is left flush at the margin', function(){
+  var result = tabIndentParas(delta('Opening.', '   ', 'Second paragraph.'));
+  assert.strictEqual(result.changed, 0);
+  assert.deepStrictEqual(lines(result.delta), ['Opening.', '   ', 'Second paragraph.']);
+});
+
+test('unticking Blank Lines indents the paragraph after a whitespace-only line', function(){
+  var result = tabIndentParas(delta('Opening.', '   ', 'Second paragraph.'), unticking('blankLines'));
+  assert.deepStrictEqual(lines(result.delta), ['Opening.', '   ', '\tSecond paragraph.']);
+});
+
+//With the box unticked the whitespace stays put, and a line with whitespace on it goes on counting
+//as a line with something on it.
+test('unticking Correct Current Tabs leaves a whitespace-only line counting as a line of prose', function(){
+  var result = tabIndentParas(delta('Opening.', '   ', 'Second paragraph.'), { correctCurrentTabs: false });
+  assert.strictEqual(result.changed, 1);
+  assert.deepStrictEqual(lines(result.delta), ['Opening.', '   ', '\tSecond paragraph.']);
+});
+
 //---- Remove Blank Lines Between Paragraphs ----
 
 function closingUp(delt){
