@@ -141,14 +141,15 @@ function flushMicrotasks(){
 //with getElementById needs to already be present before it's (re-)required, since setUpQuills()/
 //applyUserSettings() touch them synchronously at require-time.
 function bodyShell(){
-  return '<div id="chapter-list-sidebar" class="sidebar" tabindex="-1" role="navigation" aria-label="Project contents">' +
+  return '<div id="chapter-list-sidebar" class="sidebar" tabindex="-1" role="listbox" aria-label="Project contents">' +
       '<h1 id="chapters-header">Chapters</h1>' +
-      '<ul id="chapter-list" aria-labelledby="chapters-header"></ul>' +
+      '<ul id="chapter-list" role="group" aria-labelledby="chapters-header"></ul>' +
       '<h1 id="reference-header">Reference</h1>' +
-      '<ul id="reference-list" aria-labelledby="reference-header"></ul>' +
+      '<ul id="reference-list" role="group" aria-labelledby="reference-header"></ul>' +
       "<h1 id='trash-header'>Trash</h1>" +
-      '<ul id="trash-list" aria-labelledby="trash-header"></ul>' +
+      '<ul id="trash-list" role="group" aria-labelledby="trash-header"></ul>' +
     '</div>' +
+    '<div id="chapter-announcer" class="visually-hidden" aria-live="polite"></div>' +
     '<div id="writing-field" class="writing-field-standard-view" role="main" aria-label="Manuscript">' +
       '<div id="editor-container"></div>' +
     '</div>' +
@@ -2375,4 +2376,31 @@ test('both editors are named multiline text boxes for assistive technology', asy
   assert.strictEqual(r.notesQuill.root.getAttribute('role'), 'textbox');
   assert.strictEqual(r.notesQuill.root.getAttribute('aria-multiline'), 'true');
   assert.strictEqual(r.notesQuill.root.getAttribute('aria-labelledby'), 'notes-header');
+});
+
+//Changing chapters from inside an editor swaps the text under the caret without moving focus or
+//changing the editor's name, so nothing a screen reader listens to says it happened. The live
+//region in index.html is told the new chapter's title - unless focus is in the sidebar, whose
+//listbox already announces the row it moved to.
+test('opening a chapter from the editor announces its title in the live region', async function(){
+  var r = await freshRender();
+  r.project.chapters = [makeChap('One'), makeChap('Two'), makeChap('')];
+  r.editorQuill.focus();
+
+  await r.displayChapterByIndex(1);
+  assert.strictEqual(document.getElementById('chapter-announcer').textContent, 'Two');
+
+  await r.displayChapterByIndex(2);
+  assert.strictEqual(document.getElementById('chapter-announcer').textContent, '(untitled)');
+});
+
+test('opening a chapter while focus is in the sidebar leaves the live region alone', async function(){
+  var r = await freshRender();
+  r.project.chapters = [makeChap('One'), makeChap('Two')];
+  document.getElementById('chapter-list-sidebar').focus();
+
+  await r.displayChapterByIndex(1);
+
+  assert.strictEqual(document.getElementById('chapter-announcer').textContent, '');
+  assert.strictEqual(document.getElementById('chapter-list-sidebar').getAttribute('aria-activedescendant'), 'chapter-row-1');
 });

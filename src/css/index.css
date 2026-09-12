@@ -73,6 +73,22 @@ body {
   outline: none;
 }
 
+/* Present to assistive technology and to nothing else: the live region that says which chapter
+   was just opened. Clipped to a point rather than display: none, which would take it out of the
+   accessibility tree along with the page. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;

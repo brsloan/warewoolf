@@ -195,12 +195,68 @@ function makeListProject(){
   };
 }
 
-test('the active chapter row is marked aria-current and the others are not', function(){
+//The sidebar keeps focus while the shortcuts move the active row, so it is a listbox whose
+//aria-activedescendant names that row: the one attribute a reader watches to announce where the
+//arrows landed. Each row is an option, selected or not.
+test('every chapter row is an option, and only the active one is selected', function(){
   const { renderChapterList } = require('../src/components/views/chapter-list_display');
   renderChapterList(makeListProject(), { onSelect: function(){}, onRename: function(){} });
 
   var rows = Array.from(document.querySelectorAll('#chapter-list li'));
-  assert.deepStrictEqual(rows.map(function(r){ return r.getAttribute('aria-current'); }), [null, 'true']);
+  assert.deepStrictEqual(rows.map(function(r){ return r.getAttribute('role'); }), ['option', 'option']);
+  assert.deepStrictEqual(rows.map(function(r){ return r.getAttribute('aria-selected'); }), ['false', 'true']);
+});
+
+test('the sidebar names the active row as its active descendant, and drops it when no row is active', function(){
+  const { renderChapterList } = require('../src/components/views/chapter-list_display');
+  var handlers = { onSelect: function(){}, onRename: function(){} };
+  var sidebar = document.getElementById('chapter-list-sidebar');
+
+  renderChapterList(makeListProject(), handlers);
+
+  var active = document.querySelector('#chapter-list li.activeChapter');
+  assert.ok(active.id, 'the active row needs an id for aria-activedescendant to point at');
+  assert.strictEqual(sidebar.getAttribute('aria-activedescendant'), active.id);
+  assert.strictEqual(document.getElementById(sidebar.getAttribute('aria-activedescendant')), active);
+
+  renderChapterList({ chapters: [], reference: [], trash: [], activeChapterIndex: 0 }, handlers);
+
+  assert.strictEqual(sidebar.getAttribute('aria-activedescendant'), null);
+});
+
+test('the active descendant follows the active row into the reference and trash lists', function(){
+  const { renderChapterList } = require('../src/components/views/chapter-list_display');
+  var project = {
+    chapters: [{ title: 'One', hasUnsavedChanges: false }],
+    reference: [{ title: 'Notes', hasUnsavedChanges: false }],
+    trash: [{ title: 'Cut', hasUnsavedChanges: false }],
+    activeChapterIndex: 2
+  };
+
+  renderChapterList(project, { onSelect: function(){}, onRename: function(){} });
+
+  var sidebar = document.getElementById('chapter-list-sidebar');
+  assert.strictEqual(document.getElementById(sidebar.getAttribute('aria-activedescendant')).textContent, 'Cut');
+});
+
+//An option's children are presentational, so a rename box left inside one would be invisible to
+//a reader. The row gives up the role while the box is in it, and the rebuild that ends every
+//rename gives it back.
+test('a row being renamed stops being an option until the list is rebuilt', function(){
+  const { renderChapterList, renameChapterInList } = require('../src/components/views/chapter-list_display');
+  var handlers = { onSelect: function(){}, onRename: function(){} };
+  renderChapterList(makeListProject(), handlers);
+
+  var box = renameChapterInList(1, handlers);
+  var row = box.parentNode;
+
+  assert.strictEqual(row.getAttribute('role'), null);
+  assert.strictEqual(row.getAttribute('aria-selected'), null);
+
+  renderChapterList(makeListProject(), handlers);
+
+  var rows = Array.from(document.querySelectorAll('#chapter-list li'));
+  assert.deepStrictEqual(rows.map(function(r){ return r.getAttribute('role'); }), ['option', 'option']);
 });
 
 test('the rename box has a name, since its label is the row it replaces', function(){

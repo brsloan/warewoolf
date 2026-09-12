@@ -715,6 +715,22 @@ async function displayChapterByIndex(ind){
   editorQuill.setContents(contents, 'api');
   notesQuill.setContents(notes, 'api');
   updateFileList();
+  announceChapter(chap);
+}
+
+//Says which chapter the manuscript now shows, for a screen reader. Changing chapters from inside
+//an editor (Ctrl+Up/Down, the menu) swaps the whole text under the caret, and nothing a
+//reader is listening to says so: focus has not moved, and the editor's name has not changed. The
+//polite live region in index.html is told the title, and a reader speaks it once the writer
+//stops typing. Skipped while focus is in the sidebar itself, where the listbox's active
+//descendant already announces the row it moved to - said twice, it would be noise.
+function announceChapter(chap){
+  var announcer = document.getElementById('chapter-announcer');
+  var sidebar = document.getElementById('chapter-list-sidebar');
+  if(!announcer || sidebar.contains(document.activeElement))
+    return;
+
+  announcer.textContent = chap.title != '' ? chap.title : '(untitled)';
 }
 
 function updateTitleBar(){

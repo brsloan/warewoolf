@@ -13,14 +13,23 @@
   </head>
   <body>
 
-    <div id="chapter-list-sidebar" class="sidebar" tabindex="-1" role="navigation" aria-label="Project contents">
+    <!-- The sidebar takes focus as a whole and the shortcuts move an active row inside it, which
+         is the shape of a listbox whose focus stays on the container: aria-activedescendant
+         (kept current by chapter-list_display.js) is what lets a screen reader announce the row
+         the arrows land on. A listbox cannot also be a navigation landmark, so its label is what
+         a reader jumps to; the three lists are groups named by their headings. -->
+    <div id="chapter-list-sidebar" class="sidebar" tabindex="-1" role="listbox" aria-label="Project contents">
       <h1 id="chapters-header">Chapters</h1>
-      <ul id="chapter-list" aria-labelledby="chapters-header"></ul>
+      <ul id="chapter-list" role="group" aria-labelledby="chapters-header"></ul>
       <h1 id="reference-header">Reference</h1>
-      <ul id="reference-list" aria-labelledby="reference-header"></ul>
+      <ul id="reference-list" role="group" aria-labelledby="reference-header"></ul>
       <h1 id='trash-header'>Trash</h1>
-      <ul id="trash-list" aria-labelledby="trash-header"></ul>
+      <ul id="trash-list" role="group" aria-labelledby="trash-header"></ul>
     </div>
+
+    <!-- Says which chapter the manuscript now shows when it changes while focus is in an editor,
+         where nothing else a reader is listening to changes (render.js announceChapter). -->
+    <div id="chapter-announcer" class="visually-hidden" aria-live="polite"></div>
 
     <div id="writing-field" class="writing-field-standard-view" role="main" aria-label="Manuscript">
       <div id="editor-container">

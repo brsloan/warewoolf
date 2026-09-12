@@ -46,7 +46,7 @@ function renderChapterList(project, handlers){
 
       if(combinedIndex == project.activeChapterIndex){
         row.classList.add("activeChapter");
-        row.setAttribute('aria-current', 'true');
+        row.setAttribute('aria-selected', 'true');
         rowToReveal = row;
       }
     });
@@ -54,6 +54,17 @@ function renderChapterList(project, handlers){
     if(section.headerId)
       markHeaderEmpty(document.getElementById(section.headerId), chapters.length == 0);
   });
+
+  //Focus never leaves the sidebar while the shortcuts move the active row, so the sidebar (a
+  //listbox, index.html) says which row that is: a screen reader announces the option
+  //aria-activedescendant points at whenever it changes, which is what makes stepping through the
+  //chapters audible. Cleared when no row is active (an emptied project), rather than left pointing
+  //at a row that no longer exists.
+  var sidebar = document.getElementById('chapter-list-sidebar');
+  if(rowToReveal)
+    sidebar.setAttribute('aria-activedescendant', rowToReveal.id);
+  else
+    sidebar.removeAttribute('aria-activedescendant');
 
   //Deliberately after the whole list is rebuilt, not as the active row is appended. Every render
   //clears all three lists and re-appends every row, so mid-loop the active row is the *last* row in
@@ -65,9 +76,16 @@ function renderChapterList(project, handlers){
     scrollIntoViewIfNeeded(document.getElementById('chapter-list-sidebar'), rowToReveal);
 }
 
+//Each row is an option in the sidebar's listbox, with an id for aria-activedescendant to name and
+//aria-selected saying whether it is the active chapter - a reader announces "selected" on the one
+//the arrows are on and nothing on the rest. The click handlers are what they always were; the
+//role only changes what a reader is told the row is.
 function buildRow(chap, combinedIndex, handlers){
   var row = document.createElement("li");
 
+  row.id = 'chapter-row-' + combinedIndex;
+  row.setAttribute('role', 'option');
+  row.setAttribute('aria-selected', 'false');
   row.textContent = (chap.title != '' ? chap.title : '(untitled)') + (chap.hasUnsavedChanges == true ? "*" : "");
   row.dataset.chapIndex = combinedIndex;
   row.onclick = function(){
@@ -147,6 +165,13 @@ function renameChapterInList(combinedIndex, handlers){
     removeElementsByClass('name-box');
     handlers.onDismiss();
   };
+
+  //An option's children are presentational to assistive technology, so a text box left inside
+  //one would be a text box a reader cannot see. The row stops being an option for as long as the
+  //box is in it; every way out of a rename (commit, Escape, blur) rebuilds the list, which gives
+  //the row its role back.
+  row.removeAttribute('role');
+  row.removeAttribute('aria-selected');
 
   row.firstChild.remove();
   row.appendChild(nameBox);
