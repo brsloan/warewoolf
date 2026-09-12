@@ -7,7 +7,6 @@ As you type, WareWoolf quietly replaces a few things with what you almost certai
 * Three periods become an ellipsis: “Well…”.
 If a substitution is not the one you wanted, press **Ctrl+Z** once. That puts back exactly what you typed. Press it again and you undo the typing itself, as usual.
 	You can switch any of this off in **File > Settings**, under **Automatic Substitutions**.
-	Two rules worth knowing about:
 	
 None of this touches writing you have already done.
 	To bring an older manuscript into line, use **Tools > Convert Straight Quotes Etc.** It runs the same substitutions over every chapter at once. Unlike a substitution made as you type, this one cannot be undone, so save first.
