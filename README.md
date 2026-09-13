@@ -53,7 +53,7 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 * Saves chapters as .txt files with light Markdown-style formatting, so even if WareWoolf disappears you will always be able to read/edit the documents you create with it. This is also widely considered the most "archival" file format, so people will still be able to open your files in 100 years (if people still read then).
 * Export as plain text, markdownFic, standard markdown, docx, HTML, or .epub 
 * Import HTML files and EPUB ebooks, splitting a whole book into chapters as it reads - at headings or horizontal rules for HTML, and by the ebook's own table of contents for EPUB.
-* Screenplays. A screenplay project is one script in [Fountain](https://fountain.io) syntax, saved as a plain `.fountain` file you can open anywhere. The sidebar lists its scenes, Enter and Tab move between screenplay elements, character names and locations complete as you type, and it exports as PDF, Final Draft `.fdx` or Fountain and imports from Fountain, Final Draft or Fade In.
+* Screenplays. A screenplay project is one script in [Fountain](https://fountain.io) syntax, saved as a plain `.fountain` file you can open anywhere. The sidebar lists its scenes, Enter and Tab move between screenplay elements, character names and locations complete as you type, a dotted line marks where each page is estimated to turn, and it exports as PDF, Final Draft `.fdx` or Fountain and imports from Fountain, Final Draft or Fade In.
 
 ## Installation
 

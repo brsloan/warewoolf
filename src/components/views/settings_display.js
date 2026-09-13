@@ -150,6 +150,17 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
 
   substitutionTbl.appendChild(generateRow(autocompleteLabel, autocompleteCheck));
 
+  var pageMarksLabel = document.createElement('label');
+  pageMarksLabel.innerText = 'Mark Estimated Page Turns In Scripts: ';
+  pageMarksLabel.htmlFor = 'screenplay-page-marks-check';
+
+  var pageMarksCheck = document.createElement('input');
+  pageMarksCheck.type = 'checkbox';
+  pageMarksCheck.id = 'screenplay-page-marks-check';
+  pageMarksCheck.checked = userSettings.screenplayPageMarks !== false;
+
+  substitutionTbl.appendChild(generateRow(pageMarksLabel, pageMarksCheck));
+
   //Shown as what is in force - the defaults with the writer's saved changes over them - rather
   //than as the stored overrides, which are only the handful that differ.
   var rules = resolveAutocorrect(userSettings.autocorrect);
@@ -298,6 +309,7 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
     userSettings.addressInfo = addressIn.value;
     userSettings.autocorrectEnabled = autocorrectCheck.checked;
     userSettings.screenplayAutocomplete = autocompleteCheck.checked;
+    userSettings.screenplayPageMarks = pageMarksCheck.checked;
     //Stored as only what differs from the defaults - see diffFromDefaults in models/autocorrect.js.
     userSettings.autocorrect = diffFromDefaults(checkedRules());
     if(platformInfo.platform == 'linux'){

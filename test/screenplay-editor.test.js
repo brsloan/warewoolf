@@ -4,7 +4,7 @@ const assert = require('node:assert');
 const Quill = require('quill');
 
 const { registerScreenplayFormats, SCREENPLAY_FORMATS } = require('../src/components/blots/screenplay');
-const { loadScreenplayDelta, deltaToScreenplayHtml } = require('../src/components/controllers/screenplay-editor');
+const { loadScreenplayDelta, deltaToScreenplayHtml, markEstimatedPages } = require('../src/components/controllers/screenplay-editor');
 const { parseFountain, elementsToDelta, deltaToElements } = require('../src/components/controllers/fountain');
 
 //docs/screenplay-plan.md, Phase 3: the attributors, and the load path that bypasses setContents.
@@ -845,4 +845,41 @@ test('a script survives editor -> delta -> elements after the HTML load', functi
   loadScreenplayDelta(quill, elementsToDelta(parsed.elements));
 
   assert.deepStrictEqual(deltaToElements(quill.getContents()), parsed.elements);
+});
+
+//docs/screenplay-plan.md, "Page count": the estimated page turns are drawn on the paragraphs that
+//begin each page, as an attribute outside the content.
+test('the estimated page turns mark the first paragraph of each page, outside the content', function(){
+  var quill = makeQuill();
+  var ops = [];
+  for(var i = 0; i < 40; i++)
+    ops.push({ insert: 'x' }, { insert: '\n' });
+  loadScreenplayDelta(quill, { ops: ops });
+
+  var before = quill.getContents().ops;
+  var changes = 0;
+  quill.on('text-change', function(){ changes++; });
+
+  //The 28th of forty one-line actions is the first on page two - see fountain.test.js.
+  markEstimatedPages(quill, true);
+  var marked = quill.root.querySelectorAll('p[data-sp-page]');
+  assert.strictEqual(marked.length, 1);
+  assert.strictEqual(marked[0], quill.root.children[28]);
+  assert.strictEqual(marked[0].getAttribute('data-sp-page'), '2');
+
+  //The mark is not content: nothing changed, nothing to undo, nothing in the delta.
+  quill.update();
+  assert.strictEqual(changes, 0);
+  assert.strictEqual(quill.history.stack.undo.length, 0);
+  assert.deepStrictEqual(quill.getContents().ops, before);
+
+  //A line typed above the turn moves the turn down one paragraph, and the old one is cleared.
+  quill.insertText(0, 'a\n', 'user');
+  markEstimatedPages(quill, true);
+  marked = quill.root.querySelectorAll('p[data-sp-page]');
+  assert.strictEqual(marked.length, 1);
+  assert.strictEqual(marked[0], quill.root.children[28]);
+
+  markEstimatedPages(quill, false);
+  assert.strictEqual(quill.root.querySelectorAll('p[data-sp-page]').length, 0);
 });

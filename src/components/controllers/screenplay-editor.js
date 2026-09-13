@@ -1,6 +1,6 @@
 const Quill = require('quill');
 const { parseDelta, replaceTextPreservingFormats } = require('./quill-utils');
-const { classifyLine } = require('./fountain');
+const { classifyLine, deltaToElements, estimatePageStarts } = require('./fountain');
 const { ELEMENT_TYPES } = require('../blots/screenplay');
 
 //The editor side of screenplay mode - see docs/screenplay-plan.md, "The editor" and "Keyboard".
@@ -1120,6 +1120,47 @@ function attachAutocomplete(quill, getMode, isEnabled){
   return { close: close, isOpen: isOpen, refresh: refresh };
 }
 
+// ------------------------------------------------------------------------------------------
+// Page marks - docs/screenplay-plan.md, "Autocomplete, word count, title page" (Page count)
+// ------------------------------------------------------------------------------------------
+
+//Draws where the pages are estimated to turn: the first paragraph of each page after the first
+//gets `data-sp-page` holding its page number, and the CSS on that attribute draws the dotted rule
+//and the number above it. Everything else is cleared, so a paragraph that no longer starts a page
+//loses its mark; `show` false clears them all.
+//
+//The attribute is put on the paragraph's node directly, not through a format: a mark is derived
+//from the whole script, so it is not part of any line's content, must not be saved, and must not
+//be an undo step. Parchment reads only the attributors it knows back off a node, so the attribute
+//is invisible to getContents() and the mutation it makes emits no text-change. The estimate is
+//fountain.js's line model, one element per line of the editor, which is why the elements are
+//matched to the lines by position; a count that disagrees (an embed pasted from prose) draws
+//nothing rather than something wrong.
+function markEstimatedPages(quill, show){
+  var lines = quill.getLines();
+  var pageOf = {};
+
+  if(show){
+    var elements = deltaToElements(quill.getContents());
+    if(elements.length === lines.length){
+      estimatePageStarts(elements).forEach(function(start){
+        pageOf[start.index] = String(start.page);
+      });
+    }
+  }
+
+  lines.forEach(function(line, i){
+    var node = line.domNode;
+    var want = pageOf[i];
+    if(want === undefined){
+      if(node.hasAttribute('data-sp-page'))
+        node.removeAttribute('data-sp-page');
+    }
+    else if(node.getAttribute('data-sp-page') !== want)
+      node.setAttribute('data-sp-page', want);
+  });
+}
+
 module.exports = {
   loadScreenplayDelta,
   deltaToScreenplayHtml,
@@ -1135,6 +1176,7 @@ module.exports = {
   suggestionsFor,
   attachAutocomplete,
   attachScreenplayTyping,
+  markEstimatedPages,
   sceneIndex,
   sceneAt,
   previousSceneStart,

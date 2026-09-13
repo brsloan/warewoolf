@@ -16,6 +16,7 @@ const {
   attachScreenplayKeys,
   attachAutocomplete,
   attachScreenplayTyping,
+  markEstimatedPages,
   sceneIndex,
   sceneAt,
   previousSceneStart,
@@ -757,6 +758,7 @@ async function displayChapterByIndex(ind){
     loadScreenplayDelta(editorQuill, contents);
   else
     editorQuill.setContents(contents, 'api');
+  refreshPageMarks();
   notesQuill.setContents(notes, 'api');
   updateFileList();
   announceChapter(chap);
@@ -769,6 +771,13 @@ async function displayChapterByIndex(ind){
 function editorMode(){
   var chap = project.getActiveChapter();
   return chap && newChapter.isFountainChapter(chap) ? 'screenplay' : 'prose';
+}
+
+//The estimated page turns drawn in a script - screenplay-editor.js's markEstimatedPages. Redrawn
+//after a load, on the same debounce as the Scenes list after a keystroke, and when Settings
+//close, since the marks are a Settings switch (screenplayPageMarks). Prose clears them.
+function refreshPageMarks(){
+  markEstimatedPages(editorQuill, editorMode() === 'screenplay' && userSettings.screenplayPageMarks !== false);
 }
 
 function applyEditorMode(){
@@ -1753,6 +1762,8 @@ function refreshSceneListIfChanged(){
   if(editorMode() !== 'screenplay' || !document.body.contains(editorQuill.root))
     return;
 
+  refreshPageMarks();
+
   var scenes = currentScenes();
   var titles = scenes.map(function(scene){ return scene.title; });
   var sameTitles = cachedSceneTitles != null && titles.length === cachedSceneTitles.length &&
@@ -2184,6 +2195,7 @@ const menuCommands = {
       updateFonts();
       updateLineHeight();
       autocorrectRules = resolveAutocorrectSetting();
+      refreshPageMarks();
     }, platformInfo);
   } },
   'dictionaries-clicked': { run: function(){

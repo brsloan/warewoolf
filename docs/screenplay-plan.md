@@ -486,6 +486,25 @@ transitions. Word Count (`wordcount_display.js`) shows "Pages: 112 (112 3/8)"
 above the word counts when the active document is a script. It is an
 estimate, and the label should say so; the PDF phase gives the real count.
 
+The same walk (`layoutPages`, behind `estimatePageStarts`) says which
+element begins each page after the first, and the editor draws those turns:
+`markEstimatedPages` in `screenplay-editor.js` puts `data-sp-page`, the page
+number, on the first paragraph of each page, and the CSS draws a dotted rule
+across the page with the number at its right in the widened gap above it. The
+mark is an attribute on the paragraph's node and not a format, so it is not
+content: Parchment reads back only the attributors it knows, the mutation
+emits no text-change, nothing is saved and nothing is undoable. A page turn
+inside a long element is marked on the element after it, since a line has no
+place in the editor for a rule to sit; a forced page break marks the element
+after the break. A heading, a cue or a parenthetical is never left at the foot
+of a page with what it introduces on the next: when the page would turn after
+one, the run of them moves over whole and its first element begins the page,
+lengthening the estimate by the lines left blank - the same keep-with-next the
+PDF stylesheet applies, so the two agree. A run longer than a page cannot
+move and the turn falls where the count puts it. Redrawn after a load and on the Scenes list's debounce after
+a keystroke; a Settings switch (`screenplayPageMarks`, on by default) turns
+them off.
+
 **Title page.** Properties (`properties_display.js`) shows the Fountain keys
 (Title, Credit, Author, Source, Draft date, Contact, Copyright, Notes) for a
 screenplay project, each a text input except Notes and Contact, which are

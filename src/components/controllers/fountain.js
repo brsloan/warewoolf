@@ -640,13 +640,30 @@ function escapeInline(text){
 //A page estimate from the elements alone. A script page is Courier 12 with an inch above and
 //below: 55 lines. Each element takes the lines its text wraps to at its own width, plus the blank
 //line before it, and a dialogue group has no blanks inside it. A real count needs the PDF; this is
-//for the Word Count popup, which says it is an estimate.
+//for the Word Count popup, which says it is an estimate, and for the page marks the editor draws.
 const PAGE_LINES = 55;
 const LINE_WIDTH = { action: 61, scene: 61, transition: 61, centered: 61, lyric: 35,
   dialogue: 35, parenthetical: 25, character: 38, section: 61, synopsis: 61 };
 
-function estimatePages(elements){
+//A heading, a cue or a parenthetical is never left at the foot of a page with what it introduces
+//on the next: a page cannot turn after one, so it moves over with what follows. The PDF says the
+//same (page-break-after: avoid in screenplay-export.js), so the estimate keeps step with it.
+const KEEP_WITH_NEXT = ['scene', 'character', 'parenthetical'];
+
+//The walk the estimate and the page marks share: the lines the script fills, and which elements
+//begin a page. `starts` holds one { index, page } for each element that is the first to begin on
+//a page after the first - after a forced page break, or after the element the count ran over the
+//page inside, since a break inside an element has no line in the editor to sit on. When the page
+//turns before an element that a run of KEEP_WITH_NEXT elements introduces, the whole run is laid
+//again from the top of the new page and its first element begins the page, unless the run is
+//itself longer than a page. Notes and boneyards take no lines and never start a page.
+function layoutPages(elements){
   var lines = 0;
+  var page = 1;
+  var starts = [];
+  //The run of KEEP_WITH_NEXT elements directly before the current one: each with its index, the
+  //line it starts on, whether a blank line preceded it and the lines its text takes.
+  var run = [];
 
   elements.forEach(function(element, i){
     if(element.type === 'note' || element.type === 'boneyard')
@@ -654,21 +671,64 @@ function estimatePages(elements){
 
     if(element.type === 'pagebreak'){
       lines = Math.ceil(lines / PAGE_LINES) * PAGE_LINES;
+      run = [];
       return;
     }
 
     var previous = i > 0 ? elements[i - 1] : null;
     var joined = previous != null && (element.tight ||
       (GROUP_CONTINUATION.indexOf(element.type) !== -1 && isDialogueGroupMember(previous)));
+    var gap = previous != null && !joined;
 
-    if(previous != null && !joined)
+    if(gap)
       lines += 1;
 
+    var startsOn = Math.floor(lines / PAGE_LINES) + 1;
+    if(startsOn > page && run.length > 0){
+      var top = Math.ceil(run[0].start / PAGE_LINES) * PAGE_LINES;
+      if(top > run[0].start){
+        lines = top;
+        run.forEach(function(kept, k){
+          if(k > 0 && kept.gap)
+            lines += 1;
+          kept.start = lines;
+          lines += kept.height;
+        });
+        page = Math.floor(top / PAGE_LINES) + 1;
+        starts.push({ index: run[0].index, page: page });
+        if(gap)
+          lines += 1;
+        startsOn = Math.floor(lines / PAGE_LINES) + 1;
+      }
+    }
+
+    if(startsOn > page){
+      page = startsOn;
+      starts.push({ index: i, page: page });
+    }
+
     var width = LINE_WIDTH[element.type] || 61;
-    lines += Math.max(1, Math.ceil((element.text || '').length / width));
+    var height = Math.max(1, Math.ceil((element.text || '').length / width));
+
+    if(KEEP_WITH_NEXT.indexOf(element.type) !== -1)
+      run.push({ index: i, start: lines, gap: gap, height: height });
+    else
+      run = [];
+
+    lines += height;
   });
 
-  var exact = lines / PAGE_LINES;
+  return { lines: lines, starts: starts };
+}
+
+//Where the pages are estimated to turn: [{ index, page }], the element that begins each page
+//after the first and that page's number. Drawn by screenplay-editor.js's markEstimatedPages.
+function estimatePageStarts(elements){
+  return layoutPages(elements).starts;
+}
+
+function estimatePages(elements){
+  var exact = layoutPages(elements).lines / PAGE_LINES;
   var whole = Math.floor(exact);
   var eighths = Math.round((exact - whole) * 8);
   if(eighths === 8){ whole += 1; eighths = 0; }
@@ -733,6 +793,7 @@ module.exports = {
   tokenizeInline,
   classifyLine,
   estimatePages,
+  estimatePageStarts,
   getTitlePageValues,
   setTitlePageValues,
   sanitizeTitlePage

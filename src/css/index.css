@@ -575,22 +575,29 @@ hr {
 .ql-editor .sp-character {
   text-transform: uppercase;
   margin-left: 40%;
+  --sp-left: 0.4;
 }
 
 .ql-editor .sp-parenthetical {
   margin-left: 30%;
   margin-right: 25%;
+  --sp-left: 0.3;
+  --sp-right: 0.25;
 }
 
 .ql-editor .sp-dialogue {
   margin-left: 20%;
   margin-right: 20%;
+  --sp-left: 0.2;
+  --sp-right: 0.2;
 }
 
 .ql-editor .sp-lyric {
   margin-left: 20%;
   margin-right: 20%;
   font-style: italic;
+  --sp-left: 0.2;
+  --sp-right: 0.2;
 }
 
 .ql-editor .sp-transition {
@@ -616,6 +623,41 @@ hr {
 .ql-editor .sp-pagebreak {
   border-top: 1px dashed var(--border);
   color: var(--text-muted);
+}
+
+/* Where the pages are estimated to turn. screenplay-editor.js's markEstimatedPages puts
+   data-sp-page - the page number - on the first paragraph of each page after the first, from
+   fountain.js's line model, and this draws it: a dotted rule across the page with the number at
+   its right, in the gap above the paragraph, which is widened to make room (the attribute is
+   doubled so the rule outweighs the tight-group rules above, which would close that gap). The
+   rule is a pseudo-element of the paragraph, so it scrolls with the text and Quill never sees it
+   as content. An indented element's rule is pushed back out to the page's margins with the
+   element's own indents (--sp-left/--sp-right, the fractions its margins take, set with them
+   above), since a paragraph's percentages are of its own width and not the page's. */
+#editor-container.screenplay .ql-editor p[data-sp-page][data-sp-page] {
+  position: relative;
+  margin-top: 2.75em;
+}
+
+#editor-container.screenplay .ql-editor p[data-sp-page]::before {
+  content: attr(data-sp-page) ".";
+  position: absolute;
+  top: -2.5em;
+  left: calc(-100% * var(--sp-left, 0) / (1 - var(--sp-left, 0) - var(--sp-right, 0)));
+  width: calc(100% / (1 - var(--sp-left, 0) - var(--sp-right, 0)));
+  box-sizing: border-box;
+  border-top: 1px dotted var(--danger);
+  padding-top: 0.15em;
+  color: var(--danger);
+  font-family: var(--font-sidebar);
+  font-size: 0.75em;
+  font-style: normal;
+  font-weight: normal;
+  line-height: 1.4;
+  text-align: right;
+  text-transform: none;
+  pointer-events: none;
+  user-select: none;
 }
 
 /* The dual-dialogue marker, drawn rather than typed, so the cue's text stays the cue. */

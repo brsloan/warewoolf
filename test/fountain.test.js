@@ -11,6 +11,7 @@ const {
   tokenizeInline,
   classifyLine,
   estimatePages,
+  estimatePageStarts,
   getTitlePageValues,
   setTitlePageValues,
   sanitizeTitlePage
@@ -381,6 +382,64 @@ test('the page estimate counts wrapped lines and blank lines between elements', 
 
   var breaks = estimatePages([{ type: 'action', text: 'a' }, { type: 'pagebreak', text: '' }, { type: 'action', text: 'b' }]);
   assert.strictEqual(breaks.pages, 2);
+});
+
+test('the page starts name the element that begins each page after the first', function(){
+  assert.deepStrictEqual(estimatePageStarts([]), []);
+
+  //Forty one-line actions: the first takes line 0, each after it a blank and a line, so the n-th
+  //starts on line 2n, and the first to start on the second page (line 55 or later) is the 28th.
+  var actions = [];
+  for(var i = 0; i < 40; i++)
+    actions.push({ type: 'action', text: 'x' });
+  assert.deepStrictEqual(estimatePageStarts(actions), [{ index: 28, page: 2 }]);
+
+  //A forced break: the element after it starts the next page.
+  var breaks = [{ type: 'action', text: 'a' }, { type: 'pagebreak', text: '' }, { type: 'action', text: 'b' }];
+  assert.deepStrictEqual(estimatePageStarts(breaks), [{ index: 2, page: 2 }]);
+
+  //The count runs over the page inside the second element (lines 54 to 56): the mark goes on the
+  //element after it, the first that begins on the new page.
+  var straddle = [{ type: 'action', text: 'x'.repeat(61 * 53) }, { type: 'action', text: 'y'.repeat(61 * 3) }, { type: 'action', text: 'z' }];
+  assert.deepStrictEqual(estimatePageStarts(straddle), [{ index: 2, page: 2 }]);
+
+  //A note takes no lines and never begins a page; the element after it does.
+  var noted = [{ type: 'action', text: 'x'.repeat(61 * 54) }, { type: 'note', text: 'later' }, { type: 'action', text: 'y' }];
+  assert.deepStrictEqual(estimatePageStarts(noted), [{ index: 2, page: 2 }]);
+});
+
+test('a heading, a cue or a parenthetical is never left at the foot of a page: the page turns before it', function(){
+  //Forty one-line actions again, so the 27th starts on line 54, the last of page one, and what
+  //follows it on line 55 or 56 begins page two.
+  function script(){
+    var actions = [];
+    for(var i = 0; i < 40; i++)
+      actions.push({ type: 'action', text: 'x' });
+    return actions;
+  }
+
+  //A cue on the last line with its speech over the page: the cue begins the page instead.
+  var cue = script();
+  cue[27] = { type: 'character', text: 'BOB' };
+  cue[28] = { type: 'dialogue', text: 'Hi.' };
+  assert.deepStrictEqual(estimatePageStarts(cue), [{ index: 27, page: 2 }]);
+
+  //A heading on the last line with its action over the page.
+  var heading = script();
+  heading[27] = { type: 'scene', text: 'INT. HOUSE - DAY' };
+  assert.deepStrictEqual(estimatePageStarts(heading), [{ index: 27, page: 2 }]);
+
+  //A two-line cue and a parenthetical, with the speech over the page: the whole run moves, and
+  //the cue begins the page.
+  var chain = script();
+  chain[26] = { type: 'character', text: 'x'.repeat(39) };
+  chain[27] = { type: 'parenthetical', text: '(low)' };
+  chain[28] = { type: 'dialogue', text: 'Hi.' };
+  assert.deepStrictEqual(estimatePageStarts(chain), [{ index: 26, page: 2 }]);
+
+  //A run longer than a page cannot move over whole, so the turn falls where the count puts it.
+  var long = [{ type: 'character', text: 'BOB' }, { type: 'parenthetical', text: 'x'.repeat(25 * 54) }, { type: 'dialogue', text: 'y' }];
+  assert.deepStrictEqual(estimatePageStarts(long), [{ index: 2, page: 2 }]);
 });
 
 //---- Big Fish ------------------------------------------------------------------------------------
