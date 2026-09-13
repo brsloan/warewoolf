@@ -562,10 +562,40 @@ test('a script\'s sidebar lists its scenes, follows the caret, and jumps on a cl
   assert.strictEqual(r.editorQuill.getSelection().index, 47);
   assert.strictEqual(document.querySelector('#chapter-list .activeChapter').textContent, 'INT. C - DAY');
 
-  //A reference document beside the script is prose, and the sidebar goes back to chapters for it.
+  //A reference document beside the script is prose, but it is still part of the same screenplay:
+  //the sidebar goes on listing the script's scenes, with none of them the active row, and the
+  //reference document it is showing is.
   await r.displayChapterByIndex(1);
-  assert.strictEqual(document.getElementById('chapters-header').textContent, 'Chapters');
-  assert.deepStrictEqual(sceneRowTitles(), ['Script']);
+  assert.strictEqual(document.getElementById('chapters-header').textContent, 'Scenes');
+  assert.deepStrictEqual(sceneRowTitles(), ['INT. A - DAY', 'EXT. B - NIGHT', 'INT. C - DAY']);
+  assert.strictEqual(document.querySelector('#chapter-list .activeChapter'), null);
+  assert.strictEqual(document.querySelector('#reference-list .activeChapter').textContent, 'Bible');
+
+  //And a scene row is the way back: it displays the script and lands on that scene.
+  document.querySelectorAll('#chapter-list li')[1].onclick();
+  await flushMicrotasks();
+  assert.strictEqual(r.project.activeChapterIndex, 0);
+  assert.strictEqual(r.editorQuill.getSelection().index, 27, 'EXT. B - NIGHT');
+  assert.strictEqual(document.querySelector('#chapter-list .activeChapter').textContent, 'EXT. B - NIGHT');
+});
+
+test('a trashed document shows the script\'s scenes too, read from its file when it has never been open', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  var script = scriptWithScenes();
+  r.project.trash = [makeChap('Cut scene')];
+
+  //The script as a project opened onto another document has it: a filename and no contents. Its
+  //scenes are on disk, and the sidebar reads them there.
+  var delta = script.contents;
+  script.contents = null;
+  script.getFile = async function(){ return delta; };
+  r.project.chapters = [script];
+
+  await r.displayChapterByIndex(1);
+  await flushMicrotasks();
+  assert.deepStrictEqual(sceneRowTitles(), ['INT. A - DAY', 'EXT. B - NIGHT', 'INT. C - DAY']);
+  assert.strictEqual(document.querySelector('#trash-list .activeChapter').textContent, 'Cut scene');
 });
 
 test('in a script the chapter shortcuts move between scenes and reorder them', async function(){
@@ -604,7 +634,7 @@ test('from the last scene the next-chapter shortcut goes on to the first referen
   r.editorQuill.setSelection(47, 0, 'user');
   await r.displayNextChapter();
   assert.strictEqual(r.project.activeChapterIndex, 1, 'off the end of the script and into Reference');
-  assert.strictEqual(document.getElementById('chapters-header').textContent, 'Chapters');
+  assert.strictEqual(document.querySelector('#chapter-list .activeChapter'), null, 'no scene is the active row');
 
   //And back up to the script, landing on the last scene it was left from rather than the top.
   await r.displayPreviousChapter();
@@ -658,6 +688,32 @@ test('renaming a scene row rewrites the heading in the script', async function()
 });
 
 //docs/screenplay-plan.md, Phase 7: what the menus refuse for a script, and that they say so.
+test('renaming a scene row from a reference document goes through the script', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [scriptWithScenes()];
+  r.project.reference = [makeChap('Bible')];
+  await r.displayChapterByIndex(1);
+  await flushMicrotasks();
+
+  //A double-click is two clicks and then the rename, so the script is still on its way in when the
+  //box is asked for; it goes into the row the load leaves behind.
+  var row = document.querySelectorAll('#chapter-list li')[1];
+  row.onclick();
+  row.onclick();
+  row.ondblclick();
+  await flushMicrotasks();
+
+  var box = document.querySelector('.name-box');
+  assert.strictEqual(box.getAttribute('aria-label'), 'Scene heading');
+  box.value = 'ext. beach - dawn';
+  box.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter' }));
+
+  assert.strictEqual(r.project.activeChapterIndex, 0);
+  assert.strictEqual(r.editorQuill.getText(27, 17), 'EXT. BEACH - DAWN');
+  assert.deepStrictEqual(sceneRowTitles(), ['INT. A - DAY', 'EXT. BEACH - DAWN', 'INT. C - DAY']);
+});
+
 test('the chapter tools refuse a script and the manuscript conversions refuse a screenplay project, each with a message', async function(){
   var r = await freshRender();
   r.project.type = 'screenplay';

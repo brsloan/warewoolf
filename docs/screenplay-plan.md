@@ -619,10 +619,17 @@ per phase. Where the implementation departed from the plan above:
   walks off the end of a chapter, and Previous Chapter from that document
   comes back to the script's last scene - the return trip of that walk, rather
   than the top of a document just come down the length of.
-- The Scenes rows come from the editor's delta, so they show while the script
-  is the active document; with a Reference document active the sidebar shows
-  chapters, with the script as one row. A screenplay project's reference
-  documents are prose, as intended.
+- The Scenes rows come from the script wherever the caret is, not only while
+  the script is the active document: with a Reference or trashed document in
+  the editor the top section still lists the script's scenes, with no row
+  active, and clicking one goes back to the script and lands on that scene. A
+  writer in a Reference document is still working on the same screenplay, and
+  the scene list is how a screenplay is navigated. The rows come from the
+  editor's delta while the script is being edited, from the script's own
+  contents while it holds unsaved ones, and otherwise from the last list read
+  off it - or from its file, once, for a project opened onto a Reference
+  document. A screenplay project's reference documents are themselves prose,
+  as intended.
 - A screenplay project's Export is a format and a Save As: one file, at the
   path and name the writer chooses, rather than the novel's folder of numbered
   chapter files (`exportScreenplayFile` in `export.js`). A novel project's

@@ -15,13 +15,14 @@ const SECTIONS = [
 
 //handlers: { onSelect(combinedIndex), onRename(combinedIndex), onSelectScene(k), onRenameScene(k) }
 //
-//`scenes` is null for a novel. For a screenplay whose script is the active document it is
-//{ rows: [{ title, index }], active, unsaved }: the top section then shows those rows - one per
-//scene heading, from the script's own text (see screenplay-editor.js's sceneIndex) rather than
-//the chapters list - under a "Scenes" header, with `active` the scene the caret is in. A script
-//with no headings yet falls back to its chapter row, so there is always something to select. The
-//Reference and Trash sections render as they do for a novel. docs/screenplay-plan.md, "The Scenes
-//sidebar".
+//`scenes` is null for a novel. For a screenplay it is { rows: [{ title, index }], active, unsaved }:
+//the top section then shows those rows - one per scene heading, from the script's own text (see
+//screenplay-editor.js's sceneIndex) rather than the chapters list - under a "Scenes" header, with
+//`active` the scene the caret is in, or -1 while the caret is in another document. The rows show
+//whichever document is being edited, since a Reference document or a trashed one is still part of
+//the same screenplay and the scene list is how a screenplay is navigated. A script with no
+//headings yet falls back to its chapter row, so there is always something to select. The Reference
+//and Trash sections render as they do for a novel. docs/screenplay-plan.md, "The Scenes sidebar".
 function renderChapterList(project, handlers, scenes){
   //A rename box left over from before this render started has to go before clearChildren() below
   //tears down the row it lives in. Its own onblur handler also calls removeElementsByClass() - if

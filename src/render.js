@@ -685,8 +685,10 @@ var pendingListSelections = 0;
 var listSelectionsSettled = Promise.resolve();
 
 function selectChapterFromList(ind){
-  var selection = displayChapterByIndex(ind);
+  return trackListSelection(displayChapterByIndex(ind));
+}
 
+function trackListSelection(selection){
   pendingListSelections++;
   listSelectionsSettled = listSelectionsSettled.then(function(){
     return selection.catch(reportDetachedFailure);
@@ -1620,23 +1622,114 @@ function currentScenes(){
   return sceneIndex(editorQuill.getContents());
 }
 
-//What renderChapterList is handed for its top section: null for prose, otherwise the scenes with
-//the one the caret is in and whether the script has unsaved changes - the header carries that
-//marker, since no one scene row could.
+//The project's script: the .fountain chapter the Scenes rows are read from, whichever document is
+//in the editor. Found the same way editorMode() decides what the editor is showing - by asking the
+//document what it is rather than by a flag - so nothing has to be told when a project changes.
+function scriptLocator(){
+  var chapters = chapterList.listOf(project, 'chapters');
+
+  for(var i = 0; i < chapters.length; i++){
+    if(newChapter.isFountainChapter(chapters[i]))
+      return { list: 'chapters', index: i };
+  }
+
+  return null;
+}
+
+function scriptChapter(){
+  var loc = scriptLocator();
+  return loc ? chapterList.resolve(project, loc) : null;
+}
+
+//The script's scenes as of the last time they could be read, for the stretches when the script is
+//not the document in the editor: its contents are dropped the moment it is left unedited
+//(clearCurrentChapterIfUnchanged), and the sidebar still has to list its scenes. Keyed by the
+//chapter object, so a different project's script is never answered for with this one's.
+var scriptScenes = null;
+var scriptScenesFor = null;
+var loadingScriptScenes = false;
+
+function rememberScriptScenes(script, scenes){
+  scriptScenesFor = script;
+  scriptScenes = scenes;
+}
+
+//What renderChapterList is handed for its top section: null for a novel, otherwise the script's
+//scenes, the one the caret is in (none, while the caret is in another document) and whether the
+//script has unsaved changes - the header carries that marker, since no one scene row could.
+//
+//The rows come from the script whether or not it is the document being edited: a writer who steps
+//into a Reference document or the trash is still working on the same screenplay, and the scene
+//list is how a screenplay is navigated. Clicking one goes back to the script and lands on it.
 function sceneListForSidebar(){
-  if(editorMode() !== 'screenplay'){
+  var script = scriptChapter();
+
+  if(!script){
     cachedScenes = [];
     cachedSceneTitles = null;
     activeSceneRow = -1;
+    scriptScenes = null;
+    scriptScenesFor = null;
     return null;
   }
 
-  cachedScenes = currentScenes();
-  cachedSceneTitles = cachedScenes.map(function(scene){ return scene.title; });
-  activeSceneRow = sceneAt(cachedScenes, project.textCursorPosition || 0);
+  if(editorMode() === 'screenplay'){
+    cachedScenes = currentScenes();
+    cachedSceneTitles = cachedScenes.map(function(scene){ return scene.title; });
+    activeSceneRow = sceneAt(cachedScenes, project.textCursorPosition || 0);
+    rememberScriptScenes(script, cachedScenes);
 
-  var chap = project.getActiveChapter();
-  return { rows: cachedScenes, active: activeSceneRow, unsaved: Boolean(chap && chap.hasUnsavedChanges) };
+    return { rows: cachedScenes, active: activeSceneRow, unsaved: Boolean(script.hasUnsavedChanges) };
+  }
+
+  //Another document is in the editor, so there is no caret in the script and no cached list for
+  //followCaretInSceneList to move a highlight around in.
+  cachedScenes = [];
+  cachedSceneTitles = null;
+  activeSceneRow = -1;
+
+  return { rows: scriptScenesNow(script), active: -1, unsaved: Boolean(script.hasUnsavedChanges) };
+}
+
+//The script's scenes without the editor: from its contents if it still holds them (an unsaved
+//script keeps them wherever the caret goes), otherwise from the last list read off it, otherwise
+//from its file - which is a read, so the rows it produces arrive in a later render.
+function scriptScenesNow(script){
+  if(script.contents != null)
+    return sceneIndex(script.contents);
+
+  if(scriptScenesFor === script)
+    return scriptScenes;
+
+  loadScriptScenes(script);
+  return [];
+}
+
+//A project opened onto a Reference document has never had its script in the editor, so the only
+//place its scene headings are is the file. Read once and remembered; a failure remembers an empty
+//list rather than nothing, so the render it triggers does not ask for the file again, and again.
+//An unsaved script with no file yet has nothing to read and no scenes to show.
+function loadScriptScenes(script){
+  if(loadingScriptScenes || !script.filename)
+    return;
+
+  loadingScriptScenes = true;
+
+  //keepProjectTitlePage, because this is a read for the sidebar's benefit and not a load of the
+  //document: the title page the writer has in Properties is not the file's to replace here.
+  Promise.resolve().then(function(){
+    return script.getFile({ keepProjectTitlePage: true });
+  }).then(function(contents){
+    rememberScriptScenes(script, sceneIndex(contents));
+  }).catch(function(err){
+    rememberScriptScenes(script, []);
+    reportDetachedFailure(err);
+  }).then(function(){
+    loadingScriptScenes = false;
+
+    if(scriptChapter() === script && editorMode() !== 'screenplay')
+      updateFileList();
+  });
 }
 
 function scheduleSceneListRefresh(){
@@ -1691,8 +1784,26 @@ function followCaretInSceneList(index){
   markActiveSceneRow(k);
 }
 
-//A click on a scene row.
+//A click on a scene row. From another document the row is a way back into the script, so the
+//script is displayed first and the caret lands on the scene that was clicked - the same journey
+//clicking a chapter row makes, ending somewhere inside the document rather than at its top. Routed
+//through the pending-selection chain for the same reason a chapter click is: a double-click on the
+//row means a rename, and the load must be over before its box goes in.
 function selectScene(k){
+  if(editorMode() !== 'screenplay'){
+    var loc = scriptLocator();
+    if(!loc)
+      return;
+
+    return trackListSelection(displayChapterByIndex(chapterList.toCombinedIndex(project, loc)).then(function(){
+      jumpToSceneNumber(k);
+    }));
+  }
+
+  jumpToSceneNumber(k);
+}
+
+function jumpToSceneNumber(k){
   var scenes = currentScenes();
   if(!scenes[k])
     return;
@@ -1724,10 +1835,24 @@ function moveCurrentScene(direction){
   updateFileList();
 }
 
+//A double-click on a scene row from another document is two clicks first, so the script is already
+//on its way into the editor by the time the rename is asked for, and the box goes into the row that
+//load leaves behind. Waiting for it is what selectChapterFromList()'s chain is for.
+function changeSceneTitle(k){
+  if(pendingListSelections > 0){
+    listSelectionsSettled.then(function(){
+      openSceneRenameBox(k);
+    }).catch(reportDetachedFailure);
+    return;
+  }
+
+  openSceneRenameBox(k);
+}
+
 //Renaming a scene row edits the heading line itself, in place and as a user change, so it is
 //undoable and the sidebar follows through the ordinary refresh. Capitals, as a heading gets when
 //it is typed into being.
-function changeSceneTitle(k){
+function openSceneRenameBox(k){
   var scenes = currentScenes();
   if(k < 0 || k >= scenes.length)
     return;
