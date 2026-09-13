@@ -24,10 +24,11 @@ const NOVEL_PROJECT_ONLY = [
   'center-all-heads-clicked'
 ];
 
+//Delete Chapter and Restore Deleted Chapter are not here: on a script they work on the scene the
+//selection covers, and on a trashed block they bring it back (render.js's cutScenes and
+//mergeIntoScript - docs/screenplay-plan.md, "One script").
 const PROSE_DOCUMENT_ONLY = [
   'split-chapter-clicked',
-  'delete-chapter-clicked',
-  'restore-chapter-clicked',
   'headings-to-chaps-clicked'
 ];
 

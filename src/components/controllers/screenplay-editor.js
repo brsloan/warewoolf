@@ -701,41 +701,53 @@ function nextSceneStart(scenes, caret){
   return found ? found.index : null;
 }
 
-//A new delta with scene `k` swapped with the one above (direction -1) or below (+1), or null when
-//there is no such neighbour. A scene is its heading and every line down to the next heading; text
-//before the first heading belongs to no scene and never moves. Pure: the caller diffs this against
-//the editor's contents and applies the difference as one user change, which is one undo entry.
-//Returns the new delta and where the moved heading now starts, for the caret.
-function moveScene(delta, k, direction){
-  var paragraphs = parseDelta(delta).paragraphs;
+//A block of scenes is one or more consecutive scenes, each its heading and every line down to the
+//next heading or the end. Text before the first heading (a FADE IN:, an opening action) belongs to
+//no scene and is never part of a block. See docs/screenplay-plan.md, "One script".
+
+//Which scenes a selection covers, as scene numbers from..to inclusive: the scene the caret is in,
+//or every scene a range touches, a partly selected one included. A range ending exactly where a
+//heading begins does not take that scene. A caret before the first heading covers nothing; a range
+//starting there and reaching a heading covers from the first scene.
+function sceneBlock(scenes, range){
+  if(!range || scenes.length === 0)
+    return null;
+
+  var length = range.length > 0 ? range.length : 0;
+  var to = sceneAt(scenes, length > 0 ? range.index + length - 1 : range.index);
+  if(to < 0)
+    return null;
+
+  return { from: Math.max(sceneAt(scenes, range.index), 0), to: to };
+}
+
+function headingsOf(paragraphs){
   var headings = [];
   paragraphs.forEach(function(para, i){
     if(para.attributes && para.attributes.element === 'scene')
       headings.push(i);
   });
+  return headings;
+}
 
-  var neighbour = k + direction;
-  if(k < 0 || k >= headings.length || neighbour < 0 || neighbour >= headings.length)
-    return null;
+function paragraphLength(para){
+  var length = 0;
+  para.textRuns.forEach(function(run){
+    length += typeof run.text === 'string' ? run.text.length : 1;
+  });
+  return length + 1;
+}
 
-  var rangeOf = function(n){
-    return { from: headings[n], to: n + 1 < headings.length ? headings[n + 1] : paragraphs.length };
-  };
-  var first = rangeOf(Math.min(k, neighbour));
-  var second = rangeOf(Math.max(k, neighbour));
-
-  var reordered = paragraphs.slice(0, first.from)
-    .concat(paragraphs.slice(second.from, second.to))
-    .concat(paragraphs.slice(first.from, first.to))
-    .concat(paragraphs.slice(second.to));
-
-  //The moved scene is the first of the two when it went up, and the second when it went down -
-  //which, once reordered, puts it at first.from either way, or after the other scene's length.
-  var movedAt = direction < 0 ? first.from : first.from + (second.to - second.from);
-
+//An empty line comes out of parseDelta as one run of empty text, and an empty insert must not go
+//back in: Delta.diff cannot align a delta holding them with the editor's own, and answers with a
+//change that rewrites every line of the script (thousands of ops on a feature script - seconds
+//in the editor, a hang to the writer) instead of the move it is.
+function paragraphsToOps(paragraphs){
   var ops = [];
-  reordered.forEach(function(para){
+  paragraphs.forEach(function(para){
     para.textRuns.forEach(function(run){
+      if(run.text === '')
+        return;
       var op = { insert: run.text };
       if(run.attributes)
         op.attributes = run.attributes;
@@ -746,20 +758,89 @@ function moveScene(delta, k, direction){
       lineOp.attributes = para.attributes;
     ops.push(lineOp);
   });
+  return ops;
+}
 
-  //Where the moved heading now starts, walked the same way the ops were built.
+//The text index a paragraph starts at.
+function offsetOf(paragraphs, n){
   var index = 0;
-  var start = 0;
-  reordered.forEach(function(para, i){
-    if(i === movedAt)
-      start = index;
-    para.textRuns.forEach(function(run){
-      index += typeof run.text === 'string' ? run.text.length : 1;
-    });
-    index += 1;
-  });
+  for(var i = 0; i < n; i++)
+    index += paragraphLength(paragraphs[i]);
+  return index;
+}
 
-  return { ops: ops, start: start };
+//The paragraph span of scenes from..to, or null when there are no such scenes.
+function blockSpan(paragraphs, from, to){
+  var headings = headingsOf(paragraphs);
+  if(from < 0 || to < from || to >= headings.length)
+    return null;
+
+  return { from: headings[from], to: to + 1 < headings.length ? headings[to + 1] : paragraphs.length };
+}
+
+//Where a block of scenes sits in the text and the delta of the block on its own, for cutting it out
+//of the script into a document of its own. Pure: the caller deletes `length` characters at `start`.
+function splitScenes(delta, from, to){
+  var paragraphs = parseDelta(delta).paragraphs;
+  var span = blockSpan(paragraphs, from, to);
+  if(!span)
+    return null;
+
+  var start = offsetOf(paragraphs, span.from);
+  var block = paragraphs.slice(span.from, span.to);
+
+  return {
+    start: start,
+    length: offsetOf(paragraphs, span.to) - start,
+    extracted: { ops: paragraphsToOps(block) }
+  };
+}
+
+//A new delta with the block of scenes from..to swapped with the scene above (direction -1) or below
+//(+1), or null when there is no such neighbour. Pure: the caller diffs this against the editor's
+//contents and applies the difference as one user change, which is one undo entry. Returns the new
+//delta and where the moved block now starts and how long it is, for the selection.
+function moveScenes(delta, from, to, direction){
+  var paragraphs = parseDelta(delta).paragraphs;
+  var block = blockSpan(paragraphs, from, to);
+  var neighbour = direction < 0 ? blockSpan(paragraphs, from - 1, from - 1) : blockSpan(paragraphs, to + 1, to + 1);
+  if(!block || !neighbour)
+    return null;
+
+  var first = direction < 0 ? neighbour : block;
+  var second = direction < 0 ? block : neighbour;
+
+  var reordered = paragraphs.slice(0, first.from)
+    .concat(paragraphs.slice(second.from, second.to))
+    .concat(paragraphs.slice(first.from, first.to))
+    .concat(paragraphs.slice(second.to));
+
+  //The moved block is the second of the two when it went up, and the first when it went down -
+  //which, once reordered, puts it at first.from either way, or after the neighbour's length.
+  var movedAt = direction < 0 ? first.from : first.from + (second.to - second.from);
+  var start = offsetOf(reordered, movedAt);
+
+  return {
+    ops: paragraphsToOps(reordered),
+    start: start,
+    length: offsetOf(reordered, movedAt + (block.to - block.from)) - start
+  };
+}
+
+function moveScene(delta, k, direction){
+  return moveScenes(delta, k, k, direction);
+}
+
+//`delta` with `extra`'s lines after its own, and where the added text starts. A script that is
+//nothing but its one empty line (a new project's) is replaced rather than appended to, so the
+//block does not sit under a blank.
+function appendScenes(delta, extra){
+  var paragraphs = parseDelta(delta).paragraphs;
+  if(paragraphs.length === 1 && !paragraphs[0].attributes && paragraphLength(paragraphs[0]) === 1)
+    paragraphs = [];
+
+  var start = offsetOf(paragraphs, paragraphs.length);
+  return { ops: paragraphsToOps(paragraphs.concat(parseDelta(extra).paragraphs)), start: start };
 }
 
 // ------------------------------------------------------------------------------------------
@@ -1182,6 +1263,10 @@ module.exports = {
   previousSceneStart,
   nextSceneStart,
   moveScene,
+  moveScenes,
+  sceneBlock,
+  splitScenes,
+  appendScenes,
   attachScreenplayKeys,
   screenplayEnterBinding,
   screenplayShiftEnterBinding,

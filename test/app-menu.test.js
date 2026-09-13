@@ -61,9 +61,8 @@ test('a screenplay project showing its script renames Word Count and disables wh
   //Named, so a change to the lists is a change to this test too.
   assert.deepStrictEqual(disabled, [
     'center-all-heads-clicked', 'compile-clicked', 'convert-first-lines-clicked',
-    'convert-italics-clicked', 'convert-tabs-clicked', 'delete-chapter-clicked',
-    'headings-to-chaps-clicked', 'renumber-chapters-clicked', 'restore-chapter-clicked',
-    'split-chapter-clicked', 'tab-indent-paragraphs-clicked'
+    'convert-italics-clicked', 'convert-tabs-clicked', 'headings-to-chaps-clicked',
+    'renumber-chapters-clicked', 'split-chapter-clicked', 'tab-indent-paragraphs-clicked'
   ]);
 
   //What a screenplay keeps: the script's own tools, and Add New Chapter, which makes a Reference

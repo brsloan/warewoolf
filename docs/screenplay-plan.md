@@ -407,8 +407,9 @@ the popup should say in a line rather than hide.
 **Navigation shortcuts** keep their ids. `previousChapter`/`nextChapter`
 (`shortcuts.js:334`) become previous/next scene when the active document is a
 script the writer is working in - `editingScript()`, which is `editorMode()`
-plus "not in the Trash", since an import leaves the script it replaced there
-and a thrown-away script's scenes are not what the keys are for - and
+plus "in the Chapters list", since a `.fountain` in Reference or Trash is a
+stashed or thrown-away block of scenes and not what the keys are for (see "One
+script" below) - and
 `moveChapterUp`/`moveChapterDown` move the scene. The dispatch in
 `keybindings.js` does not change; the `render.js` actions it calls branch on
 `editorMode()`. The labels in the popup read "Previous Chapter / Scene".
@@ -537,7 +538,8 @@ accelerator on a menu built before the mode arrived - gets the message from
 | Works as-is | Needs a screenplay branch | Prose only |
 | --- | --- | --- |
 | Save, Save As, Save Copy, Backup, Open, New | Word Count (pages) | Split Chapter |
-| Find/Replace, Spell Check | Properties (title page) | Delete/Restore Chapter (script row); allowed on Reference |
+| Find/Replace, Spell Check | Properties (title page) | |
+| | Delete/Restore Chapter (a scene block in the script; see "One script") | |
 | Send via Email (sends the script as `.fountain`) | Export (one file, Save As: PDF, FDX, Fountain, text) | Renumber Chapters |
 | Add New Chapter (makes a Reference document while the script is active) | | |
 | Settings, Dictionaries, File Manager, Wi-Fi | Compile (one document: Export instead) | Convert First Lines, Marked Italics, Marked Tabs |
@@ -639,6 +641,95 @@ Tests: FDX writer output parsed back with `DOMParser` and compared to the
 element list; the same for the reader; a PDF page count against the estimate
 on Big Fish, loosely.
 
+## One script: scenes as the unit of Trash and Reference
+
+A screenplay project's Chapters list holds exactly one document, the script,
+and it never leaves. Everything the chapter keys do to a chapter in a novel
+they do to a *scene block* in the script: Delete Chapter takes a block out of
+the script and into Trash, the reorder keys move a block within the script or
+out the bottom of it into Reference, and Restore puts a trashed block back.
+Blocks outside the script are ordinary `.fountain` documents.
+
+This replaces the swap that `installScript` and `restoreFromTrash` used to do
+for a restored script. It is the simpler model: the code no longer has to
+decide which `.fountain` is the script, since the one in Chapters always is,
+and every consumer that asks for the script (Export, Page Count, the Scenes
+list, the title page) keeps working untouched.
+
+**A block** is one or more consecutive scenes: from a heading down to the next
+heading or the end. The block a key acts on is the one the selection covers:
+the scene the caret is in, or with a range selected, every scene the range
+touches, a partly selected scene included. A selection that ends exactly where
+a heading begins does not take that scene. The text before the first heading
+(a `FADE IN:`) belongs to no scene, so a caret up there gives the keys nothing
+to act on; a range that starts there and reaches a heading covers from the
+first scene. A script with no headings has no blocks, and Delete Chapter on it
+does nothing: the script itself is never trashed.
+
+**Out of the script.** Delete Chapter (`moveToTrash`) with the script active
+cuts the block out of the editor and makes a new `.fountain` document of it,
+titled by its first heading, stamped as trashed from Chapters, and appended to
+Trash. The script stays in the editor with the caret where the block was.
+Moving the last block down (`moveChapDown` with nowhere below) does the same
+into the top of Reference, the way the last chapter of a novel moves into
+Reference. Moving the first block up does nothing, as it does now.
+
+**Back into the script.** Restore on a trashed block appends its scenes to the
+end of the script, shows the script and lands the caret on the first restored
+heading, from where the reorder keys carry it up to where it belongs. Moving
+the first Reference document up does the same when it is a `.fountain`; a
+prose document there stays put, since a screenplay's Chapters list has no room
+for prose. The merged document's file is deleted once the script holds its
+scenes: the script is saved first when the project has a directory, so no
+moment exists in which the scenes are in neither file. Restore of a prose
+document trashed from Chapters lands in Reference for the same reason. A
+trashed document that came from Reference goes back to Reference whatever it
+is, as a block, and is not merged.
+
+**Blocks are documents, not scripts.** A `.fountain` document in Reference or
+Trash edits as a script (rendering, element keys, page marks, Page Count) but
+the navigation, reorder, delete and rename keys treat it as one document, as
+the last commit made them treat a trashed script. It shows as one row, under
+its own title, however many scenes it holds, so a writer can grow a stashed
+scene into several and the whole file still moves as one. `editingScript()`
+becomes "a `.fountain` in the Chapters list is active": the Scenes rows are
+only ever the script's, and typing in a stashed block cannot change them.
+
+**Import** still replaces the script (`installScript`) and trashes the one it
+replaced as a block. Restoring that block now appends it to the imported
+script rather than swapping the two.
+
+**Undo.** Cutting a block out of the editor, or appending one, is applied with
+source `'api'`, which the editor's history (`userOnly: true`) does not record:
+an undo entry that put the text back would leave the block in Trash as well,
+and the mirror for a merge would resurrect a document whose file is gone.
+Restore is the undo of a delete, and Delete the undo of a restore. Moving a
+block within the script stays a `'user'` change and one undo entry, as a
+single scene's move is now. Because the editor's own text-change handler only
+records a `'user'` change on the chapter, the cut sets the chapter's contents
+and unsaved flags itself.
+
+**Unloaded contents.** A block not in the editor may hold `contents: null`
+(`clearCurrentChapterIfUnchanged`), so a merge reads its file first, with
+`keepProjectTitlePage`, since a fragment's file carries the project's title
+page at its head on every save and that page is not the fragment's to
+restore. Merging works from deltas, never from file text.
+
+**The pure part**, in `screenplay-editor.js` and tested without Quill:
+
+```
+sceneBlock(scenes, range)          -> { from, to } scene numbers, or null
+splitScenes(delta, from, to)       -> { start, length, extracted }, or null
+moveScenes(delta, from, to, dir)   -> { ops, start, length }, or null
+appendScenes(delta, extra)         -> { ops, start }
+```
+
+`moveScene(delta, k, dir)` stays as `moveScenes(delta, k, k, dir)`. After a
+move the selection covers the moved block again when it was a range before, so
+holding the key walks the block; a collapsed caret lands on the block's first
+heading as it does today. `appendScenes` drops the single empty line a new
+script is, so a block restored into an empty script does not sit under a blank.
+
 ## Status
 
 All seven phases are implemented, on the `screenplay-new` branch, one commit
@@ -701,9 +792,10 @@ per phase. Where the implementation departed from the plan above:
   file, and Import allows it. A screenplay project is one script and any
   number of Reference documents: a script imported into one takes the script's
   place and the displaced script goes to Trash (`installScript` in
-  `render.js`), Restore of a trashed script swaps the same way, and a prose
-  import lands in Reference. The imported script's title page becomes the
-  project's, as a `.fountain`'s own title page does on load.
+  `render.js`), Restore of a trashed script appends it to the script as a
+  block (see "One script"), and a prose import lands in Reference. The
+  imported script's title page becomes the project's, as a `.fountain`'s own
+  title page does on load.
 - Dual dialogue renders as a marker only. Side-by-side layout is a print
   feature and belongs with the PDF stylesheet.
 - Sections and synopses are preserved and shown dimmed. An outline view built

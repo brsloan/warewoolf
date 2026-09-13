@@ -21,7 +21,10 @@ const {
   sceneAt,
   previousSceneStart,
   nextSceneStart,
-  moveScene
+  moveScenes,
+  sceneBlock,
+  splitScenes,
+  appendScenes
 } = require('./components/controllers/screenplay-editor');
 const {
   applyStructuralFootnoteChanges,
@@ -802,18 +805,19 @@ function editorMode(){
   return chap && newChapter.isFountainChapter(chap) ? 'screenplay' : 'prose';
 }
 
-//Whether the script in the editor is one the writer is working in, which is what the scene
-//navigation keys are for. A trashed document is the case this separates out: importing a
-//screenplay puts the script it replaced in the Trash (installScript), so the Trash of a screenplay
-//project routinely holds a .fountain document. The editor still shows it as a script - that is
-//what it is - but from the Trash the chapter keys move between documents, as they do from any
-//other trashed document, rather than walking the scenes of something already thrown away.
+//Whether the script in the editor is the project's script - the one in the Chapters list - which is
+//what the scene keys are for. A .fountain document in Reference or Trash is the case this separates
+//out: a block of scenes stashed or thrown away (cutScenes), or the script an import replaced
+//(installScript). The editor still shows it as a script - that is what it is - but from there the
+//chapter keys move, reorder, trash and rename it as one document, the way they treat any other
+//document beside the script, rather than walking the scenes inside it. See docs/screenplay-plan.md,
+//"One script".
 function editingScript(){
   if(editorMode() !== 'screenplay')
     return false;
 
   var loc = chapterList.activeLocator(project);
-  return Boolean(loc) && loc.list !== 'trash';
+  return Boolean(loc) && loc.list === 'chapters';
 }
 
 //The estimated page turns drawn in a script - screenplay-editor.js's markEstimatedPages. Redrawn
@@ -1036,11 +1040,25 @@ async function displayNextChapter(){
 
 function moveChapUp(chapInd){
   if(editingScript()){
-    moveCurrentScene(-1);
+    moveCurrentScenes(-1);
     return;
   }
 
-  var landed = chapterList.moveUp(project, chapterList.toLocator(project, chapInd));
+  var loc = chapterList.toLocator(project, chapInd);
+
+  //The first Reference document of a screenplay project moving up: a block of scenes goes back
+  //into the script, at its end, as a chapter would go back into Chapters. A prose document stays
+  //where it is, since a screenplay's Chapters list has no room for prose.
+  if(project.isScreenplay() && loc && loc.list == 'reference' && loc.index == 0){
+    var chap = chapterList.resolve(project, loc);
+    if(newChapter.isFountainChapter(chap)){
+      chapterList.remove(project, loc);
+      return detached(mergeIntoScript)(chap);
+    }
+    return;
+  }
+
+  var landed = chapterList.moveUp(project, loc);
 
   if(landed){
     project.hasUnsavedChanges = true;
@@ -1054,7 +1072,10 @@ function moveChapUp(chapInd){
 
 function moveChapDown(chapInd){
   if(editingScript()){
-    moveCurrentScene(1);
+    //The last block moving down leaves the script for the top of Reference, the way the last
+    //chapter of a novel does - a stashed scene, to be brought back the same way.
+    if(!moveCurrentScenes(1))
+      cutScenes('reference');
     return;
   }
 
@@ -1475,6 +1496,15 @@ async function moveToTrash(ind){
     return;
   }
 
+  //A screenplay project's script never leaves its Chapters list: Delete Chapter on it takes the
+  //block of scenes the selection covers out into Trash as a document of its own, and the script
+  //stays. See docs/screenplay-plan.md, "One script".
+  if(loc.list == 'chapters' && project.isScreenplay() && newChapter.isFountainChapter(chapterList.resolve(project, loc))){
+    if(ind == project.activeChapterIndex)
+      cutScenes('trash');
+    return;
+  }
+
   project.hasUnsavedChanges = true;
   var wasActive = ind == project.activeChapterIndex;
 
@@ -1557,18 +1587,18 @@ async function restoreFromTrash(ind){
   var destList = chap.trashedFrom == 'reference' ? 'reference' : 'chapters';
   delete chap.trashedFrom;
 
-  //A script restored into a screenplay project takes the script's place, and the script it
-  //displaces goes to Trash in its stead - the project holds one script. The restored script is
-  //then shown whichever document was: the one displaced may have been the one showing, and its
-  //place in the list is now the restored script's.
-  var landed;
-  if(project.isScreenplay() && destList == 'chapters' && newChapter.isFountainChapter(chap)){
-    landed = installScript(chap);
-    await displayChapterByIndex(chapterList.toCombinedIndex(project, landed));
-    return;
+  //A screenplay project's Chapters list is its one script, so nothing is restored into it: a
+  //block of scenes goes back into the script, at its end, and a prose document trashed from
+  //Chapters (a novel's, before the project became what it is) lands in Reference instead.
+  if(project.isScreenplay() && destList == 'chapters'){
+    if(newChapter.isFountainChapter(chap)){
+      await mergeIntoScript(chap);
+      return;
+    }
+    destList = 'reference';
   }
 
-  landed = chapterList.append(project, destList, chap);
+  var landed = chapterList.append(project, destList, chap);
 
   if(wasActive){
     //Follow the restored chapter to its new place. Leaving activeChapterIndex where it was left
@@ -1912,19 +1942,145 @@ function jumpToScene(start){
   project.textCursorPosition = start;
 }
 
-//The scene the caret is in swaps places with its neighbour, as one user change - one undo entry -
-//and the caret follows its heading. See moveScene for what a scene is.
-function moveCurrentScene(direction){
+//The editor's selection, for the keys that act on the block of scenes it covers. Asked of Quill
+//first; with the focus elsewhere (the sidebar, the notes) it has none, and the caret's last known
+//place stands in for it.
+function editorSelection(){
+  return editorQuill.getSelection() || { index: project.textCursorPosition || 0, length: 0 };
+}
+
+//The block of scenes the selection covers: the caret's scene, or every scene a range touches.
+function selectedSceneBlock(){
+  return sceneBlock(currentScenes(), editorSelection());
+}
+
+//The block of scenes the selection covers swaps places with the scene above or below it, as one
+//user change - one undo entry. A range selection covers the block again afterwards, so holding the
+//key walks the block; a caret follows the block's first heading. Answers whether there was a
+//neighbour to swap with. See moveScenes for what a block is.
+function moveCurrentScenes(direction){
   var Delta = Quill.import('delta');
   var current = editorQuill.getContents();
-  var scenes = sceneIndex(current);
-  var moved = moveScene(current, sceneAt(scenes, project.textCursorPosition || 0), direction);
+  var range = editorSelection();
+  var block = sceneBlock(sceneIndex(current), range);
+  var moved = block ? moveScenes(current, block.from, block.to, direction) : null;
 
   if(!moved)
-    return;
+    return false;
 
   editorQuill.updateContents(new Delta(current).diff(new Delta(moved.ops)), 'user');
-  jumpToScene(moved.start);
+
+  if(range.length > 0){
+    //One short of the block's length: its last character is the newline before the next heading,
+    //and a selection ending there would read as reaching into that scene.
+    editorQuill.setSelection(moved.start, moved.length - 1, 'user');
+    project.textCursorPosition = moved.start;
+  }
+  else
+    jumpToScene(moved.start);
+
+  updateFileList();
+  return true;
+}
+
+//Takes the block of scenes the selection covers out of the script and makes a .fountain document
+//of it, titled by its first heading: appended to Trash, stamped as trashed from Chapters so
+//Restore knows to merge it back, or put at the top of Reference. The script stays in the editor
+//with the caret where the block was. Answers where the block landed, or null when the selection
+//covered no scene. See docs/screenplay-plan.md, "One script".
+//
+//The cut is applied with source 'api', which the editor's history does not record: an undo entry
+//that put the text back would leave the block in Trash as well. Restore is the undo. And because
+//the text-change handler only records a user change on the chapter, the cut records itself.
+function cutScenes(destList){
+  var block = selectedSceneBlock();
+  var split = block ? splitScenes(editorQuill.getContents(), block.from, block.to) : null;
+
+  if(!split)
+    return null;
+
+  var title = currentScenes()[block.from].title;
+  editorQuill.deleteText(split.start, split.length, 'api');
+  recordEditorContents();
+
+  var fragment = newChapter(project);
+  fragment.format = 'fountain';
+  fragment.title = title || 'Scene';
+  fragment.contents = split.extracted;
+  fragment.hasUnsavedChanges = true;
+
+  var landed;
+  if(destList == 'trash'){
+    fragment.trashedFrom = 'chapters';
+    landed = chapterList.append(project, 'trash', fragment);
+  }
+  else
+    landed = chapterList.insertAt(project, 'reference', 0, fragment);
+
+  //Neither landing place is before the script in the combined order, so the script's own index,
+  //and the editor showing it, are as they were.
+  project.hasUnsavedChanges = true;
+  jumpToScene(Math.min(split.start, editorQuill.getLength() - 1));
+  refreshPageMarks();
+  updateFileList();
+  return landed;
+}
+
+//What the text-change handler does for a user change, for a change made with another source.
+function recordEditorContents(){
+  var chap = project.getActiveChapter();
+  if(chap){
+    chap.contents = editorQuill.getContents();
+    chap.hasUnsavedChanges = true;
+    project.hasUnsavedChanges = true;
+  }
+}
+
+//Puts a .fountain document's scenes back into the script, at its end, and shows the script with
+//the caret on the first of them - from where the reorder keys carry the block up to where it
+//belongs. `chap` has already been taken out of its list. Its file goes once the script holds its
+//scenes: the script is saved first, when the project has a directory, so there is no moment in
+//which the scenes are in neither file, and the project file follows so the next load does not
+//expect a document whose file is gone - as deleteChapter() does for the same reason.
+//
+//Read from deltas, never file text: a fragment's file carries the project's title page at its head
+//on every save, and that page is not the fragment's to restore (keepProjectTitlePage).
+//
+//A project with no script - every scene of it cut away and the file gone, then a block restored -
+//gets the block as its script. See docs/screenplay-plan.md, "One script".
+async function mergeIntoScript(chap){
+  var loc = scriptLocator();
+
+  if(!loc){
+    project.hasUnsavedChanges = true;
+    var placed = chapterList.append(project, 'chapters', chap);
+    await displayChapterByIndex(chapterList.toCombinedIndex(project, placed));
+    return;
+  }
+
+  var script = chapterList.resolve(project, loc);
+  var extra = chap.contents != null ? chap.contents : await chap.getFile({ keepProjectTitlePage: true });
+  var base = script.contents != null ? script.contents : await script.getFile({ keepProjectTitlePage: true });
+  var merged = appendScenes(base || getEmptyDelta(), extra || getEmptyDelta());
+
+  script.contents = { ops: merged.ops };
+  script.hasUnsavedChanges = true;
+  project.hasUnsavedChanges = true;
+
+  if(project.directory != ''){
+    await script.saveFile();
+    await chap.deleteFile();
+    await project.saveFile();
+  }
+  else
+    await chap.deleteFile();
+
+  //The script is what to show, and clearCurrentChapterIfUnchanged() on the way in must look at it
+  //(unsaved, so kept) rather than at whatever the removed document's index now names.
+  var scriptIndex = chapterList.toCombinedIndex(project, loc);
+  project.activeChapterIndex = scriptIndex;
+  await displayChapterByIndex(scriptIndex);
+  jumpToScene(merged.start);
   updateFileList();
 }
 
@@ -2071,9 +2227,9 @@ function alertBackupResult(msg, skipBackup = null, skipLabel){
 
 //Makes `chap` a screenplay project's script - its one script. Whatever scripts its Chapters list
 //held go to Trash first, stamped as trashed from there, so nothing is lost and Restore can bring
-//one back (which swaps it in the same way - see restoreFromTrash). Answers where the new script
-//landed. A screenplay project is one script and any number of Reference documents; this is the
-//one way a script enters the Chapters list other than New Project, and what keeps it to one.
+//one back, merged into the new script as a block of scenes (mergeIntoScript). Answers where the
+//new script landed. A screenplay project is one script and any number of Reference documents; this
+//is the one way a script enters the Chapters list other than New Project, and what keeps it to one.
 function installScript(chap){
   var chapters = chapterList.listOf(project, 'chapters');
 
@@ -2361,10 +2517,10 @@ const menuCommands = {
 //the same two lists (app-menu.js, told the mode by syncAppMenu); this is the answer for a command
 //that reaches here anyway - a shortcut, an accelerator on a menu built before the mode arrived.
 //app-menu.test.js holds the two sets of lists to each other.
+//Delete Chapter and Restore Deleted Chapter are not here: on a script they act on scenes - see
+//moveToTrash and restoreFromTrash.
 const PROSE_DOCUMENT_ONLY = {
   'split-chapter-clicked': 'Split Chapter',
-  'delete-chapter-clicked': 'Delete Chapter',
-  'restore-chapter-clicked': 'Restore Deleted Chapter',
   'headings-to-chaps-clicked': 'Break Headings Into Chapters'
 };
 

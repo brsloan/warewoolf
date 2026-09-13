@@ -855,6 +855,22 @@ test('the chapter tools refuse a script and the manuscript conversions refuse a 
 
   await currentBridge().handlers['split-chapter-clicked']();
   assert.match(document.getElementById('blocked-action-alert-text').innerText, /Split Chapter works on chapters/);
+  document.getElementById('blocked-action-alert').remove();
+
+  //Delete Chapter and Restore are not refused: on a script they act on scenes (cutScenes), so the
+  //menu item and its shortcut must reach them.
+  r.editorQuill.setSelection(30, 0, 'user');
+  await currentBridge().handlers['delete-chapter-clicked']();
+  assert.strictEqual(document.getElementById('blocked-action-alert'), null);
+  assert.deepStrictEqual(r.project.trash.map(function(c){ return c.title; }), ['EXT. B - NIGHT']);
+  await r.displayChapterByIndex(2);
+  focusEditor();
+  await currentBridge().handlers['restore-chapter-clicked']();
+  assert.strictEqual(document.getElementById('blocked-action-alert'), null);
+  assert.deepStrictEqual(r.project.trash, []);
+  assert.strictEqual(r.project.activeChapterIndex, 0);
+  await r.displayChapterByIndex(0);
+  focusEditor();
 
   await currentBridge().handlers['renumber-chapters-clicked']();
   assert.match(document.getElementById('blocked-action-alert-text').innerText, /Renumber Chapters is for a novel project/);
@@ -1128,27 +1144,264 @@ test('a script imported while a Reference document is showing still becomes the 
   assert.deepStrictEqual(r.project.trash, [starter]);
 });
 
-test('restoring a trashed script into a screenplay project swaps it in for the current script, which goes to Trash', async function(){
+//A .fountain document beside the script: a block of scenes stashed in Reference or thrown into
+//Trash, or the script an import replaced. scriptWithScenes() by index: FADE IN: 0-8, INT. A - DAY
+//9-26 (One.), EXT. B - NIGHT 27-46 (Two.), INT. C - DAY 47-66 (Three.).
+function fountainChap(title, text, opts){
+  var { parseFountain, elementsToDelta } = require('../src/components/controllers/fountain');
+  var chap = makeChap(title, Object.assign({ contents: elementsToDelta(parseFountain(text).elements) }, opts || {}));
+  chap.filename = title.replace(/[^A-Za-z]/g, '') + '.fountain';
+  return chap;
+}
+
+function elementTexts(delta){
+  var { deltaToElements } = require('../src/components/controllers/fountain');
+  return deltaToElements(delta).map(function(e){ return e.text; }).filter(Boolean);
+}
+
+//A screenplay project's script never leaves Chapters. Delete Chapter on it takes the scene the
+//caret is in out into Trash as a document of its own - docs/screenplay-plan.md, "One script".
+test('Delete Chapter with the script active cuts the caret\'s scene into Trash and leaves the script', async function(){
   var r = await freshRender();
   r.project.type = 'screenplay';
-  var current = makeChap('Current', { text: 'INT. NOW - DAY' });
-  current.filename = 'Current.fountain';
-  var old = makeChap('Old', { text: 'INT. THEN - DAY' });
-  old.filename = 'Old.fountain';
-  old.trashedFrom = 'chapters';
-  r.project.chapters = [current];
+  var script = scriptWithScenes();
+  r.project.chapters = [script];
+  await r.displayChapterByIndex(0);
+  await flushMicrotasks();
+
+  //The caret up in FADE IN: is in no scene, and there is nothing to cut.
+  r.editorQuill.setSelection(2, 0, 'user');
+  await r.moveToTrash(0);
+  assert.deepStrictEqual(r.project.trash, []);
+  assert.strictEqual(r.editorQuill.getText(9, 12), 'INT. A - DAY');
+
+  r.editorQuill.setSelection(30, 0, 'user'); //inside EXT. B - NIGHT
+  await r.moveToTrash(0);
+
+  assert.deepStrictEqual(r.project.chapters, [script], 'the script stays');
+  assert.strictEqual(r.project.trash.length, 1);
+  var cut = r.project.trash[0];
+  assert.strictEqual(cut.title, 'EXT. B - NIGHT', 'titled by its heading');
+  assert.strictEqual(cut.format, 'fountain');
+  assert.strictEqual(cut.trashedFrom, 'chapters');
+  assert.deepStrictEqual(elementTexts(cut.contents), ['EXT. B - NIGHT', 'Two.']);
+
+  assert.deepStrictEqual(elementTexts(r.editorQuill.getContents()), ['FADE IN:', 'INT. A - DAY', 'One.', 'INT. C - DAY', 'Three.']);
+  assert.strictEqual(r.project.activeChapterIndex, 0, 'still in the script');
+  assert.strictEqual(r.editorQuill.getSelection().index, 27, 'the caret where the scene was, now INT. C');
+  assert.strictEqual(script.hasUnsavedChanges, true);
+  assert.deepStrictEqual(elementTexts(script.contents), elementTexts(r.editorQuill.getContents()), 'recorded on the chapter, though not a user change');
+  assert.deepStrictEqual(sceneRowTitles(), ['INT. A - DAY', 'INT. C - DAY']);
+  assert.strictEqual(document.querySelector('#trash-list li').textContent, 'EXT. B - NIGHT*', 'its row, unsaved');
+
+  //Not an undo entry: undoing would put the scene back while the Trash kept its copy.
+  r.editorQuill.history.undo();
+  assert.deepStrictEqual(elementTexts(r.editorQuill.getContents()), ['FADE IN:', 'INT. A - DAY', 'One.', 'INT. C - DAY', 'Three.']);
+});
+
+test('a range over two scenes is cut as one block, a partly selected scene included', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [scriptWithScenes()];
+  await r.displayChapterByIndex(0);
+  await flushMicrotasks();
+
+  r.editorQuill.setSelection(12, 20, 'user'); //from inside INT. A's heading to inside EXT. B's
+  await r.moveToTrash(0);
+
+  assert.strictEqual(r.project.trash.length, 1, 'one document, not two');
+  assert.strictEqual(r.project.trash[0].title, 'INT. A - DAY');
+  assert.deepStrictEqual(elementTexts(r.project.trash[0].contents), ['INT. A - DAY', 'One.', 'EXT. B - NIGHT', 'Two.']);
+  assert.deepStrictEqual(elementTexts(r.editorQuill.getContents()), ['FADE IN:', 'INT. C - DAY', 'Three.']);
+  assert.strictEqual(r.editorQuill.getSelection().index, 9);
+});
+
+test('Restore on a trashed block appends it to the script and lands the caret on it', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  var script = scriptWithScenes();
+  var deleted = [];
+  var block = fountainChap('EXT. B - NIGHT', 'EXT. D - DUSK\n\nFour.\n', { deleteFile: function(){ deleted.push(this.title); } });
+  block.trashedFrom = 'chapters';
+  r.project.chapters = [script];
   r.project.reference = [makeChap('Bible')];
-  r.project.trash = [old];
-  await r.displayChapterByIndex(1); //the Reference document, where Restore is allowed from
+  r.project.trash = [block];
+  await r.displayChapterByIndex(2); //the trashed block, where Restore is pressed from
 
-  await r.restoreFromTrash(2); //old's combined index: 1 chapter + 1 reference
+  await r.restoreFromTrash(2);
 
-  assert.deepStrictEqual(r.project.chapters, [old]);
-  assert.deepStrictEqual(r.project.trash, [current]);
-  assert.strictEqual(current.trashedFrom, 'chapters');
-  assert.strictEqual(r.project.activeChapterIndex, 0, 'the restored script is shown');
-  assert.strictEqual(r.editorQuill.getText().trim(), 'INT. THEN - DAY');
-  assert.strictEqual(r.project.hasUnsavedChanges, true);
+  assert.deepStrictEqual(r.project.chapters, [script], 'nothing joins Chapters');
+  assert.deepStrictEqual(r.project.trash, []);
+  assert.deepStrictEqual(r.project.reference.map(function(c){ return c.title; }), ['Bible']);
+  assert.deepStrictEqual(elementTexts(script.contents), ['FADE IN:', 'INT. A - DAY', 'One.', 'EXT. B - NIGHT', 'Two.', 'INT. C - DAY', 'Three.', 'EXT. D - DUSK', 'Four.']);
+  assert.strictEqual(script.hasUnsavedChanges, true);
+  assert.deepStrictEqual(deleted, ['EXT. B - NIGHT'], 'the block\'s own file goes');
+  assert.strictEqual(r.project.activeChapterIndex, 0, 'the script is shown');
+  assert.strictEqual(r.editorQuill.getText(67, 13), 'EXT. D - DUSK');
+  assert.strictEqual(r.editorQuill.getSelection().index, 67, 'on the restored heading');
+  assert.deepStrictEqual(sceneRowTitles(), ['INT. A - DAY', 'EXT. B - NIGHT', 'INT. C - DAY', 'EXT. D - DUSK']);
+});
+
+test('a block restored into an empty script becomes its text, with no blank line above', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  var script = makeChap('Script', { contents: { ops: [{ insert: '\n' }] } });
+  script.filename = 'Script.fountain';
+  var block = fountainChap('INT. A - DAY', 'INT. A - DAY\n\nOne.\n');
+  block.trashedFrom = 'chapters';
+  r.project.chapters = [script];
+  r.project.trash = [block];
+  await r.displayChapterByIndex(1);
+
+  await r.restoreFromTrash(1);
+
+  assert.deepStrictEqual(elementTexts(r.editorQuill.getContents()), ['INT. A - DAY', 'One.']);
+  assert.strictEqual(r.editorQuill.getSelection().index, 0);
+});
+
+test('restoring a prose document trashed from Chapters into a screenplay project lands it in Reference', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  var script = scriptWithScenes();
+  var prose = makeChap('Chapter 1');
+  prose.trashedFrom = 'chapters';
+  r.project.chapters = [script];
+  r.project.trash = [prose];
+  await r.displayChapterByIndex(1);
+
+  await r.restoreFromTrash(1);
+
+  assert.deepStrictEqual(r.project.chapters, [script]);
+  assert.deepStrictEqual(r.project.reference, [prose]);
+  assert.deepStrictEqual(r.project.trash, []);
+});
+
+test('moving the last block down stashes it at the top of Reference, and moving it back up merges it', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  var script = scriptWithScenes();
+  var deleted = [];
+  r.project.chapters = [script];
+  r.project.reference = [makeChap('Bible')];
+  await r.displayChapterByIndex(0);
+  await flushMicrotasks();
+
+  //A block with a scene below it just swaps with it, as before.
+  r.editorQuill.setSelection(30, 0, 'user'); //EXT. B
+  r.moveChapDown(0);
+  assert.deepStrictEqual(elementTexts(r.editorQuill.getContents()), ['FADE IN:', 'INT. A - DAY', 'One.', 'INT. C - DAY', 'Three.', 'EXT. B - NIGHT', 'Two.']);
+  assert.deepStrictEqual(r.project.reference.map(function(c){ return c.title; }), ['Bible']);
+  assert.strictEqual(r.editorQuill.getSelection().index, 47);
+
+  //Now the last one: down again leaves the script.
+  r.moveChapDown(0);
+  assert.deepStrictEqual(elementTexts(r.editorQuill.getContents()), ['FADE IN:', 'INT. A - DAY', 'One.', 'INT. C - DAY', 'Three.']);
+  assert.deepStrictEqual(r.project.reference.map(function(c){ return c.title; }), ['EXT. B - NIGHT', 'Bible']);
+  var stashed = r.project.reference[0];
+  assert.strictEqual(stashed.format, 'fountain');
+  assert.strictEqual(stashed.trashedFrom, undefined);
+  assert.strictEqual(r.project.activeChapterIndex, 0, 'the writer stays in the script');
+  assert.strictEqual(r.editorQuill.getSelection().index, 46, 'the caret where the block was, now the end of the script');
+  assert.deepStrictEqual(sceneRowTitles(), ['INT. A - DAY', 'INT. C - DAY']);
+  assert.strictEqual(document.querySelector('#reference-list li').textContent, 'EXT. B - NIGHT*');
+
+  //From the stashed block, up goes back into the script.
+  stashed.deleteFile = function(){ deleted.push(this.title); };
+  await r.displayChapterByIndex(1);
+  await r.moveChapUp(1);
+
+  assert.deepStrictEqual(r.project.reference.map(function(c){ return c.title; }), ['Bible']);
+  assert.deepStrictEqual(elementTexts(r.editorQuill.getContents()), ['FADE IN:', 'INT. A - DAY', 'One.', 'INT. C - DAY', 'Three.', 'EXT. B - NIGHT', 'Two.']);
+  assert.deepStrictEqual(deleted, ['EXT. B - NIGHT']);
+  assert.strictEqual(r.project.activeChapterIndex, 0);
+  assert.strictEqual(r.editorQuill.getSelection().index, 47);
+
+  //A prose document at the top of Reference has nowhere to go.
+  await r.displayChapterByIndex(1);
+  r.moveChapUp(1);
+  assert.deepStrictEqual(r.project.chapters, [script]);
+  assert.deepStrictEqual(r.project.reference.map(function(c){ return c.title; }), ['Bible']);
+  assert.strictEqual(r.project.activeChapterIndex, 1);
+});
+
+test('a range over two scenes moves as one block and stays selected, so the key walks it', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [scriptWithScenes()];
+  await r.displayChapterByIndex(0);
+  await flushMicrotasks();
+
+  r.editorQuill.setSelection(30, 25, 'user'); //from inside EXT. B to inside INT. C
+  r.moveChapUp(0);
+
+  assert.deepStrictEqual(elementTexts(r.editorQuill.getContents()), ['FADE IN:', 'EXT. B - NIGHT', 'Two.', 'INT. C - DAY', 'Three.', 'INT. A - DAY', 'One.']);
+  var range = r.editorQuill.getSelection();
+  assert.strictEqual(range.index, 9);
+  assert.strictEqual(range.length, 39, 'B and C, short of the newline before A');
+
+  //And once more, the same block: at the top now, so nothing happens.
+  r.moveChapUp(0);
+  assert.strictEqual(r.editorQuill.getSelection().index, 9);
+  assert.strictEqual(elementTexts(r.editorQuill.getContents())[1], 'EXT. B - NIGHT');
+
+  //Moving is a user change, so it is an undo entry - and the no-op above added none.
+  r.editorQuill.history.undo();
+  assert.deepStrictEqual(elementTexts(r.editorQuill.getContents()), ['FADE IN:', 'INT. A - DAY', 'One.', 'EXT. B - NIGHT', 'Two.', 'INT. C - DAY', 'Three.']);
+  r.editorQuill.history.redo();
+  assert.strictEqual(elementTexts(r.editorQuill.getContents())[1], 'EXT. B - NIGHT');
+
+  //Down again, as a block, past INT. A.
+  r.editorQuill.setSelection(9, 39, 'user');
+  r.moveChapDown(0);
+  assert.deepStrictEqual(elementTexts(r.editorQuill.getContents()), ['FADE IN:', 'INT. A - DAY', 'One.', 'EXT. B - NIGHT', 'Two.', 'INT. C - DAY', 'Three.']);
+  assert.strictEqual(r.editorQuill.getSelection().index, 27);
+});
+
+//A stashed block in Reference is a script to the editor and one document to everything else -
+//as a trashed script already is - however many scenes it holds.
+test('a .fountain document in Reference is one document to the keys and the sidebar', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [scriptWithScenes()];
+  var stash = scriptWithScenes();
+  stash.title = 'Stash';
+  r.project.reference = [makeChap('Bible'), stash];
+
+  await r.displayChapterByIndex(2);
+  await flushMicrotasks();
+  r.editorQuill.setSelection(30, 0, 'user');
+
+  assert.strictEqual(r.editorMode(), 'screenplay', 'edited as a script');
+  assert.deepStrictEqual(sceneRowTitles(), ['INT. A - DAY', 'EXT. B - NIGHT', 'INT. C - DAY'], 'the project\'s script\'s scenes');
+  assert.strictEqual(document.querySelector('#chapter-list .activeChapter'), null);
+  assert.strictEqual(document.querySelector('#reference-list .activeChapter').textContent, 'Stash');
+
+  //Typing a new heading into it does not change the Scenes rows.
+  r.editorQuill.insertText(0, 'INT. Z - DAY\n', { element: 'scene' }, 'user');
+  await new Promise(function(resolve){ setTimeout(resolve, 350); });
+  assert.deepStrictEqual(sceneRowTitles(), ['INT. A - DAY', 'EXT. B - NIGHT', 'INT. C - DAY']);
+
+  //The reorder key moves the document within Reference, not the scene the caret is in.
+  r.moveChapUp(2);
+  assert.deepStrictEqual(r.project.reference.map(function(c){ return c.title; }), ['Stash', 'Bible']);
+  assert.strictEqual(r.project.activeChapterIndex, 1);
+
+  //Delete Chapter trashes the whole document, and it comes back to Reference whole.
+  await r.moveToTrash(1);
+  assert.deepStrictEqual(r.project.trash.map(function(c){ return c.title; }), ['Stash']);
+  assert.strictEqual(r.project.trash[0].trashedFrom, 'reference');
+  await r.displayChapterByIndex(2);
+  await r.restoreFromTrash(2);
+  assert.deepStrictEqual(r.project.reference.map(function(c){ return c.title; }), ['Bible', 'Stash']);
+  assert.deepStrictEqual(r.project.trash, []);
+  assert.deepStrictEqual(elementTexts(r.project.chapters[0].contents || r.project.chapters[0].getFile()).slice(0, 2), ['FADE IN:', 'INT. A - DAY'], 'the script is untouched');
+
+  //The navigation keys leave it for the document above, as from any other document.
+  await r.displayChapterByIndex(2);
+  r.editorQuill.setSelection(30, 0, 'user');
+  await r.displayPreviousChapter();
+  assert.strictEqual(r.project.activeChapterIndex, 1);
+  assert.strictEqual(r.editorQuill.getText().trim(), 'Bible');
 });
 
 test('restoring a trashed prose document into a screenplay project does not touch the script', async function(){

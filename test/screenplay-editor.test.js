@@ -556,7 +556,7 @@ test('cycleCase takes the selection, or the word at the caret, through capitals,
 
 //---- Phase 5: scenes -----------------------------------------------------------------------------
 
-const { sceneIndex, sceneAt, previousSceneStart, nextSceneStart, moveScene } = require('../src/components/controllers/screenplay-editor');
+const { sceneIndex, sceneAt, previousSceneStart, nextSceneStart, moveScene, moveScenes, sceneBlock, splitScenes, appendScenes } = require('../src/components/controllers/screenplay-editor');
 
 const THREE_SCENES = 'FADE IN:\n\nINT. A - DAY\n\nOne.\n\nBOB\nHi.\n\nEXT. B - NIGHT\n\nTwo.\n\nINT. C - DAY\n\nThree.\n';
 
@@ -610,6 +610,101 @@ test('moveScene swaps a scene with its neighbour and leaves the text before the 
 
   //Everything the elements carried survives: the flags and the inline formats travel with the lines.
   assert.deepStrictEqual(deltaToElements(down).length, parsed.elements.length);
+});
+
+//---- Scene blocks: docs/screenplay-plan.md, "One script" --------------------------------------
+
+//THREE_SCENES by index: FADE IN: 0-8, INT. A 9-34 (One. BOB Hi.), EXT. B 35-54 (Two.), INT. C 55-74.
+function textsOf(delta){
+  return deltaToElements(delta).map(function(e){ return e.text; }).filter(Boolean);
+}
+
+test('sceneBlock is the scenes a selection covers, a partly selected one included', function(){
+  var scenes = sceneIndex(elementsToDelta(parseFountain(THREE_SCENES).elements));
+
+  assert.deepStrictEqual(sceneBlock(scenes, { index: 30, length: 0 }), { from: 0, to: 0 }, 'the caret\'s scene');
+  assert.deepStrictEqual(sceneBlock(scenes, { index: 60, length: 0 }), { from: 2, to: 2 });
+  assert.deepStrictEqual(sceneBlock(scenes, { index: 12, length: 30 }), { from: 0, to: 1 }, 'a range reaching into B takes B');
+  assert.deepStrictEqual(sceneBlock(scenes, { index: 9, length: 26 }), { from: 0, to: 0 }, 'ending where B\'s heading begins does not take B');
+  assert.deepStrictEqual(sceneBlock(scenes, { index: 9, length: 27 }), { from: 0, to: 1 });
+  assert.deepStrictEqual(sceneBlock(scenes, { index: 0, length: 20 }), { from: 0, to: 0 }, 'from the preamble into A covers from A');
+  assert.strictEqual(sceneBlock(scenes, { index: 0, length: 0 }), null, 'the preamble is no scene');
+  assert.strictEqual(sceneBlock(scenes, { index: 0, length: 5 }), null);
+  assert.strictEqual(sceneBlock([], { index: 0, length: 0 }), null, 'no headings, no blocks');
+  assert.strictEqual(sceneBlock(scenes, null), null);
+});
+
+test('splitScenes says where a block sits and hands back the block on its own', function(){
+  var delta = elementsToDelta(parseFountain(THREE_SCENES).elements);
+
+  var one = splitScenes(delta, 1, 1);
+  assert.strictEqual(one.start, 35);
+  assert.strictEqual(one.length, 20);
+  assert.deepStrictEqual(textsOf(one.extracted), ['EXT. B - NIGHT', 'Two.']);
+
+  var all = splitScenes(delta, 0, 2);
+  assert.strictEqual(all.start, 9);
+  assert.strictEqual(all.length, 66);
+  assert.deepStrictEqual(textsOf(all.extracted), ['INT. A - DAY', 'One.', 'BOB', 'Hi.', 'EXT. B - NIGHT', 'Two.', 'INT. C - DAY', 'Three.']);
+  assert.strictEqual(deltaToElements(all.extracted)[2].type, 'character', 'the element types travel with the block');
+
+  assert.strictEqual(splitScenes(delta, 2, 3), null);
+  assert.strictEqual(splitScenes(delta, -1, 0), null);
+  assert.strictEqual(splitScenes(delta, 1, 0), null);
+});
+
+test('moveScenes moves a block of scenes as one and says where it landed', function(){
+  var delta = elementsToDelta(parseFountain(THREE_SCENES).elements);
+
+  var down = moveScenes(delta, 0, 1, 1);
+  assert.deepStrictEqual(textsOf(down), ['FADE IN:', 'INT. C - DAY', 'Three.', 'INT. A - DAY', 'One.', 'BOB', 'Hi.', 'EXT. B - NIGHT', 'Two.']);
+  assert.strictEqual(down.start, 29, 'after FADE IN: and scene C');
+  assert.strictEqual(down.length, 46, 'A and B together');
+  assert.strictEqual(sceneIndex(down)[1].index, down.start);
+
+  var up = moveScenes(delta, 1, 2, -1);
+  assert.deepStrictEqual(textsOf(up), ['FADE IN:', 'EXT. B - NIGHT', 'Two.', 'INT. C - DAY', 'Three.', 'INT. A - DAY', 'One.', 'BOB', 'Hi.']);
+  assert.strictEqual(up.start, 9);
+  assert.strictEqual(up.length, 40);
+
+  assert.strictEqual(moveScenes(delta, 1, 2, 1), null, 'nothing below the last');
+  assert.strictEqual(moveScenes(delta, 0, 1, -1), null, 'nothing above the first');
+  assert.strictEqual(moveScene(delta, 1, 1).start, moveScenes(delta, 1, 1, 1).start, 'moveScene is the one-scene case');
+});
+
+//A blank line inside a scene (Fountain's "two spaces" empty dialogue line, or a plain empty action
+//line) is one run of empty text to parseDelta. Written back as an empty insert, Delta.diff could not
+//align the rebuilt delta with the editor's and answered with a change touching every line.
+test('a rebuilt delta carries no empty inserts, so the change applied is the move and nothing else', function(){
+  var Delta = require('quill-delta');
+  var delta = elementsToDelta(parseFountain('INT. A - DAY\n\nOne.\n\n\n\nBOB\nHi.\n  \nBye.\n\nEXT. B - NIGHT\n\nTwo.\n\nINT. C - DAY\n\nThree.\n').elements);
+  delta.ops.splice(3, 0, { insert: '\n' }); //and a bare empty line, as the editor holds one
+
+  var moved = moveScenes(delta, 2, 2, -1);
+  assert.ok(moved.ops.every(function(op){ return op.insert !== ''; }));
+
+  var diff = new Delta(delta).diff(new Delta(moved.ops));
+  assert.ok(diff.ops.length <= 8, 'a retain, the inserted lines, a retain and a delete - not ' + diff.ops.length);
+  var canonical = function(ops){ return new Delta().compose(new Delta(ops)).ops; };
+  assert.deepStrictEqual(canonical(new Delta(delta).compose(diff).ops), canonical(moved.ops));
+
+  var still = moveScenes(moveScenes(delta, 1, 1, 1), 2, 2, -1);
+  assert.strictEqual(new Delta(delta).diff(new Delta(still.ops)).ops.length, 0, 'there and back is no change at all');
+});
+
+test('appendScenes puts a block after the script, or in place of an empty one', function(){
+  var delta = elementsToDelta(parseFountain(THREE_SCENES).elements);
+  var block = splitScenes(delta, 1, 1).extracted;
+
+  var onto = appendScenes(delta, block);
+  assert.strictEqual(onto.start, 75);
+  assert.deepStrictEqual(textsOf(onto), ['FADE IN:', 'INT. A - DAY', 'One.', 'BOB', 'Hi.', 'EXT. B - NIGHT', 'Two.', 'INT. C - DAY', 'Three.', 'EXT. B - NIGHT', 'Two.']);
+  assert.strictEqual(sceneIndex(onto)[3].index, onto.start);
+
+  var fresh = appendScenes({ ops: [{ insert: '\n' }] }, block);
+  assert.strictEqual(fresh.start, 0);
+  assert.deepStrictEqual(textsOf(fresh), ['EXT. B - NIGHT', 'Two.']);
+  assert.strictEqual(fresh.ops.length, block.ops.length, 'no blank line left above it');
 });
 
 //---- Phase 6: autocomplete -----------------------------------------------------------------------
