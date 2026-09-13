@@ -10,12 +10,17 @@ Releases before v0.9.0 were never tagged or published; the work from that period
 
 ### Added
 
-- Screenplay projects. New Project asks Novel or Screenplay; a screenplay is one script written in Fountain syntax and saved as a `.fountain` file, edited all at once. The Chapters sidebar becomes a Scenes list built from the scene headings, the chapter shortcuts jump between scenes and reorder them, and renaming a scene row rewrites its heading. Enter and Tab move between screenplay elements the way Final Draft does (Ctrl+1 to Ctrl+6 set them outright, Shift+Enter makes a line break inside an element), character names and locations complete as they are typed, Word Count shows a page estimate, and Properties edits the title page. Export for a screenplay is a Save As of one file as PDF, Final Draft `.fdx`, `.fountain` or plain text; Import reads `.fountain` and `.fdx` files. Reference documents in a screenplay project stay prose, and Add New Chapter (Ctrl+N) makes one while the script is showing. See `docs/screenplay-plan.md`.
+- Screenplay projects. New Project asks Novel or Screenplay; a screenplay is one script written in Fountain syntax and saved as a `.fountain` file, edited all at once. The Chapters sidebar becomes a Scenes list built from the scene headings, the chapter shortcuts jump between scenes and reorder them, and renaming a scene row rewrites its heading. Enter and Tab move between screenplay elements the way Final Draft and Fade In do (Ctrl+1 to Ctrl+6 open a new element, Ctrl+Alt+1 to Ctrl+Alt+6 change the current line's type, Shift+Enter makes a line break inside an element, Ctrl+Enter starts a scene heading, Ctrl+Shift+Enter opens a picker of every element, Ctrl+D marks dual dialogue). Typing `INT. ` on an action line makes it a heading; headings, cues and transitions are kept in capitals as they are typed; a cue gets `(CONT'D)` when the same character speaks again after action; and Tab after a heading's place puts in the ` - ` for the time. Character names, locations, scene intros, times of day, transitions and cue extensions complete as they are typed, an empty cue suggests the next speaker, Enter on a suggested name goes straight to the speech, and the suggestions can be switched off in Settings. Word Count shows a page estimate, and Properties edits the title page. Export for a screenplay is a Save As of one file as PDF, Final Draft `.fdx`, `.fountain` or plain text; Import reads `.fountain` and `.fdx` files. Reference documents in a screenplay project stay prose, and Add New Chapter (Ctrl+N) makes one while the script is showing. See `docs/screenplay-plan.md`.
 
 ### Changed
 
 - Keyboard shortcuts carry a mode: the heading, list, blockquote, alignment and footnote shortcuts are bound only while a prose document is shown, the screenplay element shortcuts only while a script is, so the two sets can share Ctrl+1 to Ctrl+6 and Ctrl+E. The Shortcuts popup lists a new Screenplay section, and the chapter navigation rows read "Chapter / Scene".
+- **Upper / Lower / Title Case** on `Ctrl+Shift+K`, in prose and scripts: the selection, or the word at the caret, cycles through capitals, lower case and Title Case.
 - The chapter-save commands take an optional file extension (`.txt` or `.fountain`), and the project file carries a `type` and a `titlePage`. Older builds open a screenplay project as prose with the Fountain markup visible, losing nothing.
+
+### Fixed
+
+- Two consecutive empty lines with the same paragraph format (a heading, an alignment, a screenplay element) lost that format on export and in the scene list: Quill stores them as one two-newline op, and the delta parser was splitting the newlines out without their attributes.
 
 ## [3.0.0] - 2026-09-12
 

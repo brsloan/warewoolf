@@ -11,3 +11,4 @@ error_log.txt
 .DS_store
 test/driven/results.json
 screenplay/
+docs/fade-in-comparison.md

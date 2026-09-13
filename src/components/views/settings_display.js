@@ -139,6 +139,17 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
 
   substitutionTbl.appendChild(generateRow(autocorrectLabel, autocorrectCheck));
 
+  var autocompleteLabel = document.createElement('label');
+  autocompleteLabel.innerText = 'Suggest Names, Places And Times In Scripts: ';
+  autocompleteLabel.htmlFor = 'screenplay-autocomplete-check';
+
+  var autocompleteCheck = document.createElement('input');
+  autocompleteCheck.type = 'checkbox';
+  autocompleteCheck.id = 'screenplay-autocomplete-check';
+  autocompleteCheck.checked = userSettings.screenplayAutocomplete !== false;
+
+  substitutionTbl.appendChild(generateRow(autocompleteLabel, autocompleteCheck));
+
   //Shown as what is in force - the defaults with the writer's saved changes over them - rather
   //than as the stored overrides, which are only the handful that differ.
   var rules = resolveAutocorrect(userSettings.autocorrect);
@@ -286,6 +297,7 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
     userSettings.defaultAuthor = defAuthIn.value;
     userSettings.addressInfo = addressIn.value;
     userSettings.autocorrectEnabled = autocorrectCheck.checked;
+    userSettings.screenplayAutocomplete = autocompleteCheck.checked;
     //Stored as only what differs from the defaults - see diffFromDefaults in models/autocorrect.js.
     userSettings.autocorrect = diffFromDefaults(checkedRules());
     if(platformInfo.platform == 'linux'){

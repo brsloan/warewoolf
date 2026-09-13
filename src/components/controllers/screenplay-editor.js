@@ -1,10 +1,11 @@
 const Quill = require('quill');
-const { parseDelta } = require('./quill-utils');
+const { parseDelta, replaceTextPreservingFormats } = require('./quill-utils');
 const { classifyLine } = require('./fountain');
 const { ELEMENT_TYPES } = require('../blots/screenplay');
 
-//The editor side of screenplay mode - see docs/screenplay-plan.md, "The editor" and "Keyboard".
-//Everything here is a function of a Quill instance and a delta; nothing reads the DOM for content.
+//The editor side of screenplay mode - see docs/screenplay-plan.md, "The editor" and "Keyboard",
+//and docs/fade-in-comparison.md for where each behaviour comes from. Everything here is a
+//function of a Quill instance and a delta; nothing reads the DOM for content.
 
 // ------------------------------------------------------------------------------------------
 // Loading
@@ -72,9 +73,13 @@ function escapeHtml(text){
 // Elements
 // ------------------------------------------------------------------------------------------
 
-//The types whose text is upper-cased when a line becomes one. The CSS draws capitals regardless;
-//this is what puts them in the file, so a cue reads as a cue to the spec without a force marker.
+//The types whose text is kept in capitals: put there when a line becomes one, and again as the
+//line is typed into (attachScreenplayTyping). The CSS draws capitals regardless; this is what
+//puts them in the file, so a cue reads as a cue to the spec without a force marker.
 const UPPERCASED = ['scene', 'character', 'transition'];
+
+//The lines that are part of a speech, between its cue and whatever follows.
+const SPEECH = ['dialogue', 'parenthetical', 'lyric'];
 
 //The line at an index, with the numbers the handlers below need. `index` is where the line
 //starts and `length` counts its terminating newline, as Quill's own line.length() does.
@@ -87,6 +92,10 @@ function lineAt(quill, index){
 function elementOf(line){
   var formats = line.formats();
   return formats.element || 'action';
+}
+
+function textOf(quill, info){
+  return quill.getText(info.index, info.length - 1);
 }
 
 //Makes the line (or every line the selection touches) the given element: one formatLine, since
@@ -109,9 +118,11 @@ function setElement(quill, type, range){
 
 //Replaces each line's text with its upper case, run by run so the inline formats are kept, in
 //one change per line so a Ctrl+Z takes the capitals off together with the type that brought them
-//(Quill's history merges user changes that land within its delay).
+//(Quill's history merges user changes that land within its delay). The caret is put back where it
+//was: the replacement is a delete and an insert at the same place, which Quill would otherwise
+//carry to the end of the new text.
 function uppercaseLines(quill, index, length){
-  var Delta = Quill.import('delta');
+  var selection = quill.getSelection();
 
   quill.getLines(index, Math.max(length, 1)).forEach(function(line){
     var start = quill.getIndex(line);
@@ -119,26 +130,98 @@ function uppercaseLines(quill, index, length){
     if(textLength <= 0)
       return;
 
-    var ops = quill.getContents(start, textLength).ops;
-    var changed = ops.some(function(op){ return typeof op.insert === 'string' && op.insert !== op.insert.toUpperCase(); });
-    if(!changed)
+    var text = quill.getText(start, textLength);
+    if(text === text.toUpperCase())
       return;
 
-    var change = new Delta().retain(start).delete(textLength);
-    ops.forEach(function(op){
-      change.insert(typeof op.insert === 'string' ? op.insert.toUpperCase() : op.insert, op.attributes);
-    });
-
-    quill.updateContents(change, 'user');
+    replaceTextPreservingFormats(quill, start, textLength, function(run){ return run.toUpperCase(); });
   });
+
+  if(selection)
+    quill.setSelection(selection.index, selection.length, 'silent');
+}
+
+//Opens an empty line of `type` above the line at `index`, which must be the line's start. The
+//inserted newline terminates the new line, so it carries the new type; the line pushed down keeps
+//its own terminator and so its own formats. The caret is left where it was, which is now the
+//empty line.
+function insertLineAbove(quill, index, type){
+  quill.insertText(index, '\n', { element: type === 'action' ? false : type, tight: false, dual: false }, 'user');
+  quill.setSelection(index, 0, 'user');
+}
+
+//What an element shortcut does, as Fade In has it: a selection or an empty line is made the type,
+//and a line with text gets a new, empty line of the type instead - above it with the caret at the
+//start, below it with the caret at the end, and between the two halves of the line otherwise, the
+//halves keeping the line's type. The line's own text is never retyped by a shortcut; that is what
+//the reformat shortcuts are for, which call setElement outright.
+function insertElement(quill, type, range){
+  range = range || quill.getSelection(true);
+  if(!range)
+    return;
+
+  var info = lineAt(quill, range.index);
+  var textLength = info.length - 1;
+
+  if(range.length > 0 || textLength === 0){
+    setElement(quill, type, range);
+    return;
+  }
+
+  if(info.offset === 0){
+    insertLineAbove(quill, range.index, type);
+    return;
+  }
+
+  if(info.offset >= textLength){
+    splitLine(quill, range.index, elementOf(info.line), type, false);
+    return;
+  }
+
+  //Mid-line: split the line into two of its own type, then open the new line between them. The
+  //second half is a continuation, so the dual and tight marks come off it as splitLine does.
+  var formats = info.line.formats();
+  quill.insertText(range.index, '\n', formats, 'user');
+  quill.formatLine(range.index + 1, 1, { tight: false, dual: false }, 'user');
+  insertLineAbove(quill, range.index + 1, type);
+}
+
+//The cue a caret is in: the line itself when it is a cue, or the cue above the speech the caret
+//is in. Null anywhere else.
+function cueFor(quill, index){
+  var info = lineAt(quill, index);
+  while(info){
+    var type = elementOf(info.line);
+    if(type === 'character')
+      return info;
+    if(SPEECH.indexOf(type) === -1 || info.index === 0)
+      return null;
+    info = lineAt(quill, info.index - 1);
+  }
+  return null;
+}
+
+//Fade In's Format > Dual Dialogue, as Fountain has it: the mark goes on the cue of the second
+//speaker, and here on the cue the caret is on or under. Toggled, so the same key takes it off.
+function toggleDual(quill){
+  var range = quill.getSelection(true);
+  if(!range)
+    return;
+
+  var cue = cueFor(quill, range.index);
+  if(!cue)
+    return;
+
+  quill.formatLine(cue.index, 1, { dual: !cue.line.formats().dual }, 'user');
 }
 
 // ------------------------------------------------------------------------------------------
 // Keys
 // ------------------------------------------------------------------------------------------
 
-//What Enter at the end of a line makes next, as Final Draft has it: a cue is followed by dialogue
-//and dialogue by the next cue, a heading by action, a transition by a heading.
+//What Enter at the end of a line makes next, as Final Draft and Fade In have it: a cue is
+//followed by dialogue and dialogue by the next cue, a heading by action, a transition by a
+//heading.
 const NEXT_ON_ENTER = {
   scene: 'action',
   action: 'action',
@@ -170,12 +253,71 @@ function splitLine(quill, index, currentType, nextType, tight){
   quill.setSelection(index + 1, 0, 'user');
 }
 
+//A cue's name: the text without its extension and the dual marker, in capitals.
+const CUE_EXTENSIONS = /\s*\(.*$/;
+
+function cueName(text){
+  return text.replace(CUE_EXTENSIONS, '').replace(/\s*\^$/, '').trim().toUpperCase();
+}
+
+//Whether the cue at `info` is the same character speaking again in the same scene after
+//something other than speech - action, a transition - which is when a script marks the cue
+//(CONT'D). Read from the lines above: back over the previous speech to its cue, noting whether
+//anything that is not speech stood between. A heading, a section or a page break ends the search
+//with no: a character picking up in a new scene is not continuing. Notes and synopses are not on
+//the page and count for nothing; an empty action line is a blank line and counts for nothing
+//either.
+function continuedCue(quill, info){
+  var text = textOf(quill, info);
+  if(/\(/.test(text))
+    return false;
+
+  var name = cueName(text);
+  if(name === '')
+    return false;
+
+  var lines = quill.getLines(0, info.index).filter(function(line){ return line !== info.line; });
+  var sawBreak = false;
+
+  for(var i = lines.length - 1; i >= 0; i--){
+    var type = elementOf(lines[i]);
+    if(type === 'character')
+      return sawBreak && cueName(quill.getText(quill.getIndex(lines[i]), lines[i].length() - 1)) === name;
+    if(SPEECH.indexOf(type) !== -1 || type === 'note' || type === 'synopsis' || type === 'boneyard')
+      continue;
+    if(type === 'scene' || type === 'section' || type === 'pagebreak')
+      return false;
+    if(type === 'action' && lines[i].length() <= 1)
+      continue;
+    sawBreak = true;
+  }
+
+  return false;
+}
+
+const CONTINUED = " (CONT'D)";
+
+//Fade In and Final Draft jump over trailing spaces on Enter and Tab: a caret before nothing but
+//spaces is treated as at the end of the line, so the spaces never start the next one.
+function skipTrailingSpaces(quill, range, info){
+  var textLength = info.length - 1;
+  if(info.offset === 0 || info.offset >= textLength)
+    return range;
+
+  var rest = quill.getText(range.index, info.index + textLength - range.index);
+  if(!/^\s+$/.test(rest))
+    return range;
+
+  return { index: info.index + textLength, length: 0 };
+}
+
 //The Enter binding. Everything it decides is in the table in docs/screenplay-plan.md, "Keyboard":
 //
 //  empty line, not action  -> the line becomes action (the way out of a type chosen by mistake)
-//  caret at the start      -> the line moves down and an empty action line opens above it
+//  caret at the start      -> the line moves down and an empty line of its own type opens above
 //  caret at the end        -> a new line of the type that follows this one; an action line that
-//                             reads as a heading or transition is converted first
+//                             reads as a heading or transition is converted first, and a cue that
+//                             continues the same character's speech after action gets (CONT'D)
 //  caret in the middle     -> the line splits into two of the same type
 //
 //A selection is left to Quill, and so is every keypress while the editor shows prose - returning
@@ -184,11 +326,14 @@ function splitLine(quill, index, currentType, nextType, tight){
 function screenplayEnterBinding(quill, getMode){
   return {
     key: 13,
+    screenplayKey: 'enter',
     handler: function(range){
       if(getMode() !== 'screenplay' || range.length > 0)
         return true;
 
       var info = lineAt(quill, range.index);
+      range = skipTrailingSpaces(quill, range, info);
+      info = lineAt(quill, range.index);
       var type = elementOf(info.line);
       var textLength = info.length - 1;
 
@@ -201,7 +346,7 @@ function screenplayEnterBinding(quill, getMode){
       }
 
       if(info.offset === 0){
-        quill.insertText(range.index, '\n', { element: false, tight: false, dual: false }, 'user');
+        insertLineAbove(quill, range.index, type);
         quill.setSelection(range.index + 1, 0, 'user');
         return false;
       }
@@ -214,15 +359,21 @@ function screenplayEnterBinding(quill, getMode){
       var current = type;
       var next = NEXT_ON_ENTER[type] || 'action';
 
-      //The one place the editor classifies text: "INT. KITCHEN - DAY" or "CUT TO:" typed as plain
-      //action becomes what it is, with no shortcut. Asked as the codec would read the line after a
+      //The one place the editor classifies text on Enter: "CUT TO:" typed as plain action becomes
+      //the transition it is, with no shortcut (a heading was already made one on the space after
+      //its "INT." - see attachScreenplayTyping). Asked as the codec would read the line after a
       //blank line and before one, which is where a heading or a transition stands.
       if(type === 'action'){
-        var read = classifyLine(quill.getText(info.index, textLength), { blankBefore: true, nextBlank: true, inDialogue: false });
+        var read = classifyLine(textOf(quill, info), { blankBefore: true, nextBlank: true, inDialogue: false });
         if(read.type === 'scene' || read.type === 'transition'){
           current = read.type;
           next = read.type === 'scene' ? 'action' : 'scene';
         }
+      }
+
+      if(type === 'character' && continuedCue(quill, info)){
+        quill.insertText(range.index, CONTINUED, 'user');
+        range = { index: range.index + CONTINUED.length, length: 0 };
       }
 
       splitLine(quill, range.index, current, next, false);
@@ -248,26 +399,48 @@ function screenplayShiftEnterBinding(quill, getMode){
   };
 }
 
-//Tab moves to the element a writer reaches for next from where they are, again as Final Draft
-//has it: action becomes a cue, a cue or a speech opens a parenthetical under it with the caret
-//between the parentheses, a parenthetical opens the speech, a transition becomes a heading. On
-//an empty heading it types the "INT. " a heading almost always starts with.
+//A heading's INT./EXT. prefix, its " - DAY" time of day, which is not part of the place, and the
+//separator Tab puts between the two.
+const HEADING_PREFIX = /^(?:INT\.?\/EXT|EXT\.?\/INT|INT|EXT|EST|I\/E)[.\s\-]+/i;
+const HEADING_TIME = /\s+-\s*([^-]*)$/;
+const HEADING_NUMBER = /\s*#[^#]*#\s*$/;
+const HEADING_SEPARATOR = ' - ';
+
+//Tab moves to the element a writer reaches for next from where they are, as Final Draft and Fade
+//In have it: action becomes a cue, a cue or a speech opens a parenthetical under it with the caret
+//between the parentheses (an empty one becomes the parenthetical itself), a parenthetical opens
+//the speech. A heading is stepped through: on an empty one it types the "INT. " a heading almost
+//always starts with, and after the place it puts the " - " the time of day follows, which opens
+//the list of times. A transition is Fade In's way: nothing with the caret at the start, and an
+//action line under it otherwise, since Enter is what opens the heading.
 function screenplayTabBinding(quill, getMode){
   return {
     key: 9,
+    screenplayKey: 'tab',
     handler: function(range){
       if(getMode() !== 'screenplay')
         return true;
 
       var info = lineAt(quill, range.index);
       var type = elementOf(info.line);
-      var end = info.index + info.length - 1;
+      var textLength = info.length - 1;
+      var end = info.index + textLength;
 
       switch(type){
         case 'scene':
-          if(info.length <= 1){
+          if(textLength === 0){
             quill.insertText(range.index, 'INT. ', 'user');
             quill.setSelection(range.index + 5, 0, 'user');
+            break;
+          }
+          var text = textOf(quill, info);
+          var prefix = HEADING_PREFIX.exec(text);
+          if(prefix && text.slice(prefix[0].length).trim() !== '' && !HEADING_TIME.test(text)){
+            var trailing = text.length - text.replace(/\s+$/, '').length;
+            if(trailing > 0)
+              quill.deleteText(end - trailing, trailing, 'user');
+            quill.insertText(end - trailing, HEADING_SEPARATOR, 'user');
+            quill.setSelection(end - trailing + HEADING_SEPARATOR.length, 0, 'user');
           }
           break;
         case 'action':
@@ -275,6 +448,12 @@ function screenplayTabBinding(quill, getMode){
           break;
         case 'character':
         case 'dialogue':
+          if(textLength === 0){
+            setElement(quill, 'parenthetical', { index: info.index, length: 0 });
+            quill.insertText(info.index, '()', 'user');
+            quill.setSelection(info.index + 1, 0, 'user');
+            break;
+          }
           splitLine(quill, end, type, 'parenthetical', false);
           quill.insertText(end + 1, '()', 'user');
           quill.setSelection(end + 2, 0, 'user');
@@ -283,7 +462,8 @@ function screenplayTabBinding(quill, getMode){
           splitLine(quill, end, type, 'dialogue', false);
           break;
         case 'transition':
-          setElement(quill, 'scene', { index: info.index, length: 0 });
+          if(info.offset > 0)
+            splitLine(quill, end, type, 'action', false);
           break;
         default:
           setElement(quill, 'action', { index: info.index, length: 0 });
@@ -306,7 +486,45 @@ function screenplayShiftTabBinding(getMode){
   };
 }
 
-//Installs the four bindings ahead of Quill's own for the same keys. Unshifted straight onto the
+//The modifier Quill's own bindings call shortKey - Cmd on a Mac, Ctrl elsewhere. Quill resolves
+//it in addBinding's normalize(); the bindings below go on without addBinding (see
+//attachScreenplayKeys), so it is resolved here the same way.
+const SHORT_KEY = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform || '') ? 'metaKey' : 'ctrlKey';
+
+//Fade In's Ctrl+Enter: a new heading, which the autocomplete then offers INT. and EXT. for.
+//A fixed binding rather than a shortcut, like Shift+Enter, since Enter is reserved from the
+//shortcuts (shortcuts.js RESERVED_KEYS).
+function screenplayNewSceneBinding(quill, getMode){
+  var binding = {
+    key: 13,
+    handler: function(range){
+      if(getMode() !== 'screenplay')
+        return true;
+      insertElement(quill, 'scene', range);
+      return false;
+    }
+  };
+  binding[SHORT_KEY] = true;
+  return binding;
+}
+
+//Fade In's Ctrl+Shift+Enter, Insert Element: the picker of every type a line can be.
+function screenplayPickerBinding(quill, getMode){
+  var binding = {
+    key: 13,
+    shiftKey: true,
+    handler: function(){
+      if(getMode() !== 'screenplay')
+        return true;
+      require('../views/element-picker_display')(quill);
+      return false;
+    }
+  };
+  binding[SHORT_KEY] = true;
+  return binding;
+}
+
+//Installs the six bindings ahead of Quill's own for the same keys. Unshifted straight onto the
 //keyboard's lists rather than added through addBinding, which appends - Quill's Enter and Tab
 //handlers are added in its constructor after the named options.bindings, so nothing added later
 //by the supported route can run before them (see render.js's setup for the footnote Enter binding,
@@ -317,10 +535,107 @@ function attachScreenplayKeys(quill, getMode){
   bindings[13] = bindings[13] || [];
   bindings[9] = bindings[9] || [];
 
+  bindings[13].unshift(screenplayPickerBinding(quill, getMode));
+  bindings[13].unshift(screenplayNewSceneBinding(quill, getMode));
   bindings[13].unshift(screenplayShiftEnterBinding(quill, getMode));
   bindings[13].unshift(screenplayEnterBinding(quill, getMode));
   bindings[9].unshift(screenplayShiftTabBinding(getMode));
   bindings[9].unshift(screenplayTabBinding(quill, getMode));
+}
+
+//The screenplay binding for a key, for the autocomplete to hand the keypress on to once it has
+//put the chosen text in: the writer pressed Enter on a cue, and gets the speech under it.
+function screenplayBindingFor(quill, key){
+  var code = key === 'tab' ? 9 : 13;
+  return (quill.keyboard.bindings[code] || []).find(function(binding){ return binding.screenplayKey === key; }) || null;
+}
+
+// ------------------------------------------------------------------------------------------
+// Typing - what changes as the text does, docs/screenplay-plan.md, "Keyboard"
+// ------------------------------------------------------------------------------------------
+
+//The whole of an action line that has just become the start of a heading: "INT. " and its kin,
+//period and space, nothing else. Fade In makes the line a heading the moment that space is typed.
+const HEADING_START = /^(?:INT\.?\/EXT|EXT\.?\/INT|INT|EXT|EST|I\/E)\.\s$/i;
+
+//Two things done on every user change while the editor shows a script. First, an action line that
+//has just been typed as "INT. " becomes a heading, as Fade In has it, so the writer sees the
+//heading style while typing the place and the location list can open on it. Second, the lines the
+//change touched are kept in capitals where their type takes them: a cue, heading or transition is
+//stored the way it is shown, so the file carries "BOB" and not a forced "@bob". Both changes go
+//in as user changes within Quill's history delay, so Ctrl+Z takes the typed character and its
+//consequence off together. Nothing is done while an IME composition is open, which a replacement
+//under it would break, and nothing on the changes made here (the busy guard) or on a load.
+function attachScreenplayTyping(quill, getMode){
+  var busy = false;
+  var composing = false;
+
+  quill.root.addEventListener('compositionstart', function(){ composing = true; });
+  quill.root.addEventListener('compositionend', function(){ composing = false; });
+
+  quill.on('text-change', function(delta, oldDelta, source){
+    if(busy || composing || source !== 'user' || getMode() !== 'screenplay')
+      return;
+
+    var span = touchedSpan(delta);
+    if(!span)
+      return;
+
+    busy = true;
+    try{
+      if(span.insertedSpace){
+        var info = lineAt(quill, span.end - 1);
+        if(elementOf(info.line) === 'action' && HEADING_START.test(textOf(quill, info)))
+          setElement(quill, 'scene', { index: info.index, length: 0 });
+      }
+
+      var start = quill.getIndex(quill.getLine(span.start)[0]);
+      quill.getLines(start, Math.max(span.end - start, 1)).forEach(function(line){
+        if(UPPERCASED.indexOf(elementOf(line)) !== -1)
+          uppercaseLines(quill, quill.getIndex(line), 1);
+      });
+    }
+    finally{
+      busy = false;
+    }
+  });
+}
+
+//The index range a change delta touched, walked the way Quill applies it, and whether it was a
+//single typed space - the one keystroke the heading detection above waits for.
+function touchedSpan(delta){
+  var index = 0;
+  var start = null;
+  var end = 0;
+  var insertedSpace = false;
+  var inserts = 0;
+
+  (delta.ops || []).forEach(function(op){
+    if(typeof op.retain === 'number'){
+      if(op.attributes){
+        if(start === null) start = index;
+        end = index + op.retain;
+      }
+      index += op.retain;
+    }
+    else if(op.insert !== undefined){
+      var length = typeof op.insert === 'string' ? op.insert.length : 1;
+      if(start === null) start = index;
+      index += length;
+      end = index;
+      inserts += 1;
+      insertedSpace = op.insert === ' ';
+    }
+    else if(typeof op.delete === 'number'){
+      if(start === null) start = index;
+      end = Math.max(end, index);
+    }
+  });
+
+  if(start === null)
+    return null;
+
+  return { start: start, end: Math.max(end, start), insertedSpace: insertedSpace && inserts === 1 };
 }
 
 // ------------------------------------------------------------------------------------------
@@ -453,19 +768,17 @@ function moveScene(delta, k, direction){
 // Autocomplete - docs/screenplay-plan.md, "Autocomplete, word count, title page"
 // ------------------------------------------------------------------------------------------
 
-//The extensions a cue carries after the name - (V.O.), (CONT'D), (O.S.) - and the dual marker.
-const CUE_EXTENSIONS = /\s*\(.*$/;
-//A heading's INT./EXT. prefix and its " - DAY" time of day, which is not part of the place.
-const HEADING_PREFIX = /^(?:INT\.?\/EXT|EXT\.?\/INT|INT|EXT|EST|I\/E)[.\s\-]+/i;
-const HEADING_TIME = /\s+-\s+[^-]*$/;
-const HEADING_NUMBER = /\s*#[^#]*#\s*$/;
+//The lists every script shares, as Fade In keeps them: how a heading starts, when it is set, how a
+//scene ends, and what a cue carries after the name. The script's own transitions join the last.
+const SCENE_INTROS = ['INT.', 'EXT.', 'INT./EXT.', 'EST.'];
+const TIMES_OF_DAY = ['DAY', 'NIGHT', 'CONTINUOUS', 'LATER', 'MOMENTS LATER', 'MORNING', 'AFTERNOON', 'EVENING', 'DAWN', 'DUSK', 'SAME TIME'];
+const TRANSITIONS = ['CUT TO:', 'DISSOLVE TO:', 'FADE OUT.', 'FADE TO BLACK.', 'SMASH CUT TO:', 'MATCH CUT TO:', 'JUMP CUT TO:', 'INTERCUT WITH:', 'FADE TO:', 'TIME CUT:'];
+const EXTENSIONS = ['V.O.', 'O.S.', 'O.C.', "CONT'D"];
 
 //Every character the script has a cue for, once each, in capitals, sorted - what a cue being
 //typed is completed from.
 function characterNames(delta){
-  return unique(linesOfType(delta, 'character').map(function(text){
-    return text.replace(CUE_EXTENSIONS, '').replace(/\s*\^$/, '').trim().toUpperCase();
-  }));
+  return unique(linesOfType(delta, 'character').map(cueName));
 }
 
 //Every place the script has a heading for, the same way: "INT. WILL'S BEDROOM - NIGHT (1973)"
@@ -476,15 +789,17 @@ function locations(delta){
   }));
 }
 
+function paragraphText(para){
+  return para.textRuns.map(function(run){ return typeof run.text === 'string' ? run.text : ''; }).join('');
+}
+
 function linesOfType(delta, type){
   if(!delta || !Array.isArray(delta.ops))
     return [];
 
   return parseDelta(delta).paragraphs.filter(function(para){
     return para.attributes && para.attributes.element === type;
-  }).map(function(para){
-    return para.textRuns.map(function(run){ return typeof run.text === 'string' ? run.text : ''; }).join('');
-  });
+  }).map(paragraphText);
 }
 
 function unique(values){
@@ -497,50 +812,147 @@ function unique(values){
   }).sort();
 }
 
-//What to offer for the line being typed: on a cue, the names it is the start of; on a heading,
-//the places its text after the prefix is the start of. Nothing until two characters are typed,
-//and never the thing already typed in full. Returns { typed, suggestions, prefix } - `prefix` is
-//the heading's INT./EXT. part, kept so an accepted suggestion goes back behind it.
-function suggestionsFor(delta, type, lineText){
-  if(type === 'character'){
-    var typedName = lineText.trim().toUpperCase();
-    if(typedName.length < 2)
-      return null;
+//Who speaks next, for an empty cue at `lineStart`, as Fade In guesses it: the character who spoke
+//before the last speaker first, since a scene is mostly two people taking turns, then the last
+//speaker and the rest of the scene's speakers by recency, then the speakers of earlier scenes by
+//recency, then the rest of the cast. Names once each.
+function speakersFor(delta, lineStart){
+  var paragraphs = parseDelta(delta).paragraphs;
+  var index = 0;
+  var here = paragraphs.length;
 
-    var names = characterNames(delta).filter(function(name){
-      return name.indexOf(typedName) === 0 && name !== typedName;
-    });
-    return names.length > 0 ? { typed: typedName, prefix: '', suggestions: names } : null;
+  for(var p = 0; p < paragraphs.length; p++){
+    if(index >= lineStart){
+      here = p;
+      break;
+    }
+    var length = 0;
+    paragraphs[p].textRuns.forEach(function(run){ length += typeof run.text === 'string' ? run.text.length : 1; });
+    index += length + 1;
+  }
+
+  var inScene = [];
+  var earlier = [];
+  var seen = {};
+  var pastHeading = false;
+
+  for(var i = here - 1; i >= 0; i--){
+    var attributes = paragraphs[i].attributes || {};
+    if(attributes.element === 'scene'){
+      pastHeading = true;
+      continue;
+    }
+    if(attributes.element !== 'character')
+      continue;
+    var name = cueName(paragraphText(paragraphs[i]));
+    if(name === '' || seen[name])
+      continue;
+    seen[name] = true;
+    (pastHeading ? earlier : inScene).push(name);
+  }
+
+  if(inScene.length > 1){
+    var last = inScene[0];
+    inScene[0] = inScene[1];
+    inScene[1] = last;
+  }
+
+  return inScene.concat(earlier, characterNames(delta).filter(function(name){ return !seen[name]; }));
+}
+
+function startingWith(list, typed){
+  return list.filter(function(item){ return item.indexOf(typed) === 0 && item !== typed; });
+}
+
+//What to offer for the line being typed, or null. `lineStart` is the index the line starts at,
+//which the next-speaker guess needs to know where in the script it is. The result says what was
+//typed, the suggestions, and how an accepted one goes in: `prefix` before it, `suffix` after it,
+//replacing the line's text from offset `from` to offset `to`. A list is offered before anything
+//is typed too - the next speaker on an empty cue, the intros on an empty heading, the times after
+//" - " - and Enter or Tab takes its first entry like any other, as Fade In has it; Escape is the
+//way past it.
+//
+//  cue, empty                -> the speakers, next-speaker first
+//  cue, "BO"                 -> the names starting with it
+//  cue, "BOB (" or "BOB (V"  -> the extensions, in parentheses after the name
+//  heading, empty or "IN"    -> INT., EXT. and the rest, with a space after
+//  heading, "INT. KI"        -> the places starting with it
+//  heading, "INT. KITCHEN - " -> the times of day
+//  transition                -> the usual transitions and the script's own
+function suggestionsFor(delta, type, lineText, lineStart){
+  var text = lineText || '';
+
+  if(type === 'character'){
+    var open = /^(.*?)\s*\(([^)]*)$/.exec(text);
+    if(open){
+      var name = open[1].trim().toUpperCase();
+      if(name === '')
+        return null;
+      var typedExtension = open[2].trim().toUpperCase();
+      var extensions = startingWith(EXTENSIONS, typedExtension).map(function(extension){ return '(' + extension + ')'; });
+      return extensions.length > 0 ? { typed: typedExtension, prefix: name + ' ', suffix: '', from: 0, to: text.length, suggestions: extensions } : null;
+    }
+
+    var typedName = text.trim().toUpperCase();
+    if(typedName === ''){
+      var speakers = speakersFor(delta, lineStart || 0);
+      return speakers.length > 0 ? { typed: '', prefix: '', suffix: '', from: 0, to: text.length, suggestions: speakers } : null;
+    }
+
+    var names = startingWith(characterNames(delta), typedName);
+    return names.length > 0 ? { typed: typedName, prefix: '', suffix: '', from: 0, to: text.length, suggestions: names } : null;
   }
 
   if(type === 'scene'){
-    var prefix = HEADING_PREFIX.exec(lineText);
-    if(!prefix)
-      return null;
+    var prefix = HEADING_PREFIX.exec(text);
+    if(!prefix){
+      var typedIntro = text.trim().toUpperCase();
+      var intros = startingWith(SCENE_INTROS, typedIntro);
+      //An intro is the start of the heading, not the end of it: Enter fills it in and stays.
+      return intros.length > 0 ? { typed: typedIntro, prefix: '', suffix: ' ', from: 0, to: text.length, handOn: false, suggestions: intros } : null;
+    }
 
-    var typedPlace = lineText.slice(prefix[0].length).trim().toUpperCase();
-    if(typedPlace.length < 2)
-      return null;
+    var time = HEADING_TIME.exec(text);
+    if(time){
+      var typedTime = time[1].trim().toUpperCase();
+      var times = startingWith(TIMES_OF_DAY, typedTime);
+      return times.length > 0 ? { typed: typedTime, prefix: '', suffix: '', from: text.length - time[1].length, to: text.length, suggestions: times } : null;
+    }
 
-    var places = locations(delta).filter(function(place){
-      return place.indexOf(typedPlace) === 0 && place !== typedPlace;
+    var typedPlace = text.slice(prefix[0].length).trim().toUpperCase();
+    var places = startingWith(locations(delta), typedPlace);
+    return places.length > 0 ? { typed: typedPlace, prefix: '', suffix: '', from: prefix[0].length, to: text.length, suggestions: places } : null;
+  }
+
+  if(type === 'transition'){
+    var typedTransition = text.trim().toUpperCase();
+    var known = TRANSITIONS.slice();
+    linesOfType(delta, 'transition').forEach(function(line){
+      var transition = line.trim().toUpperCase();
+      if(transition !== '' && known.indexOf(transition) === -1)
+        known.push(transition);
     });
-    return places.length > 0 ? { typed: typedPlace, prefix: prefix[0], suggestions: places } : null;
+    var transitions = startingWith(known, typedTransition);
+    return transitions.length > 0 ? { typed: typedTransition, prefix: '', suffix: '', from: 0, to: text.length, suggestions: transitions } : null;
   }
 
   return null;
 }
 
-//The suggestion box: a list under the caret while a cue or heading is being typed, moved through
-//with the arrow keys, accepted with Enter or Tab, dismissed with Escape or by typing on to
-//something it has nothing for. Its keys are Quill bindings unshifted ahead of the screenplay ones
-//and guarded on the box being open, rather than one-shot listeners racing each other, which is
-//what the abandoned first attempt had. Positioned from quill.getBounds, so it needs no DOM of
-//the editor's own read; the names and places come from the delta.
-function attachAutocomplete(quill, getMode){
+//The suggestion box: a list under the caret while a cue, heading or transition is being typed,
+//moved through with the arrow keys, accepted with Enter, Tab, the right arrow or a click - the
+//first entry unless the arrows chose another - dismissed with Escape (and brought back with
+//Escape again) or by typing on to something it has nothing for. Enter and Tab go on to do what they do on the line once the text is in - Enter on a
+//cue opens the speech, Tab the parenthetical - which is what makes a name one keypress. Its keys
+//are Quill bindings unshifted ahead of the screenplay ones and guarded on the box being open,
+//rather than one-shot listeners racing each other, which is what the abandoned first attempt
+//had. Positioned from quill.getBounds, so it needs no DOM of the editor's own read; the names and
+//places come from the delta. `isEnabled` is the Settings switch, asked on every refresh.
+function attachAutocomplete(quill, getMode, isEnabled){
   var box = null;
   var current = null;
   var selected = 0;
+  var accepting = false;
 
   function close(){
     if(box && box.parentNode)
@@ -574,7 +986,7 @@ function attachAutocomplete(quill, getMode){
       item.onmousedown = function(e){
         e.preventDefault();
         selected = i;
-        accept();
+        accept(null);
       };
       box.appendChild(item);
     });
@@ -587,7 +999,7 @@ function attachAutocomplete(quill, getMode){
   }
 
   function refresh(){
-    if(getMode() !== 'screenplay'){
+    if(getMode() !== 'screenplay' || (isEnabled && !isEnabled())){
       close();
       return;
     }
@@ -600,7 +1012,7 @@ function attachAutocomplete(quill, getMode){
 
     var info = lineAt(quill, range.index);
     var type = elementOf(info.line);
-    var found = suggestionsFor(quill.getContents(), type, quill.getText(info.index, info.length - 1));
+    var found = suggestionsFor(quill.getContents(), type, textOf(quill, info), info.index);
 
     if(!found){
       close();
@@ -614,15 +1026,17 @@ function attachAutocomplete(quill, getMode){
     render();
   }
 
-  //The chosen name or place replaces the line's text - behind the heading's prefix, for a
-  //heading - as one user change, and the caret lands at the end of it.
-  function accept(){
+  //The chosen text replaces the part of the line it completes, as one user change, and the caret
+  //lands after it. Then the key that accepted it does what it would do there: `key` is 'enter' or
+  //'tab' for the screenplay binding to run, or null for a click or the right arrow.
+  function accept(key){
     if(!current)
       return;
 
-    var start = current.lineStart;
-    var length = current.lineLength;
-    var replacement = current.prefix + current.suggestions[selected];
+    var start = current.lineStart + current.from;
+    var length = current.to - current.from;
+    var replacement = current.prefix + current.suggestions[selected] + current.suffix;
+    var handOn = current.handOn !== false;
     var Delta = Quill.import('delta');
 
     //Closed before the change goes in: the change is a user text-change, which would otherwise
@@ -637,13 +1051,24 @@ function attachAutocomplete(quill, getMode){
     finally{
       accepting = false;
     }
-  }
 
-  var accepting = false;
+    var binding = key && handOn ? screenplayBindingFor(quill, key) : null;
+    if(binding)
+      binding.handler.call(quill.keyboard, { index: start + replacement.length, length: 0 }, {});
+  }
 
   function move(step){
     selected = (selected + step + current.suggestions.length) % current.suggestions.length;
     render();
+  }
+
+  function acceptWith(key){
+    return function(){
+      if(!isOpen())
+        return true;
+      accept(key);
+      return false;
+    };
   }
 
   function whenOpen(action){
@@ -655,11 +1080,21 @@ function attachAutocomplete(quill, getMode){
     };
   }
 
+  //Escape closes an open list, and brings a closed one back when there is one to bring.
+  function escape(){
+    if(isOpen()){
+      close();
+      return false;
+    }
+    refresh();
+    return !isOpen();
+  }
+
   var bindings = quill.keyboard.bindings;
-  [[13, function(){ accept(); }], [9, function(){ accept(); }], [27, close],
-   [40, function(){ move(1); }], [38, function(){ move(-1); }]].forEach(function(pair){
+  [[13, acceptWith('enter')], [9, acceptWith('tab')], [39, acceptWith(null)], [27, escape],
+   [40, whenOpen(function(){ move(1); })], [38, whenOpen(function(){ move(-1); })]].forEach(function(pair){
     bindings[pair[0]] = bindings[pair[0]] || [];
-    bindings[pair[0]].unshift({ key: pair[0], handler: whenOpen(pair[1]) });
+    bindings[pair[0]].unshift({ key: pair[0], handler: pair[1] });
   });
 
   quill.on('text-change', function(delta, oldDelta, source){
@@ -671,10 +1106,16 @@ function attachAutocomplete(quill, getMode){
       close();
   });
 
-  //Moving the caret off the line, or out of the editor, takes the box with it.
-  quill.on('selection-change', function(range){
-    if(!isOpen())
+  //Moving the caret off the line, or out of the editor, takes the box with it. Landing on an
+  //empty line opens it: Enter and the element keys open their new line and put the caret on it
+  //after the text-change (Quill leaves a caret at the insertion point where it was), so the empty
+  //cue that offers the next speaker, or the empty heading that offers INT., is only seen here.
+  quill.on('selection-change', function(range, oldRange, source){
+    if(!isOpen()){
+      if(range && source === 'user' && range.length === 0 && lineAt(quill, range.index).length <= 1)
+        refresh();
       return;
+    }
     if(!range || range.index < current.lineStart || range.index > current.lineStart + current.lineLength)
       close();
   });
@@ -686,12 +1127,17 @@ module.exports = {
   loadScreenplayDelta,
   deltaToScreenplayHtml,
   setElement,
+  insertElement,
+  toggleDual,
+  cueFor,
   elementOf,
   lineAt,
   characterNames,
   locations,
+  speakersFor,
   suggestionsFor,
   attachAutocomplete,
+  attachScreenplayTyping,
   sceneIndex,
   sceneAt,
   previousSceneStart,
@@ -701,5 +1147,11 @@ module.exports = {
   screenplayEnterBinding,
   screenplayShiftEnterBinding,
   screenplayTabBinding,
-  screenplayShiftTabBinding
+  screenplayShiftTabBinding,
+  screenplayNewSceneBinding,
+  screenplayPickerBinding,
+  SCENE_INTROS,
+  TIMES_OF_DAY,
+  TRANSITIONS,
+  EXTENSIONS
 };

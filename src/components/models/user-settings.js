@@ -67,6 +67,7 @@ const SETTINGS_SCHEMA = {
   keyboardShortcuts: { type: 'object', sanitize: sanitizeOverrides },
   autocorrectEnabled: { type: 'boolean' },
   autocorrect: { type: 'object', sanitize: sanitizeAutocorrect },
+  screenplayAutocomplete: { type: 'boolean' },
   spellcheckDictionaries: { type: 'object', sanitize: sanitizeDictionaryIds },
   wordsPerPage: { type: 'number' },
   editorFont: { type: 'string', sanitize: sanitizeFontId },
@@ -118,6 +119,9 @@ function getUserSettings(userSettingsFilepath){
     //And, exactly like keyboardShortcuts above, only the individual rules a writer has actually
     //changed, keyed by the ids in autocorrect.js. A rule missing from here is on its default.
     autocorrect: {},
+    //The suggestion list in a script - names, places, times, transitions, extensions - which a
+    //writer who finds it in the way turns off here, as Fade In lets them.
+    screenplayAutocomplete: true,
     //Ids of the dictionaries a writer ticked in the Dictionaries dialog. Empty means "whatever the
     //app ships as default" - see loadDictionaries' own fallback (platform.js, group I) - so a writer
     //who never opens that dialog keeps working after an update that changes the bundled default.

@@ -383,15 +383,31 @@ const SHORTCUT_DEFS = [
   { id: 'typewriterMode', label: 'Typewriter Mode', section: 'Display', target: 'global', defaultBinding: makeBinding('T', { mod: true, alt: true }) },
 
   //Screenplay elements (docs/screenplay-plan.md, Phase 4), bound only while the editor shows a
-  //script. Ctrl+1..6 in the order Final Draft uses, which is also what the abandoned first
-  //attempt shipped; they share those keys with the prose headings, which is why `mode` exists.
+  //script. The keys and their meaning are Fade In's: Ctrl+1..6 in its order (Final Draft's too)
+  //open a new element on a line with text and set the type on an empty line, Ctrl+Alt+1..6 set
+  //the type of the current line whatever it holds. They share Ctrl+1..6 with the prose headings,
+  //which is why `mode` exists.
   { id: 'elementScene', label: 'Scene Heading', section: 'Screenplay', target: 'quill', mode: 'screenplay', defaultBinding: makeBinding('1', { mod: true }) },
   { id: 'elementAction', label: 'Action', section: 'Screenplay', target: 'quill', mode: 'screenplay', defaultBinding: makeBinding('2', { mod: true }) },
   { id: 'elementCharacter', label: 'Character', section: 'Screenplay', target: 'quill', mode: 'screenplay', defaultBinding: makeBinding('3', { mod: true }) },
   { id: 'elementParenthetical', label: 'Parenthetical', section: 'Screenplay', target: 'quill', mode: 'screenplay', defaultBinding: makeBinding('4', { mod: true }) },
   { id: 'elementDialogue', label: 'Dialogue', section: 'Screenplay', target: 'quill', mode: 'screenplay', defaultBinding: makeBinding('5', { mod: true }) },
   { id: 'elementTransition', label: 'Transition', section: 'Screenplay', target: 'quill', mode: 'screenplay', defaultBinding: makeBinding('6', { mod: true }) },
-  { id: 'elementCentered', label: 'Centered Text', section: 'Screenplay', target: 'quill', mode: 'screenplay', defaultBinding: makeBinding('E', { mod: true }) }
+  { id: 'elementCentered', label: 'Centered Text', section: 'Screenplay', target: 'quill', mode: 'screenplay', defaultBinding: makeBinding('E', { mod: true }) },
+  { id: 'reformatScene', label: 'Reformat as Scene Heading', section: 'Screenplay', target: 'quill', mode: 'screenplay', defaultBinding: makeBinding('1', { mod: true, alt: true }) },
+  { id: 'reformatAction', label: 'Reformat as Action', section: 'Screenplay', target: 'quill', mode: 'screenplay', defaultBinding: makeBinding('2', { mod: true, alt: true }) },
+  { id: 'reformatCharacter', label: 'Reformat as Character', section: 'Screenplay', target: 'quill', mode: 'screenplay', defaultBinding: makeBinding('3', { mod: true, alt: true }) },
+  { id: 'reformatParenthetical', label: 'Reformat as Parenthetical', section: 'Screenplay', target: 'quill', mode: 'screenplay', defaultBinding: makeBinding('4', { mod: true, alt: true }) },
+  { id: 'reformatDialogue', label: 'Reformat as Dialogue', section: 'Screenplay', target: 'quill', mode: 'screenplay', defaultBinding: makeBinding('5', { mod: true, alt: true }) },
+  { id: 'reformatTransition', label: 'Reformat as Transition', section: 'Screenplay', target: 'quill', mode: 'screenplay', defaultBinding: makeBinding('6', { mod: true, alt: true }) },
+  //The rest of Fade In's keys for a script. Ctrl+D is its Dual Dialogue. Its Ctrl+Enter (a new
+  //heading) and Ctrl+Shift+Enter (Insert Element) are not here: Enter is reserved from the
+  //shortcuts (RESERVED_KEYS), so those two are fixed bindings in screenplay-editor.js, like
+  //Shift+Enter. Its Upper/Lower/Title Case is Ctrl+K, which is Strikethrough here in both modes,
+  //so it takes its Ctrl+Shift+K instead and is bound in prose too, where a case change is as
+  //useful.
+  { id: 'toggleDualDialogue', label: 'Dual Dialogue', section: 'Screenplay', target: 'quill', mode: 'screenplay', defaultBinding: makeBinding('D', { mod: true }) },
+  { id: 'cycleCase', label: 'Upper / Lower / Title Case', section: 'Formatting', target: 'quill', defaultBinding: makeBinding('K', { mod: true, shift: true }) }
 ];
 
 //Returns the canonical name for a key, or null for anything that may not be stored: an empty or

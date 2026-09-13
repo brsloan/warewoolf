@@ -123,6 +123,22 @@ test('parseDelta preserves per-run attributes and paragraph (line) attributes', 
   ]);
 });
 
+//Quill merges adjacent ops with equal attributes, so a cue followed by an empty cue comes back as
+//one "\n\n" op carrying the line format; each of its newlines is a line of that type.
+test('parseDelta keeps the line attributes of a merged newline op on every line it holds', function(){
+  var parsed = parseDelta({ ops: [{ insert: 'BOB' }, { insert: '\n\n', attributes: { element: 'character' } }, { insert: 'Hi.\n' }] });
+
+  //The split leaves empty runs behind, which every consumer skips; what matters is each line's
+  //text and its attributes.
+  assert.deepStrictEqual(parsed.paragraphs.map(function(para){
+    return [para.textRuns.map(function(run){ return run.text; }).join(''), para.attributes || null];
+  }), [
+    ['BOB', { element: 'character' }],
+    ['', { element: 'character' }],
+    ['Hi.', null]
+  ]);
+});
+
 test('parseDelta on an empty delta produces no paragraphs', function(){
   assert.deepStrictEqual(parseDelta({ ops: [] }), { paragraphs: [] });
 });
@@ -200,9 +216,12 @@ test('every formatting shortcut is bound on its default key with the platform mo
   assert.deepStrictEqual(q.applied().map(function(binding){ return binding.warewoolfAction; }).sort(), [
     'formatAlignCenter', 'formatAlignJustify', 'formatAlignLeft', 'formatAlignRight',
     'formatBlockquote', 'formatBold', 'formatClearHeading', 'formatHeading1', 'formatHeading2',
+    'cycleCase',
+    'formatAlignCenter', 'formatAlignJustify', 'formatAlignLeft', 'formatAlignRight',
+    'formatBlockquote', 'formatBold', 'formatClearHeading', 'formatHeading1', 'formatHeading2',
     'formatHeading3', 'formatHeading4', 'formatItalics', 'formatList', 'formatStrikethrough',
     'formatTitle', 'formatUnderline', 'insertFootnote'
-  ]);
+  ].filter(function(id, i, all){ return all.indexOf(id) === i; }).sort());
 
   assert.ok(q.applied().every(function(binding){ return binding.shortKey === true; }));
 });
@@ -214,9 +233,12 @@ test('in screenplay mode the element shortcuts are bound and the prose-only ones
   applyQuillShortcuts(q, shortcutsModel.resolveShortcuts(null), 'screenplay');
 
   assert.deepStrictEqual(q.applied().map(function(binding){ return binding.warewoolfAction; }).sort(), [
+    'cycleCase',
     'elementAction', 'elementCentered', 'elementCharacter', 'elementDialogue', 'elementParenthetical',
     'elementScene', 'elementTransition',
-    'formatBold', 'formatItalics', 'formatStrikethrough', 'formatUnderline'
+    'formatBold', 'formatItalics', 'formatStrikethrough', 'formatUnderline',
+    'reformatAction', 'reformatCharacter', 'reformatDialogue', 'reformatParenthetical',
+    'reformatScene', 'reformatTransition', 'toggleDualDialogue'
   ]);
 
   //And back: re-applying for prose strips the elements and restores the headings.
@@ -341,7 +363,7 @@ test('a shortcut a writer has unassigned is not bound at all', function(){
   var q = recordingQuill({}, { formatBold: null });
 
   assert.strictEqual(q.find('formatBold'), undefined);
-  assert.strictEqual(q.applied().length, 16);
+  assert.strictEqual(q.applied().length, 17);
 });
 
 //Quill 1.x has no removeBinding(), so re-applying has to strip what it added last time - or every
@@ -353,7 +375,7 @@ test('re-applying replaces the bindings it added before, leaving Quill to keep i
     formatBold: { key: 'W', mod: true, alt: false, shift: false, code: 'KeyW' }
   }));
 
-  assert.strictEqual(q.applied().length, 17, 'no duplicates left over from the first application');
+  assert.strictEqual(q.applied().length, 18, 'no duplicates left over from the first application');
   assert.strictEqual(q.find('formatBold').key, 87);
   assert.deepStrictEqual((q.keyboard.bindings[66] || []).map(function(binding){
     return binding.warewoolfAction;
@@ -437,7 +459,7 @@ test('a binding Quill could not match is left off rather than added dead', funct
   applyQuillShortcuts(q, bindings);
 
   assert.strictEqual(q.find('formatBold'), undefined);
-  assert.strictEqual(q.applied().length, 16);
+  assert.strictEqual(q.applied().length, 17);
 });
 
 //---------------------------------------------------------------------------

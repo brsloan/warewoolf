@@ -618,6 +618,25 @@ hr {
   background-color: var(--selected-bg);
 }
 
+/* The element picker (element-picker_display.js): the same rows as the suggestion box, in a
+   popup, with the list scrolling rather than the popup. */
+#element-picker {
+  width: auto;
+  min-width: 18em;
+}
+
+#element-picker .element-picker-hint {
+  font-size: var(--dialog-font-size-small);
+  color: var(--text-muted);
+}
+
+#element-picker .element-picker-list {
+  max-height: 50vh;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  outline: none;
+}
+
 /* ------------------------------------------------------------------------------------------
    Popups
    ------------------------------------------------------------------------------------------ */

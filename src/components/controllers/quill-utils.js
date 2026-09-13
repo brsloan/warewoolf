@@ -89,6 +89,10 @@ function flattenInserts(ops){
     if(ops[i].insert == '\n')
       flattened.push(ops[i]);
     else{
+      //Every character of an op carries its attributes, the newlines included: Quill merges
+      //adjacent ops with equal attributes, so two empty lines of the same type come back as one
+      //"\n\n" op with the line format on it, and a newline split out without the attributes
+      //would read as a plain paragraph.
       var lines = ops[i].insert.split('\n');
       for(let l=0;l<lines.length;l++){
         var op = { insert: lines[l] };
@@ -96,8 +100,12 @@ function flattenInserts(ops){
           op.attributes = ops[i].attributes;
         flattened.push(op);
 
-        if(l != lines.length -1)
-          flattened.push({ insert: '\n'} );
+        if(l != lines.length -1){
+          var newline = { insert: '\n' };
+          if(ops[i].attributes)
+            newline.attributes = ops[i].attributes;
+          flattened.push(newline);
+        }
       }
     }
   }
@@ -277,20 +285,96 @@ const QUILL_HANDLERS = {
   //formatting so applyQuillShortcuts has one list to walk; which of them are bound is decided by
   //each definition's `mode` in shortcuts.js. Required lazily for the same reason insertFootnote is:
   //screenplay-editor.js requires this module for parseDelta.
+  //Ctrl+1..6 as Fade In has them: a new element on a line with text, the type itself on an empty
+  //line or a selection. Ctrl+Alt+1..6 make the current line the type whatever it holds, and so
+  //does Centered on Ctrl+E, which is an alignment there and a reformat here.
   elementScene: elementHandler('scene'),
   elementAction: elementHandler('action'),
   elementCharacter: elementHandler('character'),
   elementParenthetical: elementHandler('parenthetical'),
   elementDialogue: elementHandler('dialogue'),
   elementTransition: elementHandler('transition'),
-  elementCentered: elementHandler('centered')
+  elementCentered: reformatHandler('centered'),
+  reformatScene: reformatHandler('scene'),
+  reformatAction: reformatHandler('action'),
+  reformatCharacter: reformatHandler('character'),
+  reformatParenthetical: reformatHandler('parenthetical'),
+  reformatDialogue: reformatHandler('dialogue'),
+  reformatTransition: reformatHandler('transition'),
+  toggleDualDialogue: function(){
+    const { toggleDual } = require('./screenplay-editor');
+    toggleDual(this.quill);
+  },
+  cycleCase: function(){
+    cycleCase(this.quill);
+  }
 };
 
 function elementHandler(type){
   return function(){
+    const { insertElement } = require('./screenplay-editor');
+    insertElement(this.quill, type);
+  };
+}
+
+function reformatHandler(type){
+  return function(){
     const { setElement } = require('./screenplay-editor');
     setElement(this.quill, type);
   };
+}
+
+//Replaces the text from `index` for `length` with `transform` applied to each run of it, so the
+//inline formats survive, as one user change. Embeds pass through untouched. What the screenplay
+//editor's capitals and the case shortcut below are made of.
+function replaceTextPreservingFormats(quill, index, length, transform){
+  const Quill = require('quill');
+  var Delta = Quill.import('delta');
+  var ops = quill.getContents(index, length).ops;
+  var change = new Delta().retain(index).delete(length);
+
+  ops.forEach(function(op){
+    change.insert(typeof op.insert === 'string' ? transform(op.insert) : op.insert, op.attributes);
+  });
+
+  quill.updateContents(change, 'user');
+}
+
+//Fade In's Upper/Lower/Title Case: the selection, or the word at the caret, goes to capitals;
+//capitals go to lower case; lower case goes to Title Case. The selection is kept so the key can
+//be pressed again to get the next. Word boundaries are found in the editor's own index space
+//(getIndexableText), so a footnote marker counts as one character as it does to Quill.
+function cycleCase(quill){
+  var range = quill.getSelection(true);
+  if(!range)
+    return;
+
+  if(range.length === 0){
+    var text = getIndexableText(quill);
+    var start = range.index;
+    var end = range.index;
+    while(start > 0 && /[\w'’]/.test(text[start - 1])) start--;
+    while(end < text.length && /[\w'’]/.test(text[end])) end++;
+    if(start === end)
+      return;
+    range = { index: start, length: end - start };
+  }
+
+  var current = quill.getText(range.index, range.length);
+  var transform;
+  if(current === current.toUpperCase() && current !== current.toLowerCase())
+    transform = function(run){ return run.toLowerCase(); };
+  else if(current === current.toLowerCase())
+    transform = titleCase;
+  else
+    transform = function(run){ return run.toUpperCase(); };
+
+  replaceTextPreservingFormats(quill, range.index, range.length, transform);
+  quill.setSelection(range.index, range.length, 'silent');
+}
+
+function titleCase(run){
+  return run.toLowerCase().replace(/(^|[^\w'’])(\w)/g, function(match, before, letter){ return before + letter.toUpperCase(); });
 }
 
 function headingHandler(level){
@@ -497,5 +581,7 @@ module.exports = {
   getListLevel,
   getListMarker,
   applyQuillShortcuts,
+  replaceTextPreservingFormats,
+  cycleCase,
   goPageDown
 }

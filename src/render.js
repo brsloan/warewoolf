@@ -15,6 +15,7 @@ const {
   loadScreenplayDelta,
   attachScreenplayKeys,
   attachAutocomplete,
+  attachScreenplayTyping,
   sceneIndex,
   sceneAt,
   previousSceneStart,
@@ -426,7 +427,10 @@ function setUpQuills(){
   //it fires and hands the key back to Quill while the editor shows prose. The autocomplete's own
   //keys go on first, so an open suggestion box takes Enter and Tab before the element cycle does.
   attachScreenplayKeys(editorQuill, editorMode);
-  attachAutocomplete(editorQuill, editorMode);
+  //Typing goes on before the autocomplete so a line made a heading on its "INT. " is one when the
+  //suggestion list looks at it. The list itself is a Settings switch, read on every refresh.
+  attachScreenplayTyping(editorQuill, editorMode);
+  attachAutocomplete(editorQuill, editorMode, function(){ return userSettings.screenplayAutocomplete !== false; });
   //Attached once and never re-attached: unlike Quill's own bindings, these read the rules through
   //the getter below on every keystroke, so a change in Settings takes effect on the next character
   //typed. The returned detach functions are dropped because both editors live as long as the

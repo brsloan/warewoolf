@@ -309,46 +309,89 @@ element cycle, applied when the caret is at the end of the line:
 
 | On | Enter, line has text | Enter, line empty | Tab |
 | --- | --- | --- | --- |
-| scene | new action | becomes action | fills `INT. ` if empty |
-| action | new action; if the line reads as a scene heading or transition, convert it first | new action | becomes character |
-| character | new dialogue | becomes action | new parenthetical `()` with the caret inside |
+| scene | new action | becomes action | fills `INT. ` if empty; after the place, puts in ` - ` and offers the times |
+| action | new action; if the line reads as a transition, convert it first | new action | becomes character |
+| character | new dialogue, with `(CONT'D)` added when the same character spoke last in the scene before something other than speech | becomes action | new parenthetical `()` with the caret inside; an empty cue becomes the parenthetical |
 | parenthetical | new dialogue | becomes action | new dialogue |
-| dialogue | new character | becomes action | new parenthetical `()` |
-| transition | new scene | becomes action | becomes scene |
+| dialogue | new character | becomes action | new parenthetical `()`; an empty speech becomes the parenthetical |
+| transition | new scene | becomes action | nothing at the start of the line; new action after it |
 | anything else | new action | becomes action | becomes action |
 
 Enter on an empty line of any type but action makes it action: the way out of
 a type chosen by mistake, and the double-Enter after a speech that gets from
 the next cue to action. Enter with the caret at the start of a non-empty line
-pushes the line down and leaves an empty action line above it. Enter mid-line
+pushes the line down and leaves an empty line of the same type above it, as
+Fade In does (see `docs/fade-in-comparison.md`). Enter mid-line
 splits the line into two of the same type, with the dual and tight marks
-cleared on the second. A selection falls through to Quill. Shift+Enter inserts
-a new line of the same type with `tight` set. A line that becomes a heading,
-cue or transition has its text upper-cased, so the file needs no force marker.
+cleared on the second. A caret before nothing but trailing spaces counts as at
+the end of the line, for Enter and Tab both. A selection falls through to
+Quill. Shift+Enter inserts a new line of the same type with `tight` set. Two
+more fixed bindings, fixed because Enter is reserved from the customizable
+shortcuts: Ctrl+Enter opens a new heading, with the intros offered, and
+Ctrl+Shift+Enter opens the element picker (`element-picker_display.js`),
+every type a line can be in one list, Enter inserting and Shift+Enter
+reformatting.
+
+**Typing** (`attachScreenplayTyping`) does two things on every user change.
+An action line typed as `INT. ` (or `EXT. `, `EST. `, `INT./EXT. `) becomes a
+heading on that space, as Fade In has it, so the heading style shows while the
+place is typed and the location list can open on it. And every line the change
+touched whose type takes capitals - heading, cue, transition - has its text
+upper-cased, with the caret put back, so the file carries `BOB` and never a
+forced `@bob`. Both go in within Quill's history delay, so Ctrl+Z takes the
+typed character and its consequence off together; nothing is done during an
+IME composition.
 
 The auto-detection on Enter after an action line reuses the codec's classifier
-on that one line, so "CUT TO:" and "INT. KITCHEN - DAY" typed as plain action
-become what they are without a shortcut. It is the only place the editor
-classifies text; everything else is explicit.
+on that one line, so "CUT TO:" typed as plain action becomes the transition
+it is without a shortcut (a heading was already made one on its space). That
+and the `INT. ` check are the only places the editor classifies text;
+everything else is explicit.
+
+**(CONT'D)** is added by Enter at the end of a cue (`continuedCue`), reading
+back over the lines above: past the previous speech to its cue, noting whether
+action or a transition stood between. Same name and something between: the
+cue gets ` (CONT'D)`. A heading, section or page break between ends the search
+with no; notes, synopses and blank lines count for nothing; a cue that already
+has an extension is left to the writer. It is text in the file, as a writer
+would type it, so every Fountain reader sees it; the cost is that deleting the
+action between two speeches later leaves the mark to be removed by hand. Page
+break `(MORE)`/`(CONT'D)` is not done: the PDF is paginated by Chromium, and
+the editor has no page model to hang it on.
 
 **Backspace and Delete** need no handler. With the type as an attributor,
 Quill's own merge (`keyboard.js:338`) gives the joined line the previous
 line's type, which is what a writer expects.
 
-**Element shortcuts.** Seven new entries in `SHORTCUT_DEFS`
+**Element shortcuts.** Fifteen new entries in `SHORTCUT_DEFS`
 (`shortcuts.js:333`), section `Screenplay`, target `quill`, plus a `mode`
 field new to every definition: `'prose'` on the heading, list, blockquote,
 footnote and alignment shortcuts, `'screenplay'` on these, absent on the rest.
+The keys and what they do are Fade In's. Ctrl+digit (`insertElement`) opens a
+new, empty line of the type when the line has text - above it with the caret
+at the start, below it with the caret at the end, between the two halves
+otherwise - and sets the type of an empty line or of every line in a
+selection. Ctrl+Alt+digit (`setElement`) sets the type of the current line
+whatever it holds, which is what a writer who chose the wrong type wants.
+Centered stays on Ctrl+E and is a reformat.
 
-| Id | Default |
-| --- | --- |
-| elementScene | Ctrl+1 |
-| elementAction | Ctrl+2 |
-| elementCharacter | Ctrl+3 |
-| elementParenthetical | Ctrl+4 |
-| elementDialogue | Ctrl+5 |
-| elementTransition | Ctrl+6 |
-| elementCentered | Ctrl+E |
+| Id | Default | Id | Default |
+| --- | --- | --- | --- |
+| elementScene | Ctrl+1 | reformatScene | Ctrl+Alt+1 |
+| elementAction | Ctrl+2 | reformatAction | Ctrl+Alt+2 |
+| elementCharacter | Ctrl+3 | reformatCharacter | Ctrl+Alt+3 |
+| elementParenthetical | Ctrl+4 | reformatParenthetical | Ctrl+Alt+4 |
+| elementDialogue | Ctrl+5 | reformatDialogue | Ctrl+Alt+5 |
+| elementTransition | Ctrl+6 | reformatTransition | Ctrl+Alt+6 |
+| elementCentered | Ctrl+E | toggleDualDialogue | Ctrl+D |
+| cycleCase (both modes, section Formatting) | Ctrl+Shift+K | | |
+
+`toggleDualDialogue` is Fade In's Ctrl+D: the dual mark goes on or off the cue
+the caret is on or under, which in Fountain is the second speaker's.
+`cycleCase` is its Upper/Lower/Title Case, on Ctrl+Shift+K because Ctrl+K is
+Strikethrough here in both modes: the selection, or the word at the caret,
+goes to capitals, capitals to lower case, lower case to Title Case, keeping
+the selection so the key can be pressed again.
 
 `findConflict` (`shortcuts.js:828`) skips a pair whose modes differ and are
 both set. `applyQuillShortcuts` (`quill-utils.js:330`) takes the mode and
@@ -400,16 +443,38 @@ moves.
 
 ## Autocomplete, word count, title page
 
-**Autocomplete** for cues and locations is the old branch's feature with the
-DOM scans replaced. `characterNames(delta)` and `locations(delta)` walk the
-ops once, strip extensions like `(V.O.)` and `(CONT'D)` from cues and the
-`INT./EXT.` prefix and ` - TIME` suffix from headings, and are cached until the
-next text-change. The suggestion box is a popup positioned from
-`quill.getBounds`, and its keys go through Quill bindings that check
-`suggestionBoxOpen()` rather than the one-shot `keydown` listeners the branch
-used, which raced each other. Suggestions appear on a character or scene line
-once two characters are typed; Enter or Tab accepts, Escape dismisses, Up and
-Down move within the list, anything else keeps typing.
+**Autocomplete** is the old branch's feature with the DOM scans replaced and
+Fade In's lists added (`docs/fade-in-comparison.md`, items 15 to 19).
+`characterNames(delta)` and `locations(delta)` walk the ops once, stripping
+extensions like `(V.O.)` and `(CONT'D)` from cues and the `INT./EXT.` prefix
+and ` - TIME` suffix from headings. `suggestionsFor(delta, type, lineText,
+lineStart)` decides what a line gets, and how an accepted suggestion goes in
+(`prefix`, `suffix`, and the offsets `from`/`to` it replaces):
+
+| On | Typed | Offered |
+| --- | --- | --- |
+| cue | nothing | the speakers, next-speaker first (`speakersFor`: whoever spoke before the last speaker, then the scene's speakers by recency, then earlier scenes', then the rest of the cast) |
+| cue | `B` | the names starting with it, from one character |
+| cue | `BOB (` or `BOB (V` | the extensions, `(V.O.)` `(O.S.)` `(O.C.)` `(CONT'D)`, put in after the name with a space |
+| heading | nothing, or `IN` | `INT.` `EXT.` `INT./EXT.` `EST.`, with a space after; Enter stays on the line |
+| heading | `INT. ` or `INT. KI` | the places |
+| heading | `INT. KITCHEN - ` | the times of day |
+| transition | anything | the usual transitions and the script's own |
+
+A list is offered before anything is typed too - the next speaker, the
+intros, the times after Tab's ` - ` - and Enter or Tab takes its first entry
+like any other, so a guessed speaker is one keypress; Escape is the way past
+it, after which Enter on the empty cue makes it action as before. Enter, Tab,
+the right arrow or a click accepts, the first entry unless the arrows chose
+another; Enter and Tab then do what they do on the line once the text
+is in, so a name is one keypress from its speech and Tab after a location puts
+in the ` - ` and offers the times. Escape dismisses, and Escape again brings
+the list back. Up and Down move within it, wrapping. The box is a popup
+positioned from `quill.getBounds`, and its keys go through Quill bindings
+guarded on the box being open rather than the one-shot `keydown` listeners the
+branch used, which raced each other. The whole thing is a Settings switch
+(`screenplayAutocomplete`), read on every refresh. The lists are computed
+from the script on every keystroke and are not editable, unlike Fade In's.
 
 **Page count.** `estimatePages(elements)` in `fountain.js`, from the old
 branch's line model: 55 lines a page, 61 characters across an action line, 35

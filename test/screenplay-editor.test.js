@@ -108,6 +108,7 @@ test('the HTML is built from the delta and escaped', function(){
 
 const {
   setElement,
+  insertElement,
   attachScreenplayKeys,
   screenplayEnterBinding,
   screenplayShiftEnterBinding,
@@ -244,17 +245,88 @@ test('Enter on an empty line makes it action; on an empty action line it opens a
   assert.strictEqual(s.quill.getSelection().index, 1);
 });
 
-test('Enter at the start of a line pushes it down under a new action line, and mid-line splits it', function(){
+test('Enter at the start of a line pushes it down under a new line of its own type, and mid-line splits it', function(){
   var s = scriptQuill(delta([['character', 'BOB', { dual: true }]]));
   var enter = screenplayEnterBinding(s.quill, function(){ return 'screenplay'; });
 
+  //As Fade In has it: the empty line above is a cue too, without the dual mark.
   press(s.quill, enter, 0);
-  assert.deepStrictEqual(lines(s.quill), [['action', ''], ['character', 'BOB', 'dual']]);
+  assert.deepStrictEqual(lines(s.quill), [['character', ''], ['character', 'BOB', 'dual']]);
   assert.strictEqual(s.quill.getSelection().index, 1, 'the caret stays with the cue');
 
   press(s.quill, enter, 3);
-  assert.deepStrictEqual(lines(s.quill), [['action', ''], ['character', 'BO', 'dual'], ['character', 'B']], 'the second half is a cue without the mark');
+  assert.deepStrictEqual(lines(s.quill), [['character', ''], ['character', 'BO', 'dual'], ['character', 'B']], 'the second half is a cue without the mark');
   assert.strictEqual(s.quill.getSelection().index, 4);
+
+  s = scriptQuill(delta([['action', 'A room.', { tight: true }]]));
+  enter = screenplayEnterBinding(s.quill, function(){ return 'screenplay'; });
+  press(s.quill, enter, 0);
+  assert.deepStrictEqual(lines(s.quill), [['action', ''], ['action', 'A room.', 'tight']], 'the pushed-down line keeps its own flags');
+});
+
+test('Enter at the end of a cue marks it (CONT\'D) when the same character spoke last in the scene, before something other than speech', function(){
+  var enter = function(s){ return screenplayEnterBinding(s.quill, function(){ return 'screenplay'; }); };
+
+  var s = scriptQuill(delta([['character', 'BOB'], ['dialogue', 'One.'], ['action', 'He waits.'], ['character', 'BOB']]));
+  press(s.quill, enter(s), s.quill.getLength() - 1);
+  assert.deepStrictEqual(lines(s.quill).slice(-2), [['character', "BOB (CONT'D)"], ['dialogue', '']]);
+
+  s = scriptQuill(delta([['character', 'BOB'], ['dialogue', 'One.'], ['character', 'BOB']]));
+  press(s.quill, enter(s), s.quill.getLength() - 1);
+  assert.deepStrictEqual(lines(s.quill).slice(-2), [['character', 'BOB'], ['dialogue', '']], 'nothing between the speeches: not continued');
+
+  s = scriptQuill(delta([['character', 'BOB'], ['dialogue', 'One.'], ['action', 'Later.'], ['character', 'ANN'], ['dialogue', 'Two.'], ['action', 'Later.'], ['character', 'BOB']]));
+  press(s.quill, enter(s), s.quill.getLength() - 1);
+  assert.deepStrictEqual(lines(s.quill).slice(-2), [['character', 'BOB'], ['dialogue', '']], 'someone else spoke in between');
+
+  s = scriptQuill(delta([['character', 'BOB'], ['dialogue', 'One.'], ['scene', 'INT. B - DAY'], ['action', 'Later.'], ['character', 'BOB']]));
+  press(s.quill, enter(s), s.quill.getLength() - 1);
+  assert.deepStrictEqual(lines(s.quill).slice(-2), [['character', 'BOB'], ['dialogue', '']], 'a new scene is not a continuation');
+
+  s = scriptQuill(delta([['character', 'BOB (V.O.)'], ['dialogue', 'One.'], ['action', 'Later.'], ['character', 'BOB (V.O.)']]));
+  press(s.quill, enter(s), s.quill.getLength() - 1);
+  assert.deepStrictEqual(lines(s.quill).slice(-2), [['character', 'BOB (V.O.)'], ['dialogue', '']], 'a cue with an extension is left to the writer');
+
+  s = scriptQuill(delta([['character', 'BOB'], ['parenthetical', '(low)'], ['dialogue', 'One.'], ['action', ''], ['action', 'Later.'], ['note', 'fix'], ['character', 'BOB']]));
+  press(s.quill, enter(s), s.quill.getLength() - 1);
+  assert.deepStrictEqual(lines(s.quill).slice(-2), [['character', "BOB (CONT'D)"], ['dialogue', '']], 'back over the parenthetical, the blank line and the note');
+});
+
+test('Enter and Tab jump over trailing spaces', function(){
+  var s = scriptQuill(delta([['character', 'BOB  ']]));
+  var enter = screenplayEnterBinding(s.quill, function(){ return 'screenplay'; });
+  press(s.quill, enter, 3);
+  assert.deepStrictEqual(lines(s.quill), [['character', 'BOB  '], ['dialogue', '']], 'not split at the caret');
+  assert.strictEqual(s.quill.getSelection().index, 6);
+
+  s = scriptQuill(delta([['dialogue', 'Hi.  ']]));
+  var tab = screenplayTabBinding(s.quill, function(){ return 'screenplay'; });
+  press(s.quill, tab, 3);
+  assert.deepStrictEqual(lines(s.quill), [['dialogue', 'Hi.  '], ['parenthetical', '()']]);
+});
+
+test('Ctrl+Enter opens a new heading and Ctrl+Shift+Enter the element picker, as fixed bindings', function(){
+  var s = scriptQuill(delta([['action', 'A room.']]));
+  var ctrlEnter = s.quill.keyboard.bindings[13].find(function(b){ return b.ctrlKey && !b.shiftKey; });
+  var picker = s.quill.keyboard.bindings[13].find(function(b){ return b.ctrlKey && b.shiftKey; });
+  assert.ok(ctrlEnter && picker, 'both bound on Enter with the modifier');
+
+  assert.strictEqual(press(s.quill, ctrlEnter, 7), false);
+  assert.deepStrictEqual(lines(s.quill), [['action', 'A room.'], ['scene', '']]);
+
+  assert.strictEqual(press(s.quill, picker, 8), false);
+  var popup = document.getElementById('element-picker');
+  assert.ok(popup, 'the picker is showing');
+  var list = popup.querySelector('.element-picker-list');
+  list.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowDown' }));
+  list.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowDown' }));
+  list.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter' }));
+  assert.strictEqual(document.getElementById('element-picker'), null, 'closed on Enter');
+  assert.deepStrictEqual(lines(s.quill), [['action', 'A room.'], ['character', '']], 'the empty heading was made the third type, Character');
+
+  s.state.mode = 'prose';
+  assert.strictEqual(press(s.quill, ctrlEnter, 7), true);
+  assert.strictEqual(press(s.quill, picker, 7), true);
 });
 
 test('Enter with a selection, or while the editor shows prose, is left to Quill', function(){
@@ -287,9 +359,17 @@ test('Tab moves to the next element a writer reaches for', function(){
   assert.deepStrictEqual(lines(s.quill), [['scene', 'INT. ']]);
   assert.strictEqual(s.quill.getSelection().index, 5);
 
-  s = scriptQuill(delta([['scene', 'INT. A']]));
+  //A heading is stepped through as Fade In has it: after the place, Tab puts in the " - " the
+  //time follows, trailing spaces and all; with a time there already, or no place yet, nothing.
+  s = scriptQuill(delta([['scene', 'INT. A  ']]));
   press(s.quill, tab(s), 2);
-  assert.deepStrictEqual(lines(s.quill), [['scene', 'INT. A']], 'a heading with text is left alone');
+  assert.deepStrictEqual(lines(s.quill), [['scene', 'INT. A - ']], 'the separator after the place');
+  assert.strictEqual(s.quill.getSelection().index, 9);
+  press(s.quill, tab(s), 9);
+  assert.deepStrictEqual(lines(s.quill), [['scene', 'INT. A - ']], 'once');
+  s = scriptQuill(delta([['scene', 'INT. ']]));
+  press(s.quill, tab(s), 5);
+  assert.deepStrictEqual(lines(s.quill), [['scene', 'INT. ']], 'no place yet');
 
   s = scriptQuill(delta([['action', 'bob']]));
   press(s.quill, tab(s), 1);
@@ -300,6 +380,12 @@ test('Tab moves to the next element a writer reaches for', function(){
   assert.deepStrictEqual(lines(s.quill), [['character', 'BOB'], ['parenthetical', '()']]);
   assert.strictEqual(s.quill.getSelection().index, 5, 'the caret sits between the parentheses');
 
+  //An empty cue or speech becomes the parenthetical itself, rather than leaving an empty line.
+  s = scriptQuill(delta([['character', 'BOB'], ['dialogue', '']]));
+  press(s.quill, tab(s), 4);
+  assert.deepStrictEqual(lines(s.quill), [['character', 'BOB'], ['parenthetical', '()']], 'in place');
+  assert.strictEqual(s.quill.getSelection().index, 5);
+
   s = scriptQuill(delta([['dialogue', 'Hi.'], ['action', 'Later.']]));
   press(s.quill, tab(s), 0);
   assert.deepStrictEqual(lines(s.quill), [['dialogue', 'Hi.'], ['parenthetical', '()'], ['action', 'Later.']], 'opened after the whole line, wherever the caret was');
@@ -308,9 +394,14 @@ test('Tab moves to the next element a writer reaches for', function(){
   press(s.quill, tab(s), 5);
   assert.deepStrictEqual(lines(s.quill), [['parenthetical', '(low)'], ['dialogue', '']]);
 
-  s = scriptQuill(delta([['transition', 'cut to:']]));
-  press(s.quill, tab(s), 0);
-  assert.deepStrictEqual(lines(s.quill), [['scene', 'CUT TO:']]);
+  //A transition as Fade In has it: Tab at the start does nothing (but is not handed to Quill,
+  //which would type a tab), and after the text it opens the action line under it.
+  s = scriptQuill(delta([['transition', 'CUT TO:']]));
+  assert.strictEqual(press(s.quill, tab(s), 0), false);
+  assert.deepStrictEqual(lines(s.quill), [['transition', 'CUT TO:']]);
+  press(s.quill, tab(s), 3);
+  assert.deepStrictEqual(lines(s.quill), [['transition', 'CUT TO:'], ['action', '']], 'opened after the whole line');
+  assert.strictEqual(s.quill.getSelection().index, 8);
 
   s = scriptQuill(delta([['centered', 'x']]));
   press(s.quill, tab(s), 0);
@@ -339,18 +430,128 @@ test('attachScreenplayKeys puts the bindings ahead of Quill\'s own for Enter and
   assert.strictEqual(tabHandlers[1].shiftKey, true);
 });
 
-test('the element shortcuts drive setElement on a real editor', function(){
+//The element shortcuts as Fade In has them: Ctrl+digit opens a new element on a line with text
+//and sets the type of an empty line or a selection; Ctrl+Alt+digit sets the type outright.
+test('insertElement opens a new line of the type where the caret is, and sets the type of an empty line or a selection', function(){
+  var s = scriptQuill(delta([['action', 'A room.']]));
+
+  s.quill.setSelection(7, 0);
+  insertElement(s.quill, 'character');
+  assert.deepStrictEqual(lines(s.quill), [['action', 'A room.'], ['character', '']], 'at the end: below');
+  assert.strictEqual(s.quill.getSelection().index, 8);
+
+  s = scriptQuill(delta([['dialogue', 'Hi there.', { tight: true }]]));
+  s.quill.setSelection(0, 0);
+  insertElement(s.quill, 'parenthetical');
+  assert.deepStrictEqual(lines(s.quill), [['parenthetical', ''], ['dialogue', 'Hi there.', 'tight']], 'at the start: above, and the line keeps its flags');
+  assert.strictEqual(s.quill.getSelection().index, 0);
+
+  s = scriptQuill(delta([['action', 'One. Two.']]));
+  s.quill.setSelection(5, 0);
+  insertElement(s.quill, 'character');
+  assert.deepStrictEqual(lines(s.quill), [['action', 'One. '], ['character', ''], ['action', 'Two.']], 'mid-line: between the halves');
+  assert.strictEqual(s.quill.getSelection().index, 6);
+
+  s = scriptQuill(delta([['action', '']]));
+  s.quill.setSelection(0, 0);
+  insertElement(s.quill, 'scene');
+  assert.deepStrictEqual(lines(s.quill), [['scene', '']], 'an empty line is made the type');
+
+  s = scriptQuill(delta([['action', 'bob'], ['action', 'Hi.']]));
+  s.quill.setSelection(0, 5);
+  insertElement(s.quill, 'transition');
+  assert.deepStrictEqual(lines(s.quill), [['transition', 'BOB'], ['transition', 'HI.']], 'a selection is made the type');
+});
+
+test('the element shortcuts drive insertElement and setElement on a real editor', function(){
   var s = scriptQuill(delta([['action', 'bob']]));
   applyQuillShortcuts(s.quill, resolveShortcuts(null), 'screenplay');
 
-  //Ctrl+3 is elementCharacter; Quill keys its bindings by keyCode, and '3' is 51.
-  var binding = s.quill.keyboard.bindings[51].find(function(b){ return b.warewoolfAction === 'elementCharacter'; });
-  assert.ok(binding, 'bound');
+  //Ctrl+3 is elementCharacter and Ctrl+Alt+3 reformatCharacter; Quill keys its bindings by
+  //keyCode, and '3' is 51.
+  var insert = s.quill.keyboard.bindings[51].find(function(b){ return b.warewoolfAction === 'elementCharacter'; });
+  var reformat = s.quill.keyboard.bindings[51].find(function(b){ return b.warewoolfAction === 'reformatCharacter'; });
+  assert.ok(insert && !insert.altKey, 'Ctrl+3 bound');
+  assert.ok(reformat && reformat.altKey, 'Ctrl+Alt+3 bound');
   assert.ok(!s.quill.keyboard.bindings[51].some(function(b){ return b.warewoolfAction === 'formatHeading3'; }), 'and the prose heading is not');
 
+  s.quill.setSelection(3, 0);
+  insert.handler.call(s.quill.keyboard, { index: 3, length: 0 }, {});
+  assert.deepStrictEqual(lines(s.quill), [['action', 'bob'], ['character', '']], 'a new cue under the action');
+
   s.quill.setSelection(1, 0);
-  binding.handler.call(s.quill.keyboard, { index: 1, length: 0 }, {});
-  assert.deepStrictEqual(lines(s.quill), [['character', 'BOB']]);
+  reformat.handler.call(s.quill.keyboard, { index: 1, length: 0 }, {});
+  assert.deepStrictEqual(lines(s.quill), [['character', 'BOB'], ['character', '']], 'the action line made a cue');
+});
+
+//An action line typed as "INT. " becomes a heading on the space, and cues, headings and
+//transitions are kept in capitals as they are typed, with the caret where it was.
+test('typing "INT. " on an action line makes it a heading, and typed text in a cue, heading or transition goes to capitals', function(){
+  var s = scriptQuill(delta([['action', '']]));
+  attachScreenplayTyping(s.quill, function(){ return s.state.mode; });
+
+  var type = function(index, text){
+    s.quill.setSelection(index, 0, 'user');
+    s.quill.insertText(index, text, 'user');
+    s.quill.setSelection(index + text.length, 0, 'user');
+  };
+
+  type(0, 'int.');
+  assert.deepStrictEqual(lines(s.quill), [['action', 'int.']], 'not yet');
+  type(4, ' ');
+  assert.deepStrictEqual(lines(s.quill), [['scene', 'INT. ']], 'on the space');
+  type(5, 'kitchen');
+  assert.deepStrictEqual(lines(s.quill), [['scene', 'INT. KITCHEN']], 'and in capitals from then on');
+  assert.strictEqual(s.quill.getSelection().index, 12, 'the caret kept up');
+
+  //Mid-line too, with the caret staying where it typed.
+  type(5, 'the ');
+  assert.deepStrictEqual(lines(s.quill), [['scene', 'INT. THE KITCHEN']]);
+  assert.strictEqual(s.quill.getSelection().index, 9);
+
+  //Not in prose, not in action, and not "int." inside a sentence.
+  s = scriptQuill(delta([['action', 'The int. shot.'], ['dialogue', '']]));
+  attachScreenplayTyping(s.quill, function(){ return s.state.mode; });
+  type(15, 'hello');
+  assert.deepStrictEqual(lines(s.quill), [['action', 'The int. shot.'], ['dialogue', 'hello']]);
+  s.state.mode = 'prose';
+  s = scriptQuill(delta([['character', '']]), 'prose');
+  attachScreenplayTyping(s.quill, function(){ return s.state.mode; });
+  type(0, 'bob');
+  assert.deepStrictEqual(lines(s.quill), [['character', 'bob']]);
+});
+
+test('toggleDual marks the cue the caret is on or under, and unmarks it again', function(){
+  var s = scriptQuill(delta([['character', 'BOB'], ['dialogue', 'Hi.'], ['action', 'Later.']]));
+
+  s.quill.setSelection(5, 0);
+  toggleDual(s.quill);
+  assert.deepStrictEqual(lines(s.quill), [['character', 'BOB', 'dual'], ['dialogue', 'Hi.'], ['action', 'Later.']], 'from the speech');
+
+  s.quill.setSelection(1, 0);
+  toggleDual(s.quill);
+  assert.deepStrictEqual(lines(s.quill), [['character', 'BOB'], ['dialogue', 'Hi.'], ['action', 'Later.']], 'off again from the cue');
+
+  s.quill.setSelection(9, 0);
+  toggleDual(s.quill);
+  assert.deepStrictEqual(lines(s.quill), [['character', 'BOB'], ['dialogue', 'Hi.'], ['action', 'Later.']], 'nothing from action');
+});
+
+test('cycleCase takes the selection, or the word at the caret, through capitals, lower case and Title Case', function(){
+  var s = scriptQuill(delta([['action', 'a quiet room']]));
+
+  s.quill.setSelection(0, 12);
+  cycleCase(s.quill);
+  assert.deepStrictEqual(lines(s.quill), [['action', 'A Quiet Room']], 'lower case goes to Title Case');
+  assert.deepStrictEqual([s.quill.getSelection().index, s.quill.getSelection().length], [0, 12], 'still selected');
+  cycleCase(s.quill);
+  assert.deepStrictEqual(lines(s.quill), [['action', 'A QUIET ROOM']], 'mixed goes to capitals');
+  cycleCase(s.quill);
+  assert.deepStrictEqual(lines(s.quill), [['action', 'a quiet room']], 'capitals go to lower case');
+
+  s.quill.setSelection(3, 0);
+  cycleCase(s.quill);
+  assert.deepStrictEqual(lines(s.quill), [['action', 'a Quiet room']], 'the word at the caret');
 });
 
 //---- Phase 5: scenes -----------------------------------------------------------------------------
@@ -415,7 +616,8 @@ test('moveScene swaps a scene with its neighbour and leaves the text before the 
 
 const fs = require('fs');
 const path = require('path');
-const { characterNames, locations, suggestionsFor, attachAutocomplete } = require('../src/components/controllers/screenplay-editor');
+const { characterNames, locations, speakersFor, suggestionsFor, attachAutocomplete, attachScreenplayTyping, toggleDual } = require('../src/components/controllers/screenplay-editor');
+const { cycleCase } = require('../src/components/controllers/quill-utils');
 
 const CAST = 'INT. WILL\'S BEDROOM - NIGHT (1973)\n\nEDWARD (V.O.)\nOne.\n\nWILL\nTwo.\n\nEDWARD (CONT\'D)\nThree.\n\nEXT. CAMPFIRE - NIGHT\n\nSANDRA ^\nFour.\n\nINT. WILL\'S BEDROOM - DAY #4#\n\nwill\nFive.\n';
 
@@ -426,73 +628,199 @@ test('characterNames and locations come from the cues and headings, stripped, in
   assert.deepStrictEqual(characterNames(null), []);
 });
 
-test('suggestionsFor offers names a cue is the start of and places a heading is, after two characters', function(){
+//What a result says: what was typed, what is offered, and how an accepted one goes in.
+function offered(found){
+  return found ? { typed: found.typed, suggestions: found.suggestions, replacement: found.prefix + found.suggestions[0] + found.suffix, from: found.from, to: found.to } : null;
+}
+
+test('suggestionsFor offers names a cue is the start of and places a heading is, from one character', function(){
   var d = elementsToDelta(parseFountain(CAST).elements);
 
-  assert.deepStrictEqual(suggestionsFor(d, 'character', 'ed'), { typed: 'ED', prefix: '', suggestions: ['EDWARD'] });
-  assert.strictEqual(suggestionsFor(d, 'character', 'e'), null, 'one character is too few');
+  assert.deepStrictEqual(offered(suggestionsFor(d, 'character', 'e')), { typed: 'E', suggestions: ['EDWARD'], replacement: 'EDWARD', from: 0, to: 1 });
   assert.strictEqual(suggestionsFor(d, 'character', 'EDWARD'), null, 'already typed in full');
   assert.strictEqual(suggestionsFor(d, 'character', 'zz'), null);
 
-  assert.deepStrictEqual(suggestionsFor(d, 'scene', 'INT. wi'), { typed: 'WI', prefix: 'INT. ', suggestions: ['WILL\'S BEDROOM'] });
-  assert.deepStrictEqual(suggestionsFor(d, 'scene', 'ext. ca'), { typed: 'CA', prefix: 'ext. ', suggestions: ['CAMPFIRE'] });
-  assert.strictEqual(suggestionsFor(d, 'scene', 'wi'), null, 'no prefix yet');
+  assert.deepStrictEqual(offered(suggestionsFor(d, 'scene', 'INT. wi')), { typed: 'WI', suggestions: ['WILL\'S BEDROOM'], replacement: 'WILL\'S BEDROOM', from: 5, to: 7 }, 'the place goes in after the prefix');
+  assert.deepStrictEqual(suggestionsFor(d, 'scene', 'ext. c').suggestions, ['CAMPFIRE']);
   assert.strictEqual(suggestionsFor(d, 'dialogue', 'ed'), null);
 });
 
-test('the suggestion box opens under a cue being typed, moves with the arrows, and accepts with Enter', function(){
-  var s = scriptQuill(elementsToDelta(parseFountain(CAST).elements));
-  var box = attachAutocomplete(s.quill, function(){ return s.state.mode; });
+test('suggestionsFor offers the intros, times, transitions and extensions every script shares', function(){
+  var d = elementsToDelta(parseFountain(CAST).elements);
+
+  //An empty heading offers the intros, with a space after; a typed letter narrows them.
+  assert.deepStrictEqual(offered(suggestionsFor(d, 'scene', '')), { typed: '', suggestions: ['INT.', 'EXT.', 'INT./EXT.', 'EST.'], replacement: 'INT. ', from: 0, to: 0 });
+  assert.deepStrictEqual(offered(suggestionsFor(d, 'scene', 'e')), { typed: 'E', suggestions: ['EXT.', 'EST.'], replacement: 'EXT. ', from: 0, to: 1 });
+  assert.strictEqual(suggestionsFor(d, 'scene', '').handOn, false, 'an intro is the start of the heading, so Enter stays on the line');
+
+  //After the separator, the times; the typed part alone is replaced.
+  var times = suggestionsFor(d, 'scene', 'INT. KITCHEN - ');
+  assert.deepStrictEqual([times.typed, times.from, times.to, times.suggestions[0]], ['', 15, 15, 'DAY']);
+  var typedTime = suggestionsFor(d, 'scene', 'INT. KITCHEN - mo');
+  assert.deepStrictEqual([typedTime.suggestions, typedTime.from, typedTime.to], [['MOMENTS LATER', 'MORNING'], 15, 17]);
+  assert.strictEqual(suggestionsFor(d, 'scene', 'INT. KITCHEN - DAY'), null);
+
+  //The places right after the prefix, before anything is typed.
+  assert.deepStrictEqual(suggestionsFor(d, 'scene', 'INT. ').suggestions, ['CAMPFIRE', 'WILL\'S BEDROOM']);
+
+  //A transition: the usual ones and the script's own.
+  assert.deepStrictEqual(suggestionsFor(d, 'transition', 'cu').suggestions, ['CUT TO:']);
+  assert.ok(suggestionsFor(d, 'transition', '').suggestions.indexOf('FADE OUT.') !== -1);
+
+  //An extension after the name, with the space put in if it was not.
+  assert.deepStrictEqual(offered(suggestionsFor(d, 'character', 'BOB(')), { typed: '', suggestions: ['(V.O.)', '(O.S.)', '(O.C.)', '(CONT\'D)'], replacement: 'BOB (V.O.)', from: 0, to: 4 });
+  assert.deepStrictEqual(suggestionsFor(d, 'character', 'BOB (o').suggestions, ['(O.S.)', '(O.C.)']);
+  assert.strictEqual(suggestionsFor(d, 'character', 'BOB (V.O.)'), null, 'closed');
+  assert.strictEqual(suggestionsFor(d, 'character', '('), null, 'no name yet');
+});
+
+test('an empty cue offers the next speaker first: whoever spoke before the last speaker, then the scene, then the rest', function(){
+  var d = elementsToDelta(parseFountain('INT. A - DAY\n\nANNA\nOne.\n\nBOB\nTwo.\n\nCARL\nThree.\n\nEXT. B - DAY\n\nDAVE\nFour.\n\nBOB\nFive.\n\n').elements);
+  var index = 0;
+  d.ops.forEach(function(op){ index += typeof op.insert === 'string' ? op.insert.length : 1; });
+
+  //A cue at the very end: BOB spoke last, DAVE before him, so DAVE is the guess, then BOB, then
+  //the earlier scene's speakers by recency, then nobody left.
+  assert.deepStrictEqual(speakersFor(d, index), ['DAVE', 'BOB', 'CARL', 'ANNA']);
+  assert.deepStrictEqual(suggestionsFor(d, 'character', '', index).suggestions[0], 'DAVE');
+
+  //A cue at the start of the second scene: nobody has spoken in it, so the first scene's speakers
+  //by recency.
+  var secondScene = 'INT. A - DAY\n'.length + 'ANNA\nOne.\nBOB\nTwo.\nCARL\nThree.\nEXT. B - DAY\n'.length;
+  assert.deepStrictEqual(speakersFor(d, secondScene), ['CARL', 'BOB', 'ANNA', 'DAVE']);
+});
+
+//A script editor with the box attached and the keys the box answers, for the tests below.
+function boxQuill(delta){
+  var s = scriptQuill(delta);
+  s.box = attachAutocomplete(s.quill, function(){ return s.state.mode; }, function(){ return s.state.autocomplete !== false; });
+  s.key = function(code, index){
+    var binding = s.quill.keyboard.bindings[code][0];
+    return binding.handler.call(s.quill.keyboard, { index: index, length: 0 }, {});
+  };
+  s.type = function(index, text){
+    s.quill.setSelection(index, 0, 'user');
+    s.quill.insertText(index, text, 'user');
+    s.quill.setSelection(index + text.length, 0, 'user');
+  };
+  return s;
+}
+
+function shown(){
+  return Array.from(document.querySelectorAll('.suggestion-box .suggestion')).map(function(el){ return el.textContent; });
+}
+
+test('the suggestion box opens under a cue being typed, accepts with Enter, and Enter then opens the speech', function(){
+  var s = boxQuill(elementsToDelta(parseFountain(CAST).elements));
   var end = s.quill.getLength() - 1;
 
   //A new cue at the end of the script.
   s.quill.insertText(end, '\n', 'user');
   s.quill.formatLine(end + 1, 1, 'element', 'character', 'user');
-  s.quill.setSelection(end + 1, 0, 'user');
-  s.quill.insertText(end + 1, 'S', 'user');
-  assert.strictEqual(box.isOpen(), false, 'one character is too few');
+  s.type(end + 1, 'S');
+  assert.strictEqual(s.box.isOpen(), true, 'one character is enough');
+  assert.deepStrictEqual(shown(), ['SANDRA']);
 
-  s.quill.setSelection(end + 2, 0, 'user');
-  s.quill.insertText(end + 2, 'A', 'user');
-  assert.strictEqual(box.isOpen(), true);
-  assert.deepStrictEqual(Array.from(document.querySelectorAll('.suggestion')).map(function(el){ return el.textContent; }), ['SANDRA']);
-
-  s.quill.setSelection(end + 3, 0, 'user');
-  var enter = s.quill.keyboard.bindings[13][0];
-  assert.strictEqual(enter.handler.call(s.quill.keyboard, { index: end + 3, length: 0 }, {}), false, 'Enter is claimed while the box is open');
-  assert.strictEqual(box.isOpen(), false);
-  assert.strictEqual(s.quill.getText(end + 1, 6), 'SANDRA');
-  assert.strictEqual(s.quill.getSelection().index, end + 7, 'the caret lands at the end of the name');
+  assert.strictEqual(s.key(13, end + 2), false, 'Enter is claimed while the box is open');
+  assert.strictEqual(s.box.isOpen(), false);
+  assert.deepStrictEqual(lines(s.quill).slice(-2), [['character', 'SANDRA'], ['dialogue', '']], 'the name went in and the speech opened under it');
+  assert.strictEqual(s.quill.getSelection().index, end + 8, 'the caret is on the speech');
 
   //Closed, Enter falls through to the screenplay binding beneath it.
-  assert.strictEqual(enter.handler.call(s.quill.keyboard, { index: end + 7, length: 0 }, {}), true);
+  assert.strictEqual(s.key(13, end + 8), true);
 });
 
-test('the suggestion box closes on Escape, on moving off the line, and while the editor shows prose', function(){
-  var s = scriptQuill(elementsToDelta(parseFountain(CAST).elements));
-  var box = attachAutocomplete(s.quill, function(){ return s.state.mode; });
+test('Tab accepts and opens the parenthetical; the right arrow and a click accept and stay', function(){
+  var s = boxQuill(elementsToDelta(parseFountain(CAST).elements));
   var end = s.quill.getLength() - 1;
   s.quill.insertText(end, '\n', 'user');
   s.quill.formatLine(end + 1, 1, 'element', 'character', 'user');
-  s.quill.setSelection(end + 1, 0, 'user');
-  s.quill.insertText(end + 1, 'ED', 'user');
-  s.quill.setSelection(end + 3, 0, 'user');
-  assert.strictEqual(box.isOpen(), true);
 
-  var escape = s.quill.keyboard.bindings[27][0];
-  assert.strictEqual(escape.handler.call(s.quill.keyboard, { index: end + 3, length: 0 }, {}), false);
-  assert.strictEqual(box.isOpen(), false);
-  assert.strictEqual(escape.handler.call(s.quill.keyboard, { index: end + 3, length: 0 }, {}), true, 'closed, Escape is not claimed');
+  s.type(end + 1, 'E');
+  assert.strictEqual(s.key(9, end + 2), false);
+  assert.deepStrictEqual(lines(s.quill).slice(-2), [['character', 'EDWARD'], ['parenthetical', '()']]);
 
-  box.refresh();
-  assert.strictEqual(box.isOpen(), true);
+  s = boxQuill(elementsToDelta(parseFountain(CAST).elements));
+  end = s.quill.getLength() - 1;
+  s.quill.insertText(end, '\n', 'user');
+  s.quill.formatLine(end + 1, 1, 'element', 'character', 'user');
+  s.type(end + 1, 'E');
+  assert.strictEqual(s.key(39, end + 2), false, 'the right arrow accepts');
+  assert.deepStrictEqual(lines(s.quill).slice(-1), [['character', 'EDWARD']]);
+  assert.strictEqual(s.quill.getSelection().index, end + 7);
+});
+
+test('an empty cue offers the next speaker, and Enter takes the guess straight into the speech', function(){
+  var s = boxQuill(elementsToDelta(parseFountain('INT. A - DAY\n\nANNA\nOne.\n\nBOB\nTwo.\n').elements));
+  var end = s.quill.getLength() - 1;
+
+  //Enter after the last speech opens an empty cue, which offers the speakers.
+  var enter = s.quill.keyboard.bindings[13].find(function(b){ return b.screenplayKey === 'enter'; });
+  s.quill.setSelection(end, 0, 'user');
+  enter.handler.call(s.quill.keyboard, { index: end, length: 0 }, {});
+  assert.deepStrictEqual(lines(s.quill).slice(-1), [['character', '']]);
+  assert.strictEqual(s.box.isOpen(), true);
+  assert.deepStrictEqual(shown(), ['ANNA', 'BOB'], 'ANNA spoke before BOB, so ANNA is the guess');
+
+  //Enter takes the first entry with no arrowing, and goes on into the speech.
+  assert.strictEqual(s.key(13, end + 1), false);
+  assert.deepStrictEqual(lines(s.quill).slice(-2), [['character', 'ANNA'], ['dialogue', '']]);
+
+  //Escape is the way past the guess: the cue is then empty with no list, and Enter makes it action.
+  s = boxQuill(elementsToDelta(parseFountain('INT. A - DAY\n\nANNA\nOne.\n\nBOB\nTwo.\n').elements));
+  enter = s.quill.keyboard.bindings[13].find(function(b){ return b.screenplayKey === 'enter'; });
+  s.quill.setSelection(end, 0, 'user');
+  enter.handler.call(s.quill.keyboard, { index: end, length: 0 }, {});
+  assert.strictEqual(s.key(27, end + 1), false);
+  assert.strictEqual(s.box.isOpen(), false);
+  assert.strictEqual(s.key(13, end + 1), true, 'closed, Enter is handed on');
+  enter.handler.call(s.quill.keyboard, { index: end + 1, length: 0 }, {});
+  assert.deepStrictEqual(lines(s.quill).slice(-1), [['action', '']]);
+});
+
+test('accepting an intro fills the start of the heading and stays on the line', function(){
+  var s = boxQuill(delta([['action', 'A room.']]));
+  s.quill.setSelection(7, 0, 'user');
+  insertElement(s.quill, 'scene');
+  assert.strictEqual(s.box.isOpen(), true, 'a new heading offers the intros');
+  assert.deepStrictEqual(shown(), ['INT.', 'EXT.', 'INT./EXT.', 'EST.']);
+
+  s.type(8, 'e');
+  assert.deepStrictEqual(shown(), ['EXT.', 'EST.']);
+  assert.strictEqual(s.key(13, 9), false);
+  assert.deepStrictEqual(lines(s.quill), [['action', 'A room.'], ['scene', 'EXT. ']], 'no new line');
+  assert.strictEqual(s.quill.getSelection().index, 13);
+});
+
+test('the suggestion box closes on Escape and comes back on Escape, closes on moving off the line, in prose, and when switched off', function(){
+  var s = boxQuill(elementsToDelta(parseFountain(CAST).elements));
+  var end = s.quill.getLength() - 1;
+  s.quill.insertText(end, '\n', 'user');
+  s.quill.formatLine(end + 1, 1, 'element', 'character', 'user');
+  s.type(end + 1, 'ED');
+  assert.strictEqual(s.box.isOpen(), true);
+
+  assert.strictEqual(s.key(27, end + 3), false);
+  assert.strictEqual(s.box.isOpen(), false);
+  assert.strictEqual(s.key(27, end + 3), false, 'Escape again brings it back');
+  assert.strictEqual(s.box.isOpen(), true);
+  s.key(27, end + 3);
+
+  s.box.refresh();
+  assert.strictEqual(s.box.isOpen(), true);
   s.quill.setSelection(0, 0, 'user');
-  assert.strictEqual(box.isOpen(), false, 'the caret left the line');
+  assert.strictEqual(s.box.isOpen(), false, 'the caret left the line');
+  assert.strictEqual(s.key(27, 0), true, 'nothing to bring back here: Escape is not claimed');
+
+  s.quill.setSelection(end + 3, 0, 'user');
+  s.state.autocomplete = false;
+  s.box.refresh();
+  assert.strictEqual(s.box.isOpen(), false, 'switched off in Settings');
+  s.state.autocomplete = true;
 
   s.state.mode = 'prose';
-  s.quill.setSelection(end + 3, 0, 'user');
-  box.refresh();
-  assert.strictEqual(box.isOpen(), false);
+  s.box.refresh();
+  assert.strictEqual(s.box.isOpen(), false);
 });
 
 const BIG_FISH = path.join(__dirname, '..', 'screenplay', 'Big-Fish.fountain');
