@@ -594,6 +594,52 @@ test('in a script the chapter shortcuts move between scenes and reorder them', a
   assert.strictEqual(r.editorQuill.getText(9, 12), 'INT. A - DAY', 'one undo entry');
 });
 
+test('from the last scene the next-chapter shortcut goes on to the first reference document', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [scriptWithScenes()];
+  r.project.reference = [makeChap('Bible'), makeChap('Research')];
+  await r.displayChapterByIndex(0);
+
+  r.editorQuill.setSelection(47, 0, 'user');
+  await r.displayNextChapter();
+  assert.strictEqual(r.project.activeChapterIndex, 1, 'off the end of the script and into Reference');
+  assert.strictEqual(document.getElementById('chapters-header').textContent, 'Chapters');
+
+  //And back up to the script, landing on the last scene it was left from rather than the top.
+  await r.displayPreviousChapter();
+  assert.strictEqual(r.project.activeChapterIndex, 0);
+  assert.strictEqual(document.getElementById('chapters-header').textContent, 'Scenes');
+  assert.strictEqual(r.editorQuill.getSelection().index, 47, 'INT. C - DAY');
+  assert.strictEqual(r.project.textCursorPosition, 47);
+  assert.strictEqual(document.querySelector('#chapter-list .activeChapter').textContent, 'INT. C - DAY');
+
+  //From there the shortcut carries on up the script, one scene at a time.
+  await r.displayPreviousChapter();
+  assert.strictEqual(r.editorQuill.getSelection().index, 27, 'EXT. B - NIGHT');
+
+  //With nothing beside the script, the last scene is still where the key stops.
+  r.project.reference = [];
+  r.editorQuill.setSelection(47, 0, 'user');
+  await r.displayNextChapter();
+  assert.strictEqual(r.project.activeChapterIndex, 0);
+  assert.strictEqual(r.editorQuill.getSelection().index, 47);
+});
+
+test('backing into a script with no scene headings lands at the top of it', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  var script = makeChap('Script', { contents: { ops: [{ insert: 'FADE IN:\n' }] } });
+  script.filename = 'Script.fountain';
+  r.project.chapters = [script];
+  r.project.reference = [makeChap('Bible')];
+
+  await r.displayChapterByIndex(1);
+  await r.displayPreviousChapter();
+  assert.strictEqual(r.project.activeChapterIndex, 0);
+  assert.strictEqual(r.editorQuill.getSelection().index, 0);
+});
+
 test('renaming a scene row rewrites the heading in the script', async function(){
   var r = await freshRender();
   r.project.type = 'screenplay';

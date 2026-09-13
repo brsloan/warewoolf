@@ -915,7 +915,8 @@ function removeSpecialDisplayClasses(el){
 //User Actions
 
 //In a script the same keys move between scenes - positions in the one document - rather than
-//between documents. See docs/screenplay-plan.md, "Keyboard".
+//between documents, until the script runs out of scenes below the caret and they go on to the
+//documents beside it. See docs/screenplay-plan.md, "Keyboard".
 async function displayPreviousChapter(){
   if(editorMode() === 'screenplay'){
     jumpToScene(previousSceneStart(currentScenes(), project.textCursorPosition || 0));
@@ -924,15 +925,30 @@ async function displayPreviousChapter(){
 
   if(project.activeChapterIndex > 0){
     await displayChapterByIndex(project.activeChapterIndex - 1);
-    editorQuill.setSelection(0);
-    project.textCursorPosition = 0;
+
+    //Backing into the script from the reference document below it is the return trip of walking
+    //off its last scene, so it lands where that walk left: on the last heading, not the top of a
+    //document the writer has just come down the length of. A script with no headings yet has
+    //nowhere else to go but the top.
+    var scenes = editorMode() === 'screenplay' ? currentScenes() : [];
+    var landing = scenes.length > 0 ? scenes[scenes.length - 1].index : 0;
+
+    editorQuill.setSelection(landing);
+    project.textCursorPosition = landing;
   }
 }
 
 async function displayNextChapter(){
   if(editorMode() === 'screenplay'){
-    jumpToScene(nextSceneStart(currentScenes(), project.textCursorPosition || 0));
-    return;
+    var nextScene = nextSceneStart(currentScenes(), project.textCursorPosition || 0);
+
+    //Past the last scene the key leaves the script the way it leaves a chapter, so that holding it
+    //down walks off the end of the script and into the reference documents beside it, rather than
+    //stopping dead on the last heading.
+    if(nextScene != null){
+      jumpToScene(nextScene);
+      return;
+    }
   }
 
   if(!chapterList.isLastOfAll(project, chapterList.activeLocator(project))){

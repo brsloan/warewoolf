@@ -614,6 +614,11 @@ per phase. Where the implementation departed from the plan above:
   cue or transition (see "Text case"). Big Fish's own `@McCLANE` is the reason.
 - Enter on an empty line of any type makes it action, rather than leaving a
   heading as it was: the keyboard table above was corrected to match.
+- Next Scene past the last scene moves on to the first Reference document,
+  rather than stopping: the key walks off the end of the script the way it
+  walks off the end of a chapter, and Previous Chapter from that document
+  comes back to the script's last scene - the return trip of that walk, rather
+  than the top of a document just come down the length of.
 - The Scenes rows come from the editor's delta, so they show while the script
   is the active document; with a Reference document active the sidebar shows
   chapters, with the script as one row. A screenplay project's reference
