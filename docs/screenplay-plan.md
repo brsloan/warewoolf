@@ -929,10 +929,11 @@ per phase. Where the implementation departed from the plan above:
   feature and belongs with the PDF stylesheet.
 - Sections and synopses are preserved, shown dimmed, and cost nothing in the
   page estimate (see "Page count"). The Outliner is by
-  scene for a screenplay project - a row per heading, the scene's share of the
-  page estimate (`estimateScenePages` in `fountain.js`) and its synopsis lines
-  as the summary, read from the script rather than kept beside it the way a
-  chapter's summary is. A summary editable there would have to write a synopsis
+  scene for a screenplay project - a row per heading, the page the scene begins
+  on ("Page") and the scene's share of the page estimate ("Pgs"), both from
+  `estimateScenePages` in `fountain.js`, and its synopsis lines as the summary,
+  read from the script rather than kept beside it the way a chapter's summary
+  is. A summary editable there would have to write a synopsis
   line back into the script, which is why it is text. An outline built from
   sections, rather than from headings, is a natural later feature.
 - The old branch's `estimateScreenplayPageLength` used 53 lines a page; the

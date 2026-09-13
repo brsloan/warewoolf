@@ -477,6 +477,26 @@ test('the scene estimate gives each heading the pages from it down to the next',
   assert.ok(Math.abs(opening[0].exact - 3 / 55) < 1e-9);
 });
 
+//The page a scene begins on, which is what the Outliner reads down its Page column - the same page
+//the editor's marks and the PDF would put the heading on, page-break reflow included.
+test('each scene says the page its heading falls on', function(){
+  var elements = [{ type: 'scene', text: 'INT. A - DAY' }];
+  for(var i = 0; i < 40; i++)
+    elements.push({ type: 'action', text: 'x' });
+  elements[28] = { type: 'scene', text: 'INT. B - DAY' };
+
+  var scenes = estimateScenePages(elements);
+  assert.deepStrictEqual(scenes.map(function(s){ return s.page; }), [1, 2]);
+
+  //A heading that would fall on the last line of a page moves over with the action it introduces,
+  //and the page it says is the one it was moved to.
+  var kept = [];
+  for(var k = 0; k < 40; k++)
+    kept.push({ type: 'action', text: 'x' });
+  kept[27] = { type: 'scene', text: 'INT. HOUSE - DAY' };
+  assert.deepStrictEqual(estimateScenePages(kept).map(function(s){ return s.page; }), [2]);
+});
+
 test('a scene carried over a page break is measured where it lands, and the scenes sum to the script', function(){
   //Forty one-line actions with a heading at the top and another partway down: the parts add up to
   //the script's own estimate, page-break reflow and all.

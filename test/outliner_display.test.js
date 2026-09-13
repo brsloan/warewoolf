@@ -174,16 +174,31 @@ test('a screenplay project is outlined by scene, with pages in eighths and the s
   await showOutliner(makeProject({ chapters: [] }), makeSettings(), makeScript(A_SCRIPT));
 
   var headers = Array.from(document.querySelectorAll('#outliner-table th')).map(function(h){ return h.innerText; });
-  assert.deepStrictEqual(headers, ['', 'Title', 'Pages', 'Summary']);
+  assert.deepStrictEqual(headers, ['', 'Title', 'Page', 'Pgs', 'Summary']);
 
   var titles = Array.from(document.querySelectorAll('.outliner-title')).map(function(c){ return c.innerText; });
   assert.deepStrictEqual(titles, ['INT. HOUSE - DAY', 'EXT. STREET - NIGHT']);
+
+  var starts = Array.from(document.querySelectorAll('.outliner-page-start')).map(function(c){ return c.innerText; });
+  assert.deepStrictEqual(starts, [1, 1], 'both scenes of a short script begin on page one');
 
   var pages = Array.from(document.querySelectorAll('.outliner-page-count')).map(function(c){ return c.innerText; });
   assert.deepStrictEqual(pages, ['0 1/8', '0 1/8']);
 
   var summaries = Array.from(document.querySelectorAll('.outliner-synopsis')).map(function(c){ return c.innerText; });
   assert.deepStrictEqual(summaries, ['She finds the letter.', ''], 'a scene with no synopsis has no summary');
+});
+
+//Where a scene falls, not how long it runs: the writer reading down the column is looking for the
+//page they would turn to, so a scene pushed onto page two says 2 however short it is.
+test('the page column is the page each scene begins on', async function(){
+  var showOutliner = require(outlinerDisplayPath);
+
+  var script = 'INT. HOUSE - DAY\n\n' + 'Action.\n\n'.repeat(40) + 'EXT. STREET - NIGHT\n\nAction.\n';
+  await showOutliner(makeProject({ chapters: [] }), makeSettings(), makeScript(script));
+
+  var starts = Array.from(document.querySelectorAll('.outliner-page-start')).map(function(c){ return c.innerText; });
+  assert.deepStrictEqual(starts, [1, 2]);
 });
 
 //The two prose columns are gone rather than left empty: a word count says nothing about a script,

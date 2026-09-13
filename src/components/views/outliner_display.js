@@ -107,12 +107,14 @@ async function showOutliner(project, userSettings, script){
   }
 }
 
-//A script's outline: a row per scene heading, the pages the scene fills, and its synopsis lines as
-//the summary. No word count and no words-per-page estimate - a screenplay is measured in pages, and
-//the pages here are the ones Page Count and the editor's page marks are drawn from (fountain.js's
-//estimateScenePages), said in eighths the way a screenwriter says a length. The summary is read from
-//the script rather than kept beside it: a scene's synopsis is a line of the script itself, so it is
-//shown as it stands and written where it lives, in the editor.
+//A script's outline: a row per scene heading, the page it is estimated to begin on, the pages the
+//scene fills, and its synopsis lines as the summary. No word count and no words-per-page estimate -
+//a screenplay is measured in pages, and the pages here are the ones Page Count and the editor's page
+//marks are drawn from (fountain.js's estimateScenePages), the length said in eighths the way a
+//screenwriter says one. "Page" is where the scene falls in the script and "Pgs" is how long it runs;
+//the first is what a writer reads down the column to find where they are, so it comes first. The
+//summary is read from the script rather than kept beside it: a scene's synopsis is a line of the
+//script itself, so it is shown as it stands and written where it lives, in the editor.
 async function showSceneOutliner(script){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
@@ -123,7 +125,7 @@ async function showSceneOutliner(script){
   sceneTable.id = "outliner-table";
 
   var headerRow = document.createElement('tr');
-  ["", "Title", "Pages", "Summary"].forEach(function(h){
+  ["", "Title", "Page", "Pgs", "Summary"].forEach(function(h){
     var head = document.createElement('th');
     head.innerText = h;
     headerRow.appendChild(head);
@@ -144,6 +146,11 @@ async function showSceneOutliner(script){
     titleCell.innerText = scene.title;
     titleCell.classList.add('outliner-title');
     row.appendChild(titleCell);
+
+    var pageCell = document.createElement('td');
+    pageCell.innerText = scene.page;
+    pageCell.classList.add('outliner-page-start');
+    row.appendChild(pageCell);
 
     var pagesCell = document.createElement('td');
     pagesCell.innerText = scene.eighths;

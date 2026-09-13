@@ -758,11 +758,12 @@ function estimatePages(elements){
   };
 }
 
-//Each scene's share of the page estimate: its heading, where the heading is in `elements`, and the
-//pages from it down to the next heading - or to the end of the script, for the last one. The blank
-//line before a heading falls to the scene above it, so the scenes add up to the script's own
-//estimate but for whatever stands before the first heading (a FADE IN:, an opening action line),
-//which belongs to no scene the way it belongs to none in the sidebar's list. Read by the Outliner.
+//Each scene's share of the page estimate: its heading, where the heading is in `elements`, the page
+//the heading is estimated to fall on, and the pages from it down to the next heading - or to the end
+//of the script, for the last one. The blank line before a heading falls to the scene above it, so
+//the scenes add up to the script's own estimate but for whatever stands before the first heading (a
+//FADE IN:, an opening action line), which belongs to no scene the way it belongs to none in the
+//sidebar's list. Read by the Outliner.
 function estimateScenePages(elements){
   var layout = layoutPages(elements);
   var headings = [];
@@ -779,6 +780,7 @@ function estimateScenePages(elements){
     return {
       index: heading.index,
       title: heading.title,
+      page: Math.floor(heading.start / PAGE_LINES) + 1,
       pages: Math.ceil(exact),
       exact: exact,
       eighths: describeEighths(exact)
