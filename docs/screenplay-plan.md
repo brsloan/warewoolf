@@ -5,7 +5,7 @@ script, written in [Fountain](https://fountain.io) syntax and saved as a single
 `.fountain` file, edited all at once in the manuscript editor. The Chapters
 sidebar becomes a Scenes list built from the script's scene headings, and the
 chapter shortcuts become scene shortcuts. Enter and Tab move between screenplay
-elements the way Final Draft does, so a writer never types markup.
+elements, so a writer never types markup.
 
 This replaces the abandoned `screenplay` branch (40 commits, diverged from main
 at `ba9c0be` in October 2025). That branch proved the workflow and is the
@@ -141,7 +141,7 @@ reason. Because the editor upper-cases on the way in, forced forms stay rare.
 | Title page | Structured, on the project, round-tripped through the file; the file wins on load |
 | Case of cues and headings | Written as typed; forced with `@`/`.`/`>` when the text would not read back as its type. The editor upper-cases on the way in |
 | Literal `*`, `_`, `[[`, leading `.`/`!`/`@`/`>`/`~`/`=`/`#` in text | Escaped with a backslash on save, exactly as `convertDeltaToMDF` escapes MarkdownFic markers |
-| Enter after Dialogue | Character, as Final Draft does. The old branch went to Action; a second Enter on the empty cue gets there. **Confirm before Phase 4** |
+| Enter after Dialogue | Character. The old branch went to Action; a second Enter on the empty cue gets there. **Confirm before Phase 4** |
 | Element shortcuts | Ctrl+1..6 as before. Definitions carry a `mode`, and conflicts are checked within a mode, so Ctrl+1 can mean Heading 1 in prose and Scene Heading in a script |
 | Footnotes in a script | Inert: the Enter binding and the insert shortcut both return early in screenplay mode |
 | Big Fish as a test fixture | Read from `screenplay/` when present and skipped when not; the folder is gitignored, and the script is John August's, not ours to commit |

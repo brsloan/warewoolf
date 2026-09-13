@@ -219,9 +219,8 @@ function toggleDual(quill){
 // Keys
 // ------------------------------------------------------------------------------------------
 
-//What Enter at the end of a line makes next, as Final Draft has it: a cue is
-//followed by dialogue and dialogue by the next cue, a heading by action, a transition by a
-//heading.
+//What Enter at the end of a line makes next: a cue is followed by dialogue and dialogue by the
+//next cue, a heading by action, a transition by a heading.
 const NEXT_ON_ENTER = {
   scene: 'action',
   action: 'action',
@@ -406,10 +405,9 @@ const HEADING_TIME = /\s+-\s*([^-]*)$/;
 const HEADING_NUMBER = /\s*#[^#]*#\s*$/;
 const HEADING_SEPARATOR = ' - ';
 
-//Tab moves to the element a writer reaches for next from where they are, as Final Draft and Fade
-//In have it: action becomes a cue, a cue or a speech opens a parenthetical under it with the caret
-//between the parentheses (an empty one becomes the parenthetical itself), a parenthetical opens
-//the speech. A heading is stepped through: on an empty one it types the "INT. " a heading almost
+//Tab moves to the element a writer reaches for next from where they are: action becomes a cue, a
+//cue or a speech opens a parenthetical under it with the caret between the parentheses (an empty
+//one becomes the parenthetical itself), a parenthetical opens the speech. A heading is stepped through: on an empty one it types the "INT. " a heading almost
 //always starts with, and after the place it puts the " - " the time of day follows, which opens
 //the list of times. On a transition: nothing with the caret at the start, and an action line
 //under it otherwise, since Enter is what opens the heading.

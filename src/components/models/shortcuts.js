@@ -383,7 +383,7 @@ const SHORTCUT_DEFS = [
   { id: 'typewriterMode', label: 'Typewriter Mode', section: 'Display', target: 'global', defaultBinding: makeBinding('T', { mod: true, alt: true }) },
 
   //Screenplay elements (docs/screenplay-plan.md, Phase 4), bound only while the editor shows a
-  //script. Ctrl+1..6, in the order Final Draft uses, open a new element on a line with text and
+  //script. Ctrl+1..6 open a new element on a line with text and
   //set the type on an empty line; Ctrl+Alt+1..6 set
   //the type of the current line whatever it holds. They share Ctrl+1..6 with the prose headings,
   //which is why `mode` exists.
