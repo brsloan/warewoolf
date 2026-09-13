@@ -378,8 +378,9 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
     return select;
   }
 
-  //WareWoolf ships no font files, so a face is only ever the best one of its stack a writer happens
-  //to have installed, and there is no honest way to say which that is in the dropdown. The sample
+  //WareWoolf ships one font file (Courier Prime, for screenplays), so a face is otherwise only the
+  //best one of its stack a writer happens to have installed, and there is no honest way to say
+  //which that is in the dropdown. The sample
   //answers it by showing the result: whatever is drawn here is what the panel will be drawn in.
   //
   //A pangram, because what is being shown is the shape of the letters and a pangram is the shortest

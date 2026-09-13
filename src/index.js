@@ -5,6 +5,28 @@ const { ipcMain } = require('electron');
 const { COMMANDS, createPlatform } = require('./components/controllers/platform');
 const { createNodeBacking } = require('./components/controllers/platform-node');
 const { createCommandHost } = require('./components/controllers/platform-host');
+
+//Courier Prime's four faces as @font-face rules carrying the font bytes, for a page that cannot
+//load them by URL - the screenplay PDF's, see onPrintToPdf. Read once, on the first export: the
+//files total under 400K and become a little over 500K of base64, which is nothing to keep but
+//also nothing to read at startup for a writer who never prints a script.
+var fontFacesCss = null;
+function screenplayFontFaces(){
+  if(fontFacesCss == null){
+    var faces = [
+      ['CourierPrime-Regular.ttf', 'normal', 'normal'],
+      ['CourierPrime-Bold.ttf', 'bold', 'normal'],
+      ['CourierPrime-Italic.ttf', 'normal', 'italic'],
+      ['CourierPrime-BoldItalic.ttf', 'bold', 'italic']
+    ];
+    fontFacesCss = faces.map(function(face){
+      var bytes = fs.readFileSync(path.join(__dirname, 'assets', 'fonts', face[0]));
+      return '@font-face { font-family: "Courier Prime"; font-weight: ' + face[1] + '; font-style: ' + face[2] +
+        '; src: url("data:font/ttf;base64,' + bytes.toString('base64') + '") format("truetype"); }';
+    }).join('\n');
+  }
+  return fontFacesCss;
+}
 const isLinux = process.platform === "linux";
 const isMac = process.platform === "darwin";
 var fileRequestedOnOpen = null;
@@ -631,9 +653,15 @@ function host(){
       //in a window nobody sees and printed by Chromium to Letter with a script's margins - an
       //inch and a half on the left, an inch elsewhere - and a page number top right. The window
       //is closed whether or not the print succeeded.
+      //
+      //The page asks for Courier Prime, the face index.css bundles for the editor, and it must
+      //get it: a script's length is its page count, and that depends on the exact face. But a
+      //data: URL has no origin Chromium will let read file:// - the url()s index.css uses would
+      //be refused - so the same four files go in as @font-face rules with the bytes inlined.
       onPrintToPdf: function(html, filePath){
         var printer = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true } });
-        var done = printer.webContents.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html))
+        var page = html.replace('<head>', '<head><style>' + screenplayFontFaces() + '</style>');
+        var done = printer.webContents.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(page))
           .then(function(){
             return printer.webContents.printToPDF({
               pageSize: 'Letter',

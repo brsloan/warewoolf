@@ -258,7 +258,10 @@ Dialogue is indented, not centred: the old branch centred cues and padded
 dialogue symmetrically, which reads well enough on screen but is not how a
 script is laid out, and the PDF phase needs the real margins anyway. The
 typewriter stack is the one `fonts.js:46` already carries; the manuscript font
-setting keeps applying to prose documents and is ignored for a script.
+setting keeps applying to prose documents and is ignored for a script. Courier
+Prime, the stack's first name, is bundled (`src/assets/fonts`, declared by
+`@font-face` in index.css and inlined into the print page by index.js) so the
+script and its PDF are the same face on every machine.
 
 **Mode** is a function of the active chapter, not a flag:
 

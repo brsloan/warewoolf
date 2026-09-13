@@ -24,7 +24,8 @@ test('font ids are unique, since an id is what gets stored', function(){
   assert.strictEqual(new Set(ids).size, ids.length);
 });
 
-//WareWoolf bundles no font files, so every stack is a list of faces a writer may or may not have.
+//WareWoolf bundles one font file (Courier Prime), so every other name in a stack is a face a
+//writer may or may not have.
 //Ending in a generic family is what keeps a writer who has none of them from getting whatever the
 //browser picks by default instead of something in the right shape.
 test('every stack ends in a generic font family', function(){

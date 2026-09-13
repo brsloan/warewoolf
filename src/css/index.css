@@ -513,6 +513,37 @@ hr {
    Capitals for headings, cues and transitions are drawn here; the text keeps its own case, and
    the codec forces any line whose case would not read back. */
 
+/* The one typeface WareWoolf ships: Courier Prime (Quote-Unquote Apps, SIL Open Font License -
+   see Third-Party-Notices.txt), drawn for screenplays, where the page's length depends on the
+   exact face and "whatever Courier this machine has" is not good enough. Declared here so the
+   name resolves to the same files on every machine; Chromium reads a face only when a rule first
+   asks for it, so a writer who never opens a script never loads them. The PDF export embeds the
+   same four files itself, because its hidden window cannot reach these URLs - see index.js. */
+@font-face {
+  font-family: "Courier Prime";
+  font-weight: normal;
+  font-style: normal;
+  src: url("../assets/fonts/CourierPrime-Regular.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Courier Prime";
+  font-weight: bold;
+  font-style: normal;
+  src: url("../assets/fonts/CourierPrime-Bold.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Courier Prime";
+  font-weight: normal;
+  font-style: italic;
+  src: url("../assets/fonts/CourierPrime-Italic.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Courier Prime";
+  font-weight: bold;
+  font-style: italic;
+  src: url("../assets/fonts/CourierPrime-BoldItalic.ttf") format("truetype");
+}
+
 #editor-container.screenplay .ql-editor {
   font-family: "Courier Prime", "Courier New", Courier, "Nimbus Mono PS", "Liberation Mono", monospace;
   line-height: 1.25;
