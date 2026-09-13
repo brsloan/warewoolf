@@ -254,7 +254,7 @@ hr {
   width: var(--sidebar-width);
   display: none;
   float: left;
-  height: 93vh;
+  height: 95vh;
   font-size: var(--main-font-size);
   font-family: var(--font-sidebar);
   color: var(--text);
