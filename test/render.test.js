@@ -1662,6 +1662,29 @@ test('a command with no focus guard runs regardless of where focus is', async fu
   assert.ok(document.querySelector('.popup-outliner'), 'outliner-clicked has no focus guard and should have run');
 });
 
+//A screenplay project is outlined by scene, so the Outliner is handed the project's script - the
+//one document in its Chapters list - whichever document the caret is in, the same way the sidebar's
+//scene rows come from the script either way. See outliner_display.js's showSceneOutliner.
+test('the Outliner of a screenplay project lists the scenes of its script, from a Reference document too', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [scriptWithScenes()];
+  r.project.reference = [makeChap('Bible')];
+
+  await r.displayChapterByIndex(0);
+  await currentBridge().handlers['outliner-clicked']();
+
+  var titles = Array.from(document.querySelectorAll('.outliner-title')).map(function(c){ return c.innerText; });
+  assert.deepStrictEqual(titles, ['INT. A - DAY', 'EXT. B - NIGHT', 'INT. C - DAY']);
+  assert.strictEqual(document.querySelectorAll('.outliner-word-count').length, 0, 'a screenplay is not counted in words');
+
+  await r.displayChapterByIndex(1); //the Reference document, after the script in the combined list
+  await currentBridge().handlers['outliner-clicked']();
+
+  assert.deepStrictEqual(Array.from(document.querySelectorAll('.outliner-title')).map(function(c){ return c.innerText; }),
+    ['INT. A - DAY', 'EXT. B - NIGHT', 'INT. C - DAY']);
+});
+
 //jsdom's innerText does not create real text nodes, so document.textContent cannot see text set
 //through it - these check the specific elements the two views set it on instead.
 //

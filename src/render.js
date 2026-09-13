@@ -2411,7 +2411,11 @@ const menuCommands = {
   } },
   'outliner-clicked': { run: function(){
     const showOutliner = require('./components/views/outliner_display');
-    return showOutliner(project, userSettings);
+    //A screenplay project is outlined by scene rather than by document - its Chapters list holds
+    //only the script - so the Outliner is handed the script to break down. The project's, not the
+    //editor's: the outline is of the screenplay wherever the caret happens to be, the same way the
+    //sidebar's scene rows are.
+    return showOutliner(project, userSettings, project.isScreenplay() ? scriptChapter() : null);
   } },
   'convert-tabs-clicked': { run: function(){
     const showTabOptions = require('./components/views/convert-tabs-display');

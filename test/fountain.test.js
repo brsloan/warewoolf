@@ -13,6 +13,7 @@ const {
   estimatePages,
   describeEighths,
   estimatePageStarts,
+  estimateScenePages,
   getTitlePageValues,
   setTitlePageValues,
   sanitizeTitlePage
@@ -417,6 +418,79 @@ test('the page starts name the element that begins each page after the first', f
   //A note takes no lines and never begins a page; the element after it does.
   var noted = [{ type: 'action', text: 'x'.repeat(61 * 54) }, { type: 'note', text: 'later' }, { type: 'action', text: 'y' }];
   assert.deepStrictEqual(estimatePageStarts(noted), [{ index: 2, page: 2 }]);
+});
+
+//A section, a synopsis, a note and a boneyard are written into a script but never printed from it
+//(screenplay-export.js's PRINTED leaves all four out of the PDF), so a scene carrying them is not
+//estimated any longer than it prints - nor is the blank line between two elements doubled by one
+//standing between them.
+test('the lines a script is not printed with take no lines in the estimate', function(){
+  var bare = estimatePages(parseFountain('INT. A - DAY\n\nAction.\n\nBOB\nHi.\n').elements).exact;
+
+  ['# Act One', '= She finds the letter.', '[[check the date]]'].forEach(function(line){
+    var marked = parseFountain('INT. A - DAY\n\n' + line + '\n\nAction.\n\nBOB\nHi.\n').elements;
+    assert.strictEqual(estimatePages(marked).exact, bare, 'with ' + JSON.stringify(line));
+  });
+
+  var boned = parseFountain('INT. A - DAY\n\n/*\ncut this\n*/\n\nAction.\n\nBOB\nHi.\n').elements;
+  assert.strictEqual(estimatePages(boned).exact, bare, 'with a boneyard');
+
+  //And they never begin a page: the element after one does, as it does after a note.
+  var elements = [{ type: 'action', text: 'x'.repeat(61 * 54) }, { type: 'synopsis', text: 'the turn' },
+    { type: 'action', text: 'y' }];
+  assert.deepStrictEqual(estimatePageStarts(elements), [{ index: 2, page: 2 }]);
+});
+
+test('a scene is as long as it prints, whatever the writer has left in it', function(){
+  var scenes = estimateScenePages(parseFountain('INT. A - DAY\n\n= She finds the letter.\n\nAction.\n\nINT. B - DAY\n\nAction.\n').elements);
+  var bare = estimateScenePages(parseFountain('INT. A - DAY\n\nAction.\n\nINT. B - DAY\n\nAction.\n').elements);
+
+  assert.deepStrictEqual(scenes.map(function(s){ return s.exact; }), bare.map(function(s){ return s.exact; }));
+});
+
+test('the scene estimate gives each heading the pages from it down to the next', function(){
+  assert.deepStrictEqual(estimateScenePages([]), []);
+  assert.deepStrictEqual(estimateScenePages([{ type: 'action', text: 'Just action.' }]), [],
+    'a script with no headings has no scenes');
+
+  //INT. A (1), a blank and an action (2), and the blank before the next heading = 4 lines; the
+  //second heading (1), a blank, a cue and a line of speech = 4 more to the end. The blank before a
+  //heading falls to the scene above it, so the two scenes are the whole 8 lines between them.
+  var scenes = estimateScenePages(parseFountain('INT. A - DAY\n\nAction.\n\nINT. B - DAY\n\nBOB\nHi.\n').elements);
+  assert.deepStrictEqual(scenes.map(function(s){ return s.title; }), ['INT. A - DAY', 'INT. B - DAY']);
+  assert.deepStrictEqual(scenes.map(function(s){ return s.index; }), [0, 2]);
+  assert.ok(Math.abs(scenes[0].exact - 4 / 55) < 1e-9);
+  assert.ok(Math.abs(scenes[1].exact - 4 / 55) < 1e-9);
+  assert.deepStrictEqual(scenes.map(function(s){ return s.pages; }), [1, 1]);
+  assert.deepStrictEqual(scenes.map(function(s){ return s.eighths; }), ['0 1/8', '0 1/8']);
+
+  //A scene of a page and a half, said in eighths the way Page Count says the whole script.
+  var page = estimateScenePages([{ type: 'scene', text: 'INT. A - DAY' },
+    { type: 'action', text: 'x'.repeat(61 * 81) }]);
+  assert.strictEqual(page[0].eighths, '1 4/8');
+  assert.strictEqual(page[0].pages, 2);
+
+  //What stands before the first heading belongs to no scene, so the scenes do not account for it -
+  //the same as the sidebar's scene rows and Delete Chapter's blocks.
+  var opening = estimateScenePages(parseFountain('FADE IN:\n\nINT. A - DAY\n\nAction.\n').elements);
+  assert.strictEqual(opening.length, 1);
+  assert.ok(Math.abs(opening[0].exact - 3 / 55) < 1e-9);
+});
+
+test('a scene carried over a page break is measured where it lands, and the scenes sum to the script', function(){
+  //Forty one-line actions with a heading at the top and another partway down: the parts add up to
+  //the script's own estimate, page-break reflow and all.
+  var elements = [{ type: 'scene', text: 'INT. A - DAY' }];
+  for(var i = 0; i < 40; i++)
+    elements.push({ type: 'action', text: 'x' });
+  elements[28] = { type: 'scene', text: 'INT. B - DAY' };
+
+  var scenes = estimateScenePages(elements);
+  var total = estimatePages(elements).exact;
+  var summed = scenes.reduce(function(sum, scene){ return sum + scene.exact; }, 0);
+
+  assert.strictEqual(scenes.length, 2);
+  assert.ok(Math.abs(summed - total) < 1e-9, 'the scenes together are the script: ' + summed + ' vs ' + total);
 });
 
 test('a heading, a cue or a parenthetical is never left at the foot of a page: the page turns before it', function(){

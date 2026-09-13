@@ -643,7 +643,15 @@ function escapeInline(text){
 //for the Word Count popup, which says it is an estimate, and for the page marks the editor draws.
 const PAGE_LINES = 55;
 const LINE_WIDTH = { action: 61, scene: 61, transition: 61, centered: 61, lyric: 35,
-  dialogue: 35, parenthetical: 25, character: 38, section: 61, synopsis: 61 };
+  dialogue: 35, parenthetical: 25, character: 38 };
+
+//The elements a script is written with but never printed with: an outline header, a scene's
+//synopsis, a note to oneself, a stretch of boneyard. They are the writer's and not the
+//screenplay's - screenplay-export.js's PRINTED leaves all four out of the PDF - so they take no
+//lines in the estimate either, and a scene carrying a synopsis is not estimated a line longer than
+//it prints. They still occupy a line of the editor, so the page marks fall between the lines that
+//will be on the page rather than the lines on the screen.
+const NON_PRINTING = ['section', 'synopsis', 'note', 'boneyard'];
 
 //A heading, a cue or a parenthetical is never left at the foot of a page with what it introduces
 //on the next: a page cannot turn after one, so it moves over with what follows. The PDF says the
@@ -656,26 +664,36 @@ const KEEP_WITH_NEXT = ['scene', 'character', 'parenthetical'];
 //page inside, since a break inside an element has no line in the editor to sit on. When the page
 //turns before an element that a run of KEEP_WITH_NEXT elements introduces, the whole run is laid
 //again from the top of the new page and its first element begins the page, unless the run is
-//itself longer than a page. Notes and boneyards take no lines and never start a page.
+//itself longer than a page. A NON_PRINTING element takes no lines and never starts a page.
 function layoutPages(elements){
   var lines = 0;
   var page = 1;
   var starts = [];
+  //The line each element ends up starting on, by its index in `elements`, after any reflow below.
+  //Elements that take no lines - the non-printing ones, forced page breaks - have no entry.
+  var startLines = [];
   //The run of KEEP_WITH_NEXT elements directly before the current one: each with its index, the
   //line it starts on, whether a blank line preceded it and the lines its text takes.
   var run = [];
+  //The element the blank line before the current one is decided against: the last that took lines,
+  //rather than whichever is directly above in the list. A note or a synopsis between two elements
+  //is not a gap between them - the page has nothing there to stand a blank line away from - so the
+  //two are laid out as the PDF lays them, next to each other.
+  var previous = null;
 
   elements.forEach(function(element, i){
-    if(element.type === 'note' || element.type === 'boneyard')
+    if(NON_PRINTING.indexOf(element.type) !== -1)
       return;
 
     if(element.type === 'pagebreak'){
       lines = Math.ceil(lines / PAGE_LINES) * PAGE_LINES;
       run = [];
+      //A break is something to stand away from, the way the line above it was: what follows one
+      //begins the new page after a blank line, as it did before non-printing elements were skipped.
+      previous = element;
       return;
     }
 
-    var previous = i > 0 ? elements[i - 1] : null;
     var joined = previous != null && (element.tight ||
       (GROUP_CONTINUATION.indexOf(element.type) !== -1 && isDialogueGroupMember(previous)));
     var gap = previous != null && !joined;
@@ -692,6 +710,7 @@ function layoutPages(elements){
           if(k > 0 && kept.gap)
             lines += 1;
           kept.start = lines;
+          startLines[kept.index] = lines;
           lines += kept.height;
         });
         page = Math.floor(top / PAGE_LINES) + 1;
@@ -715,10 +734,12 @@ function layoutPages(elements){
     else
       run = [];
 
+    startLines[i] = lines;
     lines += height;
+    previous = element;
   });
 
-  return { lines: lines, starts: starts };
+  return { lines: lines, starts: starts, startLines: startLines };
 }
 
 //Where the pages are estimated to turn: [{ index, page }], the element that begins each page
@@ -735,6 +756,34 @@ function estimatePages(elements){
     exact: exact,
     eighths: describeEighths(exact)
   };
+}
+
+//Each scene's share of the page estimate: its heading, where the heading is in `elements`, and the
+//pages from it down to the next heading - or to the end of the script, for the last one. The blank
+//line before a heading falls to the scene above it, so the scenes add up to the script's own
+//estimate but for whatever stands before the first heading (a FADE IN:, an opening action line),
+//which belongs to no scene the way it belongs to none in the sidebar's list. Read by the Outliner.
+function estimateScenePages(elements){
+  var layout = layoutPages(elements);
+  var headings = [];
+
+  elements.forEach(function(element, i){
+    if(element.type === 'scene')
+      headings.push({ index: i, title: element.text || '', start: layout.startLines[i] || 0 });
+  });
+
+  return headings.map(function(heading, k){
+    var end = k + 1 < headings.length ? headings[k + 1].start : layout.lines;
+    var exact = (end - heading.start) / PAGE_LINES;
+
+    return {
+      index: heading.index,
+      title: heading.title,
+      pages: Math.ceil(exact),
+      exact: exact,
+      eighths: describeEighths(exact)
+    };
+  });
 }
 
 //A page count the way a screenwriter says one: whole pages and eighths ("3 2/8", "112"). A
@@ -805,6 +854,7 @@ module.exports = {
   tokenizeInline,
   classifyLine,
   estimatePages,
+  estimateScenePages,
   describeEighths,
   estimatePageStarts,
   getTitlePageValues,

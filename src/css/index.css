@@ -1062,6 +1062,14 @@ hr {
   background-color: var(--input-bg);
 }
 
+/* A scene's summary in a screenplay project is its synopsis lines, read out of the script itself
+   rather than typed here, so the cell is text: no field to fill it, the table's own padding, and
+   free to wrap over as many lines as the synopsis takes. */
+.outliner-synopsis {
+  width: 99%;
+  white-space: normal;
+}
+
 /* --- About -------------------------------------------------------------------------------- */
 
 .logo {

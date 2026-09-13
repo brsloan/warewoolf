@@ -486,7 +486,13 @@ from the script on every keystroke and are not editable.
 **Page count.** `estimatePages(elements)` in `fountain.js`, from the old
 branch's line model: 55 lines a page, 61 characters across an action line, 35
 across dialogue, fixed line costs for cues, parentheticals, headings and
-transitions. Word Count (`wordcount_display.js`) becomes a Page Count when the
+transitions. The elements a script is written with but not printed with -
+sections, synopses, notes, boneyards, the `NON_PRINTING` list, and the same four
+`screenplay-export.js`'s `PRINTED` leaves out of the PDF - take no lines at all,
+and are not a gap between the elements around them either: the estimate counts
+the page, not the screen, so a scene full of the writer's own notes is not
+estimated longer than it prints. They still take a line in the editor, which is
+why the page marks are drawn at an element rather than at a line number. Word Count (`wordcount_display.js`) becomes a Page Count when the
 active document is a script: "Script pages (estimate): 112 (111 3/8)", the
 session's change in pages (against the estimate the script had when it first
 came into the editor, kept per script in render.js's `scriptPagesOnOpen`, since
@@ -543,7 +549,7 @@ accelerator on a menu built before the mode arrived - gets the message from
 | Send via Email (sends the script as `.fountain`) | Export (one file, Save As: PDF, FDX, Fountain, text) | Renumber Chapters |
 | Add New Chapter (makes a Reference document while the script is active) | | |
 | Settings, Dictionaries, File Manager, Wi-Fi | Compile (one document: Export instead) | Convert First Lines, Marked Italics, Marked Tabs |
-| Corkboard, Outliner (project-level notes) | | Break Headings Into Chapters |
+| Corkboard (project-level notes) | Outliner (by scene, in pages) | Break Headings Into Chapters |
 | Convert Straight Quotes (still wanted in dialogue) | | Tab-Indent Paragraphs, Center All Headings |
 
 `insertFootnote` and `footnoteEnterBinding` return early in screenplay mode.
@@ -798,9 +804,14 @@ per phase. Where the implementation departed from the plan above:
   title page does on load.
 - Dual dialogue renders as a marker only. Side-by-side layout is a print
   feature and belongs with the PDF stylesheet.
-- Sections and synopses are preserved and shown dimmed. An outline view built
-  from sections is a natural later feature and a reason the Outliner is left
-  enabled rather than blocked.
+- Sections and synopses are preserved, shown dimmed, and cost nothing in the
+  page estimate (see "Page count"). The Outliner is by
+  scene for a screenplay project - a row per heading, the scene's share of the
+  page estimate (`estimateScenePages` in `fountain.js`) and its synopsis lines
+  as the summary, read from the script rather than kept beside it the way a
+  chapter's summary is. A summary editable there would have to write a synopsis
+  line back into the script, which is why it is text. An outline built from
+  sections, rather than from headings, is a natural later feature.
 - The old branch's `estimateScreenplayPageLength` used 53 lines a page; the
   spec-derived figure is 55. Phase 6 should pick one against the Big Fish PDF's
   actual page count rather than trust either.
