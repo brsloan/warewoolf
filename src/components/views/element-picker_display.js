@@ -2,9 +2,9 @@ const { describeDialog } = require('../controllers/utils');
 const { insertElement, setElement } = require('../controllers/screenplay-editor');
 const { ELEMENT_NAMES } = require('../blots/screenplay');
 
-//The element picker, Insert Element: every type a script line can be, in one list, for the
-//types with no key of their own - a section, a
-//synopsis, a note, a lyric, a page break - and for a writer who has not learned the keys. Enter
+//The element picker, the Insert/Convert Menu: every type a script line can be, in one list, for
+//the types with no key of their own - a section, a synopsis, a note, a lyric, a page break - and
+//for a writer who has not learned the keys. Enter
 //opens a new line of the chosen type the way the element shortcuts do (insertElement); Shift+Enter
 //makes the current line the type instead (setElement), which is the reformat shortcuts' job;
 //Escape closes it. Hand-built DOM in the style of blocked-action_display.js, and one at a time:
@@ -31,7 +31,7 @@ function showElementPicker(quill){
   popup.classList.add('popup');
 
   var heading = document.createElement('p');
-  heading.innerText = 'Insert Element';
+  heading.innerText = 'Insert/Convert Menu';
   popup.appendChild(heading);
   describeDialog(popup, heading, 'dialog');
 

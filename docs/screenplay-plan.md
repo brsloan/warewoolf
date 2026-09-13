@@ -331,7 +331,7 @@ the end of the line, for Enter and Tab both. A selection falls through to
 Quill. Shift+Enter inserts a new line of the same type with `tight` set. Two
 more fixed bindings, fixed because Enter is reserved from the customizable
 shortcuts: Ctrl+Enter opens a new heading, with the intros offered, and
-Ctrl+Shift+Enter opens the element picker (`element-picker_display.js`),
+Ctrl+Shift+Enter opens the Insert/Convert Menu (`element-picker_display.js`),
 every type a line can be in one list, Enter inserting and Shift+Enter
 reformatting.
 
@@ -468,7 +468,7 @@ this away with them. The panel lays its children out in a column for it - the
 notes editor takes the height that is left, the block keeps its own.
 
 The names come from `ELEMENT_NAMES` in `blots/screenplay.js`, beside the types
-themselves, so the block and the Insert Element picker call the same type the
+themselves, so the block and the Insert/Convert Menu call the same type the
 same thing. `refreshFormatBlock()` in `render.js` is what feeds it, from
 `selection-change` (the caret moved), from a user `text-change` (Tab
 reformatted the line the caret is already on, so no selection-change follows -

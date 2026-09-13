@@ -30,10 +30,10 @@ test('every element type has a name to show, and no name stands for a type that 
   assert.deepStrictEqual(Object.keys(ELEMENT_NAMES).slice().sort(), ELEMENT_TYPES.slice().sort());
 });
 
-//The point of moving the names out of the picker: the block and the Insert Element list call the
+//The point of moving the names out of the picker: the block and the Insert/Convert Menu call the
 //same type the same thing, so a writer who picks "Centered Text" is not then told they are on a
 //"Centered Line".
-test('the Insert Element list takes its labels from the same names, minus boneyard', function(){
+test('the Insert/Convert Menu takes its labels from the same names, minus boneyard', function(){
   var ELEMENTS = require('../src/components/views/element-picker_display').ELEMENTS;
 
   ELEMENTS.forEach(function(pair){

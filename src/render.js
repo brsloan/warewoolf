@@ -2437,6 +2437,10 @@ const menuCommands = {
     const showShortcutsHelp = require('./components/views/shortcuts-help_display');
     showShortcutsHelp({
       isMac: isMac,
+      //The project's, not the editor's: the list is of what this project's keys do, so it reads the
+      //same whether the caret happens to be in the script or in a note beside it - the same call
+      //the Outliner makes for the same reason.
+      isScreenplay: project.isScreenplay(),
       bindings: shortcutBindings,
       onSave: applyShortcutChanges
     });

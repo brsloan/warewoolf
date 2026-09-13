@@ -506,7 +506,7 @@ function screenplayNewSceneBinding(quill, getMode){
   return binding;
 }
 
-//Ctrl+Shift+Enter, Insert Element: the picker of every type a line can be.
+//Ctrl+Shift+Enter, the Insert/Convert Menu: the picker of every type a line can be.
 function screenplayPickerBinding(quill, getMode){
   var binding = {
     key: 13,

@@ -400,9 +400,9 @@ const SHORTCUT_DEFS = [
   { id: 'reformatParenthetical', label: 'Reformat as Parenthetical', section: 'Screenplay', target: 'quill', mode: 'screenplay', defaultBinding: makeBinding('4', { mod: true, alt: true }) },
   { id: 'reformatDialogue', label: 'Reformat as Dialogue', section: 'Screenplay', target: 'quill', mode: 'screenplay', defaultBinding: makeBinding('5', { mod: true, alt: true }) },
   { id: 'reformatTransition', label: 'Reformat as Transition', section: 'Screenplay', target: 'quill', mode: 'screenplay', defaultBinding: makeBinding('6', { mod: true, alt: true }) },
-  //Ctrl+D is Dual Dialogue. Ctrl+Enter (a new heading) and Ctrl+Shift+Enter (Insert Element) are
-  //not here: Enter is reserved from the shortcuts (RESERVED_KEYS), so those two are fixed
-  //bindings in screenplay-editor.js, like Shift+Enter. Upper/Lower/Title Case is on
+  //Ctrl+D is Dual Dialogue. Ctrl+Enter (a new heading) and Ctrl+Shift+Enter (the Insert/Convert
+  //Menu) are not here: Enter is reserved from the shortcuts (RESERVED_KEYS), so those two are
+  //fixed bindings in screenplay-editor.js, like Shift+Enter. Upper/Lower/Title Case is on
   //Ctrl+Shift+K, since Ctrl+K is Strikethrough in both modes, and is bound in prose too, where a
   //case change is as useful.
   { id: 'toggleDualDialogue', label: 'Dual Dialogue', section: 'Screenplay', target: 'quill', mode: 'screenplay', defaultBinding: makeBinding('D', { mod: true }) },

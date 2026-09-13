@@ -33,6 +33,9 @@ function showEditable(t, options){
 
   showShortcutsHelp(Object.assign({
     isMac: false,
+    //A screenplay project by default, so that a test about rebinding can reach every shortcut
+    //there is. The tests below that care which sections a project gets pass their own.
+    isScreenplay: true,
     bindings: shortcuts.resolveShortcuts(null),
     onSave: function(overrides){ saved.push(overrides); }
   }, options || {}));
@@ -119,6 +122,53 @@ test('every rebindable shortcut has a row showing the binding in force', functio
   assert.strictEqual(keyButtonFor('View Previous Chapter / Scene').textContent, 'Ctrl + Up');
 });
 
+//The section headings in the order the popup prints them, which is the order a writer reads them in.
+function sectionHeadings(){
+  return Array.from(document.querySelectorAll('.popup-shortcuts h2')).map(function(heading){
+    return heading.innerText;
+  });
+}
+
+//The screenplay keys are bound only while the editor shows a script, so in a novel they would
+//document keys a writer cannot press.
+test('a novel project is not shown the Screenplay section at all', function(t){
+  showEditable(t, { isScreenplay: false });
+
+  assert.strictEqual(sectionHeadings().indexOf('Screenplay'), -1);
+  assert.strictEqual(keyButtonFor('Scene Heading'), null);
+  assert.strictEqual(keyButtonFor('Dual Dialogue'), null);
+  //The fixed row lives in that section, so it goes with it.
+  assert.strictEqual(keyButtonFor('Insert/Convert Menu'), null);
+  assert.strictEqual(sectionHeadings().indexOf('Formatting') !== -1, true);
+});
+
+//Ahead of Formatting rather than after it: in a script it is the section the popup was opened for,
+//and Formatting below it is half prose-only keys.
+test('a screenplay project reads Screenplay before Formatting', function(t){
+  showEditable(t, { isScreenplay: true });
+
+  var headings = sectionHeadings();
+  assert.ok(headings.indexOf('Screenplay') !== -1, 'Screenplay should be shown');
+  assert.ok(headings.indexOf('Screenplay') < headings.indexOf('Formatting'),
+    'Screenplay should come before Formatting, got ' + headings.join(', '));
+  //Everything else keeps the order it had.
+  assert.deepStrictEqual(headings,
+    ['Navigation', 'Alteration', 'Screenplay', 'Formatting', 'Tool/Menu Navigation', 'Display']);
+});
+
+//A shortcut with no row is still a shortcut. Hiding the screenplay section from a novel project
+//must not quietly throw away a rebind made to one of those keys from a script.
+test('a novel project saves without disturbing the hidden screenplay shortcuts', function(t){
+  var saved = showEditable(t, {
+    isScreenplay: false,
+    bindings: shortcuts.resolveShortcuts({ elementScene: { key: 'W', mod: true, alt: true, shift: false } })
+  });
+
+  buttonLabelled('Save').onclick();
+
+  assert.deepStrictEqual(saved[0].elementScene, { key: 'W', mod: true, alt: true, shift: false });
+});
+
 //Escape, Tab and the menu key are the app's own structural keys - the popup documents them, but
 //they are not on offer, since Escape is how a writer gets out of this dialog.
 test('the Tool/Menu Navigation shortcuts are printed rather than offered', function(t){
@@ -130,6 +180,38 @@ test('the Tool/Menu Navigation shortcuts are printed rather than offered', funct
 
   assert.strictEqual(row.cells[1].innerText, 'Escape');
   assert.strictEqual(row.cells[1].querySelector('button'), null);
+});
+
+//The Insert/Convert Menu is a fixed binding rather than a rebindable one, because Enter is reserved
+//from the shortcuts - so the popup is the only place a writer could ever learn it exists.
+test('the Insert/Convert Menu is printed at the foot of the Screenplay section', function(t){
+  showEditable(t);
+
+  var rows = Array.from(document.querySelectorAll('.shortcuts-table tr'));
+  var index = rows.findIndex(function(candidate){
+    return candidate.cells[0].innerText === 'Insert/Convert Menu';
+  });
+
+  assert.notStrictEqual(index, -1, 'the Insert/Convert Menu should have a row');
+  assert.strictEqual(rows[index].cells[1].innerText, 'Ctrl + Shift + Enter');
+  assert.strictEqual(rows[index].cells[1].querySelector('button'), null);
+
+  //In the Screenplay table rather than one of its own, and last in it - after every shortcut that
+  //section does offer.
+  var screenplayTable = keyButtonFor('Dual Dialogue').closest('table');
+  assert.strictEqual(rows[index].closest('table'), screenplayTable);
+  assert.strictEqual(screenplayTable.rows[screenplayTable.rows.length - 1], rows[index]);
+});
+
+test('the Insert/Convert Menu is written with Cmd on a Mac', function(t){
+  var showShortcutsHelp = require(shortcutsHelpDisplayPath);
+  showShortcutsHelp({ isMac: true, isScreenplay: true });
+
+  var row = Array.from(document.querySelectorAll('.shortcuts-table tr')).find(function(candidate){
+    return candidate.cells[0].innerText === 'Insert/Convert Menu';
+  });
+
+  assert.strictEqual(row.cells[1].innerText, 'Cmd + Shift + Enter');
 });
 
 //Nothing to save to means the list rather than the editor - no buttons in the rows, and none of

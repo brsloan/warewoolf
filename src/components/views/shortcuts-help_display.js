@@ -24,10 +24,14 @@ const {
 //                     caller wanting the list rather than the editor passes.
 //  options.onSave   - called with only what differs from the defaults (see diffFromDefaults), or
 //                     absent to show the list without offering to change it.
+//  options.isScreenplay - whether this is a screenplay project, which decides whether the
+//                     Screenplay section is shown at all and where it sits (see sectionsToShow).
+//                     Defaults to false, a novel being what a project is unless it says otherwise.
 function showShortcutsHelp(options){
   options = options || {};
 
   var isMac = Boolean(options.isMac);
+  var isScreenplay = Boolean(options.isScreenplay);
   var onSave = typeof options.onSave === 'function' ? options.onSave : null;
   var bindings = copyBindings(options.bindings || getDefaultBindings());
 
@@ -51,7 +55,7 @@ function showShortcutsHelp(options){
   popup.classList.add("popup", "popup-shortcuts");
   describeDialog(popup, 'Keyboard Shortcuts');
 
-  SECTIONS.forEach(function(section){
+  sectionsToShow().forEach(function(section){
     appendSection(section, getShortcutDefs().filter(function(def){
       return def.section === section;
     }));
@@ -67,6 +71,26 @@ function showShortcutsHelp(options){
         ['Move Between Inputs', 'Tab']
       ]);
   });
+
+  //Which sections this project gets, in the order it reads them. The screenplay shortcuts are bound
+  //only while the editor shows a script (shortcuts.js `mode`), so in a novel they document keys a
+  //writer cannot press - left out rather than listed as though they were available. In a script
+  //they come ahead of Formatting instead of after it: they are the section a writer opened this
+  //popup to read, and the Formatting one is half prose-only keys a script never sees.
+  //
+  //A rebind made to a hidden shortcut is not lost by being out of sight: the popup copies every
+  //binding it was given and saves the difference across all of them (diffFromDefaults), so a
+  //novel project leaves the screenplay ones exactly as it found them.
+  function sectionsToShow(){
+    var sections = SECTIONS.filter(function(section){
+      return section !== 'Screenplay';
+    });
+
+    if(isScreenplay)
+      sections.splice(sections.indexOf('Formatting'), 0, 'Screenplay');
+
+    return sections;
+  }
 
   //Restore Defaults is about the whole list rather than any one shortcut, and its button is right
   //here, so its message goes here too.
@@ -138,6 +162,13 @@ function showShortcutsHelp(options){
         table.appendChild(messageRowFor(def));
     });
 
+    //The section's fixed keys go at the foot of its own table rather than into a section of their
+    //own: a writer looking for what a script's keys do is looking under Screenplay, and a heading
+    //that separated the rebindable ones from the rest would only make them harder to find.
+    fixedRowsFor(title).forEach(function(row){
+      table.appendChild(staticRow(row));
+    });
+
     popup.appendChild(table);
   }
 
@@ -146,12 +177,29 @@ function showShortcutsHelp(options){
     var table = newTable();
 
     rows.forEach(function(row){
-      var keys = document.createElement('td');
-      keys.innerText = row[1];
-      table.appendChild(labelledRow(row[0], keys));
+      table.appendChild(staticRow(row));
     });
 
     popup.appendChild(table);
+  }
+
+  //A shortcut the app fixes rather than offers, as a [label, keys] pair. Ctrl/Cmd+Shift+Enter opens
+  //the Insert/Convert Menu (screenplay-editor.js), a fixed binding because Enter is reserved from
+  //the rebindable shortcuts (shortcuts.js RESERVED_KEYS) - which is exactly why it has to be
+  //printed here. Left off the list, the only writers who would ever find it are the ones who
+  //already knew.
+  function fixedRowsFor(section){
+    if(section !== 'Screenplay')
+      return [];
+
+    return [['Insert/Convert Menu', (isMac ? 'Cmd' : 'Ctrl') + ' + Shift + Enter']];
+  }
+
+  function staticRow(row){
+    var keys = document.createElement('td');
+    keys.innerText = row[1];
+
+    return labelledRow(row[0], keys);
   }
 
   function appendHeading(text){
