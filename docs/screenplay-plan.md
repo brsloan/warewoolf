@@ -406,7 +406,10 @@ the popup should say in a line rather than hide.
 
 **Navigation shortcuts** keep their ids. `previousChapter`/`nextChapter`
 (`shortcuts.js:334`) become previous/next scene when the active document is a
-script, and `moveChapterUp`/`moveChapterDown` move the scene. The dispatch in
+script the writer is working in - `editingScript()`, which is `editorMode()`
+plus "not in the Trash", since an import leaves the script it replaced there
+and a thrown-away script's scenes are not what the keys are for - and
+`moveChapterUp`/`moveChapterDown` move the scene. The dispatch in
 `keybindings.js` does not change; the `render.js` actions it calls branch on
 `editorMode()`. The labels in the popup read "Previous Chapter / Scene".
 

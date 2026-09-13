@@ -802,6 +802,20 @@ function editorMode(){
   return chap && newChapter.isFountainChapter(chap) ? 'screenplay' : 'prose';
 }
 
+//Whether the script in the editor is one the writer is working in, which is what the scene
+//navigation keys are for. A trashed document is the case this separates out: importing a
+//screenplay puts the script it replaced in the Trash (installScript), so the Trash of a screenplay
+//project routinely holds a .fountain document. The editor still shows it as a script - that is
+//what it is - but from the Trash the chapter keys move between documents, as they do from any
+//other trashed document, rather than walking the scenes of something already thrown away.
+function editingScript(){
+  if(editorMode() !== 'screenplay')
+    return false;
+
+  var loc = chapterList.activeLocator(project);
+  return Boolean(loc) && loc.list !== 'trash';
+}
+
 //The estimated page turns drawn in a script - screenplay-editor.js's markEstimatedPages. Redrawn
 //after a load, on the same debounce as the Scenes list after a keystroke, and when Settings
 //close, since the marks are a Settings switch (screenplayPageMarks). Prose clears them.
@@ -979,7 +993,7 @@ function removeSpecialDisplayClasses(el){
 //between documents, until the script runs out of scenes below the caret and they go on to the
 //documents beside it. See docs/screenplay-plan.md, "Keyboard".
 async function displayPreviousChapter(){
-  if(editorMode() === 'screenplay'){
+  if(editingScript()){
     jumpToScene(previousSceneStart(currentScenes(), project.textCursorPosition || 0));
     return;
   }
@@ -991,7 +1005,7 @@ async function displayPreviousChapter(){
     //off its last scene, so it lands where that walk left: on the last heading, not the top of a
     //document the writer has just come down the length of. A script with no headings yet has
     //nowhere else to go but the top.
-    var scenes = editorMode() === 'screenplay' ? currentScenes() : [];
+    var scenes = editingScript() ? currentScenes() : [];
     var landing = scenes.length > 0 ? scenes[scenes.length - 1].index : 0;
 
     editorQuill.setSelection(landing);
@@ -1000,7 +1014,7 @@ async function displayPreviousChapter(){
 }
 
 async function displayNextChapter(){
-  if(editorMode() === 'screenplay'){
+  if(editingScript()){
     var nextScene = nextSceneStart(currentScenes(), project.textCursorPosition || 0);
 
     //Past the last scene the key leaves the script the way it leaves a chapter, so that holding it
@@ -1021,7 +1035,7 @@ async function displayNextChapter(){
 }
 
 function moveChapUp(chapInd){
-  if(editorMode() === 'screenplay'){
+  if(editingScript()){
     moveCurrentScene(-1);
     return;
   }
@@ -1039,7 +1053,7 @@ function moveChapUp(chapInd){
 }
 
 function moveChapDown(chapInd){
-  if(editorMode() === 'screenplay'){
+  if(editingScript()){
     moveCurrentScene(1);
     return;
   }
@@ -1571,8 +1585,9 @@ async function restoreFromTrash(ind){
 
 function changeChapterTitle(ind){
   //In a script with headings the sidebar's rows are scenes, and renaming one edits the heading
-  //line itself. A script with no headings yet shows its own chapter row, renamed like any other.
-  if(editorMode() === 'screenplay' && currentScenes().length > 0){
+  //line itself. A script with no headings yet shows its own chapter row, renamed like any other,
+  //and so does a trashed script, whose row is its own rather than the Scenes list's.
+  if(editingScript() && currentScenes().length > 0){
     changeSceneTitle(sceneAt(currentScenes(), project.textCursorPosition || 0));
     return;
   }
@@ -1744,7 +1759,7 @@ function sceneListForSidebar(){
     return null;
   }
 
-  if(editorMode() === 'screenplay'){
+  if(editingScript()){
     cachedScenes = currentScenes();
     cachedSceneTitles = cachedScenes.map(function(scene){ return scene.title; });
     activeSceneRow = sceneAt(cachedScenes, project.textCursorPosition || 0);
@@ -1798,7 +1813,7 @@ function loadScriptScenes(script){
   }).then(function(){
     loadingScriptScenes = false;
 
-    if(scriptChapter() === script && editorMode() !== 'screenplay')
+    if(scriptChapter() === script && !editingScript())
       updateFileList();
   });
 }
@@ -1825,6 +1840,11 @@ function refreshSceneListIfChanged(){
     return;
 
   refreshPageMarks();
+
+  //The page marks are the editor's, and a trashed script in it gets them like any other script.
+  //The rows are the project's script's, and typing in a document beside it cannot change them.
+  if(!editingScript())
+    return;
 
   var scenes = currentScenes();
   var titles = scenes.map(function(scene){ return scene.title; });
@@ -1863,7 +1883,7 @@ function followCaretInSceneList(index){
 //through the pending-selection chain for the same reason a chapter click is: a double-click on the
 //row means a rename, and the load must be over before its box goes in.
 function selectScene(k){
-  if(editorMode() !== 'screenplay'){
+  if(!editingScript()){
     var loc = scriptLocator();
     if(!loc)
       return;

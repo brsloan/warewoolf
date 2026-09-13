@@ -713,6 +713,94 @@ test('backing into a script with no scene headings lands at the top of it', asyn
   assert.strictEqual(r.editorQuill.getSelection().index, 0);
 });
 
+//Importing a screenplay into a screenplay project puts the script it replaced in the Trash, so a
+//Trash holding a .fountain document is the ordinary case rather than an odd one. The editor still
+//shows it as a script, but the navigation keys are not its scenes' - from the Trash they move
+//between documents, the way they do from any other trashed document.
+test('from a trashed script the previous-chapter shortcut leaves the Trash rather than walking its scenes', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [scriptWithScenes()];
+  r.project.reference = [makeChap('Bible')];
+  var trashedScript = scriptWithScenes();
+  trashedScript.title = 'Old script';
+  r.project.trash = [trashedScript];
+
+  await r.displayChapterByIndex(2);
+  r.editorQuill.setSelection(47, 0, 'user');
+
+  await r.displayPreviousChapter();
+  assert.strictEqual(r.project.activeChapterIndex, 1, 'up into the last Reference document');
+  assert.strictEqual(r.editorQuill.getText().trim(), 'Bible');
+
+  //And with nothing beside the script, the key goes from the Trash to the script's last scene.
+  r.project.reference = [];
+  await r.displayChapterByIndex(1);
+  r.editorQuill.setSelection(47, 0, 'user');
+  await r.displayPreviousChapter();
+  assert.strictEqual(r.project.activeChapterIndex, 0);
+  assert.strictEqual(r.editorQuill.getSelection().index, 47, 'INT. C - DAY');
+});
+
+test('from a trashed script the next-chapter shortcut moves on through the Trash', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [scriptWithScenes()];
+  var trashedScript = scriptWithScenes();
+  trashedScript.title = 'Old script';
+  r.project.trash = [trashedScript, makeChap('Cut scene')];
+
+  await r.displayChapterByIndex(1);
+  r.editorQuill.setSelection(0, 0, 'user');
+
+  await r.displayNextChapter();
+  assert.strictEqual(r.project.activeChapterIndex, 2);
+  assert.strictEqual(r.editorQuill.getText().trim(), 'Cut scene');
+});
+
+//The rest of what a trashed script is not: its scenes are not the Scenes list, Ctrl+Shift+Up does
+//not reorder them, and a rename renames the document rather than a heading inside it.
+test('a trashed script is an ordinary document to the sidebar, the reorder keys and a rename', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [scriptWithScenes()];
+  var trashedScript = scriptWithScenes();
+  trashedScript.title = 'Old script';
+  r.project.trash = [trashedScript, makeChap('Cut scene')];
+
+  await r.displayChapterByIndex(1);
+  await flushMicrotasks();
+  r.editorQuill.setSelection(27, 0, 'user');
+
+  //The Scenes rows are the project's script's, none of them active, and the trashed script is the
+  //row that is - exactly as a trashed prose document behaves.
+  assert.deepStrictEqual(sceneRowTitles(), ['INT. A - DAY', 'EXT. B - NIGHT', 'INT. C - DAY']);
+  assert.strictEqual(document.querySelector('#chapter-list .activeChapter'), null);
+  assert.strictEqual(document.querySelector('#trash-list .activeChapter').textContent, 'Old script');
+
+  //Moving it down moves the document within the Trash rather than the scene the caret is in.
+  r.moveChapDown(1);
+  assert.deepStrictEqual(r.project.trash.map(function(c){ return c.title; }), ['Cut scene', 'Old script']);
+  assert.strictEqual(r.project.activeChapterIndex, 2);
+  assert.strictEqual(r.editorQuill.getText(27, 14), 'EXT. B - NIGHT', 'the script inside it is untouched');
+
+  //And a rename renames the document, not the heading the caret is on.
+  r.changeChapterTitle(2);
+  var box = document.querySelector('.name-box');
+  assert.strictEqual(box.getAttribute('aria-label'), 'Chapter title');
+  box.value = 'First draft';
+  box.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter' }));
+
+  assert.strictEqual(r.project.trash[1].title, 'First draft');
+  assert.strictEqual(r.editorQuill.getText(27, 14), 'EXT. B - NIGHT');
+
+  //A click on a scene row is still the way back into the script itself.
+  document.querySelectorAll('#chapter-list li')[2].onclick();
+  await flushMicrotasks();
+  assert.strictEqual(r.project.activeChapterIndex, 0);
+  assert.strictEqual(r.editorQuill.getSelection().index, 47, 'INT. C - DAY');
+});
+
 test('renaming a scene row rewrites the heading in the script', async function(){
   var r = await freshRender();
   r.project.type = 'screenplay';
