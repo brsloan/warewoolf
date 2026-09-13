@@ -1675,7 +1675,8 @@ var ALL_MENU_CHANNELS = [
   'save-copy-clicked', 'help-doc-clicked', 'renumber-chapters-clicked', 'send-via-email-clicked',
   'view-error-log-clicked', 'file-manager-clicked', 'wifi-manager-clicked', 'save-backup-clicked',
   'settings-clicked', 'corkboard-clicked', 'file-opened-from-outside-warewoolf',
-  'tab-indent-paragraphs-clicked', 'center-all-heads-clicked', 'dictionaries-clicked'
+  'tab-indent-paragraphs-clicked', 'center-all-heads-clicked', 'dictionaries-clicked',
+  'screenplay-names-clicked'
 ];
 
 //The bridge set up for the current freshRender() call - the same object render.js subscribed its
@@ -2974,6 +2975,164 @@ function saveSettingsPopup(){
   currentBridge().handlers['settings-clicked']();
   settingsPopupSaveButton().onclick();
 }
+
+//---------------------------------------------------------------------------
+// Characters/Locations - docs/screenplay-plan.md, "Characters and locations"
+//---------------------------------------------------------------------------
+
+//The dialog itself is test/screenplay-names_display.test.js. What is render.js's here is which
+//copy of the script the dialog is given: the editor's while the script is being edited, the
+//chapter's when it is not, and whether the rename lands somewhere Ctrl+Z can reach.
+function namesPopup(){
+  var fieldsets = Array.from(document.querySelectorAll('.popup-names fieldset'));
+  var fieldset = fieldsets.find(function(fs){ return fs.querySelector('legend').innerText === 'Characters'; });
+
+  return {
+    names: function(){
+      return Array.from(fieldset.querySelector('select').options).map(function(o){ return o.value; });
+    },
+    rename: function(from, to){
+      Array.from(fieldset.querySelector('select').options).forEach(function(opt){ opt.selected = opt.value === from; });
+      fieldset.querySelector('select').onchange();
+      buttonIn(fieldset, 'Rename').click();
+      fieldset.querySelector('input[type=text]').value = to;
+      fieldset.querySelector('input[type=text]').oninput();
+      buttonIn(fieldset, 'Save').click();
+    }
+  };
+
+  function buttonIn(root, label){
+    return Array.from(root.querySelectorAll('button')).find(function(b){ return b.textContent === label; });
+  }
+}
+
+function cueScript(){
+  return fountainChap('Script', 'INT. A - DAY\n\nBOB\nOne.\n\nEXT. B - NIGHT\n\nBOB\nTwo.\n\nANNA\nThree.\n');
+}
+
+test('screenplay-names-clicked opens the two lists, read from the script in the editor', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [cueScript()];
+  await r.displayChapterByIndex(0);
+
+  await currentBridge().handlers['screenplay-names-clicked']();
+
+  var popup = document.querySelector('.popup');
+  assert.strictEqual(popup.querySelector('h1').innerText, 'Characters/Locations');
+  assert.deepStrictEqual(namesPopup().names(), ['ANNA', 'BOB']);
+});
+
+test('renaming a character rewrites the script in the editor, as one thing to undo', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [cueScript()];
+  await r.displayChapterByIndex(0);
+  await flushMicrotasks();
+
+  await currentBridge().handlers['screenplay-names-clicked']();
+  namesPopup().rename('BOB', 'ROBERT');
+
+  var { nameCounts } = require('../src/components/controllers/screenplay-editor');
+  assert.deepStrictEqual(nameCounts(r.editorQuill.getContents()).characters, { ANNA: 1, ROBERT: 2 });
+  assert.strictEqual(r.project.chapters[0].hasUnsavedChanges, true, 'a user change marks the script');
+
+  //One entry in the editor's history, so the writer can take the whole rename back the way they
+  //take back anything else they did to the script.
+  r.editorQuill.history.undo();
+  assert.deepStrictEqual(nameCounts(r.editorQuill.getContents()).characters, { ANNA: 1, BOB: 2 });
+});
+
+test('renaming a location with a reference document in the editor writes the script and its scene rows', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [cueScript()];
+  r.project.reference = [makeChap('Bible')];
+  await r.displayChapterByIndex(1);
+  await flushMicrotasks();
+
+  await currentBridge().handlers['screenplay-names-clicked']();
+
+  var locations = Array.from(document.querySelectorAll('.popup-names fieldset')).find(function(fs){
+    return fs.querySelector('legend').innerText === 'Locations';
+  });
+  Array.from(locations.querySelector('select').options).forEach(function(opt){ opt.selected = opt.value === 'A'; });
+  locations.querySelector('select').onchange();
+  Array.from(locations.querySelectorAll('button')).find(function(b){ return b.textContent === 'Rename'; }).click();
+  locations.querySelector('input[type=text]').value = 'THE PIER';
+  locations.querySelector('input[type=text]').oninput();
+  Array.from(locations.querySelectorAll('button')).find(function(b){ return b.textContent === 'Save'; }).click();
+
+  //The script is not the document in the editor, so the rename goes into its contents and marks
+  //both it and the project unsaved - and the Scenes rows, which are the script's wherever the
+  //caret is, are rebuilt with it.
+  assert.strictEqual(r.project.activeChapterIndex, 1, 'and the writer is left where they were');
+  assert.strictEqual(r.project.chapters[0].hasUnsavedChanges, true);
+  assert.strictEqual(r.project.hasUnsavedChanges, true);
+  assert.deepStrictEqual(elementTexts(r.project.chapters[0].contents)[0], 'INT. THE PIER - DAY');
+  assert.deepStrictEqual(sceneRowTitles(), ['INT. THE PIER - DAY', 'EXT. B - NIGHT']);
+});
+
+test('a name added in the dialog is offered on the next cue, without the script using it yet', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [cueScript()];
+  await r.displayChapterByIndex(0);
+
+  await currentBridge().handlers['screenplay-names-clicked']();
+
+  var characters = Array.from(document.querySelectorAll('.popup-names fieldset'))[0];
+  characters.querySelector('input[type=text]').value = 'zelda';
+  characters.querySelector('input[type=text]').oninput();
+  Array.from(characters.querySelectorAll('button')).find(function(b){ return b.textContent === 'Add'; }).click();
+
+  assert.deepStrictEqual(r.project.screenplayNames.characters.added, ['ZELDA']);
+
+  //attachAutocomplete asks the project for its lists on every refresh, so the new name is offered
+  //without the editor being reloaded.
+  var { suggestionsFor } = require('../src/components/controllers/screenplay-editor');
+  assert.deepStrictEqual(
+    suggestionsFor(r.editorQuill.getContents(), 'character', 'z', 0, r.project.screenplayNames).suggestions,
+    ['ZELDA']);
+});
+
+//The reason the dialog exists - docs/screenplay-plan.md, "Characters and locations".
+test('a name removed in the dialog stops being offered, and the script keeps every line of it', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [fountainChap('Script', 'INT. A - DAY\n\nDAN\nOne line only.\n\nDANIELLE\nAll the rest.\n')];
+  await r.displayChapterByIndex(0);
+
+  await currentBridge().handlers['screenplay-names-clicked']();
+
+  var characters = Array.from(document.querySelectorAll('.popup-names fieldset'))[0];
+  Array.from(characters.querySelector('select').options).forEach(function(opt){ opt.selected = opt.value === 'DAN'; });
+  characters.querySelector('select').onchange();
+  Array.from(characters.querySelectorAll('button')).find(function(b){ return b.textContent === 'Remove'; }).click();
+
+  assert.deepStrictEqual(r.project.screenplayNames.characters.removed, ['DAN']);
+
+  //The script is untouched: DAN is still in the line he was written into.
+  var { suggestionsFor, nameCounts } = require('../src/components/controllers/screenplay-editor');
+  assert.deepStrictEqual(nameCounts(r.editorQuill.getContents()).characters, { DAN: 1, DANIELLE: 1 });
+
+  //And typing towards DANIELLE is no longer met with DAN.
+  assert.deepStrictEqual(
+    suggestionsFor(r.editorQuill.getContents(), 'character', 'DAN', 0, r.project.screenplayNames).suggestions,
+    ['DANIELLE']);
+});
+
+test('screenplay-names-clicked refuses a novel project, saying why', async function(){
+  var r = await freshRender();
+  r.project.chapters = [makeChap('One')];
+  await r.displayChapterByIndex(0);
+
+  await currentBridge().handlers['screenplay-names-clicked']();
+
+  assert.strictEqual(document.querySelector('.popup-names'), null);
+  assert.match(document.getElementById('blocked-action-alert-text').innerText,
+    /Characters\/Locations lists the names a screenplay is written with/);
+});
 
 test('dictionaries-clicked opens the Dictionaries popup', async function(){
   var r = await freshRender();

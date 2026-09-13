@@ -73,6 +73,26 @@ test('a screenplay project showing its script renames Word Count and disables wh
   });
 });
 
+//The one item that is a screenplay's alone. It is left out of a novel's menu rather than greyed out
+//in it: a novel has no cues and no scene headings, so there is no novel version of the tool for a
+//disabled item to be about. See app-menu.js.
+test('Characters/Locations is on a screenplay project\'s Tools menu and on no novel\'s', function(){
+  var screenplay = build({ project: 'screenplay', document: 'screenplay' });
+  var names = itemFor(screenplay.items, 'screenplay-names-clicked');
+
+  assert.ok(names, 'a screenplay project should offer it');
+  assert.strictEqual(names.label, 'Characters/Locations');
+  assert.strictEqual(names.enabled, true);
+
+  //Still there with a prose Reference document in the editor: the names are the project's script's,
+  //wherever the caret happens to be, the way the Outliner and the Scenes rows are.
+  assert.ok(itemFor(build({ project: 'screenplay', document: 'prose' }).items, 'screenplay-names-clicked'));
+
+  assert.strictEqual(itemFor(build({ project: 'novel', document: 'prose' }).items, 'screenplay-names-clicked'), undefined);
+  assert.strictEqual(itemFor(build({ project: 'novel', document: 'screenplay' }).items, 'screenplay-names-clicked'), undefined);
+  assert.strictEqual(itemFor(build(undefined).items, 'screenplay-names-clicked'), undefined);
+});
+
 test('a screenplay project showing a prose Reference document gets the chapter tools back, not the conversions', function(){
   var built = build({ project: 'screenplay', document: 'prose' });
 

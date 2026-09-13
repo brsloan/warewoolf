@@ -144,6 +144,15 @@ function buildMenuTemplate(options){
         separator,
         item('Outliner', 'outliner-clicked', { accelerator: 'CommandOrControl+O' }),
         item('Corkboard', 'corkboard-clicked'),
+        //Absent from a novel's menu rather than greyed out in it, the way the writerDeck items
+        //below are: the other screenplay differences are one menu offering the same tool in a
+        //different shape (Page Count, the Outliner by scene), and this is a tool a novel has no
+        //version of at all. A novel has no cues and no headings to collect names from, so there is
+        //nothing there for the item to be disabled *about*. render.js refuses the channel too, for
+        //an accelerator on a menu built before the project changed.
+        ...(screenplayProject ? [
+          item('Characters/Locations', 'screenplay-names-clicked')
+        ] : []),
         separator,
         item('Renumber Chapters', 'renumber-chapters-clicked'),
         item('Convert First Lines To Titles', 'convert-first-lines-clicked'),

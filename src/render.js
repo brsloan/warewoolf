@@ -25,6 +25,7 @@ const {
   sceneBlock,
   splitScenes,
   appendScenes,
+  renameName,
   elementOf
 } = require('./components/controllers/screenplay-editor');
 const {
@@ -437,7 +438,8 @@ function setUpQuills(){
   //Typing goes on before the autocomplete so a line made a heading on its "INT. " is one when the
   //suggestion list looks at it. The list itself is a Settings switch, read on every refresh.
   attachScreenplayTyping(editorQuill, editorMode);
-  attachAutocomplete(editorQuill, editorMode, function(){ return userSettings.screenplayAutocomplete !== false; });
+  attachAutocomplete(editorQuill, editorMode, function(){ return userSettings.screenplayAutocomplete !== false; },
+    function(){ return project.screenplayNames; });
   //Attached once and never re-attached: unlike Quill's own bindings, these read the rules through
   //the getter below on every keystroke, so a change in Settings takes effect on the next character
   //typed. The returned detach functions are dropped because both editors live as long as the
@@ -2116,6 +2118,69 @@ async function mergeIntoScript(chap){
   updateFileList();
 }
 
+//What Tools > Characters/Locations reads and writes: the script, whether or not it is the document
+//in the editor. The dialog asks for the delta again after every change it makes, so this has to be
+//the live copy each time - the editor's while the script is being edited, and the chapter's
+//contents when the caret is off in a Reference note.
+//
+//The one asynchronous part is getting those contents in the first place, for a project opened onto
+//another document (clearCurrentChapterIfUnchanged leaves the script holding none), so it is done
+//once here before the dialog opens and everything the dialog then does is synchronous. Read with
+//keepProjectTitlePage, as every read of a script that is not a load must be: the file carries the
+//project's title page at its head, and Properties may hold a newer one.
+async function screenplayNamesView(){
+  var script = scriptChapter();
+
+  if(script && !editingScript() && script.contents == null && script.filename)
+    script.contents = await script.getFile({ keepProjectTitlePage: true });
+
+  return {
+    getDelta: function(){
+      if(editingScript())
+        return editorQuill.getContents();
+
+      return script ? script.contents : null;
+    },
+    rename: function(type, from, to){
+      return renameInScript(script, type, from, to);
+    }
+  };
+}
+
+//Every cue for a character, or every heading in a location, renamed at once - the lines screenplay-
+//editor.js's renameName rewrites. Answers how many of them there were.
+//
+//Applied as a 'user' change when the script is in the editor, so it is one entry in the editor's
+//history and Ctrl+Z puts the old name back the way it does for any other edit. With the script out
+//of the editor there is no history to put it in, so its contents are replaced and it is marked
+//unsaved, as a scene merged back into it is.
+function renameInScript(script, type, from, to){
+  if(!script)
+    return 0;
+
+  var current = editingScript() ? editorQuill.getContents() : script.contents;
+  var renamed = current ? renameName(current, type, from, to) : null;
+  if(!renamed)
+    return 0;
+
+  if(editingScript()){
+    var Delta = Quill.import('delta');
+    editorQuill.updateContents(new Delta(current).diff(new Delta(renamed.ops)), 'user');
+  }
+  else{
+    script.contents = { ops: renamed.ops };
+    script.hasUnsavedChanges = true;
+    project.hasUnsavedChanges = true;
+  }
+
+  //A renamed location is a renamed scene row, so the sidebar has to be rebuilt either way: the
+  //editor's own debounce would get there for a script being edited, but a third of a second after
+  //a dialog the writer is still looking at.
+  refreshPageMarks();
+  updateFileList();
+  return renamed.count;
+}
+
 //A double-click on a scene row from another document is two clicks first, so the script is already
 //on its way into the editor by the time the rename is asked for, and the box goes into the row that
 //load leaves behind. Waiting for it is what selectChapterFromList()'s chain is for.
@@ -2523,6 +2588,20 @@ const menuCommands = {
   'corkboard-clicked': { run: function(){
     const showCorkboard = require('./components/views/corkboard_display');
     return showCorkboard(project, platformInfo);
+  } },
+  'screenplay-names-clicked': { run: async function(){
+    //Refused rather than shown empty for a novel: the lists are read from cues and scene headings,
+    //and a novel has neither. The menu leaves the item out of a novel's Tools entirely - this is
+    //for the command that arrives anyway, from an accelerator on a menu built before the project
+    //changed, and reads the same way every other blocked tool does.
+    if(!project.isScreenplay()){
+      const showBlockedActionAlert = require('./components/views/blocked-action_display');
+      return showBlockedActionAlert('Characters/Locations lists the names a screenplay is written'
+        + ' with - its cues and its scene headings - so it is for a screenplay project.');
+    }
+
+    const showScreenplayNames = require('./components/views/screenplay-names_display');
+    return showScreenplayNames(project, await screenplayNamesView());
   } },
   'tab-indent-paragraphs-clicked': { run: function(){
     const showTabIndentParagraphs = require('./components/views/tab-indent-paragraphs_display');

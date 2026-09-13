@@ -252,11 +252,12 @@ function splitLine(quill, index, currentType, nextType, tight){
   quill.setSelection(index + 1, 0, 'user');
 }
 
-//A cue's name: the text without its extension and the dual marker, in capitals.
-const CUE_EXTENSIONS = /\s*\(.*$/;
-
+//A cue's name: the text without its extension and the dual marker, in capitals. Read as a span of
+//the line rather than by stripping it, so the name a cue is collected under and the characters a
+//rename rewrites are the same by construction - see cueNameSpan.
 function cueName(text){
-  return text.replace(CUE_EXTENSIONS, '').replace(/\s*\^$/, '').trim().toUpperCase();
+  var span = cueNameSpan(text);
+  return text.slice(span.from, span.to).toUpperCase();
 }
 
 //Whether the cue at `info` is the same character speaking again in the same scene after
@@ -863,9 +864,206 @@ function characterNames(delta){
 //Every place the script has a heading for, the same way: "INT. WILL'S BEDROOM - NIGHT (1973)"
 //contributes "WILL'S BEDROOM".
 function locations(delta){
-  return unique(linesOfType(delta, 'scene').map(function(text){
-    return text.replace(HEADING_NUMBER, '').replace(HEADING_PREFIX, '').replace(HEADING_TIME, '').trim().toUpperCase();
-  }));
+  return unique(linesOfType(delta, 'scene').map(headingName));
+}
+
+function headingName(text){
+  var span = headingNameSpan(text);
+  return text.slice(span.from, span.to).toUpperCase();
+}
+
+//Where in a cue line the character's name sits: everything up to the extension "(V.O.)", without
+//the dual marker "^" or the spaces around it. Where in a heading the place sits: everything after
+//the "INT."/"EXT." prefix, before the " - DAY" and the "#12#" scene number.
+//
+//These two are the single definition of what a name is. cueName and headingName read a name out of
+//a line with them, so the lists autocomplete offers are built from them, and renameName below
+//rewrites exactly the same characters. A name that can be collected can therefore be renamed, and
+//a rename leaves everything around the name - the extension, the prefix, the time of day, the
+//scene number - exactly where the writer put it.
+function cueNameSpan(text){
+  var end = text.length;
+  var paren = text.indexOf('(');
+  if(paren > -1)
+    end = paren;
+
+  while(end > 0 && /[\s^]/.test(text.charAt(end - 1)))
+    end--;
+
+  return trimmedSpan(text, 0, end);
+}
+
+function headingNameSpan(text){
+  var end = text.length;
+  var number = HEADING_NUMBER.exec(text);
+  if(number)
+    end -= number[0].length;
+
+  var prefix = HEADING_PREFIX.exec(text);
+  //Clamped, for a heading that is nothing but its prefix and a scene number: the prefix can then
+  //reach past where the number began, and a span running backwards is no span at all.
+  var start = prefix ? Math.min(prefix[0].length, end) : 0;
+
+  var time = HEADING_TIME.exec(text.slice(start, end));
+  if(time)
+    end -= time[0].length;
+
+  return trimmedSpan(text, start, end);
+}
+
+function trimmedSpan(text, from, to){
+  while(from < to && /\s/.test(text.charAt(from)))
+    from++;
+  while(to > from && /\s/.test(text.charAt(to - 1)))
+    to--;
+
+  return { from: from, to: to };
+}
+
+//How many lines of the script each name is written into: a cue for a character, a heading for a
+//place. What the Characters/Locations dialog shows beside a name, so a writer can see which names
+//the script itself is carrying before deciding what to do about one.
+function nameCounts(delta){
+  return {
+    characters: tally(linesOfType(delta, 'character').map(cueName)),
+    locations: tally(linesOfType(delta, 'scene').map(headingName))
+  };
+}
+
+function tally(names){
+  var counts = {};
+  names.forEach(function(name){
+    if(name !== '')
+      counts[name] = (counts[name] || 0) + 1;
+  });
+  return counts;
+}
+
+//What autocomplete offers: the names the script itself is written with, plus the ones the writer
+//has added to the project beside it - a character not yet on the page, a location still to be
+//written - minus the ones they have taken out of the list.
+//
+//A union rather than a stored list standing in for the script, so a name just typed into a cue is
+//offered on the next one without anyone having to rebuild anything.
+//
+//And `removed` is what makes it a list a writer can keep rather than only read. A one-off DAN in
+//scene one is in the script for good, and while every name in the script is offered, every attempt
+//at DANIELLE is met with DAN first. Removing a name changes no line of the script - the script's
+//own DAN stays exactly where it was written - it only stops the name being offered. See
+//docs/screenplay-plan.md, "Characters and locations".
+function mergeNames(derived, added, removed){
+  var dropped = {};
+  (removed || []).forEach(function(name){ dropped[normalizedName(name)] = true; });
+
+  return unique(derived.concat((added || []).map(normalizedName))).filter(function(name){
+    return !dropped[name];
+  });
+}
+
+function normalizedName(name){
+  return String(name == null ? '' : name).trim().toUpperCase();
+}
+
+//One list's two halves out of a project's `screenplayNames`, in the shape the rest of this file
+//expects them: `{ added, removed }` for 'characters' or 'locations'. Defensive rather than trusting,
+//because a project from a build that had no such field has none of it, and project.js's sanitizer
+//only runs on a project that was loaded from a file.
+function namesList(stored, key){
+  var list = stored && typeof stored === 'object' ? stored[key] : null;
+  if(!list || typeof list !== 'object')
+    return { added: [], removed: [] };
+
+  return {
+    added: Array.isArray(list.added) ? list.added : [],
+    removed: Array.isArray(list.removed) ? list.removed : []
+  };
+}
+
+//Every cue for `from` ('character'), or every heading in it ('location'), renamed to `to` - the new
+//ops and how many lines changed, or null when the script has no such name. Pure: the caller diffs
+//this against the editor's own contents, or writes it into a script that is not in the editor.
+//Only the name is rewritten; the extension after a cue, and the prefix, time of day and scene
+//number around a place, are left exactly as they stand.
+function renameName(delta, type, from, to){
+  var oldName = String(from == null ? '' : from).trim().toUpperCase();
+  var newName = String(to == null ? '' : to).trim().toUpperCase();
+  if(oldName === '' || newName === '' || oldName === newName)
+    return null;
+
+  var element = type === 'location' ? 'scene' : 'character';
+  var spanOf = element === 'scene' ? headingNameSpan : cueNameSpan;
+  var count = 0;
+
+  var renamed = parseDelta(delta).paragraphs.map(function(para){
+    if(!para.attributes || para.attributes.element !== element)
+      return para;
+
+    var text = paragraphText(para);
+    var span = spanOf(text);
+    if(text.slice(span.from, span.to).toUpperCase() !== oldName)
+      return para;
+
+    count++;
+    var line = { textRuns: replaceRunSpan(para.textRuns, span.from, span.to, newName) };
+    if(para.attributes)
+      line.attributes = para.attributes;
+    return line;
+  });
+
+  return count === 0 ? null : { ops: paragraphsToOps(renamed), count: count };
+}
+
+//A paragraph's runs with the characters from `from` to `to` replaced. The text either side keeps
+//its own inline formats; the new text takes the formats the replaced span began with, since half a
+//name in italics is not a distinction worth carrying through a rename. An embed counts as the one
+//character Quill gives it and is dropped only when the span covers it.
+function replaceRunSpan(textRuns, from, to, replacement){
+  var head = [];
+  var tail = [];
+  var spanAttributes = null;
+  var index = 0;
+
+  textRuns.forEach(function(run){
+    var isText = typeof run.text === 'string';
+    var length = isText ? run.text.length : 1;
+    var start = index;
+    index += length;
+
+    if(!isText){
+      if(index <= from)
+        head.push(run);
+      else if(start >= to)
+        tail.push(run);
+      return;
+    }
+
+    if(start < from)
+      head.push(runLike(run, run.text.slice(0, Math.min(length, from - start))));
+
+    if(spanAttributes === null && index > from && start < to)
+      spanAttributes = run.attributes || undefined;
+
+    if(index > to)
+      tail.push(runLike(run, run.text.slice(Math.max(0, to - start))));
+  });
+
+  var name = { text: replacement };
+  if(spanAttributes)
+    name.attributes = spanAttributes;
+
+  var runs = head.concat([name], tail).filter(function(run){
+    return typeof run.text !== 'string' || run.text !== '';
+  });
+
+  //parseDelta gives an empty line one empty run, and paragraphsToOps expects at least that much.
+  return runs.length > 0 ? runs : [{ text: '' }];
+}
+
+function runLike(run, text){
+  var made = { text: text };
+  if(run.attributes)
+    made.attributes = run.attributes;
+  return made;
 }
 
 function paragraphText(para){
@@ -894,8 +1092,13 @@ function unique(values){
 //Who speaks next, for an empty cue at `lineStart`: the character who spoke
 //before the last speaker first, since a scene is mostly two people taking turns, then the last
 //speaker and the rest of the scene's speakers by recency, then the speakers of earlier scenes by
-//recency, then the rest of the cast. Names once each.
-function speakersFor(delta, lineStart){
+//recency, then the rest of the cast. Names once each. `names` is the project's own
+//`{ added, removed }` for characters (mergeNames), so one added before they have said a word is
+//offered at the end, where a character who has not spoken in this script belongs - and one the
+//writer has removed is not offered at all, however recently it spoke. A name taken out of the list
+//is taken out of every place the list is offered from, which is the whole of what removing it is
+//for.
+function speakersFor(delta, lineStart, names){
   var paragraphs = parseDelta(delta).paragraphs;
   var index = 0;
   var here = paragraphs.length;
@@ -936,7 +1139,17 @@ function speakersFor(delta, lineStart){
     inScene[1] = last;
   }
 
-  return inScene.concat(earlier, characterNames(delta).filter(function(name){ return !seen[name]; }));
+  var list = names || {};
+  var offered = mergeNames(characterNames(delta), list.added, list.removed);
+  var offerable = {};
+  offered.forEach(function(name){ offerable[name] = true; });
+
+  function isOffered(name){
+    return offerable[name] === true;
+  }
+
+  return inScene.filter(isOffered).concat(earlier.filter(isOffered),
+    offered.filter(function(name){ return !seen[name]; }));
 }
 
 function startingWith(list, typed){
@@ -944,7 +1157,9 @@ function startingWith(list, typed){
 }
 
 //What to offer for the line being typed, or null. `lineStart` is the index the line starts at,
-//which the next-speaker guess needs to know where in the script it is. The result says what was
+//which the next-speaker guess needs to know where in the script it is. `names` is the project's own
+//`screenplayNames` - the names a writer added in the Characters/Locations dialog, offered alongside
+//the script's own, and the ones they removed, offered from neither. The result says what was
 //typed, the suggestions, and how an accepted one goes in: `prefix` before it, `suffix` after it,
 //replacing the line's text from offset `from` to offset `to`. A list is offered before anything
 //is typed too - the next speaker on an empty cue, the intros on an empty heading, the times after
@@ -957,8 +1172,10 @@ function startingWith(list, typed){
 //  heading, "INT. KI"        -> the places starting with it
 //  heading, "INT. KITCHEN - " -> the times of day
 //  transition                -> the usual transitions and the script's own
-function suggestionsFor(delta, type, lineText, lineStart){
+function suggestionsFor(delta, type, lineText, lineStart, names){
   var text = lineText || '';
+  var characterList = namesList(names, 'characters');
+  var locationList = namesList(names, 'locations');
 
   if(type === 'character'){
     var open = /^(.*?)\s*\(([^)]*)$/.exec(text);
@@ -973,12 +1190,12 @@ function suggestionsFor(delta, type, lineText, lineStart){
 
     var typedName = text.trim().toUpperCase();
     if(typedName === ''){
-      var speakers = speakersFor(delta, lineStart || 0);
+      var speakers = speakersFor(delta, lineStart || 0, characterList);
       return speakers.length > 0 ? { typed: '', prefix: '', suffix: '', from: 0, to: text.length, suggestions: speakers } : null;
     }
 
-    var names = startingWith(characterNames(delta), typedName);
-    return names.length > 0 ? { typed: typedName, prefix: '', suffix: '', from: 0, to: text.length, suggestions: names } : null;
+    var cast = startingWith(mergeNames(characterNames(delta), characterList.added, characterList.removed), typedName);
+    return cast.length > 0 ? { typed: typedName, prefix: '', suffix: '', from: 0, to: text.length, suggestions: cast } : null;
   }
 
   if(type === 'scene'){
@@ -998,7 +1215,7 @@ function suggestionsFor(delta, type, lineText, lineStart){
     }
 
     var typedPlace = text.slice(prefix[0].length).trim().toUpperCase();
-    var places = startingWith(locations(delta), typedPlace);
+    var places = startingWith(mergeNames(locations(delta), locationList.added, locationList.removed), typedPlace);
     return places.length > 0 ? { typed: typedPlace, prefix: '', suffix: '', from: prefix[0].length, to: text.length, suggestions: places } : null;
   }
 
@@ -1025,8 +1242,10 @@ function suggestionsFor(delta, type, lineText, lineStart){
 //are Quill bindings unshifted ahead of the screenplay ones and guarded on the box being open,
 //rather than one-shot listeners racing each other, which is what the abandoned first attempt
 //had. Positioned from quill.getBounds, so it needs no DOM of the editor's own read; the names and
-//places come from the delta. `isEnabled` is the Settings switch, asked on every refresh.
-function attachAutocomplete(quill, getMode, isEnabled){
+//places come from the delta. `isEnabled` is the Settings switch, asked on every refresh, and
+//`getAddedNames` the project's own { characters, locations } - asked on every refresh for the same
+//reason, since the Characters/Locations dialog can change it while the editor is open.
+function attachAutocomplete(quill, getMode, isEnabled, getAddedNames){
   var box = null;
   var current = null;
   var selected = 0;
@@ -1090,7 +1309,8 @@ function attachAutocomplete(quill, getMode, isEnabled){
 
     var info = lineAt(quill, range.index);
     var type = elementOf(info.line);
-    var found = suggestionsFor(quill.getContents(), type, textOf(quill, info), info.index);
+    var found = suggestionsFor(quill.getContents(), type, textOf(quill, info), info.index,
+      getAddedNames ? getAddedNames() : null);
 
     if(!found){
       close();
@@ -1253,6 +1473,10 @@ module.exports = {
   lineAt,
   characterNames,
   locations,
+  nameCounts,
+  mergeNames,
+  namesList,
+  renameName,
   speakersFor,
   suggestionsFor,
   attachAutocomplete,

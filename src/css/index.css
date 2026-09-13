@@ -1183,7 +1183,7 @@ hr {
   text-decoration: line-through;
 }
 
-/* --- Dictionaries ------------------------------------------------------------------------- */
+/* --- Dictionaries, and the Characters/Locations lists that reuse this shape ----------------- */
 
 /* The filter and its count share one row above the list; the list and its buttons share one row
    below it. Flex rather than the floats the file browser uses above: these two rows have to size
@@ -1251,6 +1251,52 @@ hr {
 .dictionary-row.selected {
   background-color: var(--selected-bg);
   border-left-color: var(--accent);
+}
+
+/* --- Characters/Locations ------------------------------------------------------------------ */
+
+/* Two lists where the Dictionaries popup has one, so this dialog is wider than the rest and lays
+   them out across: flex-basis is what decides, so a screen with room for two 300px columns gets
+   them and a narrower one - a writerDeck's - wraps to a single column and scrolls instead. The
+   lists themselves are shortened for the same reason. */
+.popup-names {
+  width: 70%;
+  overflow-y: auto;
+}
+
+.name-lists {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.name-lists fieldset {
+  flex: 1 1 300px;
+  /* Without this a flex item refuses to shrink below its content width, and the button column
+     beside each list would push the other fieldset off the edge of the dialog. */
+  min-width: 0;
+}
+
+.popup-names .word-list {
+  height: 150px;
+}
+
+/* What Remove would do to the name that is selected, or what the last change did. It holds its line
+   whether or not it has anything to say, so the buttons above it do not move under the pointer
+   every time the selection changes. Two lines, because the sentences it carries are a sentence
+   long and a list that jumped by a line as they came and went would be worse than the space. */
+.name-list-status {
+  min-height: 2.9em;
+  margin-top: 4px;
+  color: var(--text-muted);
+}
+
+/* A name that has been taken out of the list keeps its row, so it can be seen and put back. Marked
+   rather than hidden, and marked in the row itself as well as by colour - "(1, removed)" - since
+   colour alone is not something every reader has. */
+.word-list option.name-removed {
+  color: var(--text-muted);
+  font-style: italic;
 }
 
 /* --- Working / backup alerts -------------------------------------------------------------- */

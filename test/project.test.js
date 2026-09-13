@@ -718,6 +718,59 @@ test('a .woolf from an older build, or a hand-edited one, loads as a novel with 
   assert.deepStrictEqual(bad.titlePage, []);
 });
 
+//The names a screenplay's autocomplete offers beyond the ones the script is written with - Tools >
+//Characters/Locations. Kept in the .woolf the way projectDictionary is, and sanitized on the way in
+//for the same reason: nothing validates what Object.assign copies out of the file.
+test('screenplayNames round-trips through save/load, capitalised and once each', async function(t){
+  const dir = tempDir(t);
+  const proj = newProject();
+  proj.directory = dir;
+  proj.filename = 'script.woolf';
+  proj.chapsDirectory = '';
+  proj.type = 'screenplay';
+  proj.screenplayNames = {
+    characters: { added: ['zelda ', 'ZELDA', 'Yolanda'], removed: ['dan'] },
+    locations: { added: ['the zoo'], removed: [] }
+  };
+  await proj.saveFile();
+
+  const reloaded = newProject();
+  await reloaded.loadFile(dir + 'script.woolf');
+
+  assert.deepStrictEqual(reloaded.screenplayNames, {
+    characters: { added: ['ZELDA', 'YOLANDA'], removed: ['DAN'] },
+    locations: { added: ['THE ZOO'], removed: [] }
+  });
+});
+
+test('a .woolf with no name lists, or malformed ones, loads with lists it can use', async function(t){
+  const dir = tempDir(t);
+  const base = { filename: '', directory: '', chapsDirectory: '', title: 'Old Book',
+    author: '', chapters: [], reference: [], filters: [], trash: [], activeChapterIndex: 0 };
+  const empty = { characters: { added: [], removed: [] }, locations: { added: [], removed: [] } };
+
+  fs.writeFileSync(dir + 'legacy.woolf', JSON.stringify(base), 'utf8');
+  fs.writeFileSync(dir + 'bad.woolf', JSON.stringify(Object.assign({}, base,
+    { screenplayNames: 'ZELDA' })), 'utf8');
+  fs.writeFileSync(dir + 'half.woolf', JSON.stringify(Object.assign({}, base,
+    { screenplayNames: { characters: { added: ['ZELDA', '', 7], removed: 'DAN' } } })), 'utf8');
+
+  const legacy = newProject();
+  await legacy.loadFile(dir + 'legacy.woolf');
+  assert.deepStrictEqual(legacy.screenplayNames, empty);
+
+  const bad = newProject();
+  await bad.loadFile(dir + 'bad.woolf');
+  assert.deepStrictEqual(bad.screenplayNames, empty);
+
+  const half = newProject();
+  await half.loadFile(dir + 'half.woolf');
+  assert.deepStrictEqual(half.screenplayNames, {
+    characters: { added: ['ZELDA'], removed: [] },
+    locations: { added: [], removed: [] }
+  });
+});
+
 test('a screenplay project saves its script as .fountain and its reference documents as .txt', async function(t){
   const dir = tempDir(t);
   const proj = newProject();

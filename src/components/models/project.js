@@ -41,6 +41,19 @@ function newProject(){
         //written into the .fountain at every save so the file stays self-contained. On load the
         //file wins (chapter.js adoptTitlePage). Empty for a novel.
         titlePage: [],
+        //What a screenplay's autocomplete offers beyond the script itself, kept per list as
+        //`{ added, removed }`. `added` is a name the script has not reached yet - a character due in
+        //act three; `removed` is one it is written with that is not to be offered - the one-off DAN
+        //in scene one who answers every attempt at DANIELLE. Edited in Tools >
+        //Characters/Locations, which offers the script's own names plus the first and minus the
+        //second (screenplay-editor.js's mergeNames), so a name typed into a cue needs no entry here
+        //to be completed from, and removing one changes no line of the script. Travels with the
+        //.woolf the way projectDictionary does, and for the same reason: a cast list belongs to one
+        //screenplay and to no other project. Empty for a novel.
+        screenplayNames: {
+          characters: { added: [], removed: [] },
+          locations: { added: [], removed: [] }
+        },
         filters: [],
         trash: [],
         activeChapterIndex: 0,
@@ -93,10 +106,11 @@ function newProject(){
         //"projectDictionary": "Aurelion" must not turn into a spellchecker that accepts every single
         //letter of it.
         this.projectDictionary = sanitizeWordList(this.projectDictionary);
-        //Same discipline for the two screenplay fields: a .woolf from an older build has neither,
-        //and a hand-edited one could hold anything.
+        //Same discipline for the three screenplay fields: a .woolf from an older build has none of
+        //them, and a hand-edited one could hold anything.
         this.type = this.type === 'screenplay' ? 'screenplay' : 'novel';
         this.titlePage = sanitizeTitlePage(this.titlePage);
+        this.screenplayNames = sanitizeNameLists(this.screenplayNames);
 
         this.filename = opened.filename;
         this.directory = opened.directory;
@@ -377,6 +391,35 @@ function sanitizeWordList(raw){
     return [];
 
   return raw.filter(function(word){ return typeof word === 'string' && word !== ''; });
+}
+
+//The two name lists, as the rest of the app expects them: a list each for characters and locations,
+//each an added and a removed array of non-empty capitalised names, whatever a file from an older
+//build (nothing) or a hand-edited one (anything) actually held. Capitalised here rather than only
+//where they are shown, so what is compared against the script's own names is comparable with them.
+function sanitizeNameLists(raw){
+  var lists = raw && typeof raw === 'object' ? raw : {};
+
+  return { characters: sanitizeNameList(lists.characters), locations: sanitizeNameList(lists.locations) };
+}
+
+function sanitizeNameList(raw){
+  var list = raw && typeof raw === 'object' ? raw : {};
+
+  return { added: sanitizeNames(list.added), removed: sanitizeNames(list.removed) };
+}
+
+function sanitizeNames(raw){
+  var seen = {};
+
+  return sanitizeWordList(raw).map(function(name){
+    return name.trim().toUpperCase();
+  }).filter(function(name){
+    if(name === '' || seen[name])
+      return false;
+    seen[name] = true;
+    return true;
+  });
 }
 
 //Louder than a silent no-op, which for a save would be data loss behind a clean-looking return.

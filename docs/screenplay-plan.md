@@ -515,7 +515,8 @@ positioned from `quill.getBounds`, and its keys go through Quill bindings
 guarded on the box being open rather than the one-shot `keydown` listeners the
 branch used, which raced each other. The whole thing is a Settings switch
 (`screenplayAutocomplete`), read on every refresh. The lists are computed
-from the script on every keystroke and are not editable.
+from the script on every keystroke, and a project can add names of its own to
+them - see "Characters and locations" below.
 
 **Page count.** `estimatePages(elements)` in `fountain.js`, from the old
 branch's line model: 55 lines a page, 61 characters across an action line, 35
@@ -563,6 +564,89 @@ to Novel, and a screenplay project is created with one chapter titled after
 the project, filename allocated with the `.fountain` extension on first save,
 and a title page carrying the title and the default author.
 
+## Characters and locations
+
+Tools > Characters/Locations, for a screenplay project only: the two lists
+autocomplete completes a cue and a scene heading from, shown as one dialog with
+a list each, editable.
+
+The lists are not a store the script is copied into. What a list shows is the
+names the script itself is written with - every cue, every heading - together
+with the project's own two changes to that list, which live in
+`project.screenplayNames` as `{ added, removed }` per list and travel with the
+`.woolf` the way `projectDictionary` does:
+
+```
+screenplayNames: {
+  characters: { added: [], removed: [] },
+  locations:  { added: [], removed: [] }
+}
+```
+
+`added` is a name the script has not reached yet - a character due in act three.
+`removed` is a name it *is* written with that is not to be offered. So a name
+typed into a cue is offered on the next cue with nothing to rebuild, and what is
+written beside each name is the whole story of why it is there: the lines of the
+script it is in, or "added", and "removed" when it is not being offered.
+
+**Why removals exist.** A one-off DAN in scene one is in the script for good, and
+while every name in the script is offered, every attempt at DANIELLE is met with
+DAN first. Removing DAN changes no line of the script - his cue in scene one
+stays exactly as it was written - it only takes the name out of the list. That
+is a list a writer can keep rather than only read, and it is the reason the tool
+is worth opening twice.
+
+| Button | What it does |
+| --- | --- |
+| Add | Puts a name the script has not reached yet into `added`, in capitals, so it completes from the first cue typed for it. |
+| Rename | Rewrites every cue for the name, or the place in every heading that uses it, and carries the project's own entry across with it, in whichever of the two lists it is in. |
+| Remove | Takes the name out of the list. A name the script uses goes into `removed` and the script is untouched; one that was only ever `added` is simply dropped, since a removal for a name nothing can produce would be a note about nothing. |
+| Restore | The same button, when everything selected has already been removed: it takes them out of `removed` and they are offered again. |
+| Refresh | Empties both `added` and `removed`, leaving the list as the script itself writes it. Disabled when there is nothing to undo. |
+
+A removed name keeps its row in the dialog, marked `DAN  (1, removed)` and drawn
+muted, because a row the writer cannot see is a row they cannot put back - the
+marking is in the row's own text as well as in its colour. It is offered from
+nowhere while it is there, the next-speaker guess on an empty cue included: a
+name taken out of the list is out of every place the list is offered from, which
+is the whole of what taking it out is for.
+
+Every change is made as it is asked for rather than gathered behind a Save,
+because a rename is an edit to the script and belongs in the editor's history
+beside the writer's own: with the script in the editor it is applied as a
+`'user'` change, so Ctrl+Z takes the whole rename back. With the script out of
+the editor (the caret in a Reference note) there is no history to put it in, so
+its contents are replaced and it is marked unsaved, as a scene merged back into
+it is. `render.js`'s `screenplayNamesView()` hands the dialog whichever copy is
+the live one and reads the script's file once, up front, for a project opened
+onto another document.
+
+**The pure part**, in `screenplay-editor.js`:
+
+```
+cueNameSpan(text) / headingNameSpan(text)  -> { from, to } within the line
+nameCounts(delta)          -> { characters: {NAME: n}, locations: {...} }
+mergeNames(derived, added, removed)        -> the list, capitalised, once each
+namesList(screenplayNames, key)            -> { added, removed }, defensively
+renameName(delta, type, from, to)          -> { ops, count }, or null
+```
+
+The two spans are the single definition of what a name is: `cueName` and
+`headingName` read a name out of a line with them, so the lists autocomplete
+offers are built from them, and `renameName` rewrites exactly the same
+characters. A name that can be collected can therefore be renamed, and a rename
+leaves everything around the name - a cue's `(V.O.)` and its dual marker, a
+heading's `INT.`, its ` - DAY` and its `#12#` - exactly where the writer put it.
+Renaming a name onto one the script already uses merges the two characters or
+places, which is the same thing a writer would mean by it.
+
+The item is absent from a novel's Tools menu rather than greyed out in it, which
+is the only place in the menus that departs from "disable, do not remove": the
+other screenplay differences are the same tool in a different shape (Page Count,
+the Outliner by scene), and a novel has no cues and no headings for this one to
+be disabled *about*. `render.js` refuses the channel too, for an accelerator on
+a menu built before the project changed.
+
 ## What the menus offer
 
 Two lists of channels, `NOVEL_PROJECT_ONLY` and `PROSE_DOCUMENT_ONLY`, kept
@@ -578,6 +662,7 @@ accelerator on a menu built before the mode arrived - gets the message from
 | Works as-is | Needs a screenplay branch | Prose only |
 | --- | --- | --- |
 | Save, Save As, Save Copy, Backup, Open, New | Word Count (pages) | Split Chapter |
+| | Characters/Locations (a screenplay's alone: absent from a novel's menu) | |
 | Find/Replace, Spell Check | Properties (title page) | |
 | | Delete/Restore Chapter (a scene block in the script; see "One script") | |
 | Send via Email (sends the script as `.fountain`) | Export (one file, Save As: PDF, FDX, Fountain, text) | Renumber Chapters |
@@ -825,6 +910,10 @@ per phase. Where the implementation departed from the plan above:
 - Menu gating is by a table in `render.js` rather than a flag per command
   entry, and comes in two kinds: the chapter tools need a prose document in
   the editor, the manuscript conversions need a novel project.
+- The autocomplete lists became editable, in Tools > Characters/Locations - see
+  "Characters and locations". Phase 6 built them as read-only lists computed
+  from the script; they are still computed from the script, with a project's own
+  added names offered alongside and its removed ones offered nowhere.
 
 ## Open findings to carry
 

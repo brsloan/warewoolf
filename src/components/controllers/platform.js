@@ -141,6 +141,7 @@ var EVENTS = [
   'outliner-clicked', 'properties-clicked', 'reboot-clicked', 'renumber-chapters-clicked',
   'restore-chapter-clicked',
   'save-as-clicked', 'save-backup-clicked', 'save-clicked', 'save-copy-clicked',
+  'screenplay-names-clicked',
   'send-via-email-clicked', 'settings-clicked', 'shortcuts-clicked', 'spellcheck-clicked',
   'split-chapter-clicked', 'tab-indent-paragraphs-clicked', 'view-error-log-clicked',
   'wifi-manager-clicked', 'word-count-clicked',

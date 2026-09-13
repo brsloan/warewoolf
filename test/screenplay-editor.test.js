@@ -978,3 +978,157 @@ test('the estimated page turns mark the first paragraph of each page, outside th
   markEstimatedPages(quill, false);
   assert.strictEqual(quill.root.querySelectorAll('p[data-sp-page]').length, 0);
 });
+
+
+//---- Characters/Locations: the name lists a script is collected into ------------------------------
+//docs/screenplay-plan.md, "Characters and locations". The dialog itself is
+//test/screenplay-names_display.test.js; these are the parts it is made of.
+
+const { nameCounts, mergeNames, namesList, renameName } = require('../src/components/controllers/screenplay-editor');
+
+test('nameCounts says how many lines of the script each name is written into', function(){
+  var d = elementsToDelta(parseFountain(CAST).elements);
+
+  //EDWARD has two cues, one with an extension and one with (CONT'D); the lower-case "will" is not
+  //a cue at all to Fountain, so it adds nothing to the one WILL has.
+  assert.deepStrictEqual(nameCounts(d).characters, { EDWARD: 2, WILL: 1, SANDRA: 1 });
+  //WILL'S BEDROOM twice - once with a time of day, once with a scene number after it.
+  assert.deepStrictEqual(nameCounts(d).locations, { "WILL'S BEDROOM": 2, CAMPFIRE: 1 });
+  assert.deepStrictEqual(nameCounts(null), { characters: {}, locations: {} });
+});
+
+test('mergeNames is the script\'s names, plus the project\'s added ones, minus the ones it removed', function(){
+  assert.deepStrictEqual(mergeNames(['BOB'], ['anna ', 'BOB']), ['ANNA', 'BOB'], 'capitalised, trimmed, once each');
+  assert.deepStrictEqual(mergeNames(['BOB'], null), ['BOB']);
+  assert.deepStrictEqual(mergeNames([], ['']), []);
+
+  //A removal takes a name out whether the script wrote it or the project added it, and is compared
+  //in the same capitals everything else is.
+  assert.deepStrictEqual(mergeNames(['BOB', 'ANNA'], null, ['bob']), ['ANNA']);
+  assert.deepStrictEqual(mergeNames(['ANNA'], ['ZELDA'], ['ZELDA']), ['ANNA']);
+  assert.deepStrictEqual(mergeNames(['ANNA'], null, ['NOBODY']), ['ANNA'], 'a removal for a name nothing offers costs nothing');
+});
+
+test('namesList reads a project\'s list whatever shape the .woolf actually held', function(){
+  assert.deepStrictEqual(namesList({ characters: { added: ['A'], removed: ['B'] } }, 'characters'),
+    { added: ['A'], removed: ['B'] });
+  assert.deepStrictEqual(namesList(null, 'characters'), { added: [], removed: [] });
+  assert.deepStrictEqual(namesList({}, 'locations'), { added: [], removed: [] });
+  assert.deepStrictEqual(namesList({ characters: 'ZELDA' }, 'characters'), { added: [], removed: [] });
+  assert.deepStrictEqual(namesList({ characters: { added: 'ZELDA' } }, 'characters'), { added: [], removed: [] });
+});
+
+test('a cue and a heading complete from the names added to the project as well as the script\'s', function(){
+  var d = elementsToDelta(parseFountain(CAST).elements);
+  var names = { characters: { added: ['ZELDA'] }, locations: { added: ['ZOO'] } };
+
+  assert.deepStrictEqual(suggestionsFor(d, 'character', 'z', 0, names).suggestions, ['ZELDA']);
+  assert.strictEqual(suggestionsFor(d, 'character', 'z', 0, null), null, 'without the added list there is no such name');
+  assert.deepStrictEqual(suggestionsFor(d, 'scene', 'INT. z', 0, names).suggestions, ['ZOO']);
+
+  //An empty cue guesses the next speaker, and someone who has never spoken cannot be the guess -
+  //so an added name comes last, after every speaker the script has.
+  var speakers = suggestionsFor(d, 'character', '', 0, names).suggestions;
+  assert.strictEqual(speakers[speakers.length - 1], 'ZELDA');
+});
+
+//The one the dialog exists for: a name the script uses, taken out of the list without the script
+//losing a word of it - docs/screenplay-plan.md, "Characters and locations".
+test('a name the project has removed is offered from nowhere, though the script still writes it', function(){
+  var d = elementsToDelta(parseFountain('INT. A - DAY\n\nDAN\nOne line only.\n\nDANIELLE\nAll the rest.\n\nEXT. DANCE HALL - NIGHT\n\nDANIELLE\nMore.\n').elements);
+  var names = { characters: { removed: ['DAN'] }, locations: { removed: ['A'] } };
+
+  //Typing towards DANIELLE is no longer met with DAN first.
+  assert.deepStrictEqual(suggestionsFor(d, 'character', 'DAN', 0, names).suggestions, ['DANIELLE']);
+  assert.deepStrictEqual(suggestionsFor(d, 'scene', 'INT. ', 0, names).suggestions, ['DANCE HALL']);
+
+  //Nor on an empty cue, where he would otherwise be the guess: DAN spoke before DANIELLE last did.
+  var end = 0;
+  d.ops.forEach(function(op){ end += typeof op.insert === 'string' ? op.insert.length : 1; });
+  assert.deepStrictEqual(speakersFor(d, end, names.characters), ['DANIELLE']);
+
+  //And the script is untouched - the count is what it always was.
+  assert.deepStrictEqual(nameCounts(d).characters, { DAN: 1, DANIELLE: 2 });
+});
+
+//What renameName rewrote, as the lines of the script with their element types.
+function linesOf(ops){
+  var lines = [];
+  var text = '';
+  ops.forEach(function(op){
+    if(typeof op.insert !== 'string')
+      return;
+    op.insert.split('\n').forEach(function(part, i, parts){
+      text += part;
+      if(i < parts.length - 1){
+        lines.push(text);
+        text = '';
+      }
+    });
+  });
+  return lines;
+}
+
+test('renameName rewrites every cue for a character and leaves the rest of the line alone', function(){
+  var d = elementsToDelta(parseFountain(CAST).elements);
+  var renamed = renameName(d, 'character', 'edward', 'ed hyde');
+
+  assert.strictEqual(renamed.count, 2);
+  var lines = linesOf(renamed.ops);
+  assert.ok(lines.indexOf('ED HYDE (V.O.)') > -1, 'the extension stays where it is');
+  assert.ok(lines.indexOf("ED HYDE (CONT'D)") > -1);
+  assert.ok(lines.indexOf('One.') > -1, 'the speech is untouched');
+  assert.deepStrictEqual(nameCounts({ ops: renamed.ops }).characters, { 'ED HYDE': 2, WILL: 1, SANDRA: 1 });
+});
+
+test('renameName rewrites the place in every heading and leaves the prefix, the time and the number', function(){
+  var d = elementsToDelta(parseFountain(CAST).elements);
+  var renamed = renameName(d, 'location', "will's bedroom", 'the attic');
+
+  assert.strictEqual(renamed.count, 2);
+  var lines = linesOf(renamed.ops);
+  assert.ok(lines.indexOf('INT. THE ATTIC - NIGHT (1973)') > -1);
+  assert.ok(lines.indexOf('INT. THE ATTIC - DAY #4#') > -1);
+  assert.ok(lines.indexOf('EXT. CAMPFIRE - NIGHT') > -1, 'the other place is untouched');
+});
+
+test('renaming a cue keeps what the line is, dual marker and all, and can merge two characters', function(){
+  var d = elementsToDelta(parseFountain(CAST).elements);
+
+  //SANDRA's cue is marked dual, which is a line attribute rather than the "^" the writer typed, so
+  //renaming the name has to leave the attribute on the line it renamed.
+  var dual = renameName(d, 'character', 'SANDRA', 'JOSEPHINE').ops.filter(function(op){
+    return op.attributes && op.attributes.dual;
+  });
+  assert.deepStrictEqual(dual, [{ insert: '\n', attributes: { element: 'character', dual: true } }]);
+
+  //Two characters made one: SANDRA's cue now reads WILL, and the list has one name where it had two.
+  var merged = renameName(d, 'character', 'SANDRA', 'WILL');
+  assert.deepStrictEqual(nameCounts({ ops: merged.ops }).characters, { EDWARD: 2, WILL: 2 });
+});
+
+test('renameName answers null when there is nothing to rename, and never renames across the two lists', function(){
+  var d = elementsToDelta(parseFountain(CAST).elements);
+
+  assert.strictEqual(renameName(d, 'character', 'NOBODY', 'SOMEBODY'), null);
+  assert.strictEqual(renameName(d, 'character', 'EDWARD', ''), null, 'a name cannot be renamed to nothing');
+  assert.strictEqual(renameName(d, 'character', '', 'EDWARD'), null);
+  assert.strictEqual(renameName(d, 'character', 'EDWARD', 'edward'), null, 'the same name in lower case is the same name');
+  assert.strictEqual(renameName(d, 'location', 'EDWARD', 'ED'), null, 'a character is not a place');
+  assert.strictEqual(renameName(d, 'character', 'CAMPFIRE', 'BONFIRE'), null, 'and a place is not a character');
+});
+
+test('renaming a cue keeps the inline formats of the rest of its line', function(){
+  var renamed = renameName({ ops: [
+    { insert: 'BOB', attributes: { italic: true } },
+    { insert: ' (V.O.)' },
+    { insert: '\n', attributes: { element: 'character' } },
+    { insert: 'Hi.\n' }
+  ] }, 'character', 'BOB', 'ROB');
+
+  assert.deepStrictEqual(renamed.ops.slice(0, 3), [
+    { insert: 'ROB', attributes: { italic: true } },
+    { insert: ' (V.O.)' },
+    { insert: '\n', attributes: { element: 'character' } }
+  ]);
+});
