@@ -11,7 +11,7 @@ const { convertMarkedItalics } = require('./convert-italics');
 const { convertMarkedTabs } = require('./convert-tabs');
 const { parseMDF } = require('./markdownFic');
 const { parseFountain, elementsToDelta, getTitlePageValues } = require('./fountain');
-const { parseFdx } = require('./screenplay-export');
+const { parseFdx, parseFadeIn } = require('./screenplay-export');
 const { createPlatform } = require('./platform');
 const { createIpcBacking } = require('./platform-ipc');
 
@@ -81,8 +81,8 @@ function importFilesAsync(filepaths, options, addImportedChapter, cback, sysDire
     importMDF(filepath, options.mdfcOptions, function(delts){
       recurse(delts);
     });
-  else if(options.fileType.id == 'fountainSelect' || options.fileType.id == 'fdxSelect')
-    importScreenplay(filepath, options.fileType.id == 'fdxSelect', function(delts, metadata){
+  else if(SCREENPLAY_FORMAT[options.fileType.id])
+    importScreenplay(filepath, SCREENPLAY_FORMAT[options.fileType.id], function(delts, metadata){
       if(!bookMetadata && metadata)
         bookMetadata = metadata;
       recurse(delts);
@@ -275,13 +275,19 @@ function importMDF(filepath, options, callback){
   });
 }
 
-//A screenplay, from Fountain or Final Draft, as one document stamped `format: 'fountain'` - which
-//is what has it saved as a .fountain file and puts the editor in screenplay mode for it. The
-//file's title page travels out as metadata, the way an epub's title and author do, for a
-//screenplay project with no title page of its own to take (render.js's import finish).
-function importScreenplay(filepath, isFdx, callback){
-  platform.readTextFile({ path: filepath }).then(function(data){
-    var parsed = isFdx ? parseFdx(data) : parseFountain(data);
+//The screenplay import's file types (import_display.js) and the format each reads.
+const SCREENPLAY_FORMAT = { fountainSelect: 'fountain', fdxSelect: 'fdx', fadeinSelect: 'fadein' };
+
+//A screenplay, from Fountain, Final Draft or Fade In, as one document stamped `format: 'fountain'`
+//- which is what has it saved as a .fountain file and puts the editor in screenplay mode for it.
+//The file's title page travels out as metadata, the way an epub's title and author do, for a
+//screenplay project with no title page of its own to take (render.js's import finish). `format`
+//is one of SCREENPLAY_FORMAT's values.
+function importScreenplay(filepath, format, callback){
+  var read = format === 'fadein' ? readFadeIn(filepath) : platform.readTextFile({ path: filepath });
+
+  read.then(function(data){
+    var parsed = format === 'fdx' ? parseFdx(data) : format === 'fadein' ? parseFadeIn(data) : parseFountain(data);
     var title = getTitlePageValues(parsed.titlePage, 'Title').join(' ') || getFilenameFromFilepath(filepath);
 
     callback([{
@@ -296,6 +302,18 @@ function importScreenplay(filepath, isFdx, callback){
   }).catch(function(err){
     logError(err);
     callback([], null);
+  });
+}
+
+//A .fadein is a zip holding one document.xml. importEpub is the platform's "text entries of a zip"
+//command - it never extracts, and reads only text - and that is exactly the read this needs, so
+//it is borrowed rather than mirrored by a command of its own.
+function readFadeIn(filepath){
+  return platform.importEpub({ path: filepath }).then(function(result){
+    var xml = result.entries['document.xml'];
+    if(typeof xml !== 'string')
+      throw new Error('Not a Fade In (.fadein) document: no document.xml in the archive.');
+    return xml;
   });
 }
 

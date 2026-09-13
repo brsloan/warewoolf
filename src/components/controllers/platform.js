@@ -291,7 +291,7 @@ var COMMANDS = {
   //all three sample books does - so without the .css entries every class-driven italic in the book
   //resolves to nothing, which is the exact failure html-import.js exists to avoid.
   importEpub: { group: 'F', params: ['path'], returns: '{ entries: { [path]: string } }',
-    note: 'Text entries only - xhtml/html/xml/opf/ncx/css/txt, plus the "mimetype" file. Images, fonts and audio are never read, which is where "images are stripped" is actually enforced: they cannot reach the renderer to be stripped later. Paths are archive-relative with forward slashes, exactly as the zip stores them, because that is what the hrefs inside container.xml/the OPF/the nav document resolve against.' },
+    note: 'Text entries only - xhtml/html/xml/opf/ncx/css/txt, plus the "mimetype" file. Images, fonts and audio are never read, which is where "images are stripped" is actually enforced: they cannot reach the renderer to be stripped later. Paths are archive-relative with forward slashes, exactly as the zip stores them, because that is what the hrefs inside container.xml/the OPF/the nav document resolve against. The Fade In import (import.js\'s readFadeIn) reads its zip through this same command: a .fadein is one document.xml in an archive, and this is already "the text entries of a zip".' },
 
   // --- G. Export and compile ----------------------------------------------------------------
   ensureDirectory: { group: 'G', params: ['path'], returns: 'void' },

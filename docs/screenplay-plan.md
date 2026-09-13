@@ -628,6 +628,20 @@ per phase. Where the implementation departed from the plan above:
   `webContents.printToPDF` in `index.js`), which only a running Electron can
   exercise - the node backing rejects it UNAVAILABLE, and that path is what
   the tests cover. The title page is numbered like every other page.
+- Import also reads Fade In's `.fadein` (`parseFadeIn` in `screenplay-export.js`,
+  with `screenplay/Big-Fish.fadein` as the shape to match): a zip around one
+  Open Screenplay Format `document.xml`, opened through the platform's
+  `importEpub` command since that is already "the text entries of a zip". Its
+  element styles are Final Draft's names plus Normal Text and Singing, so the
+  FDX table reads them. `screenplay/dual.fadein` pins the marks Big Fish never
+  uses: `pagebreakbefore="1"` and `dualdialogue="1"` on the paragraph's style,
+  the dual mark on the first cue of the pair where Fountain's goes on the
+  second. A soft return inside a paragraph is a literal newline in its text and
+  becomes a `tight` line. Fade In's own title page names its paragraphs
+  (`bookmark="Title"`, Author, Copyright, Draft, Contact), which go straight to
+  keys; a title page pasted in as free text (Big Fish's) is read by its lines,
+  which now also yields Source and Copyright, from lines beginning "based on"
+  and "copyright", for FDX too. There is no Fade In export.
 - FDX in and out covers what both formats share. Sections, synopses, notes
   and boneyards do not go to FDX; Final Draft's empty action paragraphs and a
   speech with no cue over it do not survive the trip to Fountain.

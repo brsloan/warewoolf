@@ -182,7 +182,7 @@ test('importScreenplay reads a .fountain file as one fountain-format chapter tit
   fs.writeFileSync(filepath, 'Title: Big Fish\nAuthor: John August\n\nINT. HOUSE - DAY\n\nBOB\nHi.\n', 'utf8');
 
   const result = await new Promise(function(resolve){
-    importCtrl.importScreenplay(filepath, false, function(delts, metadata){ resolve({ delts: delts, metadata: metadata }); });
+    importCtrl.importScreenplay(filepath, 'fountain', function(delts, metadata){ resolve({ delts: delts, metadata: metadata }); });
   });
 
   assert.strictEqual(result.delts.length, 1);
@@ -206,7 +206,7 @@ test('importScreenplay reads an .fdx file, and titles it from the filename when 
     '</Content></FinalDraft>', 'utf8');
 
   const result = await new Promise(function(resolve){
-    importCtrl.importScreenplay(filepath, true, function(delts, metadata){ resolve({ delts: delts, metadata: metadata }); });
+    importCtrl.importScreenplay(filepath, 'fdx', function(delts, metadata){ resolve({ delts: delts, metadata: metadata }); });
   });
 
   assert.strictEqual(result.delts[0].title, 'my.script');
@@ -221,7 +221,7 @@ test('importScreenplay regression: a missing file logs an error and calls back w
   const fresh = freshImportCtrl();
 
   const result = await new Promise(function(resolve){
-    fresh.importScreenplay(path.join(tempDir(), 'missing.fountain').replaceAll('\\', '/'), false, function(delts, metadata){ resolve({ delts: delts, metadata: metadata }); });
+    fresh.importScreenplay(path.join(tempDir(), 'missing.fountain').replaceAll('\\', '/'), 'fountain', function(delts, metadata){ resolve({ delts: delts, metadata: metadata }); });
   });
 
   assert.deepStrictEqual(result.delts, []);
@@ -715,4 +715,66 @@ test('applyBookMetadata does nothing at all for a format that reported no metada
   assert.strictEqual(importCtrl.applyBookMetadata(project, null), false);
   assert.strictEqual(importCtrl.applyBookMetadata(project, undefined), false);
   assert.strictEqual(project.hasUnsavedChanges, false);
+});
+
+//---------------------------------------------------------------------------
+// Fade In
+//---------------------------------------------------------------------------
+
+//A .fadein is a zip around one document.xml; these build one the way the epub tests build theirs.
+function writeFadeIn(filepath, documentXml, entryName){
+  return new Promise(function(resolve, reject){
+    const output = fs.createWriteStream(filepath);
+    const archive = archiver('zip');
+    output.on('close', resolve);
+    archive.on('error', reject);
+    archive.pipe(output);
+    archive.append(documentXml, { name: entryName || 'document.xml' });
+    archive.finalize();
+  });
+}
+
+test('importScreenplay reads a .fadein archive as one fountain-format chapter, with its title page as metadata', async function(){
+  const { JSDOM } = require('jsdom');
+  global.DOMParser = new JSDOM().window.DOMParser;
+  const filepath = path.join(tempDir(), 'script.fadein').replaceAll('\\', '/');
+
+  await writeFadeIn(filepath, '<?xml version="1.0"?><document type="Open Screenplay Format document" version="50"><paragraphs>' +
+    '<para><style basestyle="Scene Heading"/><text>INT. HOUSE - DAY</text></para>' +
+    '<para><style basestyle="Character"/><text>BOB</text></para>' +
+    '<para><style basestyle="Dialogue"/><text>Hi.</text></para>' +
+    '</paragraphs><titlepage>' +
+    '<para><style basestyle="Normal Text" align="center"/><text>Big Fish</text></para>' +
+    '<para><style basestyle="Normal Text" align="center"/><text>by</text></para>' +
+    '<para><style basestyle="Normal Text" align="center"/><text>John August</text></para>' +
+    '</titlepage></document>');
+
+  const result = await new Promise(function(resolve){
+    importCtrl.importScreenplay(filepath, 'fadein', function(delts, metadata){ resolve({ delts: delts, metadata: metadata }); });
+  });
+
+  assert.strictEqual(result.delts.length, 1);
+  assert.strictEqual(result.delts[0].title, 'Big Fish');
+  assert.strictEqual(result.delts[0].format, 'fountain');
+  assert.deepStrictEqual(result.delts[0].delta.ops.map(function(op){ return op.insert; }), ['INT. HOUSE - DAY', '\n', 'BOB', '\n', 'Hi.', '\n']);
+  assert.deepStrictEqual(result.delts[0].delta.ops[1], { insert: '\n', attributes: { element: 'scene' } });
+  assert.strictEqual(result.metadata.author, 'John August');
+});
+
+test('importScreenplay regression: a .fadein with no document.xml logs an error and calls back with no chapters', async function(){
+  var logged = [];
+  errorLog.logError = function(err){ logged.push(err); };
+  const fresh = freshImportCtrl();
+  const filepath = path.join(tempDir(), 'empty.fadein').replaceAll('\\', '/');
+
+  await writeFadeIn(filepath, 'nothing', 'readme.txt');
+
+  const result = await new Promise(function(resolve){
+    fresh.importScreenplay(filepath, 'fadein', function(delts, metadata){ resolve({ delts: delts, metadata: metadata }); });
+  });
+
+  assert.deepStrictEqual(result.delts, []);
+  assert.strictEqual(result.metadata, null);
+  assert.strictEqual(logged.length, 1);
+  assert.match(logged[0].message, /document\.xml/);
 });

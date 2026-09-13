@@ -1,8 +1,9 @@
-const { getTitlePageValues } = require('./fountain');
+const { getTitlePageValues, NEVER_TIGHT } = require('./fountain');
 
-//The screenplay's other formats - docs/screenplay-plan.md, Phase 7. Three pure functions over the
-//element list the Fountain codec produces: a print page for the PDF, and Final Draft's FDX in both
-//directions. Nothing here touches a file; export.js and import.js do that.
+//The screenplay's other formats - docs/screenplay-plan.md, Phase 7. Pure functions over the
+//element list the Fountain codec produces: a print page for the PDF, Final Draft's FDX in both
+//directions, and Fade In's document in. Nothing here touches a file; export.js and import.js do
+//that.
 
 // ------------------------------------------------------------------------------------------
 // Print
@@ -333,39 +334,82 @@ function pushParagraph(elements, node, dual){
   elements.push(element);
 }
 
-//A Final Draft title page is free text, not keys. The first line with anything on it is the
-//title; a line reading "by" or "written by" is the credit and the line after it the author;
-//everything else goes to Notes, which is where nothing is lost.
+//A Final Draft title page is free text, not keys: its paragraphs' lines, read by titlePageFromLines.
 function parseFdxTitlePage(root){
   var page = childNamed(root, 'TitlePage');
   var content = page ? childNamed(page, 'Content') : null;
   if(!content)
     return [];
 
-  var lines = Array.from(content.children).filter(function(node){ return node.nodeName === 'Paragraph'; }).map(function(node){
-    return Array.from(node.children).filter(function(c){ return c.nodeName === 'Text'; }).map(function(c){ return c.textContent; }).join('').trim();
-  }).filter(function(line){ return line !== ''; });
+  return titlePageFromLines(paragraphLines(content, 'Paragraph', 'Text'));
+}
 
+//The non-empty lines of a run of paragraphs, as { text, key }, for a title page that is laid out
+//rather than keyed. FDX spells the two nodes Paragraph/Text; Fade In spells them para/text. A
+//soft return inside a paragraph is a line of its own. `keyOf(paragraph)` names the Fountain key a
+//paragraph is known to hold, or null when only its text can say.
+function paragraphLines(container, paragraphName, textName, keyOf){
+  var lines = [];
+  Array.from(container.children).forEach(function(node){
+    if(node.nodeName !== paragraphName)
+      return;
+    var key = keyOf ? keyOf(node) : null;
+    var text = Array.from(node.children).filter(function(c){ return c.nodeName === textName; }).map(function(c){ return c.textContent; }).join('');
+    text.split(/\r\n|\r|\n/).forEach(function(line){
+      line = line.trim();
+      if(line !== '')
+        lines.push({ text: line, key: key });
+    });
+  });
+  return lines;
+}
+
+//Keys from a laid-out title page. A line that arrives with a key goes under it. For the rest: the
+//first line with anything on it is the title; a line reading "by" or "written by" is the credit
+//and the line after it the author; a line beginning "based on" is the source and one beginning
+//"copyright" or "©" the copyright; everything else goes to Notes, which is where nothing is lost.
+function titlePageFromLines(lines){
   var titlePage = [];
   var notes = [];
   var expectAuthor = false;
 
+  var add = function(key, line){
+    var entry = titlePage.find(function(e){ return e.key === key; });
+    if(entry)
+      entry.values.push(line);
+    else
+      titlePage.push({ key: key, values: [line] });
+  };
+
   lines.forEach(function(line){
-    if(titlePage.length === 0){
-      titlePage.push({ key: 'Title', values: [line] });
+    if(line.key){
+      add(line.key, line.text);
+      expectAuthor = false;
       return;
     }
-    if(/^(written\s+)?by$/i.test(line)){
-      titlePage.push({ key: 'Credit', values: [line] });
+    if(titlePage.length === 0){
+      add('Title', line.text);
+      return;
+    }
+    if(/^(written\s+)?by$/i.test(line.text)){
+      add('Credit', line.text);
       expectAuthor = true;
       return;
     }
     if(expectAuthor){
-      titlePage.push({ key: 'Author', values: [line] });
+      add('Author', line.text);
       expectAuthor = false;
       return;
     }
-    notes.push(line);
+    if(/^based\s+on\b/i.test(line.text)){
+      add('Source', line.text);
+      return;
+    }
+    if(/^(copyright\b|©|\(c\)\s)/i.test(line.text)){
+      add('Copyright', line.text);
+      return;
+    }
+    notes.push(line.text);
   });
 
   if(notes.length > 0)
@@ -378,8 +422,137 @@ function childNamed(node, name){
   return Array.from(node.children).find(function(child){ return child.nodeName === name; }) || null;
 }
 
+// ------------------------------------------------------------------------------------------
+// Fade In
+// ------------------------------------------------------------------------------------------
+
+//Fade In in. A .fadein is a zip around one document.xml in Open Screenplay Format - import.js
+//opens the zip and hands the XML here. The document is a <paragraphs> list of <para>, each with a
+//<style basestyle="..."/> naming its element style and <text> runs that carry bold, italic and
+//underline as "1", and then a <titlepage> of the same shape. The style names are Final Draft's,
+//near enough, so the FDX table reads them, with Fade In's own two added: Normal Text is its
+//General, Singing its Lyrics. A style Fade In has and we do not (a writer's custom element) comes
+//in as action, and a centred one as centered, as with FDX.
+//
+//A page break and the dual-dialogue mark are attributes of the paragraph's style (screenplay/
+//dual.fadein: pagebreakbefore="1" on the paragraph that starts the new page, dualdialogue="1" on
+//the first cue of the pair), read by name on the para or its style so the format's public
+//spellings (pageBreakBefore, dualDialogue) read too. Fountain marks the second cue of a pair, so
+//a marked cue opens a pair and the next cue closes it, whether or not that one is marked as well.
+//
+//A soft return inside a paragraph is a literal newline in its text, and becomes a `tight` line of
+//the same type, which is how the editor spells one (Shift+Enter); in an element that cannot be
+//continued that way the lines are joined with a space.
+//
+//Fade In's own title page names what its paragraphs hold (bookmark="Title" and so on), so those
+//go straight to their keys; a title page pasted in as free text (Big Fish's) is read by its lines.
+const ELEMENT_FOR_FADEIN = Object.assign({}, ELEMENT_FOR_FDX, { 'Normal Text': 'action', 'Singing': 'lyric' });
+
+const TITLE_KEY_FOR_BOOKMARK = { title: 'Title', author: 'Author', authors: 'Authors', credit: 'Credit', source: 'Source',
+  copyright: 'Copyright', draft: 'Draft date', 'draft date': 'Draft date', contact: 'Contact', notes: 'Notes' };
+
+function parseFadeIn(xml){
+  var doc = new DOMParser().parseFromString(xml, 'application/xml');
+  var root = doc.documentElement;
+  if(!root || root.nodeName !== 'document' || !/open screenplay format/i.test(root.getAttribute('type') || ''))
+    throw new Error('Not a Fade In (.fadein) document.');
+
+  var paragraphs = childNamed(root, 'paragraphs');
+  var elements = [];
+  var firstOfPair = false;
+
+  if(paragraphs){
+    Array.from(paragraphs.children).forEach(function(para){
+      if(para.nodeName !== 'para')
+        return;
+
+      var style = childNamed(para, 'style');
+      if(hasFlag(para, style, /^pagebreak(before)?$/i) && elements.length > 0)
+        elements.push({ type: 'pagebreak', text: '', runs: [] });
+
+      var lines = fadeInParagraph(para, style);
+      var element = lines[0];
+      if(element.type === 'character'){
+        if(firstOfPair){
+          element.dual = true;
+          firstOfPair = false;
+        }
+        else if(hasFlag(para, style, /^dual(dialogue)?$/i))
+          firstOfPair = true;
+      }
+      lines.forEach(function(line){ elements.push(line); });
+    });
+  }
+
+  var titlePage = childNamed(root, 'titlepage');
+  return {
+    titlePage: titlePage ? titlePageFromLines(paragraphLines(titlePage, 'para', 'text', fadeInTitleKey)) : [],
+    elements: elements
+  };
+}
+
+function fadeInTitleKey(para){
+  return TITLE_KEY_FOR_BOOKMARK[(para.getAttribute('bookmark') || '').trim().toLowerCase()] || null;
+}
+
+//One paragraph as its elements: one, or one per soft-returned line with `tight` on each after
+//the first.
+function fadeInParagraph(para, style){
+  var base = style ? (style.getAttribute('basestyle') || style.getAttribute('baseStyleName') || '') : '';
+  var type = ELEMENT_FOR_FADEIN[base] || 'action';
+  var align = (style && style.getAttribute('align')) || para.getAttribute('align') || '';
+  if(type === 'action' && /^cent/i.test(align))
+    type = 'centered';
+
+  var joinLines = NEVER_TIGHT.indexOf(type) !== -1;
+  var lines = [[]];
+  Array.from(para.children).forEach(function(child){
+    if(child.nodeName !== 'text')
+      return;
+    var attributes = {};
+    ['bold', 'italic', 'underline'].forEach(function(name){
+      if(isOn(child.getAttribute(name)))
+        attributes[name] = true;
+    });
+    var text = child.textContent;
+    if(joinLines)
+      text = text.replace(/\r\n|\r|\n/g, ' ');
+    text.split(/\r\n|\r|\n/).forEach(function(segment, i){
+      if(i > 0)
+        lines.push([]);
+      if(segment === '')
+        return;
+      var run = { text: segment };
+      if(Object.keys(attributes).length > 0)
+        run.attributes = attributes;
+      lines[lines.length - 1].push(run);
+    });
+  });
+
+  return lines.map(function(runs, i){
+    var element = { type: type, text: runs.map(function(r){ return r.text; }).join(''), runs: runs };
+    if(i > 0)
+      element.tight = true;
+    return element;
+  });
+}
+
+//Whether the paragraph or its style carries a switched-on attribute whose name matches.
+function hasFlag(para, style, namePattern){
+  return [para, style].some(function(node){
+    return node && Array.from(node.attributes).some(function(attribute){
+      return namePattern.test(attribute.name) && isOn(attribute.value);
+    });
+  });
+}
+
+function isOn(value){
+  return /^(1|true|yes)$/i.test(value || '');
+}
+
 module.exports = {
   screenplayToPrintHtml,
   elementsToFdx,
-  parseFdx
+  parseFdx,
+  parseFadeIn
 };

@@ -725,6 +725,7 @@ function sanitizeTitlePage(raw){
 
 module.exports = {
   ELEMENT_TYPES,
+  NEVER_TIGHT,
   parseFountain,
   serializeFountain,
   elementsToDelta,
