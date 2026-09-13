@@ -599,7 +599,7 @@ is worth opening twice.
 | Button | What it does |
 | --- | --- |
 | Add | Puts a name the script has not reached yet into `added`, in capitals, so it completes from the first cue typed for it. |
-| Rename | Rewrites every cue for the name, or the place in every heading that uses it, and carries the project's own entry across with it, in whichever of the two lists it is in. |
+| Rename | Rewrites every use of the name in the script - see "Renaming" below - and carries the project's own entry across with it, in whichever of the two lists it is in. |
 | Remove | Takes the name out of the list. A name the script uses goes into `removed` and the script is untouched; one that was only ever `added` is simply dropped, since a removal for a name nothing can produce would be a note about nothing. |
 | Restore | The same button, when everything selected has already been removed: it takes them out of `removed` and they are offered again. |
 | Refresh | Empties both `added` and `removed`, leaving the list as the script itself writes it. Disabled when there is nothing to undo. |
@@ -621,6 +621,54 @@ it is. `render.js`'s `screenplayNamesView()` hands the dialog whichever copy is
 the live one and reads the script's file once, up front, for a project opened
 onto another document.
 
+### Renaming
+
+A character's name is not only in his cues, so a rename is two passes over the
+lines:
+
+- The **name line** - a cue for a character, a heading for a place - carries the
+  name as its whole subject, in the span `cueNameSpan`/`headingNameSpan` marks
+  out. It is matched whole and without regard to case, since a cue is the
+  character's own line and "dan" there is DAN and nothing else. Everything around
+  the name stays: a cue's extension, a heading's prefix, time of day and scene
+  number.
+- **Every other line** - action, dialogue, a parenthetical, a synopsis, and a
+  heading too, since `INT. DAN'S BEDROOM - NIGHT` is where a character's name
+  most often turns up outside his cues - carries the name as one word among
+  others. It is matched on word boundaries and put back in the case it was
+  written in: `DAN` becomes `BEN` and `Dan` becomes `Ben`. An all-lower-case
+  "dan" is left alone, because a name is also a word - will, mark, rose, sue -
+  and a script is full of them. The cue is the one line with no such doubt, which
+  is why the pass above reads it instead.
+
+The second pass is **for a character only**. A place is renamed in its headings
+and nowhere else: a location's name is far more often an ordinary phrase (THE
+CAR, OUTSIDE, THE HOUSE) than a character's is, so the same rule there would
+rewrite lines nobody meant, and a heading is a line a writer can watch change in
+the Scenes list.
+
+The lower-case rule cannot catch a sentence that *begins* with a name that is
+also a word: a character called WILL turns "Will you come?" into "Ben you come?",
+and nothing short of reading the sentence can tell that from "Will crosses the
+room." That is the one thing the rules do not settle, and it is **declared rather
+than fixed**.
+
+So a rename that reaches the script is **asked about before it is made**
+(`rename-confirmation_display.js`). `renameName` is run once for what it
+describes: the writer is told how far it goes - "This rewrites 1 cue and 5 other
+lines of the script" - and, when it reaches past the name's own lines, that a
+word spelled like the name may be replaced by mistake where a sentence begins
+with it, and that Ctrl+Z takes the whole rename back. On Rename it runs again and
+the change is written; Cancel leaves the name and the script as they were. A
+rename that no line of the script uses - a name only ever in `added` - has
+nothing to warn about and is simply made.
+
+Listing those doubtful lines for approval, one to a row behind a tick, was built
+and then taken out again. On a feature script there are far more of them than
+anyone would read through, and a list too long to be read is a worse warning than
+a sentence, not a better one. Undo is the answer when the rename does get one
+wrong, which is why the dialog names it.
+
 **The pure part**, in `screenplay-editor.js`:
 
 ```
@@ -628,7 +676,8 @@ cueNameSpan(text) / headingNameSpan(text)  -> { from, to } within the line
 nameCounts(delta)          -> { characters: {NAME: n}, locations: {...} }
 mergeNames(derived, added, removed)        -> the list, capitalised, once each
 namesList(screenplayNames, key)            -> { added, removed }, defensively
-renameName(delta, type, from, to)          -> { ops, count }, or null
+renameName(delta, type, from, to)          -> { ops, count, nameLines,
+                                                otherLines }, or null
 ```
 
 The two spans are the single definition of what a name is: `cueName` and

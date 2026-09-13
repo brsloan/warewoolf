@@ -1300,6 +1300,18 @@ hr {
   font-style: italic;
 }
 
+/* The warning a rename raises, stacked over the list. Above it in the stacking order for the same
+   reason the delete confirmation is above what it is asked about. */
+.rename-confirm-popup {
+  z-index: 4;
+}
+
+/* What the rename can get wrong, which is the part of the dialog worth reading. Set apart the way
+   the delete confirmation's line is, since it is the same kind of sentence. */
+.rename-confirm-popup .warning-text {
+  margin-top: 8px;
+}
+
 /* --- Working / backup alerts -------------------------------------------------------------- */
 
 .working-popup, .backup-alert-popup {

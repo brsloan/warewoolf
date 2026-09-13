@@ -979,38 +979,155 @@ function namesList(stored, key){
   };
 }
 
-//Every cue for `from` ('character'), or every heading in it ('location'), renamed to `to` - the new
-//ops and how many lines changed, or null when the script has no such name. Pure: the caller diffs
-//this against the editor's own contents, or writes it into a script that is not in the editor.
-//Only the name is rewritten; the extension after a cue, and the prefix, time of day and scene
-//number around a place, are left exactly as they stand.
+//`from` renamed to `to` throughout the script: the new ops and what changed, or null when nothing
+//did. Pure - the caller diffs this against the editor's own contents, or writes it into a script
+//that is not in the editor - and called twice for one rename, once to describe the change to the
+//writer and again to make it.
+//
+//A name is written two different ways, so there are two passes:
+//
+//  The **name line** - a cue for a character, a heading for a place - carries the name as its whole
+//  subject, in the span cueNameSpan/headingNameSpan marks out. It is matched whole and without
+//  regard to case, since a cue is the character's own line and "dan" there is DAN and nothing else.
+//  Everything around the name is left exactly as it stands: the extension after a cue, the prefix,
+//  the time of day and the scene number around a place.
+//
+//  **Every other line** - action, dialogue, a parenthetical, a synopsis, and a heading too, since
+//  "INT. DAN'S BEDROOM - NIGHT" is where a character's name most often turns up outside his cues -
+//  carries the name as one word among others. It is matched on word boundaries and put back in the
+//  case it was written in: DAN becomes BEN and Dan becomes Ben. An all-lower-case "dan" is left
+//  alone, because a name is also a word - will, mark, rose, sue, dan - and a script is full of
+//  them. The cue is the one line with no such doubt, which is why it is read by the pass above.
+//
+//This second pass is for a character only. A place is renamed in its headings and nowhere else: a
+//location's name is far more often an ordinary phrase (THE CAR, OUTSIDE, THE HOUSE) than a
+//character's is, so the same rule there would rewrite lines nobody meant, and a heading is a line
+//a writer can see changing in the Scenes list. See docs/screenplay-plan.md, "Characters and
+//locations".
+//
+//There is one case no rule settles. A capital is the name's own everywhere except at the start of a
+//sentence, where every word has one whether it is a name or not: "Will you come?" and "Will crosses
+//the room." are the same three characters, and only reading the sentence tells them apart. A
+//feature script has far too many lines like that to be read through one by one, so the dialog says
+//plainly that it can happen rather than listing them, and Ctrl+Z takes the whole rename back if it
+//did. See docs/screenplay-plan.md, "Renaming".
+//
+//Answers null when no line of the script is affected.
 function renameName(delta, type, from, to){
-  var oldName = String(from == null ? '' : from).trim().toUpperCase();
-  var newName = String(to == null ? '' : to).trim().toUpperCase();
+  var oldName = normalizedName(from);
+  var newName = normalizedName(to);
   if(oldName === '' || newName === '' || oldName === newName)
     return null;
 
   var element = type === 'location' ? 'scene' : 'character';
   var spanOf = element === 'scene' ? headingNameSpan : cueNameSpan;
-  var count = 0;
+  var throughout = element === 'character';
+  var nameLines = 0;
+  var otherLines = 0;
 
   var renamed = parseDelta(delta).paragraphs.map(function(para){
-    if(!para.attributes || para.attributes.element !== element)
-      return para;
-
     var text = paragraphText(para);
-    var span = spanOf(text);
-    if(text.slice(span.from, span.to).toUpperCase() !== oldName)
+
+    if(para.attributes && para.attributes.element === element){
+      var span = spanOf(text);
+      if(text.slice(span.from, span.to).toUpperCase() !== oldName)
+        return para;
+
+      nameLines++;
+      return withRuns(para, replaceRunSpan(para.textRuns, span.from, span.to,
+        inCaseOf(newName, text.slice(span.from, span.to))));
+    }
+
+    var found = throughout ? nameWordsIn(text, oldName) : [];
+    if(found.length === 0)
       return para;
 
-    count++;
-    var line = { textRuns: replaceRunSpan(para.textRuns, span.from, span.to, newName) };
-    if(para.attributes)
-      line.attributes = para.attributes;
-    return line;
+    //Rewritten from the end of the line backwards, so that every offset still measures against the
+    //text it was found in: replacing the last match cannot move the ones before it.
+    var runs = para.textRuns;
+    for(var i = found.length - 1; i >= 0; i--)
+      runs = replaceRunSpan(runs, found[i].from, found[i].to,
+        inCaseOf(newName, text.slice(found[i].from, found[i].to)));
+
+    otherLines++;
+    return withRuns(para, runs);
   });
 
-  return count === 0 ? null : { ops: paragraphsToOps(renamed), count: count };
+  var count = nameLines + otherLines;
+
+  return count === 0 ? null : {
+    ops: paragraphsToOps(renamed),
+    count: count,
+    nameLines: nameLines,
+    otherLines: otherLines
+  };
+}
+
+function withRuns(para, runs){
+  var line = { textRuns: runs };
+  if(para.attributes)
+    line.attributes = para.attributes;
+  return line;
+}
+
+//Where `name` is written as a word of its own in `text`, ignoring case - except in lower case,
+//which is never a match here. See renameName for why.
+function nameWordsIn(text, name){
+  var found = [];
+  var haystack = text.toLowerCase();
+  var needle = name.toLowerCase();
+  var at = 0;
+
+  for(;;){
+    var start = haystack.indexOf(needle, at);
+    if(start === -1)
+      return found;
+
+    var end = start + needle.length;
+    var matched = text.slice(start, end);
+    //A capital somewhere in it is what tells a name from the word it is also spelled like. Advanced
+    //by one rather than to `end` whether or not it matched, so a name written twice over ("DANDAN")
+    //cannot hide the second one behind the first.
+    if(wordBounded(text, start, end) && matched !== matched.toLowerCase())
+      found.push({ from: start, to: end });
+
+    at = start + 1;
+  }
+}
+
+//Letters and digits of any alphabet, so a name is bounded the same way in every language the editor
+//can be typed in. An apostrophe is deliberately not one of them: DAN'S is DAN followed by a
+//possessive, and renaming him has to reach it.
+const NAME_CHARACTER = /[\p{L}\p{N}]/u;
+
+function wordBounded(text, from, to){
+  return !(from > 0 && NAME_CHARACTER.test(text.charAt(from - 1)))
+    && !(to < text.length && NAME_CHARACTER.test(text.charAt(to)));
+}
+
+//The replacement in the case the text it replaces was written in: DAN becomes BEN, Dan becomes Ben,
+//dan becomes ben. Anything else - McCLANE, a name with no letters in it at all - takes the
+//replacement as it stands, there being no case to copy.
+function inCaseOf(replacement, matched){
+  var lower = matched.toLowerCase();
+  var upper = matched.toUpperCase();
+
+  if(matched === upper && matched !== lower)
+    return replacement.toUpperCase();
+  if(matched === lower && matched !== upper)
+    return replacement.toLowerCase();
+  if(matched === titleCased(lower))
+    return titleCased(replacement);
+
+  return replacement;
+}
+
+const TITLE_LETTER = /(^|[^\p{L}\p{N}])(\p{L})/gu;
+
+function titleCased(text){
+  return text.toLowerCase().replace(TITLE_LETTER, function(match, before, letter){
+    return before + letter.toUpperCase();
+  });
 }
 
 //A paragraph's runs with the characters from `from` to `to` replaced. The text either side keeps

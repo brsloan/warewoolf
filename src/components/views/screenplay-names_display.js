@@ -1,7 +1,8 @@
 const {
   closePopups, createButton, removeElementsByClass, removeOptions, describeDialog
 } = require('../controllers/utils');
-const { nameCounts, mergeNames } = require('../controllers/screenplay-editor');
+const { nameCounts, mergeNames, renameName } = require('../controllers/screenplay-editor');
+const showRenameConfirmation = require('./rename-confirmation_display');
 
 //Tools > Characters/Locations, for a screenplay project only: the two lists autocomplete completes
 //a cue and a scene heading from, shown as one dialog with a list each.
@@ -18,9 +19,12 @@ const { nameCounts, mergeNames } = require('../controllers/screenplay-editor');
 //
 //  Add      a name the script has not reached yet - a character due in act three - so it completes
 //           from the first cue that is typed for them.
-//  Rename   every instance of a name in the script at once. This is the one that touches the
-//           script: `script.rename` rewrites the cues or the headings and the editor's own undo
-//           puts them back, since a rename made from a dialog is still an edit to the script.
+//  Rename   every use of a name in the script at once - for a character that is his cues and every
+//           other line he is named in. This is the one that touches the script, so it is the one
+//           that asks first: renameName is run once to describe the change, the writer is told how
+//           far it reaches and what it can get wrong, and only then is it made. `script.rename`
+//           writes it, and the editor's own undo puts it back, since a rename made from a dialog is
+//           still an edit to the script.
 //  Remove   a name from the list, which is a change to the list and to nothing else: the script
 //           keeps every line the name is in, and only stops offering it. This is what a one-off DAN
 //           in scene one needs - he cannot be unwritten, and while he is offered every attempt at
@@ -49,9 +53,7 @@ function showScreenplayNames(project, script){
 
   var note = document.createElement('p');
   note.classList.add('sublabel');
-  note.innerText = 'Both lists follow the script as it is written, so a name in a cue or a heading is '
-    + 'offered without being added here. The number beside a name is the lines of the script it is in. '
-    + 'Removing a name only stops it being offered - the script keeps every line it is in.';
+  note.innerText = 'Remove eliminates names from autofill, but does not change the script. Rename rewrites every line of the script that uses a name.';
   popup.appendChild(note);
 
   //Side by side where there is width for it, one above the other where there is not - a screen the
@@ -68,7 +70,9 @@ function showScreenplayNames(project, script){
     legend: 'Characters',
     type: 'character',
     listKey: 'characters',
-    listLabel: 'Character names'
+    listLabel: 'Character names',
+    //What the count beside a name counts, and what the warning before a rename says it is rewriting.
+    nameNoun: 'cue'
   });
   lists.appendChild(characters.element);
 
@@ -79,7 +83,8 @@ function showScreenplayNames(project, script){
     legend: 'Locations',
     type: 'location',
     listKey: 'locations',
-    listLabel: 'Location names'
+    listLabel: 'Location names',
+    nameNoun: 'scene heading'
   });
   lists.appendChild(locations.element);
 
@@ -265,6 +270,10 @@ function nameListEditor(config){
     return String(text || '').trim().toUpperCase();
   }
 
+  function counted(n, noun){
+    return n + ' ' + noun + (n === 1 ? '' : 's');
+  }
+
   function updateButtons(){
     var typed = normalized(filterInput.value);
     var selected = selectedNames();
@@ -299,8 +308,8 @@ function nameListEditor(config){
         : selected.length + ' removed names. Restore puts them back.';
 
     if(selected.length === 1 && selected[0].count > 0)
-      return selected[0].name + ' is in ' + selected[0].count + (selected[0].count === 1 ? ' line' : ' lines')
-        + ' of the script. Remove stops it being offered and leaves those lines as they are.';
+      return selected[0].name + ' has ' + counted(selected[0].count, config.nameNoun)
+        + ' in the script. Remove stops it being offered and leaves them as they are.';
 
     return '';
   }
@@ -401,9 +410,15 @@ function nameListEditor(config){
     filterInput.focus();
   };
 
-  //The script first, then the project's own lists, then the report. The script is the part that can
-  //fail to match anything - a name that is only in the added list is in no line of it - and saying
-  //so is the difference between a rename that quietly did nothing and one that had nothing to do.
+  //A rename that reaches the script is described to the writer and asked about before it is made;
+  //one that does not - a name only ever in the project's own list, in no line of the script - has
+  //nothing to warn about and is simply done. Saying which of the two happened is the difference
+  //between a rename that quietly did nothing and one that had nothing to do.
+  //
+  //The edit in the field is ended before the question is asked, so the dialog behind can be left in
+  //a settled state while the writer reads it - and so the field's own blur, which abandons an edit,
+  //has nothing left to abandon when the focus moves to the buttons. Cancelling therefore leaves the
+  //name as it was rather than the rename half-made.
   function commitRename(){
     var from = renaming;
     var to = normalized(filterInput.value);
@@ -413,13 +428,35 @@ function nameListEditor(config){
       return;
     }
 
-    var lines = script ? script.rename(config.type, from, to) : 0;
-    renameStored(from, to);
+    //Run for what it describes, not for its ops: script.rename runs it again to make the change.
+    //Cheap enough for a dialog, and it means the writer is shown the script as it stands rather
+    //than a change worked out earlier and held.
+    var change = script ? renameName(script.getDelta(), config.type, from, to) : null;
     endRename();
 
-    say(lines > 0
-      ? 'Renamed ' + from + ' to ' + to + ' in ' + lines + (lines === 1 ? ' line' : ' lines') + ' of the script.'
-      : 'Renamed ' + from + ' to ' + to + '. The script has no line using that name.');
+    if(!change){
+      renameStored(from, to);
+      say('Renamed ' + from + ' to ' + to + '. The script has no line using that name.');
+      //endRename() above rebuilt the rows from the lists as they were, so they have to be read
+      //again now the project's own entry has moved.
+      reload();
+      return;
+    }
+
+    showRenameConfirmation({
+      from: from,
+      to: to,
+      nameNoun: config.nameNoun,
+      nameLines: change.nameLines,
+      otherLines: change.otherLines
+    }, function(){
+      var lines = script.rename(config.type, from, to);
+      renameStored(from, to);
+      say('Renamed ' + from + ' to ' + to + ' in ' + lines + (lines === 1 ? ' line' : ' lines') + ' of the script.');
+      reload();
+    });
+
+    say('Renaming ' + from + ' to ' + to + '. Nothing is written until you confirm it.');
   }
 
   //The project's own entry for the name follows the rename, in whichever of its two lists it is in:

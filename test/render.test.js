@@ -2998,12 +2998,23 @@ function namesPopup(){
       fieldset.querySelector('input[type=text]').value = to;
       fieldset.querySelector('input[type=text]').oninput();
       buttonIn(fieldset, 'Save').click();
+      //A rename that reaches the script is asked about before it is made.
+      confirmRename();
     }
   };
 
   function buttonIn(root, label){
     return Array.from(root.querySelectorAll('button')).find(function(b){ return b.textContent === label; });
   }
+}
+
+//Answers the warning the Characters/Locations dialog raises before it rewrites the script.
+function confirmRename(){
+  var popup = document.querySelector('.rename-confirm-popup');
+  assert.ok(popup, 'expected the rename to be asked about before it was made');
+  Array.from(popup.querySelectorAll('button')).find(function(b){
+    return b.textContent === 'Rename';
+  }).click();
 }
 
 function cueScript(){
@@ -3062,6 +3073,7 @@ test('renaming a location with a reference document in the editor writes the scr
   locations.querySelector('input[type=text]').value = 'THE PIER';
   locations.querySelector('input[type=text]').oninput();
   Array.from(locations.querySelectorAll('button')).find(function(b){ return b.textContent === 'Save'; }).click();
+  confirmRename();
 
   //The script is not the document in the editor, so the rename goes into its contents and marks
   //both it and the project unsaved - and the Scenes rows, which are the script's wherever the
@@ -3094,6 +3106,29 @@ test('a name added in the dialog is offered on the next cue, without the script 
   assert.deepStrictEqual(
     suggestionsFor(r.editorQuill.getContents(), 'character', 'z', 0, r.project.screenplayNames).suggestions,
     ['ZELDA']);
+});
+
+//A character's name is not only in his cues, and what it is replaced with takes the case of the
+//line it lands in - docs/screenplay-plan.md, "Characters and locations".
+test('renaming a character rewrites the whole script, in the case each line was written in', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [fountainChap('Script', 'INT. DAN\'S BEDROOM - NIGHT\n\nDAN\nI am Dan, and dan I remain.\n\nDAN crosses the room. DANIELLE does not.\n')];
+  await r.displayChapterByIndex(0);
+  await flushMicrotasks();
+
+  await currentBridge().handlers['screenplay-names-clicked']();
+  namesPopup().rename('DAN', 'BEN');
+
+  var text = r.editorQuill.getText();
+  assert.ok(text.indexOf("INT. BEN'S BEDROOM - NIGHT") > -1, 'the heading his room is in');
+  assert.ok(text.indexOf('I am Ben, and dan I remain.') > -1, 'capitalised in dialogue; lower case left alone');
+  assert.ok(text.indexOf('BEN crosses the room. DANIELLE does not.') > -1, 'capitals in action, and not a longer name');
+
+  //One entry in the editor's history still, however many lines it touched.
+  r.editorQuill.history.undo();
+  assert.ok(r.editorQuill.getText().indexOf("INT. DAN'S BEDROOM - NIGHT") > -1);
+  assert.ok(r.editorQuill.getText().indexOf('I am Dan, and dan I remain.') > -1);
 });
 
 //The reason the dialog exists - docs/screenplay-plan.md, "Characters and locations".

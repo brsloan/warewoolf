@@ -2147,8 +2147,8 @@ async function screenplayNamesView(){
   };
 }
 
-//Every cue for a character, or every heading in a location, renamed at once - the lines screenplay-
-//editor.js's renameName rewrites. Answers how many of them there were.
+//Every use of a character's name, or every heading in a location, renamed at once - the lines
+//screenplay-editor.js's renameName rewrites. Answers how many of them there were.
 //
 //Applied as a 'user' change when the script is in the editor, so it is one entry in the editor's
 //history and Ctrl+Z puts the old name back the way it does for any other edit. With the script out

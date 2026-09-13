@@ -112,6 +112,25 @@ function open(project, script){
   return showScreenplayNames(project || makeProject(), script === undefined ? makeScript() : script);
 }
 
+//The confirmation stacked over the list, and the two ways of answering it. A rename that reaches
+//the script is not made until one of them is clicked.
+function confirmation(){
+  return document.querySelector('.rename-confirm-popup');
+}
+
+function answerRename(label){
+  var popup = confirmation();
+  assert.ok(popup, 'expected the rename to be asked about before it was made');
+
+  Array.from(popup.querySelectorAll('button')).find(function(b){
+    return b.textContent === label;
+  }).click();
+}
+
+function confirmationText(){
+  return Array.from(confirmation().querySelectorAll('p')).map(function(p){ return p.innerText; });
+}
+
 function listFor(legend){
   var fieldset = Array.from(document.querySelectorAll('fieldset')).find(function(fs){
     return fs.querySelector('legend').innerText === legend;
@@ -203,6 +222,11 @@ test('Rename rewrites every line of the script that uses the name, and says how 
   characters.type('robert');
   characters.button('Save').click();
 
+  //Nothing is written until the writer has seen how far the rename reaches.
+  assert.deepStrictEqual(script.renames, []);
+  assert.strictEqual(characters.status.innerText, 'Renaming BOB to ROBERT. Nothing is written until you confirm it.');
+  answerRename('Rename');
+
   assert.deepStrictEqual(script.renames, [['character', 'BOB', 'ROBERT']]);
   assert.strictEqual(characters.status.innerText, 'Renamed BOB to ROBERT in 2 lines of the script.');
   assert.deepStrictEqual(characters.names(), ['ANNA', 'ROBERT']);
@@ -221,6 +245,7 @@ test('Rename on a location rewrites its headings and leaves what is around them'
   locations.button('Rename').click();
   locations.type('THE GALLEY');
   locations.button('Save').click();
+  answerRename('Rename');
 
   assert.deepStrictEqual(script.renames, [['location', 'KITCHEN', 'THE GALLEY']]);
   assert.deepStrictEqual(locations.names(), ['GARDEN', 'THE GALLEY']);
@@ -258,6 +283,90 @@ test('renaming an added name onto one already in the list drops it rather than l
   assert.deepStrictEqual(characters.names(), ['ANNA', 'BOB', 'YOLANDA']);
 });
 
+//What the writer is told before a character rename is written - docs/screenplay-plan.md, "Renaming".
+test('a rename says how far it reaches and what it can get wrong', function(){
+  var script = makeScript('INT. WILL\'S BEDROOM - NIGHT\n\nWILL\nWill you come?\n\nWILL waits. Edward sees Will.\n');
+  open(makeProject(), script);
+
+  var characters = listFor('Characters');
+  characters.select('WILL');
+  characters.button('Rename').click();
+  characters.type('DANIEL');
+  characters.button('Save').click();
+
+  assert.ok(confirmationText().some(function(line){
+    return line === 'This rewrites 1 cue and 3 other lines of the script.';
+  }), confirmationText().join(' | '));
+
+  //The one thing no rule settles is said rather than listed: there are far too many such lines in a
+  //feature script for anyone to read through. Asserted on what the warning has to get across rather
+  //than on how it is worded, which is the dialog's own business.
+  assert.ok(confirmationText().some(function(line){
+    return line.indexOf('may be replaced by mistake where a sentence begins with it') > -1
+      && line.indexOf('Ctrl+Z takes the whole rename back') > -1;
+  }), confirmationText().join(' | '));
+
+  answerRename('Rename');
+  assert.deepStrictEqual(script.renames, [['character', 'WILL', 'DANIEL']]);
+});
+
+test('a rename confined to its own lines is not cautioned about', function(){
+  var script = makeScript('INT. A - DAY\n\nBOB\nHello.\n');
+  open(makeProject(), script);
+
+  var characters = listFor('Characters');
+  characters.select('BOB');
+  characters.button('Rename').click();
+  characters.type('ROBERT');
+  characters.button('Save').click();
+
+  assert.deepStrictEqual(confirmationText(), ['This rewrites 1 cue.']);
+});
+
+test('cancelling the warning leaves the name and the script exactly as they were', function(){
+  var project = makeProject();
+  var script = makeScript();
+  open(project, script);
+
+  var characters = listFor('Characters');
+  characters.select('BOB');
+  characters.button('Rename').click();
+  characters.type('ROBERT');
+  characters.button('Save').click();
+  answerRename('Cancel');
+
+  assert.strictEqual(confirmation(), null);
+  assert.deepStrictEqual(script.renames, []);
+  assert.deepStrictEqual(characters.names(), ['ANNA', 'BOB'], 'the list is as it was');
+  assert.strictEqual(project.hasUnsavedChanges, false, 'and nothing is marked unsaved');
+});
+
+test('a rename that no line of the script uses is made without asking', function(){
+  var project = makeProject({ characters: { added: ['ZELDA'] } });
+  open(project, makeScript());
+
+  var characters = listFor('Characters');
+  characters.select('ZELDA');
+  characters.button('Rename').click();
+  characters.type('ZELDA MAY');
+  characters.button('Save').click();
+
+  assert.strictEqual(confirmation(), null, 'there is nothing in the script to warn about');
+  assert.deepStrictEqual(project.screenplayNames.characters.added, ['ZELDA MAY']);
+});
+
+test('a location rename is described as its headings, with no lines listed', function(){
+  open(makeProject(), makeScript());
+
+  var locations = listFor('Locations');
+  locations.select('KITCHEN');
+  locations.button('Rename').click();
+  locations.type('THE GALLEY');
+  locations.button('Save').click();
+
+  assert.deepStrictEqual(confirmationText(), ['This rewrites 2 scene headings.']);
+});
+
 test('Escape in the field abandons a rename, and the script is not touched', function(){
   var script = makeScript();
   open(makeProject(), script);
@@ -286,7 +395,7 @@ test('Remove takes a name the script uses out of the list and leaves the script 
   characters.select('DAN');
   assert.strictEqual(characters.button('Remove').disabled, false);
   assert.strictEqual(characters.status.innerText,
-    'DAN is in 1 line of the script. Remove stops it being offered and leaves those lines as they are.');
+    'DAN has 1 cue in the script. Remove stops it being offered and leaves them as they are.');
 
   characters.button('Remove').click();
 
@@ -368,6 +477,7 @@ test('renaming a removed name keeps it removed under its new name', function(){
   characters.button('Rename').click();
   characters.type('ROBERT');
   characters.button('Save').click();
+  answerRename('Rename');
 
   assert.deepStrictEqual(project.screenplayNames.characters.removed, ['ROBERT']);
   assert.deepStrictEqual(characters.rows(), ['ANNA  (2)', 'ROBERT  (2, removed)']);

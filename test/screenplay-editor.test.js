@@ -1107,16 +1107,91 @@ test('renaming a cue keeps what the line is, dual marker and all, and can merge 
   assert.deepStrictEqual(nameCounts({ ops: merged.ops }).characters, { EDWARD: 2, WILL: 2 });
 });
 
-test('renameName answers null when there is nothing to rename, and never renames across the two lists', function(){
+test('renameName answers null when there is nothing to rename', function(){
   var d = elementsToDelta(parseFountain(CAST).elements);
 
   assert.strictEqual(renameName(d, 'character', 'NOBODY', 'SOMEBODY'), null);
   assert.strictEqual(renameName(d, 'character', 'EDWARD', ''), null, 'a name cannot be renamed to nothing');
   assert.strictEqual(renameName(d, 'character', '', 'EDWARD'), null);
   assert.strictEqual(renameName(d, 'character', 'EDWARD', 'edward'), null, 'the same name in lower case is the same name');
-  assert.strictEqual(renameName(d, 'location', 'EDWARD', 'ED'), null, 'a character is not a place');
-  assert.strictEqual(renameName(d, 'character', 'CAMPFIRE', 'BONFIRE'), null, 'and a place is not a character');
+
+  //A place is read out of headings and nowhere else, so a character's name is not one.
+  assert.strictEqual(renameName(d, 'location', 'EDWARD', 'ED'), null);
 });
+
+//A character's name is not only in his cues - docs/screenplay-plan.md, "Characters and locations".
+const DAN = 'INT. DAN\'S BEDROOM - NIGHT\n\nDAN\nI am Dan.\n\nDANIELLE\nAnd I am not.\n\nDAN crosses to the window. Danielle watches dan go, and the dandelions with him.\n\n> DAN OUT.\n';
+
+test('renaming a character rewrites the name everywhere it is written with a capital', function(){
+  var renamed = renameName(elementsToDelta(parseFountain(DAN).elements), 'character', 'DAN', 'Ben');
+  var lines = linesOf(renamed.ops);
+
+  //His own cue, in the capitals a cue is written in.
+  assert.ok(lines.indexOf('DAN') === -1, 'the cue is gone');
+  assert.ok(lines.indexOf('BEN') > -1);
+
+  //The heading his bedroom is in, and the action and transition that name him - each in the case
+  //it was written in.
+  assert.ok(lines.indexOf("INT. BEN'S BEDROOM - NIGHT") > -1, 'a possessive in a heading');
+  assert.ok(lines.indexOf('BEN crosses to the window. Danielle watches dan go, and the dandelions with him.') > -1);
+  assert.ok(lines.indexOf('BEN OUT.') > -1, 'a transition');
+
+  //Dialogue, where the name is written as an ordinary capitalised word.
+  assert.ok(lines.indexOf('I am Ben.') > -1);
+
+  assert.deepStrictEqual([renamed.nameLines, renamed.otherLines], [1, 4]);
+});
+
+test('a lower-case spelling is left alone outside a cue, and a longer word is never part of a name', function(){
+  var renamed = renameName(elementsToDelta(parseFountain(DAN).elements), 'character', 'DAN', 'BEN');
+  var action = linesOf(renamed.ops).filter(function(line){ return line.indexOf('crosses') > -1; })[0];
+
+  //"dan" is also a word, so it stays; DANIELLE and "dandelions" are longer words, not the name.
+  assert.strictEqual(action, 'BEN crosses to the window. Danielle watches dan go, and the dandelions with him.');
+  assert.ok(linesOf(renamed.ops).indexOf('DANIELLE') > -1, 'the other cue is untouched');
+});
+
+test('renaming a character takes the case of each line it rewrites, not the case it was typed in', function(){
+  var script = 'INT. A - DAY\n\nBOB\nHello.\n\nBOB waves. Bob waves again. bob does not.\n';
+  var lines = linesOf(renameName(elementsToDelta(parseFountain(script).elements), 'character', 'bob', 'mcclane').ops);
+
+  assert.ok(lines.indexOf('MCCLANE') > -1, 'the cue takes the capitals a cue is written in');
+  assert.strictEqual(lines.filter(function(line){ return line.indexOf('waves') > -1; })[0],
+    'MCCLANE waves. Mcclane waves again. bob does not.');
+});
+
+test('a place is renamed in its headings and nowhere else', function(){
+  var script = 'INT. THE CAR - DAY\n\nBOB\nGet in the car.\n\nThe Car is where they are. THE CAR is filthy.\n';
+  var renamed = renameName(elementsToDelta(parseFountain(script).elements), 'location', 'THE CAR', 'THE VAN');
+  var lines = linesOf(renamed.ops);
+
+  assert.deepStrictEqual([renamed.nameLines, renamed.otherLines], [1, 0]);
+  assert.ok(lines.indexOf('INT. THE VAN - DAY') > -1);
+  assert.ok(lines.indexOf('The Car is where they are. THE CAR is filthy.') > -1, 'the action is left as it stands');
+  assert.ok(lines.indexOf('Get in the car.') > -1);
+});
+
+//The one thing the rules cannot settle: a capital at the start of a sentence belongs to the
+//sentence as much as to a name, so a word spelled like the name is rewritten there too. Not fixed
+//but declared - the dialog says so, and Ctrl+Z takes the rename back. docs/screenplay-plan.md,
+//"Renaming".
+test('a word spelled like the name is rewritten where a sentence begins with it', function(){
+  var script = 'INT. A - DAY\n\nWILL\nHello.\n\nWill you come? Edward asks Will again. WILL waits.\n\nSandra will not hear of it.\n';
+  var lines = linesOf(renameName(elementsToDelta(parseFountain(script).elements), 'character', 'WILL', 'DANIEL').ops);
+
+  //"Will you come?" is not him, and there is no rule that knows it.
+  assert.ok(lines.indexOf('Daniel you come? Edward asks Daniel again. DANIEL waits.') > -1);
+  //The lower-case rule still holds, which is what keeps this to the start of a sentence.
+  assert.ok(lines.indexOf('Sandra will not hear of it.') > -1);
+});
+
+test('renameName counts the cues and the other lines separately, for the warning to report', function(){
+  var script = 'INT. DAN\'S BEDROOM - NIGHT\n\nDAN\nI am Dan.\n\nDAN crosses the room.\n\nNobody else is here.\n';
+  var renamed = renameName(elementsToDelta(parseFountain(script).elements), 'character', 'DAN', 'BEN');
+
+  assert.deepStrictEqual([renamed.nameLines, renamed.otherLines, renamed.count], [1, 3, 4]);
+});
+
 
 test('renaming a cue keeps the inline formats of the rest of its line', function(){
   var renamed = renameName({ ops: [
