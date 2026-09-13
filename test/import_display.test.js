@@ -231,3 +231,84 @@ test('the chapter label choice is shared by every file type, EPUB included', fun
 
   assert.strictEqual(capturedOptions.epubOptions.chapLabels, 'filename');
 });
+
+//A screenplay project's dialog - docs/screenplay-plan.md, Phase 7. A script has no chapters, so
+//the chapter machinery (docx, HTML, EPUB, splitting, the label choice) stays out of the dialog, and
+//Fountain is what a screenwriter most likely has, so it is the default.
+function showForScreenplay(mocks){
+  var showImportOptions = freshImportDisplay(mocks || { initiateImport: function(){} });
+  showImportOptions({ docs: '/proj/docs' }, function(){}, function(){}, { type: 'screenplay' });
+}
+
+function offeredTypeIds(){
+  return Array.from(document.querySelectorAll('input[name="typeSelect"]')).map(function(radio){ return radio.id; });
+}
+
+test('a screenplay project offers the script formats and plain text, Fountain first and selected', function(t){
+  showForScreenplay();
+
+  assert.deepStrictEqual(offeredTypeIds(), ['fountainSelect', 'fdxSelect', 'fadeinSelect', 'txtSelect']);
+  assert.strictEqual(document.getElementById('fountainSelect').checked, true);
+});
+
+test('a screenplay project leaves out the docx, HTML, EPUB and chapter label options', function(t){
+  showForScreenplay();
+
+  assert.strictEqual(document.getElementById('docx-split-chaps-check'), null);
+  assert.strictEqual(document.getElementById('html-split-chaps-check'), null);
+  assert.strictEqual(document.getElementById('epub-strip-boilerplate-check'), null);
+  assert.strictEqual(document.querySelector('input[name="chapLabelSelect"]'), null);
+});
+
+test('a screenplay project\'s plaintext options keep the italics and tabs rows but not the chapter rows', function(t){
+  showForScreenplay();
+
+  assert.ok(document.getElementById('convert-italics-check'));
+  assert.ok(document.getElementById('convert-tabs-check'));
+  assert.strictEqual(document.getElementById('split-chaps-check'), null);
+  assert.strictEqual(document.getElementById('convert-first-lines-check'), null);
+
+  //Disabled while a script format is selected, enabled once Plain Text is.
+  var plainTextOptionsSet = document.getElementById('convert-italics-check').closest('fieldset');
+  assert.strictEqual(plainTextOptionsSet.disabled, true);
+  checkAndFireChange(document.getElementById('txtSelect'));
+  assert.strictEqual(plainTextOptionsSet.disabled, false);
+});
+
+test('a novel project\'s dialog is unchanged by the project argument', function(t){
+  var showImportOptions = freshImportDisplay({ initiateImport: function(){} });
+  showImportOptions({ docs: '/proj/docs' }, function(){}, function(){}, { type: 'novel' });
+
+  assert.strictEqual(offeredTypeIds().length, 8);
+  assert.strictEqual(document.getElementById('docxSelect').checked, true);
+  assert.ok(document.querySelector('input[name="chapLabelSelect"]'));
+});
+
+test('submitting a screenplay project\'s dialog sends the Fountain type without touching the missing controls', function(t){
+  var capturedOptions;
+  showForScreenplay({
+    initiateImport: function(sysDirectories, options){ capturedOptions = options; }
+  });
+
+  document.querySelector('form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+
+  assert.strictEqual(capturedOptions.fileType.id, 'fountainSelect');
+  assert.strictEqual(capturedOptions.txtOptions.chapLabels, 'firstLine');
+});
+
+//Plain text in a screenplay project is one Reference document: whatever the plaintext rows would
+//have said about chapters, the importer is told not to split or retitle it.
+test('a screenplay project\'s plain text import asks for no chapter splitting or first-line titles', function(t){
+  var capturedOptions;
+  showForScreenplay({
+    initiateImport: function(sysDirectories, options){ capturedOptions = options; }
+  });
+
+  checkAndFireChange(document.getElementById('txtSelect'));
+  document.querySelector('form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+
+  assert.strictEqual(capturedOptions.fileType.id, 'txtSelect');
+  assert.strictEqual(capturedOptions.txtOptions.splitChapters.split, false);
+  assert.strictEqual(capturedOptions.txtOptions.convertFirstLines, false);
+  assert.strictEqual(capturedOptions.txtOptions.convertItalics.convert, true);
+});

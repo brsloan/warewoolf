@@ -482,9 +482,14 @@ from the script on every keystroke and are not editable.
 **Page count.** `estimatePages(elements)` in `fountain.js`, from the old
 branch's line model: 55 lines a page, 61 characters across an action line, 35
 across dialogue, fixed line costs for cues, parentheticals, headings and
-transitions. Word Count (`wordcount_display.js`) shows "Pages: 112 (112 3/8)"
-above the word counts when the active document is a script. It is an
-estimate, and the label should say so; the PDF phase gives the real count.
+transitions. Word Count (`wordcount_display.js`) becomes a Page Count when the
+active document is a script: "Script pages (estimate): 112 (111 3/8)", the
+session's change in pages (against the estimate the script had when it first
+came into the editor, kept per script in render.js's `scriptPagesOnOpen`, since
+a project can hold more than one `.fountain`), and a goal in pages (`project.pageGoal`, kept
+apart from a novel's `wordGoal`) with the progress bar filling towards it. No
+word rows, no project line and no words-per-page, which are prose figures. It
+is an estimate, and the labels say so; the PDF phase gives the real count.
 
 The same walk (`layoutPages`, behind `estimatePageStarts`) says which
 element begins each page after the first, and the editor draws those turns:
@@ -685,10 +690,13 @@ per phase. Where the implementation departed from the plan above:
 
 ## Open findings to carry
 
-- A `.fountain` chapter in a novel project, or a `.txt` in a screenplay one,
-  works, because mode follows the file. Whether Import should be allowed to
-  create one in the wrong project type is a product question; the plan leaves
-  it allowed.
+- A `.fountain` chapter in a novel project works, because mode follows the
+  file, and Import allows it. A screenplay project is one script and any
+  number of Reference documents: a script imported into one takes the script's
+  place and the displaced script goes to Trash (`installScript` in
+  `render.js`), Restore of a trashed script swaps the same way, and a prose
+  import lands in Reference. The imported script's title page becomes the
+  project's, as a `.fountain`'s own title page does on load.
 - Dual dialogue renders as a marker only. Side-by-side layout is a print
   feature and belongs with the PDF stylesheet.
 - Sections and synopses are preserved and shown dimmed. An outline view built

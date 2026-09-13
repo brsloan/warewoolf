@@ -316,6 +316,7 @@ async function loadPlatformState(){
     editorMode,
     displayPreviousChapter,
     displayNextChapter,
+    scriptPageSession,
     _unregisterKeybindings: unregisterKeybindings
   });
 }
@@ -665,6 +666,32 @@ async function setWordCountOnLoad(){
   project.wordCountOnLoad = await getTotalWordCount(project);
 }
 
+//Each script's page estimate as it was when it first came into the editor this session - the
+//pages counterpart of wordCountOnLoad, for Word Count's session figure. Per script rather than per
+//project, keyed by the chapter itself, because a project can hold more than one .fountain (an
+//import beside the starter script does that) and the session has to be measured against the one
+//being shown: measured against the project's first script, an empty starter, the whole of an
+//imported script read as this session's writing. A script cannot be written in before it is
+//shown, so its first showing is the right moment; opening a project makes new chapter objects, so
+//nothing carries over between projects.
+var scriptPagesOnOpen = new WeakMap();
+
+function recordScriptPagesOnOpen(chap, contents){
+  if(scriptPagesOnOpen.has(chap))
+    return;
+
+  const { estimatePages, deltaToElements } = require('./components/controllers/fountain');
+  scriptPagesOnOpen.set(chap, estimatePages(deltaToElements(contents)).exact);
+}
+
+//What Word Count shows for the script in the editor: its estimate now, and the figure it opened at.
+function scriptPageSession(){
+  return {
+    pages: scriptPageEstimate(),
+    pagesOnLoad: scriptPagesOnOpen.get(project.getActiveChapter()) || 0
+  };
+}
+
 function updateFileList(){
   renderChapterList(project, {
     onSelect: selectChapterFromList,
@@ -754,8 +781,10 @@ async function displayChapterByIndex(ind){
   //container class the screenplay CSS hangs on, and the load path. A script is loaded by building
   //its HTML rather than through setContents - see screenplay-editor.js for why.
   applyEditorMode();
-  if(editorMode() === 'screenplay')
+  if(editorMode() === 'screenplay'){
     loadScreenplayDelta(editorQuill, contents);
+    recordScriptPagesOnOpen(chap, contents);
+  }
   else
     editorQuill.setContents(contents, 'api');
   refreshPageMarks();
@@ -1492,7 +1521,19 @@ async function restoreFromTrash(ind){
   //chapters for anything trashed before that stamp existed.
   var destList = chap.trashedFrom == 'reference' ? 'reference' : 'chapters';
   delete chap.trashedFrom;
-  var landed = chapterList.append(project, destList, chap);
+
+  //A script restored into a screenplay project takes the script's place, and the script it
+  //displaces goes to Trash in its stead - the project holds one script. The restored script is
+  //then shown whichever document was: the one displaced may have been the one showing, and its
+  //place in the list is now the restored script's.
+  var landed;
+  if(project.isScreenplay() && destList == 'chapters' && newChapter.isFountainChapter(chap)){
+    landed = installScript(chap);
+    await displayChapterByIndex(chapterList.toCombinedIndex(project, landed));
+    return;
+  }
+
+  landed = chapterList.append(project, destList, chap);
 
   if(wasActive){
     //Follow the restored chapter to its new place. Leaving activeChapterIndex where it was left
@@ -1987,6 +2028,26 @@ function alertBackupResult(msg, skipBackup = null, skipLabel){
   showBackupAlert(msg, skipBackup, skipLabel);
 }
 
+//Makes `chap` a screenplay project's script - its one script. Whatever scripts its Chapters list
+//held go to Trash first, stamped as trashed from there, so nothing is lost and Restore can bring
+//one back (which swaps it in the same way - see restoreFromTrash). Answers where the new script
+//landed. A screenplay project is one script and any number of Reference documents; this is the
+//one way a script enters the Chapters list other than New Project, and what keeps it to one.
+function installScript(chap){
+  var chapters = chapterList.listOf(project, 'chapters');
+
+  for(var i = chapters.length - 1; i >= 0; i--){
+    if(newChapter.isFountainChapter(chapters[i])){
+      var old = chapterList.remove(project, { list: 'chapters', index: i });
+      old.trashedFrom = 'chapters';
+      chapterList.append(project, 'trash', old);
+    }
+  }
+
+  project.hasUnsavedChanges = true;
+  return chapterList.append(project, 'chapters', chap);
+}
+
 //`format` is 'fountain' for an imported screenplay (import.js's importScreenplay), which is what
 //has it saved as a .fountain file and shown in screenplay mode; absent for everything else.
 async function addImportedChapter(chapDelta, title, format){
@@ -2002,10 +2063,22 @@ async function addImportedChapter(chapDelta, title, format){
   //project.activeChapterIndex + 1 used to be passed straight to displayChapterByIndex() below,
   //which only happened to land correctly because a Chapter or Reference document being active
   //keeps that arithmetic in sync with the insert position; a Trash item active does not).
+  //
+  //A screenplay project holds one script, so a script imported into one takes the script's place
+  //(installScript), whatever document is showing. And, as in addNewChapter(), a prose document
+  //imported into one goes to Reference: the project's Chapters list is its script, and the Scenes
+  //sidebar shows that script's headings rather than chapter rows, so a chapter put beside the
+  //script would have no row at all.
   var currentLoc = chapterList.activeLocator(project);
-  var landed = (currentLoc && currentLoc.list == 'reference')
-    ? chapterList.insertAt(project, 'reference', currentLoc.index + 1, newChap)
-    : chapterList.insertAt(project, 'chapters', currentLoc && currentLoc.list == 'chapters' ? currentLoc.index + 1 : project.chapters.length, newChap);
+  var landed;
+  if(project.isScreenplay() && format === 'fountain')
+    landed = installScript(newChap);
+  else if(currentLoc && currentLoc.list == 'reference')
+    landed = chapterList.insertAt(project, 'reference', currentLoc.index + 1, newChap);
+  else if(project.isScreenplay())
+    landed = chapterList.append(project, 'reference', newChap);
+  else
+    landed = chapterList.insertAt(project, 'chapters', currentLoc && currentLoc.list == 'chapters' ? currentLoc.index + 1 : project.chapters.length, newChap);
 
   //displayChapterByIndex() below renders the sidebar itself as its last step, so this used to
   //render it a second time for nothing.
@@ -2069,15 +2142,19 @@ const menuCommands = {
     const { applyBookMetadata } = require('./components/controllers/import');
     showImportOptions(sysDirectories, detached(addImportedChapter), detached(async function(bookMetadata){
       applyBookMetadata(project, bookMetadata);
-      //An imported script's title page fills a screenplay project that has none of its own; a
-      //project that already has one keeps it.
+      //An imported script takes the place of a screenplay project's script (installScript), and
+      //its title page comes with it: the project's title page, title and author become the
+      //imported script's, the way a .fountain's own title page wins on load. A script with no
+      //title page of its own leaves the project's alone.
       if(bookMetadata && Array.isArray(bookMetadata.titlePage) && bookMetadata.titlePage.length > 0 &&
-          project.isScreenplay() && project.titlePage.length === 0)
-        project.titlePage = bookMetadata.titlePage;
+          project.isScreenplay()){
+        newChapter.adoptTitlePage(project, bookMetadata.titlePage);
+        project.hasUnsavedChanges = true;
+      }
       await displayChapterByIndex(project.activeChapterIndex);
       if(project.chapters.length > 0)
         editorQuill.enable();
-    }));
+    }), project);
   } },
   'export-clicked': { run: function(){
     const showExportOptions = require('./components/views/export_display');
@@ -2093,7 +2170,7 @@ const menuCommands = {
   } },
   'word-count-clicked': { run: function(){
     const showWordCount = require('./components/views/wordcount_display');
-    return showWordCount(project, editorQuill, userSettings, editorMode() === 'screenplay' ? { pages: scriptPageEstimate() } : null);
+    return showWordCount(project, editorQuill, userSettings, editorMode() === 'screenplay' ? scriptPageSession() : null);
   } },
   'find-replace-clicked': { requiresFocus: true, run: function(){
     const showFindReplace = require('./components/views/findreplace_display');

@@ -45,6 +45,9 @@ function newProject(){
         trash: [],
         activeChapterIndex: 0,
         wordGoal: 0,
+        //A screenplay project's goal, in script pages, since Word Count shows a script as pages and
+        //nothing else. Unused by a novel, which keeps wordGoal.
+        pageGoal: 0,
         hasUnsavedChanges: false,
         //Set for a project opened out of the read-only install directory (the bundled Help doc, and
         //the Frankenstein example when its copy out to userData fails).

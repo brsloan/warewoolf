@@ -11,6 +11,7 @@ const {
   tokenizeInline,
   classifyLine,
   estimatePages,
+  describeEighths,
   estimatePageStarts,
   getTitlePageValues,
   setTitlePageValues,
@@ -382,6 +383,16 @@ test('the page estimate counts wrapped lines and blank lines between elements', 
 
   var breaks = estimatePages([{ type: 'action', text: 'a' }, { type: 'pagebreak', text: '' }, { type: 'action', text: 'b' }]);
   assert.strictEqual(breaks.pages, 2);
+});
+
+test('describeEighths says a page count the way a screenwriter does, sign included', function(){
+  assert.strictEqual(describeEighths(0), '0');
+  assert.strictEqual(describeEighths(3), '3');
+  assert.strictEqual(describeEighths(3.25), '3 2/8');
+  assert.strictEqual(describeEighths(0.5), '0 4/8');
+  assert.strictEqual(describeEighths(2.99), '3', 'the last eighth rounds up to the next page');
+  assert.strictEqual(describeEighths(-1.375), '-1 3/8');
+  assert.strictEqual(describeEighths(-0.01), '0', 'a loss too small to be an eighth is not a minus nothing');
 });
 
 test('the page starts name the element that begins each page after the first', function(){

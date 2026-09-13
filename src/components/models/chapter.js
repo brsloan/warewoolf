@@ -339,5 +339,6 @@ module.exports = newChapter;
 //`require('./chapter')` call site keeps working unchanged.
 module.exports.setPlatform = setPlatform;
 module.exports.isFountainFile = isFountainFile;
+module.exports.adoptTitlePage = adoptTitlePage;
 module.exports.isFountainChapter = isFountainChapter;
 module.exports.SCREENPLAY_EXTENSION = SCREENPLAY_EXTENSION;

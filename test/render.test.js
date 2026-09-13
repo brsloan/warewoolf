@@ -206,6 +206,8 @@ function makeChap(title, opts){
     notes: notes,
     hasUnsavedChanges: !!opts.hasUnsavedChanges,
     getFile: function(){ return contents; },
+    //As the real chapter.js does: whatever is loaded, else the file.
+    getContentsOrFile: async function(){ return this.contents ? this.contents : contents; },
     getNotesFile: function(){ return notes; },
     //Reads the live .notes property (as the real chapter.js does), not the closed-over `notes`
     //above, so a test that reassigns chap.notes after construction sees that value here too.
@@ -542,6 +544,42 @@ function scriptWithScenes(){
 function sceneRowTitles(){
   return Array.from(document.querySelectorAll('#chapter-list li')).map(function(li){ return li.textContent; });
 }
+
+//Word Count's session figure for a script is in pages, measured from the script's estimate when it
+//first came into the editor. Per script, not per project: a project can hold more than one (an
+//import beside the starter script), and measured against the first one - an empty starter - the
+//whole of the imported script read as this session's writing.
+test('a script\'s session pages count from when it first came into the editor, each script on its own', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  var starter = makeChap('Starter', { contents: { ops: [{ insert: '\n' }] } });
+  starter.filename = 'Starter.fountain';
+  var imported = scriptWithScenes();
+  r.project.chapters = [starter, imported];
+
+  await r.displayChapterByIndex(1); //the imported script, opened straight onto it
+
+  var session = r.scriptPageSession();
+  assert.ok(session.pages.exact > 0);
+  assert.strictEqual(session.pagesOnLoad, session.pages.exact, 'nothing written yet: the session is zero');
+
+  //Writing moves the estimate but not the figure it opened at.
+  r.editorQuill.insertText(r.editorQuill.getLength() - 1, '\n' + 'Long new action. '.repeat(40), 'user');
+  session = r.scriptPageSession();
+  assert.ok(session.pages.exact > session.pagesOnLoad);
+
+  //The other script has its own baseline, taken when it is first shown.
+  await r.displayChapterByIndex(0);
+  session = r.scriptPageSession();
+  assert.strictEqual(session.pagesOnLoad, session.pages.exact);
+  assert.strictEqual(session.pages.exact, 0);
+
+  //Coming back to the first script keeps the baseline it opened with.
+  await r.displayChapterByIndex(1);
+  session = r.scriptPageSession();
+  assert.ok(session.pagesOnLoad > 0);
+  assert.ok(session.pagesOnLoad < session.pages.exact);
+});
 
 test('a script\'s sidebar lists its scenes, follows the caret, and jumps on a click', async function(){
   var r = await freshRender();
@@ -898,6 +936,104 @@ test('addImportedChapter with a trashed chapter active appends onto Chapters and
   assert.strictEqual(r.project.chapters[1].title, 'Imported Title');
   assert.strictEqual(r.project.activeChapterIndex, 1);
   assert.strictEqual(r.editorQuill.getText().trim(), 'Imported');
+});
+
+//A screenplay project's Chapters list is its script, and the Scenes sidebar shows that script's
+//headings rather than chapter rows - so a prose import lands in Reference, as Ctrl+N's new
+//document does, where it has a row. A script import still joins Chapters, where Export looks.
+test('addImportedChapter puts a prose document imported into a screenplay project in Reference, with the script active', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [makeChap('Script')];
+  r.project.activeChapterIndex = 0;
+
+  await r.addImportedChapter({ ops: [{ insert: 'Notes\n' }] }, 'Character Bible');
+
+  assert.strictEqual(r.project.chapters.length, 1);
+  assert.strictEqual(r.project.reference.length, 1);
+  assert.strictEqual(r.project.reference[0].title, 'Character Bible');
+  assert.strictEqual(r.project.activeChapterIndex, 1);
+  assert.strictEqual(r.editorQuill.getText().trim(), 'Notes');
+});
+
+//A screenplay project holds one script. A script imported into one takes the script's place, and
+//the script it displaces goes to Trash rather than nowhere - Restore can bring it back, swapping
+//the other way.
+test('addImportedChapter makes an imported script the screenplay project\'s script, and trashes the one it replaces', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  var starter = makeChap('Starter');
+  starter.filename = 'Starter.fountain';
+  r.project.chapters = [starter];
+  r.project.activeChapterIndex = 0;
+  r.project.hasUnsavedChanges = false;
+
+  await r.addImportedChapter({ ops: [{ insert: 'INT. HOUSE - DAY\n' }] }, 'Big Fish', 'fountain');
+
+  assert.deepStrictEqual(r.project.chapters.map(function(c){ return c.title; }), ['Big Fish']);
+  assert.strictEqual(r.project.chapters[0].format, 'fountain');
+  assert.deepStrictEqual(r.project.trash, [starter]);
+  assert.strictEqual(starter.trashedFrom, 'chapters');
+  assert.strictEqual(r.project.reference.length, 0);
+  assert.strictEqual(r.project.activeChapterIndex, 0);
+  assert.strictEqual(r.project.hasUnsavedChanges, true);
+  assert.strictEqual(r.editorQuill.getText().trim(), 'INT. HOUSE - DAY');
+});
+
+test('a script imported while a Reference document is showing still becomes the script, not a Reference document', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  var starter = makeChap('Starter');
+  starter.filename = 'Starter.fountain';
+  r.project.chapters = [starter];
+  r.project.reference = [makeChap('Bible')];
+  await r.displayChapterByIndex(1);
+
+  await r.addImportedChapter({ ops: [{ insert: 'INT. HOUSE - DAY\n' }] }, 'Big Fish', 'fountain');
+
+  assert.deepStrictEqual(r.project.chapters.map(function(c){ return c.title; }), ['Big Fish']);
+  assert.deepStrictEqual(r.project.reference.map(function(c){ return c.title; }), ['Bible']);
+  assert.deepStrictEqual(r.project.trash, [starter]);
+});
+
+test('restoring a trashed script into a screenplay project swaps it in for the current script, which goes to Trash', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  var current = makeChap('Current', { text: 'INT. NOW - DAY' });
+  current.filename = 'Current.fountain';
+  var old = makeChap('Old', { text: 'INT. THEN - DAY' });
+  old.filename = 'Old.fountain';
+  old.trashedFrom = 'chapters';
+  r.project.chapters = [current];
+  r.project.reference = [makeChap('Bible')];
+  r.project.trash = [old];
+  await r.displayChapterByIndex(1); //the Reference document, where Restore is allowed from
+
+  await r.restoreFromTrash(2); //old's combined index: 1 chapter + 1 reference
+
+  assert.deepStrictEqual(r.project.chapters, [old]);
+  assert.deepStrictEqual(r.project.trash, [current]);
+  assert.strictEqual(current.trashedFrom, 'chapters');
+  assert.strictEqual(r.project.activeChapterIndex, 0, 'the restored script is shown');
+  assert.strictEqual(r.editorQuill.getText().trim(), 'INT. THEN - DAY');
+  assert.strictEqual(r.project.hasUnsavedChanges, true);
+});
+
+test('restoring a trashed prose document into a screenplay project does not touch the script', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  var script = makeChap('Script');
+  script.filename = 'Script.fountain';
+  var note = makeChap('Note');
+  note.trashedFrom = 'reference';
+  r.project.chapters = [script];
+  r.project.trash = [note];
+
+  await r.restoreFromTrash(1);
+
+  assert.deepStrictEqual(r.project.chapters, [script]);
+  assert.deepStrictEqual(r.project.reference, [note]);
+  assert.deepStrictEqual(r.project.trash, []);
 });
 
 //---------------------------------------------------------------------------

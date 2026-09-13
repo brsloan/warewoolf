@@ -729,15 +729,27 @@ function estimatePageStarts(elements){
 
 function estimatePages(elements){
   var exact = layoutPages(elements).lines / PAGE_LINES;
-  var whole = Math.floor(exact);
-  var eighths = Math.round((exact - whole) * 8);
-  if(eighths === 8){ whole += 1; eighths = 0; }
 
   return {
     pages: Math.ceil(exact),
     exact: exact,
-    eighths: eighths === 0 ? String(whole) : whole + ' ' + eighths + '/8'
+    eighths: describeEighths(exact)
   };
+}
+
+//A page count the way a screenwriter says one: whole pages and eighths ("3 2/8", "112"). A
+//negative count - Word Count's session figure, after a cut - keeps its sign in front ("-1 3/8").
+function describeEighths(exact){
+  var sign = exact < 0 ? '-' : '';
+  var size = Math.abs(exact);
+  var whole = Math.floor(size);
+  var eighths = Math.round((size - whole) * 8);
+  if(eighths === 8){ whole += 1; eighths = 0; }
+
+  if(whole === 0 && eighths === 0)
+    return '0';
+
+  return sign + (eighths === 0 ? String(whole) : whole + ' ' + eighths + '/8');
 }
 
 //Title page lookups by key, case-insensitively, since the spec's keys are written however the
@@ -793,6 +805,7 @@ module.exports = {
   tokenizeInline,
   classifyLine,
   estimatePages,
+  describeEighths,
   estimatePageStarts,
   getTitlePageValues,
   setTitlePageValues,

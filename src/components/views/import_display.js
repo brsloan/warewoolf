@@ -1,7 +1,15 @@
 const { closePopups, createButton, removeElementsByClass, generateRow, describeDialog } = require('../controllers/utils');
 const { initiateImport } = require('../controllers/import');
 
-function showImportOptions(sysDirectories, addImportedChapter, onFinish){
+//`project` decides what the dialog offers. A screenplay project (project.type === 'screenplay',
+//the same check export_display.js makes) imports scripts: the file types are the three screenplay
+//formats, Fountain first, plus Plain Text for a Reference document beside the script - and the
+//chapter machinery (docx, HTML and EPUB, splitting into chapters, the chapter label choice) is
+//left out, since a script has no chapters and the Scenes sidebar would not even show one. A novel
+//project gets the whole dialog as before. docs/screenplay-plan.md, Phase 7.
+function showImportOptions(sysDirectories, addImportedChapter, onFinish, project){
+  var screenplay = !!(project && project.type === 'screenplay');
+
   removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup");
@@ -32,6 +40,14 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish){
     { name: 'Fade In', id: 'fadeinSelect', extensions: ['fadein'] }
   ];
 
+  //Fountain, Final Draft, Fade In, then Plain Text: the scripts first, in the order a screenwriter
+  //is likely to have them.
+  var SCREENPLAY_TYPES = ['fountainSelect', 'fdxSelect', 'fadeinSelect', 'txtSelect'];
+  if(screenplay){
+    filetypes = filetypes.filter(function(type){ return SCREENPLAY_TYPES.indexOf(type.id) !== -1; });
+    filetypes.sort(function(a, b){ return SCREENPLAY_TYPES.indexOf(a.id) - SCREENPLAY_TYPES.indexOf(b.id); });
+  }
+
   filetypes.forEach((type, i) => {
     var filetypeSelect = document.createElement('input');
     filetypeSelect.type = 'radio';
@@ -49,7 +65,7 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish){
   var plainTextOptionsSet = document.createElement('fieldset');
 
   var plainTextOptionsLabel = document.createElement('legend');
-  plainTextOptionsLabel.innerText = 'Plaintext Options';
+  plainTextOptionsLabel.innerText = screenplay ? 'Plaintext Options (imported as a Reference document)' : 'Plaintext Options';
   plainTextOptionsSet.appendChild(plainTextOptionsLabel);
 
   var opsTable = document.createElement('table');
@@ -109,9 +125,12 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish){
   var splitChapsCheck = document.createElement("input");
   splitChapsCheck.type = "checkbox";
   splitChapsCheck.id = "split-chaps-check";
-  splitChapsCheck.checked = true;
+  //A screenplay project's plain text is one Reference document, and one document does not split:
+  //the chapter rows are still built (the submit below reads them) but stay out of the table, unticked.
+  splitChapsCheck.checked = !screenplay;
 
-  opsTable.appendChild(generateRow(splitChapsLabel, splitChapsCheck));
+  if(!screenplay)
+    opsTable.appendChild(generateRow(splitChapsLabel, splitChapsCheck));
 
   var chapsStrLabel = document.createElement("label");
   chapsStrLabel.innerText = "Chapter Split Marker: ";
@@ -124,7 +143,8 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish){
   chapsStrInput.id = "chaps-str-input";
   chapsStrInput.classList.add('sublabel');
 
-  opsTable.appendChild(generateRow(chapsStrLabel, chapsStrInput));
+  if(!screenplay)
+    opsTable.appendChild(generateRow(chapsStrLabel, chapsStrInput));
 
   var convertFirstLinesLabel = document.createElement("label");
   convertFirstLinesLabel.innerText = "Convert First Lines To Titles: ";
@@ -133,9 +153,10 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish){
   var convertFirstLinesCheck = document.createElement("input");
   convertFirstLinesCheck.type = "checkbox";
   convertFirstLinesCheck.id = "convert-first-lines-check";
-  convertFirstLinesCheck.checked = true;
+  convertFirstLinesCheck.checked = !screenplay;
 
-  opsTable.appendChild(generateRow(convertFirstLinesLabel, convertFirstLinesCheck));
+  if(!screenplay)
+    opsTable.appendChild(generateRow(convertFirstLinesLabel, convertFirstLinesCheck));
   plainTextOptionsSet.appendChild(opsTable);
   importForm.appendChild(plainTextOptionsSet);
 
@@ -158,7 +179,8 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish){
 
   docxOpsTable.appendChild(generateRow(docxSplitChapsLabel, docxSplitChapsCheck));
   docxOptionsSet.appendChild(docxOpsTable);
-  importForm.appendChild(docxOptionsSet);
+  if(!screenplay)
+    importForm.appendChild(docxOptionsSet);
 
   var htmlOptionsSet = document.createElement('fieldset');
 
@@ -220,7 +242,8 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish){
 
   htmlOpsTable.appendChild(generateRow(htmlStripBoilerplateLabel, htmlStripBoilerplateCheck));
   htmlOptionsSet.appendChild(htmlOpsTable);
-  importForm.appendChild(htmlOptionsSet);
+  if(!screenplay)
+    importForm.appendChild(htmlOptionsSet);
 
   //An epub needs no split options at all: its own table of contents says where the chapters are and
   //what they are called, which is better than anything this dialog could ask for. See the note on
@@ -254,7 +277,8 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish){
 
   epubOpsTable.appendChild(generateRow(epubUseMetadataLabel, epubUseMetadataCheck));
   epubOptionsSet.appendChild(epubOpsTable);
-  importForm.appendChild(epubOptionsSet);
+  if(!screenplay)
+    importForm.appendChild(epubOptionsSet);
 
   importForm.appendChild(document.createElement('br'));
 
@@ -288,10 +312,10 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish){
   chapLabelFirstLineLabel.innerText = 'First line';
   chapLabelSet.appendChild(chapLabelFirstLineLabel);
 
-  importForm.appendChild(chapLabelSet);
-  
-
-  importForm.appendChild(document.createElement('br'));
+  if(!screenplay){
+    importForm.appendChild(chapLabelSet);
+    importForm.appendChild(document.createElement('br'));
+  }
 
   var importBtn = document.createElement("input");
   importBtn.type = "submit";
@@ -306,7 +330,9 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish){
 
   importForm.onsubmit = function(e){
     e.preventDefault();
-    const selectedChapLabel = document.querySelector('input[name="chapLabelSelect"]:checked').value;
+    //Read off the radio itself rather than queried from the document: a screenplay project's
+    //dialog leaves the fieldset out, and the default (first line) still has to reach the importer.
+    const selectedChapLabel = chapLabelFilename.checked ? 'filename' : 'firstLine';
     var importOptions = {
       fileType: filetypes[document.querySelector('input[name="typeSelect"]:checked').value]
     };
@@ -361,22 +387,23 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish){
   popup.appendChild(importForm);
   document.body.appendChild(popup);
 
+  //Fountain is the default for a screenplay project, Docx for a novel. The other type selects are
+  //absent from a screenplay project's dialog, so each is looked up by id and may be null.
   var docxSelect = document.getElementById('docxSelect');
-  docxSelect.checked = true;
-  plainTextOptionsSet.disabled = true;
-  docxOptionsSet.disabled = false;
-  htmlOptionsSet.disabled = true;
-  epubOptionsSet.disabled = true;
-
   var textSelect = document.getElementById('txtSelect');
   var htmlSelect = document.getElementById('htmlSelect');
   var epubSelect = document.getElementById('epubSelect');
-  importForm.onchange = function(){
-    plainTextOptionsSet.disabled = !textSelect.checked;
-    docxOptionsSet.disabled = !docxSelect.checked;
-    htmlOptionsSet.disabled = !htmlSelect.checked;
-    epubOptionsSet.disabled = !epubSelect.checked;
+  document.getElementById(screenplay ? 'fountainSelect' : 'docxSelect').checked = true;
+
+  var isChecked = function(radio){ return !!(radio && radio.checked); };
+  var syncOptionSets = function(){
+    plainTextOptionsSet.disabled = !isChecked(textSelect);
+    docxOptionsSet.disabled = !isChecked(docxSelect);
+    htmlOptionsSet.disabled = !isChecked(htmlSelect);
+    epubOptionsSet.disabled = !isChecked(epubSelect);
   };
+  syncOptionSets();
+  importForm.onchange = syncOptionSets;
 
   importBtn.focus();
 }
