@@ -448,6 +448,40 @@ functions on a delta and are tested without Quill. Text before the first
 heading (a `FADE IN:`, an opening action) is not part of any scene and never
 moves.
 
+## The Format block
+
+A script's element types are invisible in the way a heading level is not. The
+layout is all that distinguishes one from another, and two types can be laid
+out alike - a section from a synopsis, an action line from a centered one - so
+a writer who has just pressed Tab twice has nothing on screen that names what
+they landed on.
+
+So the foot of the notes panel carries a Format block: a heading reading
+"Format" and, under it, the name of the element the caret's line is
+(`views/format_display.js`, `showElementFormat(type)`). Hidden entirely while
+the editor shows prose, which has no element to name.
+
+It is inside `#project-notes` rather than beside it, which is the whole of
+"it toggles with the notes": showing and hiding a panel is a class on that
+element, so a writer who has hidden the notes to get the manuscript alone gets
+this away with them. The panel lays its children out in a column for it - the
+notes editor takes the height that is left, the block keeps its own.
+
+The names come from `ELEMENT_NAMES` in `blots/screenplay.js`, beside the types
+themselves, so the block and the Insert Element picker call the same type the
+same thing. `refreshFormatBlock()` in `render.js` is what feeds it, from
+`selection-change` (the caret moved), from a user `text-change` (Tab
+reformatted the line the caret is already on, so no selection-change follows -
+and this is not on the Scenes list's debounce for that reason), and from
+`applyEditorMode()` and the chapter load. With no selection - focus in the
+notes or the sidebar - it reads the remembered caret, so the block says what
+the writer was last on rather than going blank.
+
+Deliberately not a live region. It changes because the caret moved, and a
+screen reader has just read the line it moved to; announcing the type on top of
+that would be a second voice on every arrow key. The block is named by its
+heading for a reader that wants to navigate to it.
+
 ## Autocomplete, word count, title page
 
 **Autocomplete** is the old branch's feature with the DOM scans replaced and

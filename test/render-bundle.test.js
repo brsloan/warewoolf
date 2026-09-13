@@ -37,6 +37,10 @@ function bodyShell(){
     '<div id="project-notes" class="sidebar">' +
       '<h1 id="notes-header">Project Notes</h1>' +
       '<div id="notes-editor"></div>' +
+      '<div id="format-block" role="group" aria-labelledby="format-header" hidden>' +
+        '<h1 id="format-header">Format</h1>' +
+        '<p id="format-element"></p>' +
+      '</div>' +
     '</div>';
 }
 

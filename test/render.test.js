@@ -161,6 +161,10 @@ function bodyShell(){
     '<div id="project-notes" class="sidebar" role="complementary" aria-labelledby="notes-header">' +
       '<h1 id="notes-header">Project Notes</h1>' +
       '<div id="notes-editor"></div>' +
+      '<div id="format-block" role="group" aria-labelledby="format-header" hidden>' +
+        '<h1 id="format-header">Format</h1>' +
+        '<p id="format-element"></p>' +
+      '</div>' +
     '</div>';
 }
 
@@ -534,6 +538,65 @@ test('displaying a .fountain chapter puts the editor in screenplay mode, and a .
   assert.strictEqual(r.editorMode(), 'prose');
   assert.ok(!document.getElementById('editor-container').classList.contains('screenplay'));
   assert.strictEqual(r.editorQuill.getText().trim(), 'Notes');
+});
+
+//The Format block at the foot of the notes panel: what the line the caret is on is. A script's
+//element types are invisible in the way a heading level is not, and two of them can be laid out
+//alike, so a writer who reformats by Tab needs telling which of the two they landed on.
+test('the Format block names the caret\'s element, follows a reformat, and goes away for prose', async function(){
+  var r = await freshRender();
+  var script = makeChap('Script', { contents: { ops: [
+    { insert: 'INT. HOUSE - DAY' }, { insert: '\n', attributes: { element: 'scene' } },
+    { insert: 'Bob waits.' }, { insert: '\n' },
+    { insert: 'BOB' }, { insert: '\n', attributes: { element: 'character' } },
+    { insert: 'Hi.' }, { insert: '\n', attributes: { element: 'dialogue' } }
+  ] } });
+  script.filename = 'Script.fountain';
+  var prose = makeChap('Notes');
+  prose.filename = 'Notes.txt';
+  r.project.chapters = [script, prose];
+
+  var block = document.getElementById('format-block');
+  var value = document.getElementById('format-element');
+
+  //Opening the script, before anything is focused: the block reads the top of the document rather
+  //than waiting for a caret.
+  await r.displayChapterByIndex(0);
+  assert.strictEqual(block.hidden, false);
+  assert.strictEqual(value.textContent, 'Scene Heading');
+
+  r.editorQuill.setSelection(20, 0, 'user');
+  assert.strictEqual(value.textContent, 'Action', 'action is the absence of an element in the delta');
+
+  r.editorQuill.setSelection(28, 0, 'user');
+  assert.strictEqual(value.textContent, 'Character');
+
+  r.editorQuill.setSelection(32, 0, 'user');
+  assert.strictEqual(value.textContent, 'Dialogue');
+
+  //A reformat of the line the caret is already on - what Tab and Shift+Tab do - moves no caret, so
+  //there is no selection-change behind this: the text-change is what it follows.
+  var { setElement } = require('../src/components/controllers/screenplay-editor');
+  setElement(r.editorQuill, 'parenthetical', { index: 32, length: 0 });
+  assert.strictEqual(value.textContent, 'Parenthetical');
+
+  await r.displayChapterByIndex(1);
+  assert.strictEqual(block.hidden, true, 'prose has no element to show');
+  assert.strictEqual(value.textContent, '');
+});
+
+//Inside the notes panel in index.html, not beside it: that containment is the whole of "it toggles
+//with the notes", since showing and hiding the panel is a display rule on #project-notes.
+test('the Format block lives inside the notes panel', function(){
+  var html = fs.readFileSync(path.join(__dirname, '..', 'src', 'index.html'), 'utf8');
+  var holder = document.createElement('div');
+  holder.innerHTML = html.replace(/[\s\S]*<body>/, '')
+    .replace(/<\/body>[\s\S]*/, '')
+    .replace(/<script[\s\S]*?<\/script>/g, '');
+
+  assert.ok(holder.querySelector('#project-notes #format-block'),
+    'the block has to be in the notes panel to hide with it');
+  assert.strictEqual(holder.querySelector('#format-block h1').textContent, 'Format');
 });
 
 //docs/screenplay-plan.md, Phase 5: the sidebar shows a script's scenes, and the chapter shortcuts

@@ -391,6 +391,49 @@ hr {
   right: 14px;
 }
 
+/* The notes panel is the one sidebar with something pinned under its scrolling part - the Format
+   block, which says what the caret's line is in a script. So it lays its children out in a column
+   rather than stacking them: the notes editor takes whatever height is left and the heading and
+   the block keep their own. Stated on the id with .visible so it beats the display: block that
+   .visible and the single/double view classes give every other sidebar - which of those the panel
+   is wearing depends on which panels are showing, and the column is wanted in all of them. */
+#project-notes.visible {
+  display: flex;
+  flex-direction: column;
+}
+
+/* A flex basis of zero rather than auto, deliberately: quill.core.css gives .ql-container (which
+   is this element - Quill puts the class on what it is constructed on) height: 100%, and an auto
+   basis in a column would take that as the editor's starting height, leaving the flex algorithm to
+   shrink the whole column back out of the overflow and squashing the heading with it. From zero
+   the editor simply grows into what is left, and min-height: 0 is what lets it be shorter than its
+   own text so .ql-editor scrolls instead of the panel. The editor's height: 100% then resolves
+   against that - a flex item's used size is definite, which is what the notes needed all along. */
+#notes-editor {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+#project-notes > h1,
+#format-block {
+  flex: 0 0 auto;
+}
+
+#format-block {
+  margin-top: 14px;
+}
+
+/* The name of the type, under the heading: the accent the sidebar already uses for the row the
+   writer is on, since this is the same idea - where you are - said about a line instead of a
+   document. */
+#format-element {
+  margin: 0 12px;
+  padding-bottom: 4px;
+  text-align: center;
+  font-weight: 600;
+  color: var(--accent);
+}
+
 /* ------------------------------------------------------------------------------------------
    The manuscript
    ------------------------------------------------------------------------------------------ */

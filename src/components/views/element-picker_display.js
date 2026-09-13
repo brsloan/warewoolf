@@ -1,5 +1,6 @@
 const { describeDialog } = require('../controllers/utils');
 const { insertElement, setElement } = require('../controllers/screenplay-editor');
+const { ELEMENT_NAMES } = require('../blots/screenplay');
 
 //The element picker, Insert Element: every type a script line can be, in one list, for the
 //types with no key of their own - a section, a
@@ -8,20 +9,15 @@ const { insertElement, setElement } = require('../controllers/screenplay-editor'
 //makes the current line the type instead (setElement), which is the reformat shortcuts' job;
 //Escape closes it. Hand-built DOM in the style of blocked-action_display.js, and one at a time:
 //opening it again replaces the one showing.
-const ELEMENTS = [
-  ['scene', 'Scene Heading'],
-  ['action', 'Action'],
-  ['character', 'Character'],
-  ['parenthetical', 'Parenthetical'],
-  ['dialogue', 'Dialogue'],
-  ['transition', 'Transition'],
-  ['centered', 'Centered Text'],
-  ['section', 'Section'],
-  ['synopsis', 'Synopsis'],
-  ['note', 'Note'],
-  ['lyric', 'Lyric'],
-  ['pagebreak', 'Page Break']
-];
+
+//Every type but boneyard, which is text commented out of the script rather than something to
+//insert. Its own order - the types a writer reaches for most, first - rather than the blots
+//module's; the names come from there (ELEMENT_NAMES), so the list here and the Format block at the
+//foot of the notes panel always call the same type the same thing.
+const INSERTABLE = ['scene', 'action', 'character', 'parenthetical', 'dialogue', 'transition',
+  'centered', 'section', 'synopsis', 'note', 'lyric', 'pagebreak'];
+
+const ELEMENTS = INSERTABLE.map(function(type){ return [type, ELEMENT_NAMES[type]]; });
 
 function showElementPicker(quill){
   var range = quill.getSelection(true);

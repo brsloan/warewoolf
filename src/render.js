@@ -24,7 +24,8 @@ const {
   moveScenes,
   sceneBlock,
   splitScenes,
-  appendScenes
+  appendScenes,
+  elementOf
 } = require('./components/controllers/screenplay-editor');
 const {
   applyStructuralFootnoteChanges,
@@ -50,6 +51,7 @@ const {
   disableSearchView
 } = require('./components/controllers/utils');
 const { showBattery } = require('./components/views/battery_display');
+const { showElementFormat } = require('./components/views/format_display');
 const {
   renderChapterList,
   renameChapterInList,
@@ -791,6 +793,7 @@ async function displayChapterByIndex(ind){
   else
     editorQuill.setContents(contents, 'api');
   refreshPageMarks();
+  refreshFormatBlock();
   notesQuill.setContents(notes, 'api');
   updateFileList();
   announceChapter(chap);
@@ -837,6 +840,29 @@ function applyEditorMode(){
     applyEditorShortcuts();
 
   syncAppMenu(mode);
+
+  //Prose has no element to show, so this is what takes the Format block away again; for a script
+  //it reads the document being replaced, which is why displayChapterByIndex calls it a second time
+  //once the new one is in. Both land before the browser paints, so the stale reading is never seen.
+  refreshFormatBlock();
+}
+
+//The Format block at the foot of the notes panel (views/format_display.js): what the line the
+//caret is on is, while the editor is showing a script. The caret is the editor's own while it has
+//one and the remembered position otherwise, so clicking into the notes or the sidebar leaves the
+//block saying what the writer was last on rather than blanking - and the remembered position is
+//clamped, since it outlives the document it was taken in.
+function refreshFormatBlock(){
+  if(editorMode() !== 'screenplay'){
+    showElementFormat(null);
+    return;
+  }
+
+  var range = editorQuill.getSelection();
+  var index = range ? range.index : (project.textCursorPosition || 0);
+  var found = editorQuill.getLine(Math.min(index, Math.max(editorQuill.getLength() - 1, 0)));
+
+  showElementFormat(found && found[0] ? elementOf(found[0]) : null);
 }
 
 //The application menu is the host's (app-menu.js, through index.js), and follows the project and
@@ -1327,6 +1353,11 @@ editorQuill.on('text-change', function(delta, oldDelta, source) {
 
     scheduleFootnoteRenumber();
     scheduleSceneListRefresh();
+
+    //Not on the Scenes list's debounce: Tab and Shift+Tab reformat the line the caret is already
+    //on, so no selection-change follows to pick the new type up, and a block that took a third of
+    //a second to agree with what the writer just did would be the wrong answer for that long.
+    refreshFormatBlock();
   }
 });
 
@@ -1423,6 +1454,7 @@ editorQuill.on('selection-change', function(range, oldRange, source){
   if(range){
     project.textCursorPosition = range.index;
     followCaretInSceneList(range.index);
+    refreshFormatBlock();
   }
 
   updateActiveFootnoteHighlight(range);

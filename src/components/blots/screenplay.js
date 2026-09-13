@@ -14,6 +14,26 @@ const Parchment = Quill.import('parchment');
 const ELEMENT_TYPES = ['scene', 'action', 'character', 'parenthetical', 'dialogue', 'transition',
   'centered', 'section', 'synopsis', 'note', 'boneyard', 'lyric', 'pagebreak'];
 
+//What each type is called where a writer is shown one - the Insert Element list, the Format block
+//at the foot of the notes panel. Beside the types themselves because there is one name per type
+//and no reason for two lists of them to drift apart; nothing here is written to a file or read
+//back, so these are free to be reworded.
+const ELEMENT_NAMES = {
+  scene: 'Scene Heading',
+  action: 'Action',
+  character: 'Character',
+  parenthetical: 'Parenthetical',
+  dialogue: 'Dialogue',
+  transition: 'Transition',
+  centered: 'Centered Text',
+  section: 'Section',
+  synopsis: 'Synopsis',
+  note: 'Note',
+  boneyard: 'Boneyard',
+  lyric: 'Lyric',
+  pagebreak: 'Page Break'
+};
+
 const ElementAttributor = new Parchment.Attributor.Class('element', 'sp', {
   scope: Parchment.Scope.BLOCK,
   whitelist: ELEMENT_TYPES.filter(function(type){ return type !== 'action'; })
@@ -73,6 +93,7 @@ function registerScreenplayFormats(){
 
 module.exports = {
   ELEMENT_TYPES,
+  ELEMENT_NAMES,
   SCREENPLAY_FORMATS: ['element', 'tight', 'dual'],
   ElementAttributor,
   TightAttributor,

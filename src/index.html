@@ -37,9 +37,17 @@
     </div>
 
 
+    <!-- The Format block below the notes says what element the caret's line is, while a script is
+         in the editor; hidden for prose, which has no elements (views/format_display.js). It is in
+         this panel so that hiding the notes hides it too - a writer who has asked for the
+         manuscript alone should get the manuscript alone. -->
     <div id="project-notes" class="sidebar" role="complementary" aria-labelledby="notes-header">
       <h1 id="notes-header">Project Notes</h1>
       <div id="notes-editor"></div>
+      <div id="format-block" role="group" aria-labelledby="format-header" hidden>
+        <h1 id="format-header">Format</h1>
+        <p id="format-element"></p>
+      </div>
     </div>
     <script src="render.bundle.js"></script>
   </body>
