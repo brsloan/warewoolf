@@ -107,11 +107,16 @@ function makeBridge(){
     secureStorage: null
   })));
 
+  var invocations = [];
+
   return {
     handlers: handlers,
     invoked: invoked,
+    //The same calls with their arguments, for a test that cares what was sent, not only that.
+    invocations: invocations,
     invoke: function(name, args){
       invoked.push(name);
+      invocations.push({ name: name, args: args });
       //Set by failBootAt() to make one command reject, so the boot-failure path is driven the way
       //it actually breaks rather than by stubbing render.js's own internals.
       if(bootFailure && bootFailure.command === name)
@@ -954,6 +959,45 @@ test('addImportedChapter puts a prose document imported into a screenplay projec
   assert.strictEqual(r.project.reference[0].title, 'Character Bible');
   assert.strictEqual(r.project.activeChapterIndex, 1);
   assert.strictEqual(r.editorQuill.getText().trim(), 'Notes');
+});
+
+//The application menu follows the project and the document (app-menu.js): render.js tells the
+//host through setMenuMode whenever either changes, and only then.
+function menuModesSent(){
+  return currentBridge().invocations
+    .filter(function(call){ return call.name === 'setMenuMode'; })
+    .map(function(call){ return call.args.project + '/' + call.args.document; });
+}
+
+test('the host is told the menu mode when the project or the document showing changes, and only then', async function(){
+  var r = await freshRender();
+  var before = menuModesSent().length;
+  r.project.type = 'screenplay';
+  r.project.chapters = [scriptWithScenes()];
+  r.project.reference = [makeChap('Bible'), makeChap('Notes')];
+
+  await r.displayChapterByIndex(0); //the script
+  await flushMicrotasks();
+  assert.deepStrictEqual(menuModesSent().slice(before), ['screenplay/screenplay']);
+
+  await r.displayChapterByIndex(1); //a prose Reference document
+  await r.displayChapterByIndex(2); //another - no change in mode, so nothing more is sent
+  await flushMicrotasks();
+  assert.deepStrictEqual(menuModesSent().slice(before), ['screenplay/screenplay', 'screenplay/prose']);
+
+  await r.displayChapterByIndex(0);
+  await flushMicrotasks();
+  assert.deepStrictEqual(menuModesSent().slice(before), ['screenplay/screenplay', 'screenplay/prose', 'screenplay/screenplay']);
+});
+
+test('a novel project tells the host it is a novel showing prose', async function(){
+  var r = await freshRender();
+  var before = menuModesSent().length;
+  r.project.chapters = [makeChap('c0')];
+
+  await r.displayChapterByIndex(0);
+  await flushMicrotasks();
+  assert.deepStrictEqual(menuModesSent().slice(before), ['novel/prose']);
 });
 
 //A screenplay project holds one script. A script imported into one takes the script's place, and

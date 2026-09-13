@@ -521,11 +521,15 @@ and a title page carrying the title and the default author.
 
 ## What the menus offer
 
-Mode-aware in `render.js`'s `menuCommands` table (`render.js:1607`) by one
-new flag per entry, `prose: true`, checked beside `requiresFocus`. The main
-process is not told; an item that does not apply says so with the existing
-`showBlockedActionAlert` rather than greying out, which keeps `index.js` and
-the 37-channel contract untouched.
+Two lists of channels, `NOVEL_PROJECT_ONLY` and `PROSE_DOCUMENT_ONLY`, kept
+in both `app-menu.js` (the menu template, which `index.js` builds the real
+menu from) and `render.js` (a message each), with a test holding them to each
+other. The renderer tells the host the project and document through the
+`setMenuMode` command whenever either changes, and the host rebuilds the menu:
+the items in the lists are greyed out, and Word Count reads Page Count for a
+screenplay project. A command that reaches `render.js` anyway - a shortcut, an
+accelerator on a menu built before the mode arrived - gets the message from
+`showBlockedActionAlert`.
 
 | Works as-is | Needs a screenplay branch | Prose only |
 | --- | --- | --- |

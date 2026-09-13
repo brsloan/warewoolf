@@ -443,9 +443,14 @@ test('events are validated by name and unsubscribe cleanly', function(t){
 //ipcRenderer.on() - so a name that drifts from the main process subscribes to a channel nothing
 //sends, with no error anywhere. Phase 1 shipped exactly that mistake in one of the 36 entries.
 testOnce('every event name matches a channel the main process actually sends', function(){
+  //The menu's channels are sent from app-menu.js's template (through index.js's `send`), the rest
+  //straight from index.js.
   const main = fs.readFileSync(path.join(__dirname, '..', 'src', 'index.js'), 'utf8');
+  const menu = fs.readFileSync(path.join(__dirname, '..', 'src', 'components', 'controllers', 'app-menu.js'), 'utf8');
   const sent = new Set(Array.from(main.matchAll(/webContents\.send\(['"]([^'"]+)['"]/g),
-    function(match){ return match[1]; }));
+    function(match){ return match[1]; }).concat(
+    Array.from(menu.matchAll(/\bsend\(['"]([^'"]+)['"]/g), function(match){ return match[1]; }),
+    Array.from(menu.matchAll(/item\([^,]+,\s*['"]([^'"]+)['"]/g), function(match){ return match[1]; })));
 
   assert.deepStrictEqual(EVENTS.filter(function(event){ return !sent.has(event); }), [],
     'declared events the main process never sends');
@@ -552,20 +557,25 @@ test('getFileRequestedOnOpen returns whatever the backing was constructed with, 
 //setTheme/showAppMenu/confirmExit/notifyRendererReady have no return value - what a backing does
 //with them is entirely the injected hook's business, which is exactly what these assert.
 test('setTheme, showAppMenu, confirmExit, and notifyRendererReady call their injected hooks', async function(){
-  const seen = { mode: undefined, menu: 0, exit: 0, ready: 0 };
+  const seen = { mode: undefined, menu: 0, exit: 0, ready: 0, menuMode: [] };
   const platform = wrap(createNodeBacking({
     onSetTheme: function(mode){ seen.mode = mode; },
     onShowAppMenu: function(){ seen.menu++; },
+    onSetMenuMode: function(project, document){ seen.menuMode.push([project, document]); },
     onConfirmExit: function(){ seen.exit++; },
     onNotifyRendererReady: function(){ seen.ready++; }
   }));
 
   await platform.setTheme({ mode: 'dark' });
   await platform.showAppMenu({});
+  await platform.setMenuMode({ project: 'screenplay', document: 'prose' });
+  //Anything but 'screenplay' is a novel and prose - the menu every project had before screenplays.
+  await platform.setMenuMode({ project: 'whatever', document: 'screenplay' });
   await platform.confirmExit({});
   await platform.notifyRendererReady({});
 
-  assert.deepStrictEqual(seen, { mode: 'dark', menu: 1, exit: 1, ready: 1 });
+  assert.deepStrictEqual(seen, { mode: 'dark', menu: 1, exit: 1, ready: 1,
+    menuMode: [['screenplay', 'prose'], ['novel', 'screenplay']] });
 });
 
 test('setTheme, showAppMenu, confirmExit, and notifyRendererReady are no-ops without injected hooks', async function(){
@@ -573,6 +583,7 @@ test('setTheme, showAppMenu, confirmExit, and notifyRendererReady are no-ops wit
 
   await assert.doesNotReject(platform.setTheme({ mode: 'light' }));
   await assert.doesNotReject(platform.showAppMenu({}));
+  await assert.doesNotReject(platform.setMenuMode({ project: 'screenplay', document: 'screenplay' }));
   await assert.doesNotReject(platform.confirmExit({}));
   await assert.doesNotReject(platform.notifyRendererReady({}));
 });

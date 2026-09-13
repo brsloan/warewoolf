@@ -695,17 +695,20 @@ test('an unusable binding, or an unknown action, is refused rather than thrown a
 // drift guard
 //---------------------------------------------------------------------------
 
-//MENU_ACCELERATORS is a copy of what src/index.js hands Electron, because the renderer has no way
+//MENU_ACCELERATORS is a copy of what app-menu.js hands Electron, because the renderer has no way
 //to ask the main process for the menu. A copy drifts; this reads the real list and fails when it
 //does. One-directional on purpose: the model also lists accelerators Electron supplies for a menu
 //ROLE (Toggle Full Screen's F11), which never appear as an `accelerator:` line to be found here.
 test('every accelerator in the menu is one the model knows about', function(){
-  var indexSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'index.js'), 'utf8');
-  //Anchored to the start of the line so that prose mentioning the word - the File menu's note on
-  //why Backup no longer has one - is not read as a menu entry.
-  var acceleratorLines = indexSource.match(/^\s*accelerator:[^\n]+/gm) || [];
+  //The menu template lives in app-menu.js (index.js builds the real menu from it).
+  var indexSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'components', 'controllers', 'app-menu.js'), 'utf8');
+  //Comment lines are skipped, so that prose mentioning the word - the File menu's note on why
+  //Backup no longer has one - is not read as a menu entry.
+  var acceleratorLines = (indexSource.match(/^(?![ \t]*\/\/).*accelerator:[^\n]+/gm) || [])
+    //From the key to the next comma: the entry's other fields (a role, say) sit on the same line.
+    .map(function(line){ return line.slice(line.indexOf('accelerator:')).split(',')[0]; });
 
-  assert.ok(acceleratorLines.length > 20, 'expected to find the menu accelerators in index.js');
+  assert.ok(acceleratorLines.length > 20, 'expected to find the menu accelerators in app-menu.js');
 
   acceleratorLines.forEach(function(line){
     //Every quoted string on such a line is an accelerator - the label is always its own line, and
@@ -715,13 +718,13 @@ test('every accelerator in the menu is one the model knows about', function(){
     assert.ok(quotedStrings.length > 0, 'could not read the accelerator out of: ' + line);
 
     quotedStrings.forEach(function(quoted){
-      //index.js is JavaScript source, so a lone backslash key is written '\\' in it.
+      //app-menu.js is JavaScript source, so a lone backslash key is written '\\' in it.
       var accelerator = quoted.slice(1, -1).replace(/\\\\/g, '\\');
       var binding = bindingFromAccelerator(accelerator);
 
-      assert.ok(binding != null, 'could not parse the accelerator ' + accelerator + ' from src/index.js');
+      assert.ok(binding != null, 'could not parse the accelerator ' + accelerator + ' from app-menu.js');
       assert.ok(shortcuts.findMenuAccelerator(binding) != null,
-        'src/index.js binds ' + shortcuts.formatBinding(binding, false) +
+        'app-menu.js binds ' + shortcuts.formatBinding(binding, false) +
         ' but shortcuts.js does not list it - add it to MENU_ACCELERATORS');
     });
   });

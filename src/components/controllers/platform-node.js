@@ -215,6 +215,7 @@ function createNodeBacking(deps){
   var readFileRequestedOnOpen = options.getFileRequestedOnOpen || function(){ return fileRequestedOnOpen; };
   var onSetTheme = options.onSetTheme || function(){};
   var onShowAppMenu = options.onShowAppMenu || function(){};
+  var onSetMenuMode = options.onSetMenuMode || function(){};
   var onConfirmExit = options.onConfirmExit || function(){};
   //Absent rather than a no-op: a PDF that was never written must not look written. See printToPdf.
   var onPrintToPdf = options.onPrintToPdf || null;
@@ -241,6 +242,7 @@ function createNodeBacking(deps){
     setTheme: setTheme,
     printToPdf: printToPdf,
     showAppMenu: showAppMenu,
+    setMenuMode: setMenuMode,
     confirmExit: confirmExit,
     notifyRendererReady: notifyRendererReady,
 
@@ -431,6 +433,14 @@ function createNodeBacking(deps){
 
   function showAppMenu(){
     onShowAppMenu();
+  }
+
+  //Anything but 'screenplay' is a novel project and a prose document, so a caller that sends
+  //nothing gets the menu every project had before there were screenplays.
+  function setMenuMode(args){
+    onSetMenuMode(
+      args != null && args.project === 'screenplay' ? 'screenplay' : 'novel',
+      args != null && args.document === 'screenplay' ? 'screenplay' : 'prose');
   }
 
   function confirmExit(){

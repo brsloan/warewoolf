@@ -33,7 +33,7 @@ function platformOver(invokeImpl){
 //74 at once, and a hand-maintained list here would only be a second place to forget one.
 test('the backing implements every command the contract declares', function(){
   assert.deepStrictEqual(IMPLEMENTED.slice().sort(), Object.keys(COMMANDS).sort());
-  assert.strictEqual(IMPLEMENTED.length, 74);
+  assert.strictEqual(IMPLEMENTED.length, 75);
 });
 
 test('every command invokes the bridge under its own name, with the args passed through', async function(){

@@ -6,7 +6,7 @@
 //was able to document a shortcut the app did not actually implement.
 //
 //Deliberately NOT covered here: the "Tool/Menu Navigation" shortcuts (Escape, Tab, Alt, Ctrl+M)
-//and the menu accelerators built in src/index.js. Those are structural - Escape has to keep
+//and the menu accelerators built in app-menu.js. Those are structural - Escape has to keep
 //closing dialogs for a rebind dialog to be escapable at all - and the menu ones live in the main
 //process, out of this renderer's reach.
 //
@@ -268,10 +268,10 @@ function isRealKeyCode(keyCode){
   return typeof keyCode === 'number' && Number.isInteger(keyCode) && keyCode > 0 && keyCode <= 255;
 }
 
-//The accelerators src/index.js hands to Electron's Menu. They are handled by the native menu
+//The accelerators app-menu.js hands to Electron's Menu. They are handled by the native menu
 //before the page ever sees the keydown, so a shortcut rebound onto one of them would simply never
 //fire - hence checking them here, in the renderer, with no way to ask the main process. Keep this
-//in sync with src/index.js; test/shortcuts.test.js reads that file's own accelerators and fails if
+//in sync with app-menu.js; test/shortcuts.test.js reads that file's own accelerators and fails if
 //the two drift apart.
 //
 //Ctrl+H (Cmd+Shift+H on Mac) is the Shortcuts popup itself, and is listed under both spellings so

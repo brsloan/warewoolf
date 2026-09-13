@@ -171,6 +171,13 @@ var COMMANDS = {
   //reaches it through a callback index.js supplies, like setTheme. Tauri: a webview print API.
   printToPdf: { group: 'A', params: ['html', 'path'], returns: 'void',
     note: 'Letter, an inch and a half on the left and an inch elsewhere, a page number top right. Rejects UNAVAILABLE where no printer callback was supplied (tests, a headless backing).' },
+  //What the application menu is for: `project` is \'novel\' | \'screenplay\', `document` is
+  //\'prose\' | \'screenplay\' (the document in the editor - a Reference note in a screenplay project
+  //is prose). The host rebuilds the menu from it (app-menu.js): Word Count reads Page Count for a
+  //screenplay project, the manuscript conversions are disabled for one, and the chapter tools are
+  //disabled while a script is showing. Group A, like setTheme: the menu is the host's. Sent by
+  //render.js whenever either changes. Tauri: the menu API.
+  setMenuMode: { group: 'A', params: ['project', 'document'], returns: 'void' },
 
   // --- B. Project lifecycle -----------------------------------------------------------------
   openProject: { group: 'B', params: ['path'],

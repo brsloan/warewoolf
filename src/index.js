@@ -5,6 +5,7 @@ const { ipcMain } = require('electron');
 const { COMMANDS, createPlatform } = require('./components/controllers/platform');
 const { createNodeBacking } = require('./components/controllers/platform-node');
 const { createCommandHost } = require('./components/controllers/platform-host');
+const { buildMenuTemplate } = require('./components/controllers/app-menu');
 
 //Courier Prime's four faces as @font-face rules carrying the font bytes, for a page that cannot
 //load them by URL - the screenplay PDF's, see onPrintToPdf. Read once, on the first export: the
@@ -31,6 +32,26 @@ const isLinux = process.platform === "linux";
 const isMac = process.platform === "darwin";
 var fileRequestedOnOpen = null;
 var currentWindow = null;
+
+//What the application menu is built for - the renderer's project and document, through the
+//setMenuMode command (see onSetMenuMode below). A novel showing prose until told otherwise, which
+//is the menu every project had before there were screenplays. The template is app-menu.js's; the
+//menu is rebuilt whole when the mode changes, since Electron does not relabel a built item.
+var menuMode = { project: 'novel', document: 'prose' };
+
+function applyAppMenu(){
+  Menu.setApplicationMenu(Menu.buildFromTemplate(buildMenuTemplate({
+    isMac: isMac,
+    isLinux: isLinux,
+    appName: app.name,
+    appVersion: app.getVersion(),
+    mode: menuMode,
+    send: function(channel){
+      if(currentWindow && !currentWindow.isDestroyed())
+        currentWindow.webContents.send.apply(currentWindow.webContents, arguments);
+    }
+  })));
+}
 //Set once the renderer has confirmed it's safe to quit (see 'exit-app-confirmed' below), so the
 //'close' guard on the window lets that specific close through instead of re-intercepting it.
 var closeConfirmed = false;
@@ -167,371 +188,7 @@ const createWindow = () => {
   if(!app.isPackaged)
     mainWindow.webContents.openDevTools();
 
-  var menu = Menu.buildFromTemplate([
-    ...(isMac
-      ? [{
-          label: app.name,
-          submenu: [
-            { role: 'about' },
-            { type: 'separator' },
-            { role: 'services' },
-            { type: 'separator' },
-            { role: 'hide' },
-            { role: 'hideOthers' },
-            { role: 'unhide' },
-            { type: 'separator' },
-            { role: 'quit' }
-          ]
-        }]
-      : []),
-    {
-      label: 'File',
-      submenu:[
-        {
-          label: 'New Project',
-          accelerator: 'CmdOrCtrl+Shift+N',
-          click(item, focusWindow){
-            mainWindow.webContents.send("new-project-clicked");
-          }
-        },
-        {
-          label: 'Open Project',
-          accelerator: 'CmdOrCtrl+Shift+O',
-          click(item, focusWindow){
-            mainWindow.webContents.send("open-clicked");
-          }
-        },
-        {type: 'separator'},
-        {
-          label: 'Save',
-          accelerator: 'CmdOrCtrl+S',
-          click(item, focusWindow){
-            mainWindow.webContents.send("save-clicked");
-          }
-        },
-        {
-          label: 'Save As',
-          accelerator: 'CmdOrCtrl+Shift+S',
-          click(item, focusWindow){
-              mainWindow.webContents.send('save-as-clicked');
-          }
-        },
-        {
-          label: 'Save Copy',
-          click(item, focusWindow){
-            mainWindow.webContents.send('save-copy-clicked');
-          }
-        },
-        {
-          //No accelerator: Ctrl/Cmd+Shift+B is the editor's Bullets/Numbered List shortcut, and a
-          //menu accelerator is handled natively before the page ever sees the keydown - so for as
-          //long as Backup claimed it, the bullets shortcut the Shortcuts popup documents could
-          //not fire. Backup stays reachable from this menu, where it is not competing for a key
-          //a writer presses mid-sentence.
-          label: 'Backup',
-          click(item, focusWindow){
-            mainWindow.webContents.send('save-backup-clicked');
-          }
-        },
-        {type: 'separator'},
-        {
-          label: 'Import',
-          accelerator: 'CmdOrCtrl+Shift+I',
-          click(item, focusWindow){
-              mainWindow.webContents.send('import-clicked');
-          }
-        },
-        {
-          label: 'Export',
-          accelerator: 'CmdOrCtrl+Shift+E',
-          click(item, focusWindow){
-              mainWindow.webContents.send('export-clicked');
-          }
-        },
-        {
-          label: 'Compile',
-          accelerator: 'CmdOrCtrl+Shift+C',
-          click(item, focusWindow){
-              mainWindow.webContents.send('compile-clicked');
-          }
-        },
-        { type: 'separator' },
-        {
-          label: 'Send via Email',
-          click(item, focusWindow){
-            mainWindow.webContents.send('send-via-email-clicked');
-          },
-          accelerator: 'CommandOrControl+Alt+E'
-        },
-        {type: 'separator'},
-        {
-          label: 'Properties',
-          accelerator: 'CmdOrCtrl+P',
-          click(item, focusWindow){
-            mainWindow.webContents.send('properties-clicked');
-          }
-        },
-        {
-          label: 'Settings',
-          click(item, focusWindow){
-            mainWindow.webContents.send('settings-clicked');
-          }
-        },
-        {
-          //No accelerator: this is a dialog opened rarely and does not need to spend a chord - see
-          //the note on Backup above.
-          label: 'Dictionaries',
-          click(item, focusWindow){
-            mainWindow.webContents.send('dictionaries-clicked');
-          }
-        },
-        {type: 'separator'},
-        {
-          label: 'File Manager',
-          click(item, focusWindow){
-              mainWindow.webContents.send('file-manager-clicked');
-          },
-          accelerator: 'CmdOrCtrl+Shift+F'
-        },
-        ...(isLinux ? [
-          {type: 'separator'},
-          {
-            //A writerDeck item, not a desktop one, which is why it is gated the same way the
-            //Wi-Fi Manager is: on a Pi that boots straight into WareWoolf with no desktop behind
-            //it, this menu is the whole machine's interface, and there is no panel, launcher or
-            //terminal to reach a reboot from. On a machine that has all three it would only be a
-            //worse copy of them.
-            //
-            //No accelerator, deliberately, and for a stronger version of the reason Backup and
-            //Dictionaries do without one: every other item on this menu can be undone or
-            //answered, and a chord that takes the machine down cannot.
-            label: 'Reboot',
-            click(item, focusWindow){
-              mainWindow.webContents.send('reboot-clicked');
-            }
-          }
-        ] : []),
-        {type: 'separator'},
-        {
-          label: 'Exit',
-          click() {
-            //app.quit();
-            mainWindow.webContents.send('exit-app-clicked');
-          },
-          accelerator: 'CmdOrCtrl+Shift+X'
-        }
-      ]
-    },
-    {
-      label: 'Edit',
-      submenu: [
-        {
-          label: 'Undo',
-          accelerator: 'CommandOrControl+Z',
-          role: 'undo',
-        },
-        {
-          label: 'Redo',
-          accelerator: 'Shift+CommandOrControl+Z',
-          role: 'redo',
-        },
-        { type: 'separator' },
-        {
-          label: 'Cut',
-          accelerator: 'CommandOrControl+X',
-          role: 'cut',
-        },
-        {
-          label: 'Copy',
-          accelerator: 'CommandOrControl+C',
-          role: 'copy',
-        },
-        {
-          label: 'Paste',
-          accelerator: 'CommandOrControl+V',
-          role: 'paste',
-        },
-        {
-          label: 'Select All',
-          accelerator: 'CommandOrControl+A',
-          role: 'selectall',
-        },
-        { type: 'separator' },
-        {
-          label: 'Add New Chapter',
-          click(item, focusWindow){
-            mainWindow.webContents.send('add-chapter-clicked');
-          },
-          accelerator: 'CommandOrControl+N',
-        },
-        {
-          label: 'Delete Chapter',
-          click(item, focusWindow){
-            mainWindow.webContents.send('delete-chapter-clicked');
-          },
-          accelerator: 'CommandOrControl+Shift+D',
-        },
-        {
-          label: 'Restore Deleted Chapter',
-          click(item, focusWindow){
-            mainWindow.webContents.send('restore-chapter-clicked');
-          },
-          accelerator: 'CommandOrControl+Shift+R',
-        },
-        {
-          label: 'Split Chapter',
-          click(item, focusWindow){
-            mainWindow.webContents.send('split-chapter-clicked');
-          },
-          accelerator: 'CommandOrControl+\\',
-        }
-      ]
-    },
-    {
-      label: 'Tools',
-      submenu: [
-        {
-          label: 'Word Count',
-          accelerator: 'CommandOrControl+8',
-          click(item, focusWindow){
-            mainWindow.webContents.send('word-count-clicked');
-          }
-        },
-        {
-          label: 'Find/Replace',
-          accelerator: 'CommandOrControl+F',
-          click(item, focusWindow){
-            mainWindow.webContents.send('find-replace-clicked');
-          }
-        },
-        {
-          label: 'Spell Check',
-          accelerator: 'CommandOrControl+7',
-          click(item, focusWindow){
-            mainWindow.webContents.send('spellcheck-clicked');
-          }
-        },
-        { type: 'separator' },
-        {
-          label: 'Outliner',
-          click(item, focusWindow){
-            mainWindow.webContents.send('outliner-clicked');
-          },
-          accelerator: 'CommandOrControl+O',
-        },
-        {
-          label: 'Corkboard',
-          click(item, focusWindow){
-            mainWindow.webContents.send('corkboard-clicked');
-          }
-        },
-        { type: 'separator' },
-        {
-          label: 'Renumber Chapters',
-          click(item, focusWindow){
-            mainWindow.webContents.send('renumber-chapters-clicked');
-          }
-        },
-        {
-          label: 'Convert First Lines To Titles',
-          click(item, focusWindow){
-            mainWindow.webContents.send('convert-first-lines-clicked');
-          }
-        },
-        {
-          label: 'Convert Marked Italics',
-          click(item, focusWindow){
-            mainWindow.webContents.send('convert-italics-clicked');
-          }
-        },
-        {
-          label: 'Convert Marked Tabs',
-          click(item, focusWindow){
-            mainWindow.webContents.send('convert-tabs-clicked');
-          }
-        },
-        {
-          label: 'Convert Straight Quotes Etc.',
-          click(item, focusWindow){
-            mainWindow.webContents.send('convert-substitutions-clicked');
-          }
-        },
-        { type: 'separator' },
-        {
-          label: 'Break Headings Into Chapters',
-          click(item, focusWindow){
-            mainWindow.webContents.send('headings-to-chaps-clicked');
-          }
-        },
-        {
-          label: 'Tab-Indent Paragraphs',
-          click(item, focusWindow){
-            mainWindow.webContents.send('tab-indent-paragraphs-clicked');
-          }
-        },
-        {
-          label: 'Center All Headings',
-          click(item, focusWindow){
-            mainWindow.webContents.send('center-all-heads-clicked');
-          }
-        },
-        ...(isLinux ? [
-          { type: 'separator' },
-          {
-            label: 'Wi-Fi Manager',
-            click(item, focusWindow){
-              mainWindow.webContents.send('wifi-manager-clicked');
-            },
-            accelerator: 'CommandOrControl+W'
-          }
-        ]
-        : [])
-      ]
-    },
-    ...(!isLinux ? [
-      {
-        label: 'View',
-        submenu: [
-          {
-            role: 'togglefullscreen'
-          }
-        ]
-      }
-    ] : []),
-    {
-      label: 'Help',
-      submenu: [
-        {
-          label: 'Shortcuts...',
-          click(item, focusWindow){
-            mainWindow.webContents.send('shortcuts-clicked', isMac);
-          },
-          accelerator: isMac ? 'CommandOrControl+Shift+h' : 'CommandOrControl+h'
-        },
-        {
-          label: 'Open Help Document',
-          click(item, focusWindow){
-            mainWindow.webContents.send('help-doc-clicked');
-          }
-        },
-        {
-          label: 'View Error Log',
-          click(item, focusWindow){
-            mainWindow.webContents.send('view-error-log-clicked');
-          }
-        },
-        { type: 'separator' },
-        {
-          label: 'About',
-          click(item, focusWindow){
-            mainWindow.webContents.send('about-clicked', app.getVersion());
-          }
-        }
-      ]
-    }
-  ]);
-
-  Menu.setApplicationMenu(menu);
+  applyAppMenu();
 };
 
 const assignActiveAndCreateWindow = () => {
@@ -648,6 +305,10 @@ function host(){
       },
       onShowAppMenu: function(){
         app.applicationMenu.popup({ x: 0, y: 0 });
+      },
+      onSetMenuMode: function(project, document){
+        menuMode = { project: project, document: document };
+        applyAppMenu();
       },
       //A screenplay's PDF (docs/screenplay-plan.md, Phase 7): the renderer's print page, loaded
       //in a window nobody sees and printed by Chromium to Letter with a script's margins - an

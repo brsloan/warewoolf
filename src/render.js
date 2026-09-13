@@ -817,6 +817,27 @@ function applyEditorMode(){
   //follows the mode - rebuilt only when it changes, not on every chapter.
   if(mode !== shortcutsAppliedFor)
     applyEditorShortcuts();
+
+  syncAppMenu(mode);
+}
+
+//The application menu is the host's (app-menu.js, through index.js), and follows the project and
+//the document the same way the shortcuts above do: Word Count reads Page Count for a screenplay
+//project, the manuscript conversions are disabled for one, the chapter tools while a script is
+//showing. Told only when either changes - a rebuild per chapter would be waste. The blocked-action
+//messages below stay as the answer for a command that reaches here anyway.
+var menuModeSent = null;
+
+function syncAppMenu(documentMode){
+  var projectMode = project.isScreenplay() ? 'screenplay' : 'novel';
+  var key = projectMode + '/' + documentMode;
+  if(key === menuModeSent)
+    return;
+
+  menuModeSent = key;
+  platform.setMenuMode({ project: projectMode, document: documentMode }).catch(function(err){
+    require('./components/controllers/error-log').logError(err);
+  });
 }
 
 //The manuscript editor's Quill-owned shortcuts, for the mode it is in. shortcutsAppliedFor is what
@@ -2316,8 +2337,10 @@ const menuCommands = {
 //refusal, told apart by what they are about: the chapter tools want a prose *document* in the
 //editor (a Reference note beside a script is one), and the manuscript-wide conversions want a
 //novel *project*. Everything else works on a script as it stands - Add New Chapter included, which
-//makes a Reference document there (see addNewChapter). The main process is not told; an item that
-//does not apply says so here, which keeps index.js and the channel contract untouched.
+//makes a Reference document there (see addNewChapter). The menu itself disables these items from
+//the same two lists (app-menu.js, told the mode by syncAppMenu); this is the answer for a command
+//that reaches here anyway - a shortcut, an accelerator on a menu built before the mode arrived.
+//app-menu.test.js holds the two sets of lists to each other.
 const PROSE_DOCUMENT_ONLY = {
   'split-chapter-clicked': 'Split Chapter',
   'delete-chapter-clicked': 'Delete Chapter',
