@@ -383,8 +383,8 @@ const SHORTCUT_DEFS = [
   { id: 'typewriterMode', label: 'Typewriter Mode', section: 'Display', target: 'global', defaultBinding: makeBinding('T', { mod: true, alt: true }) },
 
   //Screenplay elements (docs/screenplay-plan.md, Phase 4), bound only while the editor shows a
-  //script. The keys and their meaning are Fade In's: Ctrl+1..6 in its order (Final Draft's too)
-  //open a new element on a line with text and set the type on an empty line, Ctrl+Alt+1..6 set
+  //script. Ctrl+1..6, in the order Final Draft uses, open a new element on a line with text and
+  //set the type on an empty line; Ctrl+Alt+1..6 set
   //the type of the current line whatever it holds. They share Ctrl+1..6 with the prose headings,
   //which is why `mode` exists.
   { id: 'elementScene', label: 'Scene Heading', section: 'Screenplay', target: 'quill', mode: 'screenplay', defaultBinding: makeBinding('1', { mod: true }) },
@@ -400,12 +400,11 @@ const SHORTCUT_DEFS = [
   { id: 'reformatParenthetical', label: 'Reformat as Parenthetical', section: 'Screenplay', target: 'quill', mode: 'screenplay', defaultBinding: makeBinding('4', { mod: true, alt: true }) },
   { id: 'reformatDialogue', label: 'Reformat as Dialogue', section: 'Screenplay', target: 'quill', mode: 'screenplay', defaultBinding: makeBinding('5', { mod: true, alt: true }) },
   { id: 'reformatTransition', label: 'Reformat as Transition', section: 'Screenplay', target: 'quill', mode: 'screenplay', defaultBinding: makeBinding('6', { mod: true, alt: true }) },
-  //The rest of Fade In's keys for a script. Ctrl+D is its Dual Dialogue. Its Ctrl+Enter (a new
-  //heading) and Ctrl+Shift+Enter (Insert Element) are not here: Enter is reserved from the
-  //shortcuts (RESERVED_KEYS), so those two are fixed bindings in screenplay-editor.js, like
-  //Shift+Enter. Its Upper/Lower/Title Case is Ctrl+K, which is Strikethrough here in both modes,
-  //so it takes its Ctrl+Shift+K instead and is bound in prose too, where a case change is as
-  //useful.
+  //Ctrl+D is Dual Dialogue. Ctrl+Enter (a new heading) and Ctrl+Shift+Enter (Insert Element) are
+  //not here: Enter is reserved from the shortcuts (RESERVED_KEYS), so those two are fixed
+  //bindings in screenplay-editor.js, like Shift+Enter. Upper/Lower/Title Case is on
+  //Ctrl+Shift+K, since Ctrl+K is Strikethrough in both modes, and is bound in prose too, where a
+  //case change is as useful.
   { id: 'toggleDualDialogue', label: 'Dual Dialogue', section: 'Screenplay', target: 'quill', mode: 'screenplay', defaultBinding: makeBinding('D', { mod: true }) },
   { id: 'cycleCase', label: 'Upper / Lower / Title Case', section: 'Formatting', target: 'quill', defaultBinding: makeBinding('K', { mod: true, shift: true }) }
 ];

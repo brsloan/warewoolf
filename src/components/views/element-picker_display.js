@@ -1,8 +1,8 @@
 const { describeDialog } = require('../controllers/utils');
 const { insertElement, setElement } = require('../controllers/screenplay-editor');
 
-//The element picker, Fade In's Insert Element (docs/fade-in-comparison.md, item 12): every type
-//a script line can be, in one list, for the types with no key of their own - a section, a
+//The element picker, Insert Element: every type a script line can be, in one list, for the
+//types with no key of their own - a section, a
 //synopsis, a note, a lyric, a page break - and for a writer who has not learned the keys. Enter
 //opens a new line of the chosen type the way the element shortcuts do (insertElement); Shift+Enter
 //makes the current line the type instead (setElement), which is the reformat shortcuts' job;

@@ -120,7 +120,7 @@ function getUserSettings(userSettingsFilepath){
     //changed, keyed by the ids in autocorrect.js. A rule missing from here is on its default.
     autocorrect: {},
     //The suggestion list in a script - names, places, times, transitions, extensions - which a
-    //writer who finds it in the way turns off here, as Fade In lets them.
+    //writer who finds it in the way turns off here.
     screenplayAutocomplete: true,
     //Ids of the dictionaries a writer ticked in the Dictionaries dialog. Empty means "whatever the
     //app ships as default" - see loadDictionaries' own fallback (platform.js, group I) - so a writer

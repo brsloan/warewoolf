@@ -3,9 +3,9 @@ const { parseDelta, replaceTextPreservingFormats } = require('./quill-utils');
 const { classifyLine } = require('./fountain');
 const { ELEMENT_TYPES } = require('../blots/screenplay');
 
-//The editor side of screenplay mode - see docs/screenplay-plan.md, "The editor" and "Keyboard",
-//and docs/fade-in-comparison.md for where each behaviour comes from. Everything here is a
-//function of a Quill instance and a delta; nothing reads the DOM for content.
+//The editor side of screenplay mode - see docs/screenplay-plan.md, "The editor" and "Keyboard".
+//Everything here is a function of a Quill instance and a delta; nothing reads the DOM for
+//content.
 
 // ------------------------------------------------------------------------------------------
 // Loading
@@ -150,7 +150,7 @@ function insertLineAbove(quill, index, type){
   quill.setSelection(index, 0, 'user');
 }
 
-//What an element shortcut does, as Fade In has it: a selection or an empty line is made the type,
+//What an element shortcut does: a selection or an empty line is made the type,
 //and a line with text gets a new, empty line of the type instead - above it with the caret at the
 //start, below it with the caret at the end, and between the two halves of the line otherwise, the
 //halves keeping the line's type. The line's own text is never retyped by a shortcut; that is what
@@ -201,8 +201,8 @@ function cueFor(quill, index){
   return null;
 }
 
-//Fade In's Format > Dual Dialogue, as Fountain has it: the mark goes on the cue of the second
-//speaker, and here on the cue the caret is on or under. Toggled, so the same key takes it off.
+//Dual dialogue, as Fountain has it: the mark goes on the cue of the second speaker, and here on
+//the cue the caret is on or under. Toggled, so the same key takes it off.
 function toggleDual(quill){
   var range = quill.getSelection(true);
   if(!range)
@@ -219,7 +219,7 @@ function toggleDual(quill){
 // Keys
 // ------------------------------------------------------------------------------------------
 
-//What Enter at the end of a line makes next, as Final Draft and Fade In have it: a cue is
+//What Enter at the end of a line makes next, as Final Draft has it: a cue is
 //followed by dialogue and dialogue by the next cue, a heading by action, a transition by a
 //heading.
 const NEXT_ON_ENTER = {
@@ -297,8 +297,8 @@ function continuedCue(quill, info){
 
 const CONTINUED = " (CONT'D)";
 
-//Fade In and Final Draft jump over trailing spaces on Enter and Tab: a caret before nothing but
-//spaces is treated as at the end of the line, so the spaces never start the next one.
+//Trailing spaces are jumped over on Enter and Tab: a caret before nothing but spaces is treated
+//as at the end of the line, so the spaces never start the next one.
 function skipTrailingSpaces(quill, range, info){
   var textLength = info.length - 1;
   if(info.offset === 0 || info.offset >= textLength)
@@ -411,8 +411,8 @@ const HEADING_SEPARATOR = ' - ';
 //between the parentheses (an empty one becomes the parenthetical itself), a parenthetical opens
 //the speech. A heading is stepped through: on an empty one it types the "INT. " a heading almost
 //always starts with, and after the place it puts the " - " the time of day follows, which opens
-//the list of times. A transition is Fade In's way: nothing with the caret at the start, and an
-//action line under it otherwise, since Enter is what opens the heading.
+//the list of times. On a transition: nothing with the caret at the start, and an action line
+//under it otherwise, since Enter is what opens the heading.
 function screenplayTabBinding(quill, getMode){
   return {
     key: 9,
@@ -491,7 +491,7 @@ function screenplayShiftTabBinding(getMode){
 //attachScreenplayKeys), so it is resolved here the same way.
 const SHORT_KEY = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform || '') ? 'metaKey' : 'ctrlKey';
 
-//Fade In's Ctrl+Enter: a new heading, which the autocomplete then offers INT. and EXT. for.
+//Ctrl+Enter: a new heading, which the autocomplete then offers INT. and EXT. for.
 //A fixed binding rather than a shortcut, like Shift+Enter, since Enter is reserved from the
 //shortcuts (shortcuts.js RESERVED_KEYS).
 function screenplayNewSceneBinding(quill, getMode){
@@ -508,7 +508,7 @@ function screenplayNewSceneBinding(quill, getMode){
   return binding;
 }
 
-//Fade In's Ctrl+Shift+Enter, Insert Element: the picker of every type a line can be.
+//Ctrl+Shift+Enter, Insert Element: the picker of every type a line can be.
 function screenplayPickerBinding(quill, getMode){
   var binding = {
     key: 13,
@@ -555,11 +555,11 @@ function screenplayBindingFor(quill, key){
 // ------------------------------------------------------------------------------------------
 
 //The whole of an action line that has just become the start of a heading: "INT. " and its kin,
-//period and space, nothing else. Fade In makes the line a heading the moment that space is typed.
+//period and space, nothing else. The line becomes a heading the moment that space is typed.
 const HEADING_START = /^(?:INT\.?\/EXT|EXT\.?\/INT|INT|EXT|EST|I\/E)\.\s$/i;
 
 //Two things done on every user change while the editor shows a script. First, an action line that
-//has just been typed as "INT. " becomes a heading, as Fade In has it, so the writer sees the
+//has just been typed as "INT. " becomes a heading, so the writer sees the
 //heading style while typing the place and the location list can open on it. Second, the lines the
 //change touched are kept in capitals where their type takes them: a cue, heading or transition is
 //stored the way it is shown, so the file carries "BOB" and not a forced "@bob". Both changes go
@@ -768,7 +768,7 @@ function moveScene(delta, k, direction){
 // Autocomplete - docs/screenplay-plan.md, "Autocomplete, word count, title page"
 // ------------------------------------------------------------------------------------------
 
-//The lists every script shares, as Fade In keeps them: how a heading starts, when it is set, how a
+//The lists every script shares: how a heading starts, when it is set, how a
 //scene ends, and what a cue carries after the name. The script's own transitions join the last.
 const SCENE_INTROS = ['INT.', 'EXT.', 'INT./EXT.', 'EST.'];
 const TIMES_OF_DAY = ['DAY', 'NIGHT', 'CONTINUOUS', 'LATER', 'MOMENTS LATER', 'MORNING', 'AFTERNOON', 'EVENING', 'DAWN', 'DUSK', 'SAME TIME'];
@@ -812,7 +812,7 @@ function unique(values){
   }).sort();
 }
 
-//Who speaks next, for an empty cue at `lineStart`, as Fade In guesses it: the character who spoke
+//Who speaks next, for an empty cue at `lineStart`: the character who spoke
 //before the last speaker first, since a scene is mostly two people taking turns, then the last
 //speaker and the rest of the scene's speakers by recency, then the speakers of earlier scenes by
 //recency, then the rest of the cast. Names once each.
@@ -869,8 +869,7 @@ function startingWith(list, typed){
 //typed, the suggestions, and how an accepted one goes in: `prefix` before it, `suffix` after it,
 //replacing the line's text from offset `from` to offset `to`. A list is offered before anything
 //is typed too - the next speaker on an empty cue, the intros on an empty heading, the times after
-//" - " - and Enter or Tab takes its first entry like any other, as Fade In has it; Escape is the
-//way past it.
+//" - " - and Enter or Tab takes its first entry like any other; Escape is the way past it.
 //
 //  cue, empty                -> the speakers, next-speaker first
 //  cue, "BO"                 -> the names starting with it

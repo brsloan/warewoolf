@@ -321,7 +321,7 @@ Enter on an empty line of any type but action makes it action: the way out of
 a type chosen by mistake, and the double-Enter after a speech that gets from
 the next cue to action. Enter with the caret at the start of a non-empty line
 pushes the line down and leaves an empty line of the same type above it, as
-Fade In does (see `docs/fade-in-comparison.md`). Enter mid-line
+a word processor would. Enter mid-line
 splits the line into two of the same type, with the dual and tight marks
 cleared on the second. A caret before nothing but trailing spaces counts as at
 the end of the line, for Enter and Tab both. A selection falls through to
@@ -334,7 +334,7 @@ reformatting.
 
 **Typing** (`attachScreenplayTyping`) does two things on every user change.
 An action line typed as `INT. ` (or `EXT. `, `EST. `, `INT./EXT. `) becomes a
-heading on that space, as Fade In has it, so the heading style shows while the
+heading on that space, so the heading style shows while the
 place is typed and the location list can open on it. And every line the change
 touched whose type takes capitals - heading, cue, transition - has its text
 upper-cased, with the caret put back, so the file carries `BOB` and never a
@@ -367,7 +367,7 @@ line's type, which is what a writer expects.
 (`shortcuts.js:333`), section `Screenplay`, target `quill`, plus a `mode`
 field new to every definition: `'prose'` on the heading, list, blockquote,
 footnote and alignment shortcuts, `'screenplay'` on these, absent on the rest.
-The keys and what they do are Fade In's. Ctrl+digit (`insertElement`) opens a
+Ctrl+digit (`insertElement`) opens a
 new, empty line of the type when the line has text - above it with the caret
 at the start, below it with the caret at the end, between the two halves
 otherwise - and sets the type of an empty line or of every line in a
@@ -386,7 +386,7 @@ Centered stays on Ctrl+E and is a reformat.
 | elementCentered | Ctrl+E | toggleDualDialogue | Ctrl+D |
 | cycleCase (both modes, section Formatting) | Ctrl+Shift+K | | |
 
-`toggleDualDialogue` is Fade In's Ctrl+D: the dual mark goes on or off the cue
+`toggleDualDialogue`, Ctrl+D: the dual mark goes on or off the cue
 the caret is on or under, which in Fountain is the second speaker's.
 `cycleCase` is its Upper/Lower/Title Case, on Ctrl+Shift+K because Ctrl+K is
 Strikethrough here in both modes: the selection, or the word at the caret,
@@ -444,7 +444,7 @@ moves.
 ## Autocomplete, word count, title page
 
 **Autocomplete** is the old branch's feature with the DOM scans replaced and
-Fade In's lists added (`docs/fade-in-comparison.md`, items 15 to 19).
+the lists every script shares added.
 `characterNames(delta)` and `locations(delta)` walk the ops once, stripping
 extensions like `(V.O.)` and `(CONT'D)` from cues and the `INT./EXT.` prefix
 and ` - TIME` suffix from headings. `suggestionsFor(delta, type, lineText,
@@ -474,7 +474,7 @@ positioned from `quill.getBounds`, and its keys go through Quill bindings
 guarded on the box being open rather than the one-shot `keydown` listeners the
 branch used, which raced each other. The whole thing is a Settings switch
 (`screenplayAutocomplete`), read on every refresh. The lists are computed
-from the script on every keystroke and are not editable, unlike Fade In's.
+from the script on every keystroke and are not editable.
 
 **Page count.** `estimatePages(elements)` in `fountain.js`, from the old
 branch's line model: 55 lines a page, 61 characters across an action line, 35

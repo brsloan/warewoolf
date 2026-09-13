@@ -285,7 +285,7 @@ const QUILL_HANDLERS = {
   //formatting so applyQuillShortcuts has one list to walk; which of them are bound is decided by
   //each definition's `mode` in shortcuts.js. Required lazily for the same reason insertFootnote is:
   //screenplay-editor.js requires this module for parseDelta.
-  //Ctrl+1..6 as Fade In has them: a new element on a line with text, the type itself on an empty
+  //Ctrl+1..6: a new element on a line with text, the type itself on an empty
   //line or a selection. Ctrl+Alt+1..6 make the current line the type whatever it holds, and so
   //does Centered on Ctrl+E, which is an alignment there and a reformat here.
   elementScene: elementHandler('scene'),
@@ -340,7 +340,7 @@ function replaceTextPreservingFormats(quill, index, length, transform){
   quill.updateContents(change, 'user');
 }
 
-//Fade In's Upper/Lower/Title Case: the selection, or the word at the caret, goes to capitals;
+//Upper/Lower/Title Case: the selection, or the word at the caret, goes to capitals;
 //capitals go to lower case; lower case goes to Title Case. The selection is kept so the key can
 //be pressed again to get the next. Word boundaries are found in the editor's own index space
 //(getIndexableText), so a footnote marker counts as one character as it does to Quill.

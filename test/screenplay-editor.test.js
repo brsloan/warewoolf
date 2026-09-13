@@ -249,7 +249,7 @@ test('Enter at the start of a line pushes it down under a new line of its own ty
   var s = scriptQuill(delta([['character', 'BOB', { dual: true }]]));
   var enter = screenplayEnterBinding(s.quill, function(){ return 'screenplay'; });
 
-  //As Fade In has it: the empty line above is a cue too, without the dual mark.
+  //The empty line above is a cue too, without the dual mark.
   press(s.quill, enter, 0);
   assert.deepStrictEqual(lines(s.quill), [['character', ''], ['character', 'BOB', 'dual']]);
   assert.strictEqual(s.quill.getSelection().index, 1, 'the caret stays with the cue');
@@ -359,7 +359,7 @@ test('Tab moves to the next element a writer reaches for', function(){
   assert.deepStrictEqual(lines(s.quill), [['scene', 'INT. ']]);
   assert.strictEqual(s.quill.getSelection().index, 5);
 
-  //A heading is stepped through as Fade In has it: after the place, Tab puts in the " - " the
+  //A heading is stepped through: after the place, Tab puts in the " - " the
   //time follows, trailing spaces and all; with a time there already, or no place yet, nothing.
   s = scriptQuill(delta([['scene', 'INT. A  ']]));
   press(s.quill, tab(s), 2);
@@ -394,7 +394,7 @@ test('Tab moves to the next element a writer reaches for', function(){
   press(s.quill, tab(s), 5);
   assert.deepStrictEqual(lines(s.quill), [['parenthetical', '(low)'], ['dialogue', '']]);
 
-  //A transition as Fade In has it: Tab at the start does nothing (but is not handed to Quill,
+  //A transition: Tab at the start does nothing (but is not handed to Quill,
   //which would type a tab), and after the text it opens the action line under it.
   s = scriptQuill(delta([['transition', 'CUT TO:']]));
   assert.strictEqual(press(s.quill, tab(s), 0), false);
@@ -430,7 +430,7 @@ test('attachScreenplayKeys puts the bindings ahead of Quill\'s own for Enter and
   assert.strictEqual(tabHandlers[1].shiftKey, true);
 });
 
-//The element shortcuts as Fade In has them: Ctrl+digit opens a new element on a line with text
+//The element shortcuts: Ctrl+digit opens a new element on a line with text
 //and sets the type of an empty line or a selection; Ctrl+Alt+digit sets the type outright.
 test('insertElement opens a new line of the type where the caret is, and sets the type of an empty line or a selection', function(){
   var s = scriptQuill(delta([['action', 'A room.']]));
