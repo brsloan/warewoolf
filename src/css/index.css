@@ -151,7 +151,7 @@ input[type=radio] {
   accent-color: var(--accent);
   width: 1.05em;
   height: 1.05em;
-  margin-right: 0.45em;
+  margin-right: 0em;
   vertical-align: -0.15em;
 }
 
@@ -829,6 +829,17 @@ hr {
 
 .popup label{
   margin-left: 3px;
+}
+
+/* A radio button and its name, kept together. A row of buttons that runs past the width of the
+   dialog - the eight file types in the Import dialog - wraps, and left to itself it will break
+   between a button and the name that belongs to it, stranding the name at the start of the next
+   line where it reads as the name of a different button. Each pair is one unbreakable box with a
+   gap after it, so the row only ever breaks between choices. */
+.radio-option {
+  display: inline-block;
+  white-space: nowrap;
+  margin-right: 14px;
 }
 
 .popup a{

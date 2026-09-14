@@ -74,6 +74,40 @@ test('the italics marker input is placed exactly once, inside the plaintext opti
   assert.strictEqual(matches[0].parentNode.tagName, 'TD');
 });
 
+//Regression test: the radios and their labels used to be appended straight into the fieldset as a
+//flat run, so a row too wide for the dialog could wrap between a button and its own label and make
+//every label look like it named the button before it. Each pair now sits in its own wrapper, which
+//is what the .radio-option rule holds on one line.
+test('every file type radio is wrapped together with its own label', function(t){
+  var showImportOptions = freshImportDisplay({ initiateImport: function(){} });
+
+  showImportOptions({}, function(){}, function(){});
+
+  var radios = document.querySelectorAll('input[name="typeSelect"]');
+  assert.ok(radios.length > 1);
+  radios.forEach(function(radio){
+    var wrapper = radio.parentNode;
+    assert.ok(wrapper.classList.contains('radio-option'));
+    var labels = wrapper.querySelectorAll('label');
+    assert.strictEqual(labels.length, 1);
+    assert.strictEqual(labels[0].htmlFor, radio.id);
+  });
+});
+
+test('the chapter label radios are wrapped with their labels too', function(t){
+  var showImportOptions = freshImportDisplay({ initiateImport: function(){} });
+
+  showImportOptions({}, function(){}, function(){});
+
+  var radios = document.querySelectorAll('input[name="chapLabelSelect"]');
+  assert.strictEqual(radios.length, 2);
+  radios.forEach(function(radio){
+    var wrapper = radio.parentNode;
+    assert.ok(wrapper.classList.contains('radio-option'));
+    assert.strictEqual(wrapper.querySelector('label').htmlFor, radio.id);
+  });
+});
+
 test('switching the file type toggles which options fieldset is enabled', function(t){
   var showImportOptions = freshImportDisplay({ initiateImport: function(){} });
 

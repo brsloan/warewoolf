@@ -48,18 +48,26 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish, project
     filetypes.sort(function(a, b){ return SCREENPLAY_TYPES.indexOf(a.id) - SCREENPLAY_TYPES.indexOf(b.id); });
   }
 
+  //Each button and its name go into one .radio-option wrapper rather than straight into the
+  //fieldset. Loose in the fieldset, the row wraps wherever it likes: a line can end on a button
+  //whose name has gone to the next line, which leaves every name in the row looking as though it
+  //belongs to the button before it. The wrapper keeps the pair together and breaks between pairs.
   filetypes.forEach((type, i) => {
+    var typeOption = document.createElement('span');
+    typeOption.classList.add('radio-option');
+    filetypeSet.appendChild(typeOption);
+
     var filetypeSelect = document.createElement('input');
     filetypeSelect.type = 'radio';
     filetypeSelect.name = 'typeSelect';
     filetypeSelect.value = i;
     filetypeSelect.id = type.id;
-    filetypeSet.appendChild(filetypeSelect);
+    typeOption.appendChild(filetypeSelect);
 
     var typeLabel = document.createElement('label');
     typeLabel.htmlFor = filetypeSelect.id;
     typeLabel.innerText = type.name;
-    filetypeSet.appendChild(typeLabel);
+    typeOption.appendChild(typeLabel);
   });
 
   var plainTextOptionsSet = document.createElement('fieldset');
@@ -287,17 +295,26 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish, project
   chapLabelLegend.innerText = 'Chapter Label Options';
   chapLabelSet.appendChild(chapLabelLegend);
 
+  //Wrapped a pair at a time, as the file types above are.
+  var chapLabelFilenameOption = document.createElement('span');
+  chapLabelFilenameOption.classList.add('radio-option');
+  chapLabelSet.appendChild(chapLabelFilenameOption);
+
   var chapLabelFilename = document.createElement('input');
   chapLabelFilename.type = 'radio';
   chapLabelFilename.name = 'chapLabelSelect';
   chapLabelFilename.value = 'filename';
   chapLabelFilename.id = 'chapLabelFilename';
-  chapLabelSet.appendChild(chapLabelFilename);
+  chapLabelFilenameOption.appendChild(chapLabelFilename);
 
   var chapLabelFilenameLabel = document.createElement('label');
   chapLabelFilenameLabel.htmlFor = 'chapLabelFilename';
   chapLabelFilenameLabel.innerText = 'Filename';
-  chapLabelSet.appendChild(chapLabelFilenameLabel);
+  chapLabelFilenameOption.appendChild(chapLabelFilenameLabel);
+
+  var chapLabelFirstLineOption = document.createElement('span');
+  chapLabelFirstLineOption.classList.add('radio-option');
+  chapLabelSet.appendChild(chapLabelFirstLineOption);
 
   var chapLabelFirstLine = document.createElement('input');
   chapLabelFirstLine.type = 'radio';
@@ -305,12 +322,12 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish, project
   chapLabelFirstLine.value = 'firstLine';
   chapLabelFirstLine.id = 'chapLabelFirstLine';
   chapLabelFirstLine.checked = true;
-  chapLabelSet.appendChild(chapLabelFirstLine);
+  chapLabelFirstLineOption.appendChild(chapLabelFirstLine);
 
   var chapLabelFirstLineLabel = document.createElement('label');
   chapLabelFirstLineLabel.htmlFor = 'chapLabelFirstLine';
   chapLabelFirstLineLabel.innerText = 'First line';
-  chapLabelSet.appendChild(chapLabelFirstLineLabel);
+  chapLabelFirstLineOption.appendChild(chapLabelFirstLineLabel);
 
   if(!screenplay){
     importForm.appendChild(chapLabelSet);
