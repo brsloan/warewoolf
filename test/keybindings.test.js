@@ -97,8 +97,9 @@ function recordingActions(){
   var calls = [];
   var actions = {};
   ['moveChapUp', 'moveChapDown', 'changeChapterTitle', 'displayPreviousChapter', 'displayNextChapter',
-    'togglePanelDisplay', 'toggleChapterNotes', 'updatePanelDisplays', 'increaseFontSizeSetting',
-    'decreaseFontSizeSetting', 'increaseEditorWidthSetting', 'descreaseEditorWidthSetting'
+    'jumpToReference', 'togglePanelDisplay', 'toggleChapterNotes', 'updatePanelDisplays',
+    'increaseFontSizeSetting', 'decreaseFontSizeSetting', 'increaseEditorWidthSetting',
+    'descreaseEditorWidthSetting'
   ].forEach(function(name){
     actions[name] = function(){ calls.push([name].concat(Array.prototype.slice.call(arguments))); };
   });
@@ -331,6 +332,40 @@ test('Ctrl/Cmd+Up/Down move between chapters and focus notes only when triggered
   assert.strictEqual(document.activeElement, env.notesQuill.root);
 
   assert.deepStrictEqual(env.actions.calls, [['displayPreviousChapter'], ['displayNextChapter']]);
+
+  teardown(env);
+});
+
+test('Ctrl/Cmd+Alt+R jumps to Reference from any pane, and leaves the focus where it lands', function(){
+  var env = setup();
+
+  keydown('editor-container', 'r', ctrl({ altKey: true }));
+  keydown('chapter-list-sidebar', 'r', ctrl({ altKey: true }));
+
+  //From the notes, unlike the chapter keys above, it does NOT hand the focus back to the notes: the
+  //jump is a move to a document to read or write in, so the editor is where it should end.
+  keydown('notes-editor', 'r', ctrl({ altKey: true }));
+  assert.notStrictEqual(document.activeElement, env.notesQuill.root);
+
+  assert.deepStrictEqual(env.actions.calls,
+    [['jumpToReference'], ['jumpToReference'], ['jumpToReference']]);
+
+  //A pane shortcut, so it is nothing at all from outside the three.
+  env.actions.calls.length = 0;
+  keydown(document.body, 'r', ctrl({ altKey: true }));
+  assert.deepStrictEqual(env.actions.calls, []);
+
+  teardown(env);
+});
+
+test('the Reference jump is rebindable like any other shortcut', function(){
+  var env = setup(null, { jumpToReference: { key: 'F9', mod: false, alt: false, shift: false } });
+
+  keydown('editor-container', 'r', ctrl({ altKey: true }));
+  assert.deepStrictEqual(env.actions.calls, [], 'no longer on its default');
+
+  keydown('editor-container', 'F9');
+  assert.deepStrictEqual(env.actions.calls, [['jumpToReference']]);
 
   teardown(env);
 });

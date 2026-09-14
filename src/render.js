@@ -283,6 +283,7 @@ async function loadPlatformState(){
       changeChapterTitle: changeChapterTitle,
       displayPreviousChapter: detached(displayPreviousChapter),
       displayNextChapter: detached(displayNextChapter),
+      jumpToReference: detached(jumpToReference),
       togglePanelDisplay: togglePanelDisplay,
       toggleChapterNotes: detached(toggleChapterNotes),
       updatePanelDisplays: updatePanelDisplays,
@@ -322,6 +323,7 @@ async function loadPlatformState(){
     editorMode,
     displayPreviousChapter,
     displayNextChapter,
+    jumpToReference,
     scriptPageSession,
     _unregisterKeybindings: unregisterKeybindings
   });
@@ -1064,6 +1066,90 @@ async function displayNextChapter(){
     project.textCursorPosition = 0;
   }
 
+}
+
+//The two ends of the Reference jump: where it was last pressed from, and where it last was inside
+//Reference. Each is the chapter object rather than its locator, because everything the sidebar can
+//do between one press and the next - adding a chapter above, moving a document, trashing one -
+//moves a locator off the document it named while the object stays the document it is.
+//
+//Never cleared on a project change, and does not need to be: a chapter from a project that has been
+//closed is in none of the new one's lists, so locatorOf answers null for it and the jump falls back
+//exactly as it does for a document since deleted.
+var referenceJump = { origin: null, reference: null };
+
+//Ctrl+Alt+R, and the only shortcut that goes somewhere and comes back. Reference sits under every
+//chapter or scene a project has, and the keys that reach it walk a row at a time - the length of a
+//novel, or in a script the length of its scenes before the documents beside it even begin. This
+//goes straight there: to the reference document it was last in, or the first one until it has been
+//in any. Pressed again from inside Reference it returns to the document AND the caret position it
+//left, so a look at the character bible costs two presses rather than two walks and a hunt back
+//down the page for the line that was being written.
+//
+//The same key in both kinds of project. A screenplay's reference documents are prose, and they are
+//the documents a novel keeps there too - see docs/screenplay-plan.md, "One script".
+async function jumpToReference(){
+  var here = chapterList.activeLocator(project);
+  var leaving = Boolean(here) && here.list == 'reference';
+
+  //Out and back are the same move with its two ends swapped. Each end is the remembered document,
+  //while it is still in the project, and otherwise that end's default: the first reference document
+  //on the way out, and the script or the first chapter on the way back.
+  var remembered = leaving ? referenceJump.origin : referenceJump.reference;
+  var target = spotOf(remembered) || (leaving ? defaultJumpOrigin() : firstReferenceSpot());
+
+  //Nothing to jump to - a project with an empty Reference list, or one whose documents have all
+  //been deleted out from under a jump already made. Better to stay put than to land on a stand-in.
+  if(target == null)
+    return;
+
+  //Remembered before the move rather than after: this end is what the other press comes back to.
+  var from = chapterList.resolve(project, here);
+  if(from){
+    var spot = { chap: from, caret: editorSelection().index };
+    if(leaving)
+      referenceJump.reference = spot;
+    else
+      referenceJump.origin = spot;
+  }
+
+  await displayChapterByIndex(chapterList.toCombinedIndex(project, target.locator));
+
+  //A caret remembered from before the document was edited elsewhere - a Find and Replace pass, a
+  //block of scenes cut out of the script - can be past the end of what is there now.
+  var caret = Math.min(target.caret, Math.max(0, editorQuill.getLength() - 1));
+
+  editorQuill.setSelection(caret);
+  project.textCursorPosition = caret;
+}
+
+//A remembered end of the jump as somewhere to go now: where that document sits at this moment, or
+//null once it is no longer in the project at all.
+function spotOf(spot){
+  var locator = spot ? chapterList.locatorOf(project, spot.chap) : null;
+  return locator ? { locator: locator, caret: spot.caret } : null;
+}
+
+//The top of the first reference document - where the jump goes before it has been anywhere.
+function firstReferenceSpot(){
+  if(chapterList.listOf(project, 'reference').length == 0)
+    return null;
+
+  return { locator: { list: 'reference', index: 0 }, caret: 0 };
+}
+
+//Where the trip back goes with no origin to return to: Reference was reached some other way - a
+//click on a row, or the Next key walking off the end of the script - and the key is being used to
+//leave it. The script if the project has one and the first chapter if it has not, which either way
+//is the document the project is. Asked of the documents rather than of the project's type, the way
+//editorMode() and scriptLocator() decide everything else about a script.
+function defaultJumpOrigin(){
+  var loc = scriptLocator();
+
+  if(!loc && chapterList.listOf(project, 'chapters').length > 0)
+    loc = { list: 'chapters', index: 0 };
+
+  return loc ? { locator: loc, caret: 0 } : null;
 }
 
 function moveChapUp(chapInd){

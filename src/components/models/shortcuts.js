@@ -337,6 +337,17 @@ const SHORTCUT_DEFS = [
   { id: 'focusEditor', label: 'Shift Focus To Editor', section: 'Navigation', target: 'global', defaultBinding: makeBinding('ArrowLeft', { mod: true }) },
   { id: 'focusNotes', label: 'Shift Focus To Notes', section: 'Navigation', target: 'global', defaultBinding: makeBinding('ArrowRight', { mod: true }) },
 
+  //Reference sits under every chapter or scene a project has, and the keys above reach it a row at
+  //a time - the length of a novel, or in a script the length of its scenes before the documents
+  //beside it even begin. This is the one jump, and the one shortcut that is a round trip: down to
+  //Reference, and back to the document and the caret it left. See jumpToReference in render.js.
+  //
+  //Deliberately carries no `mode`. A screenplay's reference documents are prose and a novel's are
+  //the same documents, so the key means the same thing in both - and a 'pane' action could not be
+  //scoped to one anyway, since keybindings.js's dispatch has no mode to match against (the modes
+  //only reach Quill's own bindings, via quill-utils.js).
+  { id: 'jumpToReference', label: 'Jump To Reference / Back', section: 'Navigation', target: 'pane', defaultBinding: makeBinding('R', { mod: true, alt: true }) },
+
   { id: 'moveChapterUp', label: 'Move Chapter / Scene Up', section: 'Alteration', target: 'pane', defaultBinding: makeBinding('ArrowUp', { mod: true, shift: true }) },
   { id: 'moveChapterDown', label: 'Move Chapter / Scene Down', section: 'Alteration', target: 'pane', defaultBinding: makeBinding('ArrowDown', { mod: true, shift: true }) },
   { id: 'changeChapterLabel', label: 'Change Chapter Label', section: 'Alteration', target: 'pane', defaultBinding: makeBinding('ArrowLeft', { mod: true, shift: true }) },

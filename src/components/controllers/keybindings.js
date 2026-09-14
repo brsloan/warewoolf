@@ -156,6 +156,16 @@ function registerKeybindings(context){
           context.notesQuill.focus();
       }
     },
+    //No notes-focus clause, unlike the two above. Those flip the document under a writer who is
+    //working in the notes and means to stay there; this one is a move to a particular document, to
+    //read or write in it, so the editor is where it should end - which is where displaying a
+    //document and setting its caret leaves the focus anyway.
+    jumpToReference: {
+      preventDefault: true,
+      run: function(){
+        context.actions.jumpToReference();
+      }
+    },
     decreaseEditorWidth: {
       run: function(){
         context.actions.descreaseEditorWidthSetting();

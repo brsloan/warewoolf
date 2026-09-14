@@ -117,6 +117,27 @@ test('chapterAt goes straight from a combined index to the chapter', function(){
   assert.strictEqual(chapterList.chapterAt(project, 99), undefined);
 });
 
+test('locatorOf finds a chapter object wherever it currently sits', function(){
+  var project = mixedProject();
+
+  assert.deepStrictEqual(chapterList.locatorOf(project, project.chapters[1]), { list: 'chapters', index: 1 });
+  assert.deepStrictEqual(chapterList.locatorOf(project, project.reference[0]), { list: 'reference', index: 0 });
+  assert.deepStrictEqual(chapterList.locatorOf(project, project.trash[1]), { list: 'trash', index: 1 });
+
+  //The point of it: the locator follows the document rather than naming a position it has left.
+  var moved = project.reference[0];
+  chapterList.moveUp(project, { list: 'reference', index: 0 });
+  assert.deepStrictEqual(chapterList.locatorOf(project, moved), { list: 'chapters', index: 2 });
+});
+
+test('locatorOf returns null for a chapter that is not in the project', function(){
+  var project = mixedProject();
+
+  assert.strictEqual(chapterList.locatorOf(project, chap('elsewhere')), null);
+  assert.strictEqual(chapterList.locatorOf(project, null), null);
+  assert.strictEqual(chapterList.locatorOf(project, undefined), null);
+});
+
 test('activeLocator points at whatever activeChapterIndex currently names', function(){
   var project = mixedProject();
   project.activeChapterIndex = 2;

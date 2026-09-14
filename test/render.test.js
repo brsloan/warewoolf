@@ -762,6 +762,123 @@ test('from the last scene the next-chapter shortcut goes on to the first referen
   assert.strictEqual(r.editorQuill.getSelection().index, 47);
 });
 
+//Ctrl+Alt+R. The keys above walk to Reference a row at a time; this goes there and comes back.
+test('the Reference jump goes down to Reference and back to the caret it left', async function(){
+  var r = await freshRender();
+  r.project.chapters = [makeChap('One'),
+    makeChap('Two', { text: 'A chapter with room in it for a caret somewhere past the start.' })];
+  r.project.reference = [makeChap('Bible'), makeChap('Research')];
+
+  await r.displayChapterByIndex(1);
+  r.editorQuill.setSelection(24, 0, 'user');
+
+  await r.jumpToReference();
+  assert.strictEqual(r.project.activeChapterIndex, 2, 'the first reference document');
+  assert.strictEqual(r.editorQuill.getText().trim(), 'Bible');
+
+  //Back to the chapter, and to the line that was being written rather than the top of it.
+  await r.jumpToReference();
+  assert.strictEqual(r.project.activeChapterIndex, 1);
+  assert.strictEqual(r.editorQuill.getSelection().index, 24);
+  assert.strictEqual(r.project.textCursorPosition, 24);
+
+  //A second trip goes to the reference document it was last in, not back to the first one.
+  await r.displayChapterByIndex(3);
+  r.editorQuill.setSelection(4, 0, 'user');
+  await r.jumpToReference();
+  assert.strictEqual(r.project.activeChapterIndex, 1, 'out of Reference, to the chapter again');
+
+  await r.jumpToReference();
+  assert.strictEqual(r.project.activeChapterIndex, 3, 'Research, where Reference was left');
+  assert.strictEqual(r.editorQuill.getSelection().index, 4);
+});
+
+//The same key in a script, where the walk it saves is the longer one: the chapter keys step through
+//every scene in the one document before they reach the documents beside it.
+test('the Reference jump comes back to the scene it left in a script', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [scriptWithScenes()];
+  r.project.reference = [makeChap('Bible')];
+
+  await r.displayChapterByIndex(0);
+  r.editorQuill.setSelection(47, 0, 'user');
+
+  await r.jumpToReference();
+  assert.strictEqual(r.project.activeChapterIndex, 1);
+  assert.strictEqual(r.editorQuill.getText().trim(), 'Bible');
+
+  await r.jumpToReference();
+  assert.strictEqual(r.project.activeChapterIndex, 0);
+  assert.strictEqual(document.getElementById('chapters-header').textContent, 'Scenes');
+  assert.strictEqual(r.editorQuill.getSelection().index, 47, 'INT. C - DAY');
+  assert.strictEqual(r.project.textCursorPosition, 47);
+});
+
+test('the Reference jump stays put with nothing in Reference, and finds its way back without an origin', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [scriptWithScenes()];
+
+  await r.displayChapterByIndex(0);
+  r.editorQuill.setSelection(27, 0, 'user');
+
+  await r.jumpToReference();
+  assert.strictEqual(r.project.activeChapterIndex, 0, 'an empty Reference is nowhere to jump to');
+  assert.strictEqual(r.editorQuill.getSelection().index, 27, 'and the caret is left where it was');
+
+  //Reference reached some other way - here the Next key walking off the end of the script - and the
+  //jump used to leave it. With no origin remembered it goes to the script, that being the document
+  //the project is.
+  r.project.reference = [makeChap('Bible')];
+  r.editorQuill.setSelection(47, 0, 'user');
+  await r.displayNextChapter();
+  assert.strictEqual(r.project.activeChapterIndex, 1);
+
+  await r.jumpToReference();
+  assert.strictEqual(r.project.activeChapterIndex, 0, 'back to the script');
+  assert.strictEqual(r.editorQuill.getSelection().index, 0, 'at its top, having no caret to restore');
+});
+
+test('the Reference jump falls back when the document it would return to has gone', async function(){
+  var r = await freshRender();
+  r.project.chapters = [makeChap('One')];
+  r.project.reference = [makeChap('Bible'), makeChap('Research')];
+
+  //Reference entered by hand, so the trip out has no origin either: the first chapter, a novel
+  //having no script to make the document the project is.
+  await r.displayChapterByIndex(2);
+  await r.jumpToReference();
+  assert.strictEqual(r.project.activeChapterIndex, 0);
+
+  //And Research is deleted while the writer is back in the chapter. The next jump has no remembered
+  //document left to return to, so it goes to the first reference document rather than nowhere.
+  r.project.reference.pop();
+  await r.jumpToReference();
+  assert.strictEqual(r.project.activeChapterIndex, 1);
+  assert.strictEqual(r.editorQuill.getText().trim(), 'Bible');
+});
+
+test('a remembered caret past the end of a document that has since been cut down lands at its end', async function(){
+  var r = await freshRender();
+  var chapter = makeChap('Two', { text: 'Long enough to put a caret a good way into it.' });
+  r.project.chapters = [makeChap('One'), chapter];
+  r.project.reference = [makeChap('Bible')];
+
+  await r.displayChapterByIndex(1);
+  r.editorQuill.setSelection(40, 0, 'user');
+  await r.jumpToReference();
+
+  //Cut down while the writer is away - a Find and Replace pass, or a block of scenes taken out of
+  //a script - leaving the remembered caret past the end of what is there now.
+  chapter.contents = { ops: [{ insert: 'Short.\n' }] };
+
+  await r.jumpToReference();
+  assert.strictEqual(r.project.activeChapterIndex, 1);
+  assert.strictEqual(r.editorQuill.getSelection().index, r.editorQuill.getLength() - 1);
+  assert.strictEqual(r.editorQuill.getText().trim(), 'Short.');
+});
+
 test('backing into a script with no scene headings lands at the top of it', async function(){
   var r = await freshRender();
   r.project.type = 'screenplay';
