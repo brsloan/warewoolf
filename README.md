@@ -84,6 +84,4 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 
 ## Status
 
-The current release is **v2.5.0**, with unreleased changes on the `dev` branch.
-
 For the full release history - every version back to the v0.9.0 beta, plus the pre-release development that led to it - see [CHANGELOG.md](CHANGELOG.md).
