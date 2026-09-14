@@ -598,16 +598,91 @@ test('a key that types nothing may be bound on its own', function(){
   });
 });
 
-//The awkward middle case: these type nothing either, but the editor moves its own cursor by them, so
-//a bare shortcut on one would take that away.
-test('a navigation key still needs a modifier, though it types nothing', function(){
+//The keys a caret moves by: bindable on their own like anything else that types nothing. They used
+//to be refused, which cost the writers this app is built for the most - a compact keyboard with no
+//Page or Home cluster had no way to put those actions anywhere it could reach.
+test('a caret key may be bound on its own, at a price the writer is told', function(){
+  //With the paging shortcuts cleared out of the way: Page Up and Page Down ship ON these keys, so
+  //leaving them bound would have this refusing for a conflict and proving nothing about the policy.
+  var bindings = Object.assign(shortcuts.getDefaultBindings(), { pageUp: null, pageDown: null });
+
+  ['PageUp', 'PageDown', 'Home', 'End'].forEach(function(key){
+    assert.strictEqual(shortcuts.canBindAlone(key), true, key + ' should stand alone');
+
+    var result = shortcuts.validateBinding(shortcuts.makeBinding(key), 'formatBold', bindings);
+    assert.strictEqual(result.valid, true, key + ' should be bindable bare');
+    assert.match(result.warning, /gives that up/, key + ' should say what it costs');
+  });
+});
+
+//The other half of the same rule: a caret key already spent is a conflict like any other, named by
+//the shortcut holding it rather than warned about.
+test('a caret key another shortcut holds is refused, not warned about', function(){
+  var bindings = shortcuts.getDefaultBindings();
+  var result = shortcuts.validateBinding(shortcuts.makeBinding('PageDown'), 'formatBold', bindings);
+
+  assert.strictEqual(result.valid, false);
+  assert.match(result.message, /Page Down/);
+});
+
+//Insert is the freest of the lot and was only ever refused by being on the same list: a
+//contenteditable has no overtype mode, so the key does nothing here to take away.
+test('Insert costs nothing and is bound without a word about it', function(){
+  var bindings = shortcuts.getDefaultBindings();
+  var result = shortcuts.validateBinding(shortcuts.makeBinding('Insert'), 'formatBold', bindings);
+
+  assert.strictEqual(shortcuts.canBindAlone('Insert'), true);
+  assert.deepStrictEqual(result, { valid: true });
+});
+
+//The keys that stay refused. Space types, and a writer who lost an arrow to a fumbled modifier
+//would be unable to move through their own text - neither is a trade this offers.
+test('a typing or arrow key still needs a modifier', function(){
   var bindings = shortcuts.getDefaultBindings();
 
-  ['ArrowUp', 'PageDown', 'Home', 'End', 'Insert', 'Space'].forEach(function(key){
+  ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].forEach(function(key){
     assert.strictEqual(shortcuts.canBindAlone(key), false, key + ' should not stand alone');
 
     var result = shortcuts.validateBinding(shortcuts.makeBinding(key), 'formatBold', bindings);
     assert.strictEqual(result.valid, false, key + ' should be refused bare');
+  });
+});
+
+//The warning is about the key being spent, so it belongs only where the key itself is what was
+//taken. Ctrl+Home is a shortcut like any other, and Shift+Home is the same movement made to a
+//selection - which is gone either way, so it is warned about the same.
+test('a caret key is only warned about when nothing is held with it', function(){
+  var bindings = shortcuts.getDefaultBindings();
+
+  assert.strictEqual(shortcuts.nativeKeyWarning(shortcuts.makeBinding('Home', { mod: true })), null);
+  assert.strictEqual(shortcuts.nativeKeyWarning(shortcuts.makeBinding('Home', { alt: true })), null);
+  assert.match(shortcuts.nativeKeyWarning(shortcuts.makeBinding('Home', { shift: true })), /start of the line/);
+  assert.strictEqual(shortcuts.nativeKeyWarning(shortcuts.makeBinding('F5')), null);
+  assert.strictEqual(shortcuts.nativeKeyWarning(null), null);
+
+  //An action put back on the key it shipped on is giving up nothing: the shortcut on the key does
+  //what the key did.
+  assert.deepStrictEqual(
+    shortcuts.validateBinding(shortcuts.makeBinding('PageDown'), 'pageDown', bindings),
+    { valid: true });
+});
+
+//The four are the app's own actions rather than the browser's, so they have to be dispatchable from
+//the pane listener like the other movement shortcuts - see keybindings.js.
+test('paging and the ends of a document are rebindable pane actions', function(){
+  var defs = shortcuts.getShortcutDefs();
+
+  [['pageUp', 'PageUp', {}], ['pageDown', 'PageDown', {}],
+    ['jumpToStart', 'Home', { mod: true }], ['jumpToEnd', 'End', { mod: true }]
+  ].forEach(function(expected){
+    var def = defs.find(function(candidate){ return candidate.id === expected[0]; });
+
+    assert.ok(def, expected[0] + ' should be a listed shortcut');
+    assert.strictEqual(def.section, 'Navigation');
+    assert.strictEqual(def.target, 'pane');
+    assert.strictEqual(shortcuts.bindingsEqual(def.defaultBinding,
+      shortcuts.makeBinding(expected[1], expected[2])), true,
+      expected[0] + ' should default to its own key');
   });
 });
 

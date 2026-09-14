@@ -3,8 +3,9 @@
 At any time, if you press **Ctrl+H (Cmd+Shift+H on Mac)**, a popup will appear reminding you of all the shortcuts for editing text, chapters, etc. But there are not many, and you will quickly memorize the few you use often.
 	The same popup is where you change them. Choose any shortcut in the list and press the keys you would rather use; **Escape** cancels, and **Backspace** clears a shortcut you never use. Nothing changes until you choose **Save**, and **Restore Defaults** puts the whole list back the way it started. Your changes are remembered between sessions.
 	A few keys are not on offer, because the app itself is navigated with them: **Escape**, **Tab**, **Enter**, and the keys that open the file menu. The popup will also refuse a combination that a menu item already uses, or that another shortcut already has, and will tell you which one is in the way.
-	Otherwise a shortcut needs **Ctrl** (or **Cmd**) or **Alt** held with it, because a plain letter would stop being typeable in the editor the moment it became a shortcut. The exception is any key that types nothing at all: the function keys, and the volume, playback and browser keys a keyboard sends when its F-row is on its default layer. Those can be a shortcut on their own.
-	That last point matters on a programmable or custom keyboard, of the sort a writerdeck is often built from. If your F-row only acts as **F1**-**F12** while you hold an **Fn** key, then without it your board is sending entirely different keys - and the keyboard decides that before the computer ever sees it, so no program can tell what you meant. You can simply bind whichever keys it does send. Most boards also have an Fn-lock that flips the two around for good.
+	Otherwise a shortcut needs **Ctrl** (or **Cmd**) or **Alt** held with it, because a plain letter would stop being typeable in the editor the moment it became a shortcut. The exception is any key that types nothing at all: the function keys, the volume, playback and browser keys a keyboard sends when its F-row is on its default layer, and **Insert**, which does nothing here. Those can be a shortcut on their own.
+	So can **Page Up**, **Page Down**, **Home** and **End**, with one thing worth knowing first. Those four already move the cursor, and a shortcut put on one takes that movement away - spend **Home** and there is no other way to reach the start of a line. The popup says as much when you assign one, and then assigns it: they are yours to spend, and on a compact keyboard with no Page or Home cluster, or a Mac layout that never had one, being able to put those four somewhere you can actually reach matters more than keeping them where they are. Paging and the two ends of a document are themselves shortcuts in the list below, so moving one of them elsewhere loses nothing at all.
+	The point about the F-row matters on a programmable or custom keyboard, of the sort a writerdeck is often built from. If your F-row only acts as **F1**-**F12** while you hold an **Fn** key, then without it your board is sending entirely different keys - and the keyboard decides that before the computer ever sees it, so no program can tell what you meant. You can simply bind whichever keys it does send. Most boards also have an Fn-lock that flips the two around for good.
 	Some of those keys have no name at all, and are listed by what the computer calls their position on the board instead - a key may show up as something like **Show All Windows**. That is the key itself rather than anything it will do here; bound to a shortcut, it runs that shortcut. A few report not even that, and are listed by number, as **Key 183** or the like. Any of them can be bound, and the number is there so you can match the row against what the popup told you when you pressed the key.
 	Only a key that reports nothing whatsoever is refused, since there would be no telling it from the key beside it. When that happens the popup prints exactly what your keyboard reported, which is worth quoting if you would like that key supported.
 	Here is a summary of the defaults (Ctrl is Cmd on Mac unless otherwise noted):
@@ -14,6 +15,10 @@ At any time, if you press **Ctrl+H (Cmd+Shift+H on Mac)**, a popup will appear r
 	 View Next Chapter	: **Ctrl + Down**
 	 Shift Focus To Editor	: **Ctrl + Left**
 	 Shift Focus To Notes	: **Ctrl + Right**
+	 Page Up	: **Page Up**
+	 Page Down	: **Page Down**
+	 Jump To Start	: **Ctrl + Home**
+	 Jump To End	: **Ctrl + End**
 
 # Alteration
  Move Chapter Up	: **Ctrl + Shift + Up**

@@ -1,6 +1,6 @@
 const { removeElementsByClass, disableSearchView } = require('./utils');
 const { enableTypewriterMode, disableTypewriterMode } = require('./typewriter-mode');
-const { goPageDown } = require('./quill-utils');
+const { goPageDown, goPageUp, goToStart, goToEnd } = require('./quill-utils');
 const { releaseSpellchecker } = require('./spellcheck');
 const { createPlatform } = require('./platform');
 const { createIpcBacking } = require('./platform-ipc');
@@ -48,13 +48,32 @@ function registerKeybindings(context){
     return document.getElementById(elementId).classList.contains('visible');
   }
 
-  //What each rebindable action outside Quill actually does, keyed by the ids in shortcuts.js. The
-  //`preventDefault` flag is per action rather than blanket, and says exactly what it did when these
-  //were an if/else chain: the shortcuts that move focus, reorder chapters or toggle a pane swallow
-  //the keypress, while the ones that nudge a setting (font size, editor width) leave it alone.
+  //The pane a 'pane' shortcut was pressed in, as its Quill - or null for the chapter list, which
+  //holds no text and has no caret to move. Only the four movement actions below ask: everything
+  //else on that listener acts on the project rather than on what is written in it.
+  //
+  //Answered from the pane the listener is attached to rather than from document.activeElement,
+  //because that is what "whichever pane has focus" has always meant here - the same question
+  //previousChapter asks of e.currentTarget to decide where to leave the focus.
+  function quillForPane(e){
+    if(e.currentTarget.id === 'notes-editor')
+      return context.notesQuill;
+
+    if(e.currentTarget.id === 'editor-container')
+      return context.editorQuill;
+
+    return null;
+  }
+
+  //What each rebindable action outside Quill actually does, keyed by the ids in shortcuts.js.
+  //
+  //An `appliesTo` says when an action is available at all, and is asked BEFORE the keypress is
+  //swallowed - so a key an action cannot act on is left to do whatever it natively does, which is
+  //how Page Down keeps paging the chapter list rather than being eaten there to no effect. It is
+  //not a substitute for the visibility checks inside the handlers below: those decide whether the
+  //action does anything, having already claimed the key.
   var actions = {
     focusEditor: {
-      preventDefault: true,
       run: function(){
         if(isVisible('writing-field')){
           removeElementsByClass('popup');
@@ -64,7 +83,6 @@ function registerKeybindings(context){
       }
     },
     focusNotes: {
-      preventDefault: true,
       run: function(){
         if(isVisible('project-notes')){
           removeElementsByClass('popup');
@@ -97,51 +115,43 @@ function registerKeybindings(context){
       }
     },
     toggleChapterList: {
-      preventDefault: true,
       run: function(){
         context.actions.togglePanelDisplay(1);
       }
     },
     toggleEditor: {
-      preventDefault: true,
       run: function(){
         context.actions.togglePanelDisplay(2);
       }
     },
     toggleNotes: {
-      preventDefault: true,
       run: function(){
         context.actions.togglePanelDisplay(3);
       }
     },
     toggleChapterNotes: {
-      preventDefault: true,
       run: function(){
         context.actions.toggleChapterNotes();
       }
     },
 
     moveChapterUp: {
-      preventDefault: true,
       run: function(){
         context.actions.moveChapUp(project().activeChapterIndex);
       }
     },
     moveChapterDown: {
-      preventDefault: true,
       run: function(){
         context.actions.moveChapDown(project().activeChapterIndex);
       }
     },
     changeChapterLabel: {
-      preventDefault: true,
       run: function(){
         if(isVisible('chapter-list-sidebar'))
           context.actions.changeChapterTitle(project().activeChapterIndex);
       }
     },
     previousChapter: {
-      preventDefault: true,
       run: function(e){
         context.actions.displayPreviousChapter();
         if(e.currentTarget.id == 'notes-editor')
@@ -149,7 +159,6 @@ function registerKeybindings(context){
       }
     },
     nextChapter: {
-      preventDefault: true,
       run: function(e){
         context.actions.displayNextChapter();
         if(e.currentTarget.id == 'notes-editor')
@@ -161,7 +170,6 @@ function registerKeybindings(context){
     //read or write in it, so the editor is where it should end - which is where displaying a
     //document and setting its caret leaves the focus anyway.
     jumpToReference: {
-      preventDefault: true,
       run: function(){
         context.actions.jumpToReference();
       }
@@ -175,8 +183,41 @@ function registerKeybindings(context){
       run: function(){
         context.actions.increaseEditorWidthSetting();
       }
+    },
+
+    //Moving within a document, in whichever of the two editors the keypress came from. All four are
+    //the app's own: Quill binds none of these keys, and the native Page Down crept a line at a time
+    //rather than a screenful (see goPageDown). Page Down has worked this way all along and is only
+    //now rebindable along with the other three.
+    pageUp: {
+      appliesTo: hasQuill,
+      run: function(e){
+        goPageUp(quillForPane(e));
+      }
+    },
+    pageDown: {
+      appliesTo: hasQuill,
+      run: function(e){
+        goPageDown(quillForPane(e));
+      }
+    },
+    jumpToStart: {
+      appliesTo: hasQuill,
+      run: function(e){
+        goToStart(quillForPane(e));
+      }
+    },
+    jumpToEnd: {
+      appliesTo: hasQuill,
+      run: function(e){
+        goToEnd(quillForPane(e));
+      }
     }
   };
+
+  function hasQuill(e){
+    return quillForPane(e) != null;
+  }
 
   //Definition order decides which action wins if two ever share a binding. The popup will not let a
   //writer create that, but a hand-edited settings file can, and one shortcut quietly losing is a
@@ -199,33 +240,57 @@ function registerKeybindings(context){
     var bindings = context.getShortcuts();
 
     var def = defs.find(function(candidate){
-      return candidate.target === target && actions[candidate.id] != null &&
-        bindingsEqual(bindings[candidate.id], pressed);
+      var action = actions[candidate.id];
+
+      return candidate.target === target && action != null &&
+        bindingsEqual(bindings[candidate.id], pressed) &&
+        (action.appliesTo == null || action.appliesTo(e));
     });
 
     if(def == null)
       return false;
 
-    var action = actions[def.id];
+    //A matched shortcut always swallows its key. This was once a per-action flag - the shortcuts
+    //that nudge a setting let the keypress through, as they had when these were an if/else chain -
+    //which held only because those shortcuts sat on keys with nothing native to do. Now that a
+    //writer may put any of them on Home or Page Down (shortcuts.js), letting the key through would
+    //mean a font size that grows AND a caret that jumps, from one press.
+    stopDefaultPropagation(e);
 
-    if(action.preventDefault)
-      stopDefaultPropagation(e);
-
-    action.run(e);
+    actions[def.id].run(e);
     return true;
   }
 
+  //The keys a plain text field does its own work with, which a shortcut must not take while a
+  //writer is typing in one. Ctrl/Cmd+Left/Right is the native word-wise jump, and the shortcuts
+  //that move focus between the panes ship on exactly those keys. The caret keys are the newer half:
+  //they are bindable on their own now (shortcuts.js), so a global shortcut on bare Home would
+  //otherwise fire from inside the rename box instead of taking the caret to the start of the name.
+  //
+  //Read off the keypress rather than off what is bound to it, because it is the native behaviour of
+  //THESE keys being protected, whether or not a writer has moved a shortcut onto or off them.
+  var TEXT_FIELD_CARET_KEYS = ['PageUp', 'PageDown', 'Home', 'End'];
+
+  function inTextField(e){
+    return e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA";
+  }
+
+  function isTextFieldKey(e){
+    if(e.altKey)
+      return false;
+
+    if(e.ctrlKey || e.metaKey)
+      return e.key === "ArrowLeft" || e.key === "ArrowRight";
+
+    return TEXT_FIELD_CARET_KEYS.indexOf(e.key) !== -1;
+  }
+
   function handleGlobalKeydown(e){
-    //Ctrl/Cmd+Left/Right is the native word-wise cursor jump inside a plain text field (the chapter
-    //rename box, or any dialog input), and the shortcuts that move focus between the editor and
-    //notes panes ship on exactly those keys. Leave the field to handle its own keys rather than
-    //hijacking them - checked against the keypress itself rather than against whatever those two
-    //shortcuts are currently bound to, because it is the native behaviour of THESE keys that is
-    //being protected, whether or not a writer has moved the shortcuts off them.
-    if((e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") &&
-        (e.ctrlKey || e.metaKey) && (e.key === "ArrowLeft" || e.key === "ArrowRight")){
+    //A plain text field - the chapter rename box, a dialog input - keeps its own keys while a writer
+    //is typing in one. See isTextFieldKey for which, and why they are read off the keypress rather
+    //than off whatever happens to be bound to them.
+    if(inTextField(e) && isTextFieldKey(e))
       return;
-    }
 
     if(dispatch(e, 'global'))
       return;
@@ -254,25 +319,15 @@ function registerKeybindings(context){
 
   function editorControlEvents(e){
     //The chapter rename box is a plain text field living inside the sidebar pane, so these bubble
-    //up through it. Ctrl/Cmd+Shift+Arrow is the native extend-selection-by-word there, and every
-    //other shortcut below (chapter navigation, reordering, PageDown) would tear the box down in
-    //the middle of a rename and throw away what had been typed. Leave a text field to handle its
-    //own keys, the same way handleGlobalKeydown does above.
-    if(e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")
+    //up through it. Every shortcut on this listener - chapter navigation, reordering, paging - would
+    //tear the box down in the middle of a rename and throw away what had been typed, and the keys
+    //the field wants for itself are its own besides. So a text field keeps all of them, which is
+    //blunter than the global listener's guard above and can afford to be: none of these shortcuts
+    //mean anything while a name is being typed.
+    if(inTextField(e))
       return;
 
-    if(dispatch(e, 'pane'))
-      return;
-
-    //PageDown is not in the popup's list and so is not customizable: it is the native key doing
-    //its native job in an editor that has no built-in equivalent (see goPageDown).
-    if(e.key === "PageDown"){
-      stopDefaultPropagation(e);
-      if(e.currentTarget.id == 'notes-editor')
-        goPageDown(context.notesQuill);
-      else
-        goPageDown(context.editorQuill);
-    }
+    dispatch(e, 'pane');
   }
 
   var paneIds = ['editor-container', 'chapter-list-sidebar', 'notes-editor'];

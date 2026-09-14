@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const { getOrderedListNumbers, getListMarker, parseDelta, generateChapTitleFromFirstLine, applyQuillShortcuts, goPageDown } = require('../src/components/controllers/quill-utils');
+const { getOrderedListNumbers, getListMarker, parseDelta, generateChapTitleFromFirstLine, applyQuillShortcuts, goPageDown, goPageUp, goToStart, goToEnd } = require('../src/components/controllers/quill-utils');
 const shortcutsModel = require('../src/components/models/shortcuts');
 
 //getOrderedListNumbers works on the paragraph shape parseDelta produces. Building them by hand here
@@ -585,4 +585,143 @@ test('goPageDown selects the first position that reaches the bottom of the edito
 
   assert.deepStrictEqual(q.getSelection(), { index: 1, length: 0 });
   assert.strictEqual(q.root.scrollTop, 100, '0 (starting scrollTop) + 120 (container-relative top) - 20 (height)');
+});
+
+
+//---------------------------------------------------------------------------
+// goPageUp, goToStart, goToEnd
+//---------------------------------------------------------------------------
+
+//The same synthetic Quill the goPageDown tests use, with `scrollHeight` added - goToEnd is the only
+//caller that reads it, and a real root has one where the stub above had no need of it.
+function stubQuillWithScrollHeight(opts){
+  var q = stubQuill(opts);
+  q.root.scrollHeight = (opts || {}).scrollHeight || 0;
+  return q;
+}
+
+test('goPageUp does nothing when there is no selection', function(){
+  var q = stubQuill();
+  q.getSelection = function(){ return null; };
+
+  assert.doesNotThrow(function(){ goPageUp(q); });
+});
+
+test('goPageUp walks back to the last position a full screenful above, not the first one off the top', function(){
+  //Every position between index 4 and index 1 is above the caret but still within a screenful of
+  //it; only index 1 is a full 100px viewport clear of the top. Stopping at index 4 - the first one
+  //off the screen - would move the caret a single line, which is the too-small step this exists to
+  //avoid.
+  var q = stubQuillWithScrollHeight({
+    selectionIndex: 5,
+    scrollTop: 500,
+    clientHeight: 100,
+    boundsByIndex: {
+      4: { top: -20, height: 20 },
+      3: { top: -50, height: 20 },
+      2: { top: -90, height: 20 },
+      1: { top: -120, height: 20 }
+    }
+  });
+
+  goPageUp(q);
+
+  assert.deepStrictEqual(q.getSelection(), { index: 1, length: 0 });
+  assert.strictEqual(q.root.scrollTop, 360, '500 (starting scrollTop) + -120 (container-relative top) - 20 (height)');
+});
+
+test('goPageUp converts viewport-relative bounds to container-relative, as goPageDown does', function(){
+  //Editor sits 200px down the viewport, so a candidate at viewport y=60 is 140px ABOVE the
+  //editor's own top - past a 100px viewport, where the raw coordinate alone would read as below it.
+  var q = stubQuillWithScrollHeight({
+    selectionIndex: 2,
+    scrollTop: 300,
+    containerTop: 200,
+    clientHeight: 100,
+    boundsByIndex: { 1: { top: 60, height: 20 } }
+  });
+
+  goPageUp(q);
+
+  assert.deepStrictEqual(q.getSelection(), { index: 1, length: 0 });
+  assert.strictEqual(q.root.scrollTop, 140, '300 + -140 (container-relative top) - 20 (height)');
+});
+
+test('goPageUp lands on the start of the document when there is less than a screenful above', function(){
+  var q = stubQuillWithScrollHeight({
+    selectionIndex: 3,
+    scrollTop: 40,
+    clientHeight: 100,
+    boundsByIndex: {
+      2: { top: -20, height: 20 },
+      1: { top: -40, height: 20 },
+      0: { top: -60, height: 20 }
+    }
+  });
+
+  goPageUp(q);
+
+  assert.deepStrictEqual(q.getSelection(), { index: 0, length: 0 });
+  assert.strictEqual(q.root.scrollTop, 0, 'the top of the document, where a native PageUp ends up too');
+});
+
+test('goPageUp does not move when the caret is already at the start', function(){
+  var q = stubQuillWithScrollHeight({ selectionIndex: 0, scrollTop: 0 });
+
+  goPageUp(q);
+
+  assert.deepStrictEqual(q.getSelection(), { index: 0, length: 0 });
+  assert.strictEqual(q.root.scrollTop, 0);
+});
+
+//A page down and a page up are a round trip: each leaves the caret at the top of the screen, so the
+//one undoes the other rather than drifting by a line each time.
+test('goPageUp returns to where goPageDown was pressed', function(){
+  var bounds = {};
+  //Twenty positions, one per 20px line, laid out from the top of a 100px viewport.
+  for(var i = 0; i < 20; i++)
+    bounds[i] = { top: i * 20, height: 20 };
+
+  var q = stubQuillWithScrollHeight({
+    selectionIndex: 0, length: 20, clampsBounds: true, clientHeight: 100, boundsByIndex: bounds
+  });
+
+  goPageDown(q);
+  var afterDown = q.getSelection().index;
+  assert.strictEqual(afterDown, 5, 'the first position at or past the 100px fold');
+
+  //Paging moved the view, so the positions sit that much higher than they did.
+  Object.keys(bounds).forEach(function(index){
+    bounds[index] = { top: bounds[index].top - q.root.scrollTop, height: 20 };
+  });
+
+  goPageUp(q);
+
+  assert.strictEqual(q.getSelection().index, 0, 'back where the page down started');
+});
+
+test('goToStart puts the caret and the scroll at the top', function(){
+  var q = stubQuillWithScrollHeight({ selectionIndex: 40, scrollTop: 800 });
+
+  goToStart(q);
+
+  assert.deepStrictEqual(q.getSelection(), { index: 0, length: 0 });
+  assert.strictEqual(q.root.scrollTop, 0);
+});
+
+test('goToEnd puts the caret on the last position a caret can hold, not on the trailing newline', function(){
+  var q = stubQuillWithScrollHeight({ selectionIndex: 0, length: 6, scrollHeight: 900 });
+
+  goToEnd(q);
+
+  assert.deepStrictEqual(q.getSelection(), { index: 5, length: 0 });
+  assert.strictEqual(q.root.scrollTop, 900);
+});
+
+test('goToEnd does not run off the front of an empty document', function(){
+  var q = stubQuillWithScrollHeight({ selectionIndex: 0, length: 0 });
+
+  goToEnd(q);
+
+  assert.deepStrictEqual(q.getSelection(), { index: 0, length: 0 });
 });

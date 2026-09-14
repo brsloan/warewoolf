@@ -69,25 +69,46 @@ const MEDIA_KEYS = [
   'BrightnessUp', 'BrightnessDown', 'ZoomToggle'
 ];
 
+//The caret keys, and what each one does before a shortcut is put on it. They type nothing, so like
+//the keys below they may be bound on their own - but unlike those they are not free, and this is
+//what they cost: spend Home on a shortcut and the editor has no other way to reach the start of a
+//line. So they are offered rather than refused, with the popup saying what is being given up (see
+//nativeKeyWarning). The alternative, refusing them, was worse for exactly the keyboards this app is
+//meant to run on: a compact board with no Page or Home cluster, or a Mac layout that never had one.
+//
+//Page Up and Page Down are the app's own doing either way. Quill binds neither, and paging has been
+//implemented here since long before it was listed - see goPageDown in quill-utils.js, written
+//because the native one crept down a line at a time instead of a screenful.
+const CARET_KEY_BEHAVIOUR = {
+  PageUp: 'Page Up normally moves the caret up a screenful.',
+  PageDown: 'Page Down normally moves the caret down a screenful.',
+  Home: 'Home normally moves the caret to the start of the line.',
+  End: 'End normally moves the caret to the end of the line.'
+};
+
 //Every named key that types nothing AND that the app has no other use for - which is exactly the
 //set that may be a shortcut on its own, with no Ctrl or Alt held (see canBindAlone). ContextMenu is
-//the Menu key; nothing in this app opens a context menu from it, so it is as free as the rest.
+//the Menu key; nothing in this app opens a context menu from it, so it is as free as the rest, and
+//Insert is freer still - a contenteditable has no overtype mode for it to toggle, so the key does
+//nothing here at all.
 const STANDALONE_NAMED_KEYS = FUNCTION_KEYS.concat(MEDIA_KEYS,
-  ['ContextMenu', 'Pause', 'ScrollLock']);
+  ['ContextMenu', 'Pause', 'ScrollLock', 'Insert'], Object.keys(CARET_KEY_BEHAVIOUR));
 
-//The named keys the app is navigated and edited by. These type nothing either, but a shortcut on a
-//bare one would take the editor's own cursor movement away - so unlike the keys above, they are
-//only bindable with a modifier held.
-const NAVIGATION_NAMED_KEYS = [
+//The named keys that stay off limits on their own, whatever a writer would rather do with them.
+//Space types. The arrows are how a caret moves at all, and a writer who lost one to a fumbled
+//modifier would be left unable to move through their own text. The last four are how the app is
+//navigated and escaped, and are refused outright a second time, at the point a key is pressed -
+//see RESERVED_KEYS, which is where Escape and Enter are kept out of a rebind happening inside a
+//dialog that Escape is the way out of.
+const MODIFIED_ONLY_NAMED_KEYS = [
   'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
-  'PageUp', 'PageDown', 'Home', 'End', 'Insert',
   'Space', 'Enter', 'Tab', 'Escape', 'Backspace', 'Delete'
 ];
 
 //Named keys that may appear in a binding. Anything else with a name longer than one character
 //(dead keys, IME keys, 'Unidentified') is rejected rather than stored, so a shortcut can never be
 //saved in a shape that could not fire again.
-const KNOWN_NAMED_KEYS = NAVIGATION_NAMED_KEYS.concat(STANDALONE_NAMED_KEYS);
+const KNOWN_NAMED_KEYS = MODIFIED_ONLY_NAMED_KEYS.concat(STANDALONE_NAMED_KEYS);
 
 //The same list keyed by its own lowercased names, because normalizeKeyName is on the keystroke path:
 //it runs for every shortcut the dispatcher considers, on every keydown, and a walk of the list was
@@ -347,6 +368,28 @@ const SHORTCUT_DEFS = [
   //scoped to one anyway, since keybindings.js's dispatch has no mode to match against (the modes
   //only reach Quill's own bindings, via quill-utils.js).
   { id: 'jumpToReference', label: 'Jump To Reference / Back', section: 'Navigation', target: 'pane', defaultBinding: makeBinding('R', { mod: true, alt: true }) },
+
+  //Moving within a document rather than between them, and all four the app's own rather than the
+  //browser's - Quill binds none of these keys. Page Down has been implemented here all along
+  //(goPageDown) and simply was not listed; Page Up joins it, and the two ends of a document join
+  //both, so that a keyboard with no Page or Home cluster is not a keyboard that cannot reach them.
+  //
+  //Each default is the key it replaces, which is the one case where a bare caret key costs nothing:
+  //the shortcut on the key does what the key did. Move one elsewhere and the popup says what is
+  //being given up - see nativeKeyWarning.
+  //
+  //'pane' like the rest, but these are the only actions on that listener that care WHICH pane: they
+  //move a caret, and the chapter list has none. See quillForPane in keybindings.js, which is also
+  //what leaves the list its own native paging.
+  //
+  //Named for neither a chapter nor a document, unlike everything above them, because the two ends
+  //they reach are the editor's - which is one chapter of a novel, the WHOLE of a screenplay, and in
+  //the notes pane not a chapter at all. 'Jump To End Of Chapter / Scene' would have read as a
+  //promise the screenplay case does not keep.
+  { id: 'pageUp', label: 'Page Up', section: 'Navigation', target: 'pane', defaultBinding: makeBinding('PageUp') },
+  { id: 'pageDown', label: 'Page Down', section: 'Navigation', target: 'pane', defaultBinding: makeBinding('PageDown') },
+  { id: 'jumpToStart', label: 'Jump To Start', section: 'Navigation', target: 'pane', defaultBinding: makeBinding('Home', { mod: true }) },
+  { id: 'jumpToEnd', label: 'Jump To End', section: 'Navigation', target: 'pane', defaultBinding: makeBinding('End', { mod: true }) },
 
   { id: 'moveChapterUp', label: 'Move Chapter / Scene Up', section: 'Alteration', target: 'pane', defaultBinding: makeBinding('ArrowUp', { mod: true, shift: true }) },
   { id: 'moveChapterDown', label: 'Move Chapter / Scene Down', section: 'Alteration', target: 'pane', defaultBinding: makeBinding('ArrowDown', { mod: true, shift: true }) },
@@ -798,10 +841,26 @@ function isSafeToBind(binding){
 //Whether a key may be a shortcut on its own, with nothing held down. The rule is that the key types
 //nothing: giving up a letter would make it untypeable in the editor, while giving up F5 or Volume Up
 //costs a writer nothing at all. Shift does not qualify a typing key either - Shift+B is still a
-//character. The navigation keys are the awkward middle case and are excluded: they type nothing, but
-//the editor moves its own cursor by them (see NAVIGATION_NAMED_KEYS).
+//character. The caret keys type nothing too and so qualify, though they are the one group that is
+//not free - nativeKeyWarning is what says so. Only MODIFIED_ONLY_NAMED_KEYS are excluded outright.
 function canBindAlone(key){
   return STANDALONE_NAMED_KEYS.indexOf(key) !== -1;
+}
+
+//What a writer gives up by taking `binding`, or null when it costs nothing - the message the popup
+//shows alongside a rebind it is allowing rather than refusing.
+//
+//Only the caret keys have anything to say, and only with nothing held: Ctrl+Home is a shortcut
+//whatever else is true of it, while a bare Home IS the key, and once it is spent the editor has no
+//other way to reach the start of a line. Shift counts as nothing held, Shift+Home being the same
+//movement made to a selection rather than a caret.
+function nativeKeyWarning(binding){
+  if(binding == null || binding.mod || binding.alt)
+    return null;
+
+  var behaviour = CARET_KEY_BEHAVIOUR[binding.key];
+
+  return behaviour ? behaviour + ' Binding it here gives that up.' : null;
 }
 
 //Whether `binding` may be assigned to `actionId`, given every binding currently in force. Returns
@@ -868,7 +927,12 @@ function validateBinding(binding, actionId, bindings){
   if(conflict != null)
     return { valid: false, message: conflict.label + ' already uses that shortcut.' };
 
-  return { valid: true };
+  //Allowed, and for a caret key allowed at a price the writer is owed a word about. `warning` is
+  //left off entirely rather than set to null when there is none, so that the ordinary answer stays
+  //the bare { valid: true } every caller has always compared against.
+  var warning = nativeKeyWarning(candidate);
+
+  return warning ? { valid: true, warning: warning } : { valid: true };
 }
 
 //The action, other than `actionId` itself, already bound to `binding` - or null. Returns the
@@ -916,6 +980,7 @@ module.exports = {
   isModifierKeyEvent,
   describeKeyEvent,
   canBindAlone,
+  nativeKeyWarning,
   bindingsEqual,
   bindingMatchesEvent,
   formatBinding,

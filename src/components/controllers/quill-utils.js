@@ -567,6 +567,67 @@ function goPageDown(quillObj){
   quillObj.setSelection(textIndex - 1);
 }
 
+//The inverse of goPageDown: back one screenful, leaving the caret at the top of the screen exactly
+//as going down does, so that a page down and a page up are a round trip.
+//
+//The target is the last position a full viewport ABOVE the caret, not the first one off the top of
+//the screen. That distinction is the whole point: stopping at the first position above the fold
+//would move the caret a single line, which is the too-small step that made the native Page Down
+//unusable here and got goPageDown written in the first place.
+function goPageUp(quillObj){
+  var selectedRange = quillObj.getSelection();
+
+  if(!selectedRange)
+    return;
+
+  var startingScrolltop = 0 + quillObj.root.scrollTop;
+  var destinationY = -quillObj.root.clientHeight;
+  var containerTop = quillObj.container.getBoundingClientRect().top;
+
+  var textIndex = selectedRange.index - 1;
+
+  //No clamp to defend against on the way up, unlike goPageDown: Quill clamps a too-LARGE index and
+  //then hands back the last position forever, which is what spun that loop. Index 0 is a real
+  //position, so this walk ends at it.
+  while(textIndex >= 0){
+    var rawBounds = quillObj.selection.getBounds(textIndex, 1);
+    if(rawBounds == null)
+      break;
+
+    var bounds = { top: rawBounds.top - containerTop, height: rawBounds.height };
+
+    if(bounds.top <= destinationY){
+      quillObj.setSelection(textIndex);
+      //bounds.top is negative here - the position is above the screen - so this scrolls up. Held at
+      //zero rather than let past it: a browser would clamp a negative scrollTop silently, and a
+      //number that only works because something else corrects it is not worth writing.
+      quillObj.root.scrollTop = Math.max(0, startingScrolltop + bounds.top - bounds.height);
+      return;
+    }
+
+    textIndex -= 1;
+  }
+
+  //Nothing a screenful above the caret, so this is the first page: land on the opening position,
+  //which is where a native PageUp ends up too.
+  goToStart(quillObj);
+}
+
+//The two ends of whichever document the editor is showing. Slight next to the paging above, and
+//kept beside it for the same reason: Quill binds neither Home nor End, so reaching either end by a
+//shortcut is the app's own doing (see keybindings.js).
+function goToStart(quillObj){
+  quillObj.setSelection(0);
+  quillObj.root.scrollTop = 0;
+}
+
+function goToEnd(quillObj){
+  //getLength() counts the trailing newline Quill always keeps, so the last position a caret can sit
+  //at is the one before it - the same bound goPageDown walks up to.
+  quillObj.setSelection(Math.max(0, quillObj.getLength() - 1));
+  quillObj.root.scrollTop = quillObj.root.scrollHeight;
+}
+
 
 module.exports = {
   getTempQuill,
@@ -583,5 +644,8 @@ module.exports = {
   applyQuillShortcuts,
   replaceTextPreservingFormats,
   cycleCase,
-  goPageDown
+  goPageDown,
+  goPageUp,
+  goToStart,
+  goToEnd
 }

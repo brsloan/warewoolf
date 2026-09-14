@@ -394,6 +394,43 @@ test('a key that types nothing is bound bare, under a readable name', function(t
   }]);
 });
 
+//A caret key is a writer's to spend, and spending it takes something with it. So the rebind goes
+//through - this is the half that used to be refused outright - and the message leads with what was
+//given up, rather than leaving them to find out by reaching for a line start that no longer comes.
+test('a caret key is assigned, with a word about what it cost', function(t){
+  var saved = showEditable(t, {
+    //Page Down ships on this key; a writer would have had to move it before the popup offered the
+    //key to anything else, and clearing it is the shortest way to be in that position here.
+    bindings: shortcuts.resolveShortcuts({ pageDown: null })
+  });
+  var button = keyButtonFor('Bold');
+
+  button.onclick();
+  keydown(document, 'PageDown', { code: 'PageDown' });
+
+  assert.strictEqual(button.textContent, 'Page Down');
+  assert.match(messageFor('Bold'), /Page Down normally moves the caret down a screenful/);
+  assert.match(messageFor('Bold'), /Bold is now Page Down/);
+
+  buttonLabelled('Save').onclick();
+  assert.strictEqual(saved.length, 1);
+  assert.deepStrictEqual(saved[0].formatBold,
+    { key: 'PageDown', mod: false, alt: false, shift: false, code: 'PageDown' });
+});
+
+//The same key with Ctrl held is a shortcut like any other - nothing of the key itself is lost, so
+//there is nothing to say beyond the usual confirmation.
+test('a caret key with a modifier held is assigned without the warning', function(t){
+  showEditable(t);
+  var button = keyButtonFor('Bold');
+
+  button.onclick();
+  keydown(document, 'PageDown', { code: 'PageDown', ctrlKey: true });
+
+  assert.strictEqual(button.textContent, 'Ctrl + Page Down');
+  assert.strictEqual(messageFor('Bold'), 'Bold is now Ctrl + Page Down. Choose Save to keep the change.');
+});
+
 test('Escape cancels a rebind and leaves the shortcut as it was', function(t){
   var saved = showEditable(t);
   var button = keyButtonFor('Bold');

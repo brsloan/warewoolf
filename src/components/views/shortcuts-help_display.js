@@ -321,10 +321,13 @@ function showShortcutsHelp(options){
       return;
     }
 
-    assign(pressed);
+    //A warning is not a refusal: the key is assigned, and the message says what it cost. This is
+    //how a bare caret key is handled - Home is a writer's to spend, but spending it takes the start
+    //of the line with it, and finding that out by losing it would be the worse way to learn.
+    assign(pressed, result.warning);
   }
 
-  function assign(binding){
+  function assign(binding, warning){
     var id = capturing.def.id;
     var label = capturing.def.label;
 
@@ -332,10 +335,13 @@ function showShortcutsHelp(options){
     endCapture();
     showBinding(id);
 
-    showMessage(binding == null
+    var done = binding == null
       ? label + ' is now unassigned. Choose Save to keep the change.'
-      : label + ' is now ' + formatBinding(binding, isMac) + '. Choose Save to keep the change.',
-      false, id);
+      : label + ' is now ' + formatBinding(binding, isMac) + '. Choose Save to keep the change.';
+
+    //What was given up comes first: it is the half a writer did not ask for and might otherwise
+    //read past, and the confirmation means the same wherever it sits in the line.
+    showMessage(warning ? warning + ' ' + done : done, Boolean(warning), id);
   }
 
   function cancelCapture(){
