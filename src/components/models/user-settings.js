@@ -58,6 +58,7 @@ const SETTINGS_SCHEMA = {
   compileGenTitlePage: { type: 'boolean' },
   markSceneBreaks: { type: 'boolean' },
   htmlMaxWidth: { type: 'boolean' },
+  justifyLeftAligned: { type: 'boolean' },
   backupDirectory: { type: 'string', nullable: true },
   autoBackup: { type: 'boolean' },
   backupsToKeep: { type: 'number' },
@@ -107,6 +108,10 @@ function getUserSettings(userSettingsFilepath){
     //HTML held to a readable measure wants it whichever way the book leaves WareWoolf. Off by
     //default so a page exported by an older build is still written exactly as it was.
     htmlMaxWidth: false,
+    //The other option the two web formats share: every paragraph the writer never aligned by hand
+    //is set justified on the way out. Off by default, since ragged-right is what the editor shows
+    //and what an export has always produced.
+    justifyLeftAligned: false,
     backupDirectory: null,
     autoBackup: true,
     backupsToKeep: 10,

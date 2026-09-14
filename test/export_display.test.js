@@ -41,7 +41,7 @@ function sysDirectories(){
 //(the scene-break box is remembered between exports), so a bare {} would throw where the app does
 //not.
 function makeUserSettings(overrides){
-  return Object.assign({ markSceneBreaks: false, htmlMaxWidth: false, save: function(){} }, overrides);
+  return Object.assign({ markSceneBreaks: false, htmlMaxWidth: false, justifyLeftAligned: false, save: function(){} }, overrides);
 }
 
 test.beforeEach(function(){
@@ -339,4 +339,65 @@ test('an unticked scene-break box exports without the mark', function(t){
   document.querySelector('form').onsubmit({ preventDefault: function(){} });
 
   assert.strictEqual(capturedOptions.markSceneBreaks, false);
+});
+
+//Unlike the measure above, this one reaches .epub too: an epub carries the same stylesheet, written
+//against the same classes.
+test('the justify checkbox starts from the saved setting and is passed to exportProject', function(t){
+  var userSettings = makeUserSettings({ justifyLeftAligned: true });
+  var capturedOptions = null;
+
+  var showExportOptions = freshExportDisplay({
+    showFileDialog: function(dialogOptions, callback){ callback('/docs/My Novel'); },
+    showWorkingAndThen: function(status, cb){ cb(); },
+    hideWorking: function(){},
+    exportProject: function(project, settings, options, filepath, cback){
+      capturedOptions = options;
+      cback(0);
+    }
+  });
+
+  showExportOptions({ title: 'My Novel', chapters: [] }, userSettings, sysDirectories());
+
+  var check = document.getElementById('justify-left-check');
+  var label = document.querySelector('label[for="justify-left-check"]');
+
+  assert.ok(label, 'expected a label pointing at the justify checkbox');
+  assert.strictEqual(check.checked, true, 'the box should start from the saved setting');
+
+  document.querySelector('form').onsubmit({ preventDefault: function(){} });
+
+  assert.strictEqual(capturedOptions.justifyLeftAligned, true);
+  assert.strictEqual(userSettings.justifyLeftAligned, true, 'the choice should be remembered for next time');
+});
+
+test('the justify checkbox is live for the two web formats and greyed out for the rest', function(t){
+  var showExportOptions = freshExportDisplay({
+    showFileDialog: function(){},
+    showWorkingAndThen: function(status, cb){ cb(); },
+    hideWorking: function(){},
+    exportProject: function(){}
+  });
+
+  showExportOptions({ title: 'My Novel', chapters: [] }, makeUserSettings(), sysDirectories());
+
+  var check = document.getElementById('justify-left-check');
+  var typeSelect = document.getElementById('filetype-select');
+
+  assert.strictEqual(check.disabled, true, 'the dialog opens on .docx, which has no stylesheet');
+
+  typeSelect.value = '.html';
+  typeSelect.onchange();
+  assert.strictEqual(check.disabled, false, '.html should offer it');
+
+  typeSelect.value = '.epub';
+  typeSelect.onchange();
+  assert.strictEqual(check.disabled, false, '.epub should offer it too');
+
+  //The measure is .html only, so the two boxes part company here.
+  assert.strictEqual(document.getElementById('max-width-check').disabled, true, '.epub has no page to set a width on');
+
+  typeSelect.value = '.txt';
+  typeSelect.onchange();
+  assert.strictEqual(check.disabled, true, 'plain text has nowhere to put a rule');
 });

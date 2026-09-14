@@ -188,10 +188,10 @@ async function exportChapter(project, chapterTitle, author, chapDelta, filepathN
             await exportChapAsMd(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.generateTitlePage);
             break;
         case ".html":
-            await exportChapAsHtml(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.generateTitlePage, options.htmlMaxWidth);
+            await exportChapAsHtml(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.generateTitlePage, options.htmlMaxWidth, options.justifyLeftAligned);
             break;
         case ".epub":
-            exportChapAsEpub(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.generateTitlePage, taskStarted, taskDone);
+            exportChapAsEpub(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.generateTitlePage, options.justifyLeftAligned, taskStarted, taskDone);
             break;
         //The screenplay formats (docs/screenplay-plan.md, Phase 7). A document that is not a
         //script - a Reference note beside one - goes out the same way, as action lines, which is
@@ -242,14 +242,14 @@ async function exportChapAsMd(projectTitle, chapTitle, author, chapDelta, filepa
   await platform.writeTextFile({ path: filepathNameNoExt + '.md', contents: convertMdfcToMd(convertDeltaToMDF(chapDelta)) });
 }
 
-async function exportChapAsHtml(projectTitle, chapTitle, author, chapDelta, filepathNameNoExt, generateTitlePage, maxWidth){
+async function exportChapAsHtml(projectTitle, chapTitle, author, chapDelta, filepathNameNoExt, generateTitlePage, maxWidth, justifyLeft){
   await platform.writeTextFile({
     path: filepathNameNoExt + '.html',
-    contents: convertMdfcToHtmlPage(convertDeltaToMDF(chapDelta), projectTitle + ": " + chapTitle, author, generateTitlePage, maxWidth)
+    contents: convertMdfcToHtmlPage(convertDeltaToMDF(chapDelta), projectTitle + ": " + chapTitle, author, generateTitlePage, maxWidth, justifyLeft)
   });
 }
 
-function exportChapAsEpub(projectTitle, chapTitle, author, chapDelta, filepathNameNoExt, generateTitlePage, taskStarted, taskDone){
+function exportChapAsEpub(projectTitle, chapTitle, author, chapDelta, filepathNameNoExt, generateTitlePage, justifyLeft, taskStarted, taskDone){
   var htmlChap = {
         title: chapTitle,
         html: convertMdfcToHtml(convertDeltaToMDF(chapDelta))
@@ -259,7 +259,7 @@ function exportChapAsEpub(projectTitle, chapTitle, author, chapDelta, filepathNa
   //Same reasoning as exportChapAsDocx: guard against a synchronous throw leaving pendingTasks
   //stuck above zero forever.
   try{
-    htmlChaptersToEpub(projectTitle + ': ' + chapTitle, author, [htmlChap], filepathNameNoExt + '.epub', generateTitlePage, function(resp){
+    htmlChaptersToEpub(projectTitle + ': ' + chapTitle, author, [htmlChap], filepathNameNoExt + '.epub', generateTitlePage, justifyLeft, function(resp){
       console.log('epub exported: ' + resp);
       taskDone(resp === 'error');
     });

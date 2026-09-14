@@ -46,7 +46,7 @@ async function compileProject(project, userSettings, options, filepath, cback = 
             cback();
             break;
         case ".html":
-            await compileHtml(filepath, allChaps, project.title, project.author, options.generateTitlePage, options.htmlMaxWidth);
+            await compileHtml(filepath, allChaps, project.title, project.author, options.generateTitlePage, options.htmlMaxWidth, options.justifyLeftAligned);
             cback();
             break;
           case ".epub":
@@ -69,7 +69,7 @@ async function compileEpub(dir, chapters, title, author, options, cback = functi
       })
     }
 
-    htmlChaptersToEpub(title, author, htmlChaps, dir, options.generateTitlePage, function(resp){
+    htmlChaptersToEpub(title, author, htmlChaps, dir, options.generateTitlePage, options.justifyLeftAligned, function(resp){
       console.log('Conversion done: ' + resp);
       cback();
     })
@@ -81,9 +81,9 @@ async function compileEpub(dir, chapters, title, author, options, cback = functi
   }
 }
 
-async function compileHtml(dir, allChaps, title, author, insertTitle, maxWidth){
+async function compileHtml(dir, allChaps, title, author, insertTitle, maxWidth, justifyLeft){
   try{
-    var allText = convertMdfcToHtmlPage(convertDeltaToMDF(allChaps), title, author, insertTitle, maxWidth);
+    var allText = convertMdfcToHtmlPage(convertDeltaToMDF(allChaps), title, author, insertTitle, maxWidth, justifyLeft);
     await platform.writeTextFile({ path: dir, contents: allText });
   }
   catch(err){

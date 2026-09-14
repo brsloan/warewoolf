@@ -21,14 +21,14 @@ test.after(uninstallBridge);
 //drive it as a promise. unzipper reads entry contents lazily on demand, so the file has to stay
 //on disk for as long as the test still calls readEntry() - clean it up via t.after() instead of
 //deleting it before the test is done with it.
-async function buildEpub(t, title, author, htmlChapters, insertTitlePage){
+async function buildEpub(t, title, author, htmlChapters, insertTitlePage, justifyLeft = false){
   const filepath = path.join(os.tmpdir(), 'epub-test-' + Date.now() + '-' + Math.random().toString(36).slice(2) + '.epub');
   t.after(function(){
     fs.unlinkSync(filepath);
   });
 
   const result = await new Promise(function(resolve){
-    htmlChaptersToEpub(title, author, htmlChapters, filepath, insertTitlePage, resolve);
+    htmlChaptersToEpub(title, author, htmlChapters, filepath, insertTitlePage, justifyLeft, resolve);
   });
 
   assert.notStrictEqual(result, 'error', 'epub generation reported an error');
@@ -226,9 +226,40 @@ test('a write-stream failure reports the error via callback instead of crashing 
   t.after(function(){ process.removeListener('uncaughtException', onUncaught); });
 
   const result = await new Promise(function(resolve){
-    htmlChaptersToEpub('Title', 'Author', [{ title: 'One', html: '<p>Body</p>' }], filepath, false, resolve);
+    htmlChaptersToEpub('Title', 'Author', [{ title: 'One', html: '<p>Body</p>' }], filepath, false, false, resolve);
   });
 
   assert.strictEqual(result, 'error', 'callback should report the failure');
   assert.strictEqual(uncaught, null, 'a write-stream error must not crash the process');
+});
+
+//The Export/Compile option "Justify left-aligned text". The chapters in an epub are
+//convertMdfcToHtml's output, class for class, so the rules are the converter's own
+//(getJustifyLeftCss in mdfc-to-html.js) rather than a second copy that could drift from them.
+function templateCss(entries){
+  return entries.find(e => e.name === 'OEBPS/CSS/template.css').content;
+}
+
+test('the stylesheet justifies unset and left-aligned text when asked', function(){
+  const css = templateCss(assembleEpubEntries('Title', 'Author', [{ title: 'One', html: '<p>Body</p>' }], false, true));
+
+  assert.match(css, /p, li, blockquote \{\s*text-align: justify;/);
+  assert.match(css, /p\.left, li\.left, blockquote\.left \{\s*text-align: justify;/);
+  //Ahead of the alignment classes, so an alignment the writer chose survives however the reading
+  //device resolves the cascade.
+  assert.ok(css.indexOf('text-align: justify') < css.indexOf('.center {'), 'the justify rules must precede .center');
+});
+
+test('the epub stylesheet carries no justify rules unless they are asked for', function(){
+  const css = templateCss(assembleEpubEntries('Title', 'Author', [{ title: 'One', html: '<p>Body</p>' }], false));
+
+  assert.doesNotMatch(css, /p, li, blockquote \{/);
+  assert.doesNotMatch(css, /p\.left/);
+});
+
+//The option reaches the stylesheet through the zipped file too, not just the assembled entries.
+test('a built epub carries the justify rules its stylesheet was asked for', async function(t){
+  const { readEntry } = await buildEpub(t, 'Title', 'Author', [{ title: 'One', html: '<p>Body</p>' }], false, true);
+
+  assert.match(await readEntry('OEBPS/CSS/template.css'), /p, li, blockquote \{\s*text-align: justify;/);
 });

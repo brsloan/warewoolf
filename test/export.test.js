@@ -437,3 +437,32 @@ test('exportProject leaves .html unstyled by width when the option is off', asyn
   var html = fs.readFileSync(path.join(dir, 'Test Project', '0001_Chapter One.html'), 'utf8');
   assert.doesNotMatch(html, /max-width/);
 });
+
+//The Export dialog's "Justify left-aligned text", carried through to the page's stylesheet.
+test('exportProject justifies left-aligned text in .html when the option is set', async function(t){
+  var chap = makeChapter(sceneDelta('One.'));
+  chap.title = 'Chapter One';
+  var project = makeTestProject([chap]);
+  var dir = tempDir(t);
+  var options = { type: '.html', what: 'project', styleHeadingAsChapter: true, generateTitlePage: false, markSceneBreaks: false, justifyLeftAligned: true };
+
+  await exportProject(project, {}, options, dir);
+
+  var html = fs.readFileSync(path.join(dir, 'Test Project', '0001_Chapter One.html'), 'utf8');
+  assert.match(html, /p, li, blockquote \{\s*text-align: justify;/);
+  assert.match(html, /p\.left, li\.left, blockquote\.left \{\s*text-align: justify;/);
+});
+
+test('exportProject leaves .html ragged-right when the option is off', async function(t){
+  var chap = makeChapter(sceneDelta('One.'));
+  chap.title = 'Chapter One';
+  var project = makeTestProject([chap]);
+  var dir = tempDir(t);
+  var options = { type: '.html', what: 'project', styleHeadingAsChapter: true, generateTitlePage: false, markSceneBreaks: false, justifyLeftAligned: false };
+
+  await exportProject(project, {}, options, dir);
+
+  var html = fs.readFileSync(path.join(dir, 'Test Project', '0001_Chapter One.html'), 'utf8');
+  assert.doesNotMatch(html, /text-align: justify;\s*\}\s*\.center/);
+  assert.doesNotMatch(html, /p\.left/);
+});

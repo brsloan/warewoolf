@@ -111,12 +111,36 @@ function showExportOptions(project, userSettings, sysDirectories){
     maxWidthCheck.type = 'checkbox';
     maxWidthCheck.id = 'max-width-check';
     maxWidthCheck.checked = userSettings.htmlMaxWidth;
-    maxWidthCheck.disabled = typeSelect.value !== '.html';
     maxWidthOption.appendChild(maxWidthCheck);
 
-    typeSelect.onchange = function(){
+    exportForm.appendChild(document.createElement('br'));
+
+    //.epub as well as .html: an epub is a book of web pages, and it carries the same stylesheet
+    //written against the same classes, so the same rule reaches it.
+    var justifyOption = document.createElement('span');
+    justifyOption.classList.add('checkbox-option');
+    exportForm.appendChild(justifyOption);
+
+    var justifyLabel = document.createElement('label');
+    justifyLabel.innerText = 'Justify left-aligned text: ';
+    justifyLabel.htmlFor = 'justify-left-check';
+    justifyOption.appendChild(justifyLabel);
+
+    var justifyCheck = document.createElement('input');
+    justifyCheck.type = 'checkbox';
+    justifyCheck.id = 'justify-left-check';
+    justifyCheck.checked = userSettings.justifyLeftAligned;
+    justifyOption.appendChild(justifyCheck);
+
+    //Both boxes write a CSS rule, so each is live only for the formats that have a stylesheet to
+    //write it into - the measure for .html alone, the justification for .html and .epub.
+    function syncStyleOptions(){
       maxWidthCheck.disabled = typeSelect.value !== '.html';
-    };
+      justifyCheck.disabled = typeSelect.value !== '.html' && typeSelect.value !== '.epub';
+    }
+
+    typeSelect.onchange = syncStyleOptions;
+    syncStyleOptions();
 
     exportForm.appendChild(document.createElement('br'));
 
@@ -147,10 +171,11 @@ function showExportOptions(project, userSettings, sysDirectories){
     exportForm.onsubmit = function(e){
       e.preventDefault();
 
-      //The two boxes worth remembering between exports, and the same two settings the Compile
-      //dialog writes - see user-settings.js.
+      //The boxes worth remembering between exports, and the same settings the Compile dialog
+      //writes - see user-settings.js.
       userSettings.markSceneBreaks = sceneBreakCheck.checked;
       userSettings.htmlMaxWidth = maxWidthCheck.checked;
+      userSettings.justifyLeftAligned = justifyCheck.checked;
       userSettings.save();
 
       var options = {
@@ -159,7 +184,8 @@ function showExportOptions(project, userSettings, sysDirectories){
         styleHeadingAsChapter: true,
         generateTitlePage: false,
         markSceneBreaks: sceneBreakCheck.checked,
-        htmlMaxWidth: maxWidthCheck.checked
+        htmlMaxWidth: maxWidthCheck.checked,
+        justifyLeftAligned: justifyCheck.checked
         //insertHead: insertHeadCheck.checked
       }
       getExportFilePath(project, userSettings, options, sysDirectories, function(){
