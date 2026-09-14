@@ -305,6 +305,31 @@ test('Enter and Tab jump over trailing spaces', function(){
   assert.deepStrictEqual(lines(s.quill), [['dialogue', 'Hi.  '], ['parenthetical', '()']]);
 });
 
+test('Enter just inside the closing bracket of a parenthetical opens the speech below; Shift+Enter breaks the line', function(){
+  var enter = function(s){ return screenplayEnterBinding(s.quill, function(){ return 'screenplay'; }); };
+
+  var s = scriptQuill(delta([['character', 'BOB'], ['parenthetical', '(low)']]));
+  press(s.quill, enter(s), s.quill.getLength() - 2);
+  assert.deepStrictEqual(lines(s.quill), [['character', 'BOB'], ['parenthetical', '(low)'], ['dialogue', '']], 'not split at the caret');
+  assert.strictEqual(s.quill.getSelection().index, s.quill.getLength() - 1, 'the caret is on the speech');
+
+  //Spaces after the bracket are jumped over with it.
+  s = scriptQuill(delta([['parenthetical', '(low)  ']]));
+  press(s.quill, enter(s), 5);
+  assert.deepStrictEqual(lines(s.quill), [['parenthetical', '(low)  '], ['dialogue', '']]);
+
+  //The bracket has to be the end of the line: a caret in the middle still splits.
+  s = scriptQuill(delta([['parenthetical', '(low) then up)']]));
+  press(s.quill, enter(s), 5);
+  assert.deepStrictEqual(lines(s.quill), [['parenthetical', '(low)'], ['parenthetical', ' then up)']]);
+
+  //And it is Enter alone: Shift+Enter breaks the parenthetical there, as it does anywhere.
+  s = scriptQuill(delta([['parenthetical', '(low)']]));
+  var shiftEnter = screenplayShiftEnterBinding(s.quill, function(){ return 'screenplay'; });
+  assert.strictEqual(press(s.quill, shiftEnter, 4), false);
+  assert.deepStrictEqual(lines(s.quill), [['parenthetical', '(low'], ['parenthetical', ')', 'tight']]);
+});
+
 test('Ctrl+Enter opens a new heading and Ctrl+Shift+Enter the element picker, as fixed bindings', function(){
   var s = scriptQuill(delta([['action', 'A room.']]));
   var ctrlEnter = s.quill.keyboard.bindings[13].find(function(b){ return b.ctrlKey && !b.shiftKey; });

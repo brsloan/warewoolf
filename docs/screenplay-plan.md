@@ -327,7 +327,10 @@ pushes the line down and leaves an empty line of the same type above it, as
 a word processor would. Enter mid-line
 splits the line into two of the same type, with the dual and tight marks
 cleared on the second. A caret before nothing but trailing spaces counts as at
-the end of the line, for Enter and Tab both. A selection falls through to
+the end of the line, for Enter and Tab both, and so does a caret just inside a
+parenthetical's closing `)`, which is where Tab leaves it: Enter there opens
+the speech below rather than breaking the brackets apart, and Shift+Enter is
+the way to a second line inside one. A selection falls through to
 Quill. Shift+Enter inserts a new line of the same type with `tight` set. Two
 more fixed bindings, fixed because Enter is reserved from the customizable
 shortcuts: Ctrl+Enter opens a new heading, with the intros offered, and

@@ -311,6 +311,22 @@ function skipTrailingSpaces(quill, range, info){
   return { index: info.index + textLength, length: 0 };
 }
 
+//A parenthetical's closing ")" is jumped over the same way: the caret typed into the middle of
+//`()` is at the end of the line as the writer reads it, so Enter there opens the speech below
+//rather than breaking the parenthetical in two. Shift+Enter is the way to a second line inside
+//one, and is left alone. Only the closing bracket, and only with nothing but spaces after it.
+function skipClosingParen(quill, range, info){
+  var textLength = info.length - 1;
+  if(info.offset === 0 || info.offset >= textLength)
+    return range;
+
+  var rest = quill.getText(range.index, info.index + textLength - range.index);
+  if(!/^\)\s*$/.test(rest))
+    return range;
+
+  return { index: info.index + textLength, length: 0 };
+}
+
 //The Enter binding. Everything it decides is in the table in docs/screenplay-plan.md, "Keyboard":
 //
 //  empty line, not action  -> the line becomes action (the way out of a type chosen by mistake)
@@ -318,7 +334,8 @@ function skipTrailingSpaces(quill, range, info){
 //  caret at the end        -> a new line of the type that follows this one; an action line that
 //                             reads as a heading or transition is converted first, and a cue that
 //                             continues the same character's speech after action gets (CONT'D)
-//  caret in the middle     -> the line splits into two of the same type
+//  caret in the middle     -> the line splits into two of the same type, except just inside a
+//                             parenthetical's closing ")", which counts as the end of the line
 //
 //A selection is left to Quill, and so is every keypress while the editor shows prose - returning
 //true is what hands a binding on (modules/keyboard.js listen()). Unshifted onto Quill's list by
@@ -335,6 +352,12 @@ function screenplayEnterBinding(quill, getMode){
       range = skipTrailingSpaces(quill, range, info);
       info = lineAt(quill, range.index);
       var type = elementOf(info.line);
+
+      if(type === 'parenthetical'){
+        range = skipClosingParen(quill, range, info);
+        info = lineAt(quill, range.index);
+      }
+
       var textLength = info.length - 1;
 
       if(textLength === 0){
