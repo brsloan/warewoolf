@@ -327,13 +327,39 @@ test('a screenplay project\'s plaintext options keep the italics and tabs rows b
   assert.strictEqual(plainTextOptionsSet.disabled, false);
 });
 
-test('a novel project\'s dialog is unchanged by the project argument', function(t){
+test('a novel project\'s dialog offers the prose formats and none of the script formats', function(t){
   var showImportOptions = freshImportDisplay({ initiateImport: function(){} });
   showImportOptions({ docs: '/proj/docs' }, function(){}, function(){}, { type: 'novel' });
 
-  assert.strictEqual(offeredTypeIds().length, 8);
+  assert.deepStrictEqual(offeredTypeIds(), ['docxSelect', 'txtSelect', 'mdfcSelect', 'htmlSelect', 'epubSelect']);
   assert.strictEqual(document.getElementById('docxSelect').checked, true);
   assert.ok(document.querySelector('input[name="chapLabelSelect"]'));
+});
+
+//A dialog opened with no project at all is the novel dialog, and leaves the script formats out the
+//same way - nothing about a missing project should hand them back.
+test('a dialog opened without a project leaves the script formats out too', function(t){
+  var showImportOptions = freshImportDisplay({ initiateImport: function(){} });
+  showImportOptions({ docs: '/proj/docs' }, function(){}, function(){});
+
+  assert.deepStrictEqual(offeredTypeIds(), ['docxSelect', 'txtSelect', 'mdfcSelect', 'htmlSelect', 'epubSelect']);
+});
+
+//The submit path reads the chosen type back out of the filetypes array by the radio's index, so a
+//filtered list has to stay in step with the radios built from it: the last prose type must send
+//itself, not whatever sat at that index before the script formats were dropped.
+test('a novel project submits the file type its last radio names', function(t){
+  var capturedOptions;
+  var showImportOptions = freshImportDisplay({
+    initiateImport: function(sysDirectories, options){ capturedOptions = options; }
+  });
+  showImportOptions({ docs: '/proj/docs' }, function(){}, function(){}, { type: 'novel' });
+
+  checkAndFireChange(document.getElementById('epubSelect'));
+  document.querySelector('form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+
+  assert.strictEqual(capturedOptions.fileType.id, 'epubSelect');
+  assert.deepStrictEqual(capturedOptions.fileType.extensions, ['epub']);
 });
 
 test('submitting a screenplay project\'s dialog sends the Fountain type without touching the missing controls', function(t){

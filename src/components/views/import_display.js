@@ -6,7 +6,8 @@ const { initiateImport } = require('../controllers/import');
 //formats, Fountain first, plus Plain Text for a Reference document beside the script - and the
 //chapter machinery (docx, HTML and EPUB, splitting into chapters, the chapter label choice) is
 //left out, since a script has no chapters and the Scenes sidebar would not even show one. A novel
-//project gets the whole dialog as before. docs/screenplay-plan.md, Phase 7.
+//project gets the prose formats, and only those: the script formats are left out of its dialog the
+//way the prose formats are left out of a screenplay's. docs/screenplay-plan.md, Phase 7.
 function showImportOptions(sysDirectories, addImportedChapter, onFinish, project){
   var screenplay = !!(project && project.type === 'screenplay');
 
@@ -33,8 +34,11 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish, project
     { name: 'MarkdownFic', id: 'mdfcSelect', extensions: ['mdfc', 'txt', "md"] },
     { name: 'HTML', id: 'htmlSelect', extensions: ['html', 'htm', 'xhtml'] },
     { name: 'EPUB', id: 'epubSelect', extensions: ['epub'] },
-    //Screenplays (docs/screenplay-plan.md, Phase 7). Each comes in as a .fountain document,
-    //which is what puts the editor in screenplay mode for it, whatever kind of project it joins.
+    //Screenplays (docs/screenplay-plan.md, Phase 7). Each comes in as a .fountain document, which
+    //is what puts the editor in screenplay mode for it - so these are offered to a screenplay
+    //project only. A novel has no place to put a script: it would arrive as a chapter the editor
+    //held in screenplay mode, in a project whose sidebar, word count and export all treat its
+    //chapters as prose.
     { name: 'Fountain', id: 'fountainSelect', extensions: ['fountain', 'txt'] },
     { name: 'Final Draft', id: 'fdxSelect', extensions: ['fdx'] },
     { name: 'Fade In', id: 'fadeinSelect', extensions: ['fadein'] }
@@ -43,10 +47,15 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish, project
   //Fountain, Final Draft, Fade In, then Plain Text: the scripts first, in the order a screenwriter
   //is likely to have them.
   var SCREENPLAY_TYPES = ['fountainSelect', 'fdxSelect', 'fadeinSelect', 'txtSelect'];
+  //The script formats on their own - the ones a novel project has no use for. Plain Text belongs to
+  //both kinds of project, so it is in SCREENPLAY_TYPES above but not here.
+  var SCRIPT_TYPES = ['fountainSelect', 'fdxSelect', 'fadeinSelect'];
   if(screenplay){
     filetypes = filetypes.filter(function(type){ return SCREENPLAY_TYPES.indexOf(type.id) !== -1; });
     filetypes.sort(function(a, b){ return SCREENPLAY_TYPES.indexOf(a.id) - SCREENPLAY_TYPES.indexOf(b.id); });
   }
+  else
+    filetypes = filetypes.filter(function(type){ return SCRIPT_TYPES.indexOf(type.id) === -1; });
 
   //Each button and its name go into one .radio-option wrapper rather than straight into the
   //fieldset. Loose in the fieldset, the row wraps wherever it likes: a line can end on a button

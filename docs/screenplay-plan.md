@@ -970,8 +970,12 @@ per phase. Where the implementation departed from the plan above:
 
 ## Open findings to carry
 
-- A `.fountain` chapter in a novel project works, because mode follows the
-  file, and Import allows it. A screenplay project is one script and any
+- A `.fountain` chapter in a novel project still works, because mode follows
+  the file, but Import no longer offers a way to make one: the script formats
+  (Fountain, Final Draft, Fade In) are in a screenplay project's dialog only.
+  A script imported into a novel arrived as a chapter the editor held in
+  screenplay mode while the sidebar, word count and export around it went on
+  treating it as prose. A screenplay project is one script and any
   number of Reference documents: a script imported into one takes the script's
   place and the displaced script goes to Trash (`installScript` in
   `render.js`), Restore of a trashed script appends it to the script as a
