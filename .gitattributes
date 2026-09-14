@@ -1,0 +1,2 @@
+# Shell scripts must keep LF endings: a CRLF checkout on Windows would break them on the Pi.
+*.sh text eol=lf

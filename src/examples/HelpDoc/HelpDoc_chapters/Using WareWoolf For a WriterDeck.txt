@@ -1,6 +1,7 @@
 [>c] # Using WareWoolf For A WriterDeck
 
-WareWoolf is designed to work on a desktop computer, but its primary purpose is for use on a writerDeck. This is why it is optimized for use without a mouse and has built-in email functions.
+WareWoolf runs happily on a desktop computer, but it was built for a writerDeck: a machine that does nothing but write. That is why it works without a mouse, why it can email drafts to you, and why on Linux it carries the few pieces of an operating system a writer still needs when there is no desktop behind it.
+	This chapter explains what a writerDeck is, what WareWoolf gives you on one, and how to turn a Raspberry Pi into a device that boots straight into WareWoolf, either with a script that does it all or by hand, one command at a time. The wiki page of the same name (github.com/brsloan/warewoolf/wiki) has the same steps with copy-and-paste command blocks, which may be easier to work from than this document.
 
 ## What is a writerDeck?
 A writerDeck is a device dedicated specifically and solely to writing. Technically, a typewriter is an analog writerDeck. But usually we mean some sort of computerized word processor, such as the Astrohaus Freewrite or the Alphasmart Neo, to name two of the most popular mass-produced versions. But these tend to be either too expensive or too limited for many writers, so many of us build our own.
@@ -12,57 +13,117 @@ One major reason is distraction. If your writing machine is also your video watc
 	A second reason is pleasure. If a significant focus of your life is on writing, and much of your day is spent writing, then having a beautiful, dedicated device for doing it is very nice!
 	A third reason is because they are fun to design and build.
 
-## How do I use WareWoolf on a Raspberry Pi for a writerDeck?
-A full explanation is too much for this help doc, but here is a general outline on how to set up a Raspberry Pi to boot directly and only into WareWoolf, with no desktop or other apps to distract:
+## What WareWoolf does for a writerDeck
+On a machine with no desktop, WareWoolf’s menu *is* the machine’s interface. These are the pieces that exist for that situation. Most are Linux-only, because on Windows and Mac you already have a desktop for all of this.
+	**Full-screen kiosk window.** On Linux, WareWoolf fills the screen with no title bar or borders, so a bare window manager is all it needs underneath.
+	**Wi-Fi Manager** (Tools menu, Ctrl+W, Linux only). Turn Wi-Fi on and off, see your connection and IP address, and join a new network with a password. It needs NetworkManager; see below.
+	**Battery Display** (File > Settings > Display Battery Charge, Linux only). A small charge readout in the corner, turning red below 10%.
+	**File > Reboot** (Linux only). Restart the machine from inside WareWoolf, after the usual unsaved-changes prompt and auto-backup. See the end of this chapter.
+	**File Manager** (Ctrl+Shift+F). Rename, move, copy, delete and unzip files without a desktop file browser.
+	**Send Via Email** (Ctrl+Alt+E). Back up a chapter, the compiled book, or the whole zipped project to your inbox at the end of a session.
+	**Shortcut Helper** (Ctrl+H). Rebind any shortcut, including the odd keys a home-built keyboard sends.
+	**Check For Updates** (Help > About). On Linux this hands you the new .deb to install yourself; see “Updating WareWoolf” below.
 
-## The Basic Approach
+## What you need
+A 64-bit Raspberry Pi (3, 4, 5, Zero 2 W or later); WareWoolf’s current releases are 64-bit only. A microSD card, a screen, and a keyboard. Raspberry Pi OS *Lite* (64-bit), Bookworm or newer; “Lite” means no desktop, which is the point. A network connection during setup. And, optionally but very handily, a second computer to SSH in from, so you can paste commands instead of typing them at the Pi.
+	The same recipe works on any Debian-family machine with no desktop, such as an old laptop with Debian installed and the desktop left out.
+
+## The basic approach
 **OS With No Desktop** + **Display Server** + **Window Manager** + **Your App** = a single-app device.
 	In this case, that means:
-[>c] 	Raspberry Pi OS Lite + Xorg + Matchbox + WareWoolf
+[>c] Raspberry Pi OS Lite + Xorg + Matchbox + WareWoolf
+	Xorg draws to the screen. Matchbox is a tiny window manager whose only job is to give WareWoolf’s window the keyboard. WareWoolf is started as the *last* thing X runs, so when you close it, X exits too, and you are back at a console (or the machine turns itself off, if you prefer).
 
-## The Steps
+## The quick way: the setup script
+The WareWoolf source code includes a script, scripts/setup-writerdeck.sh, that does every step in the next section for you.
+	1. Write Raspberry Pi OS Lite (64-bit) to the card with the Raspberry Pi Imager. In the Imager’s settings, set a username and password, your Wi-Fi network, and enable SSH. Boot the Pi.
+	2. Log in, at the Pi’s keyboard or over SSH from another computer.
+	3. Download the script and read it:
+		curl -fsSLO https://raw.githubusercontent.com/brsloan/warewoolf/main/scripts/setup-writerdeck.sh
+		less setup-writerdeck.sh
+	4. See what it will do, without changing anything:
+		bash setup-writerdeck.sh --dry-run
+	5. Run it, as your ordinary user, not with sudo (it asks for your password where it needs it):
+		bash setup-writerdeck.sh
+	6. Reboot:
+		sudo reboot
+	The Pi comes back up, logs you in, and opens WareWoolf.
+	Options you can add after the script’s name: **--poweroff-on-exit** shuts the machine down when you close WareWoolf instead of dropping to a console. **--keep-cursor** leaves the mouse pointer visible (it is hidden by default). **--network-manager** installs NetworkManager so the Wi-Fi Manager works on Bullseye (Bookworm and newer already have it). **--deb PATH** installs a .deb you already have instead of downloading the latest release. **--no-autologin** leaves you typing your password at each boot. **--reboot** reboots as soon as it finishes.
+	The script installs the xorg, matchbox-window-manager and x11-xserver-utils packages and the WareWoolf .deb, sets console autologin for your user, writes ~/.xinitrc (backing up any existing one beside it), and adds a marked block to ~/.bash_profile, leaving anything else in that file alone. Running it again is safe. To undo it, delete the marked block from ~/.bash_profile, delete ~/.xinitrc, and set raspi-config > System Options > Boot back to “Console”.
 
-### 1. Install the OS.
-With a Raspberry Pi, this is very easy using their Imager.
+## The long way: every command, by hand
+This is exactly what the script does, in the same order. Do these at the Pi’s keyboard or over SSH, logged in as your ordinary user.
 
-### 2. Configure The OS
-Turn on wifi and enable SSH using raspi-config.
+### 1. Install the OS
+Write Raspberry Pi OS Lite (64-bit) to the card with the Raspberry Pi Imager, setting your username, password, Wi-Fi and SSH in the Imager’s settings. Boot the Pi and log in. (If you skipped the Imager settings, “sudo raspi-config” can set Wi-Fi under System Options and SSH under Interface Options.)
 
-### 3. Install Xorg
-This should be pretty easy:
-[>c] 	sudo apt-get install xorg
+### 2. Update the package lists
+		sudo apt-get update
 
-### 4. Install Matchbox
-[>c] sudo apt-get install matchbox-window-manager
+### 3. Install Xorg, Matchbox, and xset
+		sudo apt-get install -y xorg matchbox-window-manager x11-xserver-utils
+	This is the slow step: a Lite image has almost none of the dependencies, so expect several minutes. Afterwards, “which startx matchbox-window-manager xset” should print three paths.
 
-### 5. Install WareWoolf
-This may be as easy as “sudo apt-get install warewoolf” if it’s published in the correct repositories, or you can transfer the .deb file over SSH. Then install it with the above command. This step may take a while because it will also install any dependencies, and with a minimalist no-desktop OS, there won’t be much already there.
+### 4. Install WareWoolf
+WareWoolf is not in the Debian or Raspberry Pi repositories, so you install its .deb file directly. Get the current one from github.com/brsloan/warewoolf/releases: the file ending in \_arm64.deb for a 64-bit Pi. Download it on the Pi with curl, or download it on another computer and copy it over with scp. Then install it with apt-get rather than dpkg, so the dependencies come with it (the path must start with / or ./):
+		sudo apt-get install -y /tmp/warewoolf\_3.0.0\_arm64.deb
+	Afterwards, “which warewoolf” should print /usr/bin/warewoolf.
 
-### 6. Configure Xorg to Open Your App with Matchbox
-Following the instructions (https://wiki.archlinux.org/title/Xinit#Configuration), copy default config file for customization like so:
-[>c] 	cp /etc/X11/xinit/xinitrc ~/.xinitrc
-	Now edit the created file however you like (I use nano: “nano ~/.xinitrc”) to add this:
+### 5. Log in automatically at boot
+Without this, every boot stops at a login prompt. Older versions of this chapter left it out, and it is the most common reason “it boots to a login prompt instead of the app.”
+		sudo raspi-config nonint do_boot_behaviour B2
+	B2 is “Console Autologin”, the same as sudo raspi-config > System Options > Boot / Auto Login > Console Autologin. On plain Debian with no raspi-config, the wiki page has the systemd override that does the same thing.
+
+### 6. Tell X what to run: ~/.xinitrc
+When you run startx, X reads ~/.xinitrc and runs it. When the last command in it finishes, X exits. So the file starts the window manager in the background, runs WareWoolf in the foreground, and cleans up when WareWoolf closes. Create it (nano ~/.xinitrc) with these lines:
+		xset s off
+		xset s noblank
+		xset -dpms
 		matchbox-window-manager &
-		pid=$!
+		wm_pid=$!
 		warewoolf
-		kill pid 
-	The pid/kill pid stuff makes it so when you exit your application, X will exit too, taking you back to the command line. Otherwise your app would close and you’d be left with an empty black window.
-	Save the file and exit. You can now test your app with the command “startx”. It should open in its own solitary window in the void! No desktop! Hurray!
+		kill "$wm_pid"
+	The three xset lines stop the screen from blanking while you sit and think. The kill line takes the window manager down when WareWoolf closes, so X exits instead of leaving an empty black screen. (Older versions of this chapter had “kill pid” without the dollar sign, which did nothing.)
+	If you would rather the machine turned itself off when you close WareWoolf, add one more line at the end: “systemctl poweroff”. It works without a password because you are logged in at the machine’s own console. But think twice: if WareWoolf ever fails to start, the machine will power itself off a moment after every boot, and you will have to SSH in quickly or edit the card on another computer to fix it. Leaving it out means closing WareWoolf drops you to a shell prompt instead, which is the safer place to be while you are still tinkering.
+	Now test it, at the Pi’s keyboard (not over SSH): type “startx”. WareWoolf should open full screen, alone, with no desktop. Close it (Ctrl+Shift+X) and you should be back at the prompt.
 
-### 7. Configure the OS to start your app on boot
-We can do this by editing the ~/.bash_profile file:  
-		if [[ -z “$DISPLAY” ]] && [[ $(tty) = /dev/tty1 ]]; then
-	    		exec startx
-	    		logout
+### 7. Start X at login: ~/.bash_profile
+~/.bash_profile runs every time you log in. Add these lines to it (nano ~/.bash_profile). They run startx only when you are logging in at the first console of the machine itself, so an SSH login or a second console still gives you a normal shell:
+		if [ -z "$DISPLAY" ] && [ "$(tty)" = /dev/tty1 ]; then
+		    startx -- -nocursor
+		    echo "WareWoolf has closed. Type startx to open it again, or sudo poweroff to shut down."
 		fi
-	Save and reboot. Your app should open! Close the app to get back to the command line. (If you will not be using a mouse and would like to get rid fo the pointer so it it’s no visible on your screen, append “ — -nocursor” after “startx” above.
+	“-- -nocursor” hides the mouse pointer; if you use a mouse, write startx on its own. Notice that startx is *not* run with “exec”, as older versions of this chapter had it. With autologin on, “exec startx” means that closing WareWoolf ends your login, the console logs you straight back in, and WareWoolf reopens: an app you can never get out of.
 
-### 8. Edit Your Xorg Configuration To Make Your Device Shut Down When App Is Closed
-If you’d like the computer to shut down when you exit the app instead of going back to command line, open up ~/.xinitrc like you did in step 6 and add one more line below “kill pid”:
-		shutdown -h 0
-	Save and reboot. Your app will load! Exit the app. The computer shuts down! You’ve done it! (Maybe. Maybe some weird error popped up somewhere along the way and you can’t for the love of god figure it out. Welcome to tinkering with Linux.)  
+### 8. Reboot
+		sudo reboot
+	The Pi should boot, log you in, and open WareWoolf.
+
+### 9. NetworkManager, for the Wi-Fi Manager
+WareWoolf’s Wi-Fi Manager talks to NetworkManager through nmcli. Raspberry Pi OS Bookworm (October 2023) and newer use NetworkManager already, so there is nothing to do; “systemctl is-active NetworkManager” prints “active”. On Bullseye, which uses dhcpcd instead, install NetworkManager and switch to it:
+		sudo apt-get install -y network-manager
+		sudo apt-get install -y --only-upgrade raspi-config
+		sudo raspi-config nonint do_netconf 2
+	That last line is Advanced Options > Network Config > NetworkManager in the raspi-config menus. Switching network stacks may drop an SSH session and forget the Wi-Fi password, so do this last, at the Pi’s keyboard if you can, and reconnect afterwards through WareWoolf’s own Wi-Fi Manager.
+
+## Living with it
+**Getting to a terminal.** Everything on the Pi is still there behind WareWoolf. Close WareWoolf (Ctrl+Shift+X) and you land at a shell prompt; “startx” reopens it. Or press Ctrl+Alt+F2 at any time for a second console, with WareWoolf still running on the first (Ctrl+Alt+F1 goes back). Or SSH in from another computer.
+	**Updating WareWoolf.** The Check For Updates button in Help > About tells you when a new version is out. On Linux it cannot install it for you, so close WareWoolf, download the new .deb at the console or over SSH, and install it as in step 4. Or run the setup script again: it reinstalls the latest release and leaves everything else as it was.
+	**Email passwords.** A Lite image has no keyring service, so WareWoolf has nowhere secure to hand your Gmail app password to. When you save it, tick “Protect With Passphrase?” in the Send dialog; WareWoolf will ask for the passphrase once per session.
+	**Screen blanking.** The xset lines in ~/.xinitrc stop X from blanking the screen after ten minutes. If you would like it to blank, to save a battery, delete those three lines.
 
 ## Rebooting From Inside WareWoolf
 On Linux, the File menu ends with a **Reboot** item (it isn’t there on Windows or Mac, where you already have a desktop to do it from). On a writerDeck that boots straight into WareWoolf, this is usually the only way to restart the machine without leaving your manuscript for a terminal.
 	It behaves exactly like Exit, except that the machine comes back: if you have unsaved changes you are asked about them first, and if you have auto-backup switched on, the backup runs before anything shuts down. There is no keyboard shortcut for it, on purpose.
-	If your system refuses the reboot — some setups only allow it for an administrator — WareWoolf will tell you what it said rather than appearing to do nothing.
+	If your system refuses the reboot — some setups only allow it for an administrator — WareWoolf will tell you what it said rather than appearing to do nothing. To shut down rather than reboot, either set up poweroff-on-exit as above, or close WareWoolf and type “sudo poweroff”.
+
+## Troubleshooting
+**It boots to a login prompt, not WareWoolf.** Autologin is not set. Do step 5.
+	**It logs in but just sits at a shell prompt.** The ~/.bash_profile block is missing or not running. Check the file, and that “tty” prints /dev/tty1.
+	**startx gives a black screen and returns.** Look for lines marked EE in ~/.local/share/xorg/Xorg.0.log. If X starts but WareWoolf does not, run warewoolf from a second console (Ctrl+Alt+F2, after “export DISPLAY=:0”) to see what it prints.
+	**WareWoolf closes and immediately reopens.** ~/.bash_profile has “exec startx” in it. Remove the “exec”.
+	**The machine turns off right after booting.** ~/.xinitrc ends with systemctl poweroff and WareWoolf is failing to start. SSH in, or mount the card on another computer, and remove that line, then find out why WareWoolf is not starting.
+	**The Wi-Fi Manager says nmcli is not installed, or shows nothing.** NetworkManager is not running. See step 9.
+	**File > Reboot says “Interactive authentication required.”** systemd is not treating your login as a local session, which usually means X was started from somewhere other than the console autologin. Reboot from the console, or from WareWoolf once you have booted normally.
+	**The keys on my keyboard are not what WareWoolf expects.** Open the Shortcut Helper (Ctrl+H) and rebind them.
+	**Something else went wrong.** Welcome to tinkering with Linux. The issue tracker at github.com/brsloan/warewoolf/issues and www.writerdeck.org are both good places to ask.

@@ -42,8 +42,10 @@
         "ignore": [
           "^/test($|/)",
           "^/docs($|/)",
+          "^/scripts($|/)",
           "^/\\.github($|/)",
           "^/\\.gitignore$",
+          "^/\\.gitattributes$",
           "^/\\.vscode($|/)",
           "^/README\\.md$",
           "^/error_log\\.txt$",

@@ -66,7 +66,7 @@ Binaries of the current release for Windows (installer and portable), MacOS, Deb
 > **On an older Mac?** The main MacOS builds are packaged against Electron 44, which needs macOS 13 "Ventura" or newer. If you are on macOS 10.15 "Catalina" through 12 "Monterey" — as many of the older laptops people turn into writerdecks are — download `warewoolf_<version>_MacOS_Legacy.dmg` instead. It is the same WareWoolf, built from the same source, packaged against Electron 32: the last release line that runs on those systems. It is an Intel build, so on Apple Silicon it runs under Rosetta. Electron 32 no longer receives Chromium security updates, so take a mainline build instead if your Mac can run one.
 
 > [!WARNING]
-> The Wi-Fi Manager uses nmcli/Network Manager, which Raspberry Pi OS does not have installed/enabled by default. You will have to install network-manager and enable it in raspi-config for this function to work. You may need to update raspi-config to be able to enable Network-Manager.
+> The Wi-Fi Manager uses nmcli/NetworkManager. Raspberry Pi OS Bookworm (October 2023) and newer use NetworkManager already; on Bullseye you will have to install network-manager and enable it in raspi-config (Advanced Options > Network Config), updating raspi-config first if that option is missing. The [writerDeck setup script](scripts/setup-writerdeck.sh) can do this for you with `--network-manager`.
 
 ## Run or Build From Source
 
