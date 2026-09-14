@@ -410,7 +410,8 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish, project
   var textSelect = document.getElementById('txtSelect');
   var htmlSelect = document.getElementById('htmlSelect');
   var epubSelect = document.getElementById('epubSelect');
-  document.getElementById(screenplay ? 'fountainSelect' : 'docxSelect').checked = true;
+  var defaultSelect = document.getElementById(screenplay ? 'fountainSelect' : 'docxSelect');
+  defaultSelect.checked = true;
 
   var isChecked = function(radio){ return !!(radio && radio.checked); };
   var syncOptionSets = function(){
@@ -422,7 +423,10 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish, project
   syncOptionSets();
   importForm.onchange = syncOptionSets;
 
-  importBtn.focus();
+  //The file type is the first thing to choose, and the rest of the dialog follows from it, so the
+  //dialog opens on the checked type rather than on the Import button: the arrow keys then move
+  //through the types straight away, and Enter still submits from there.
+  defaultSelect.focus();
 }
 
 module.exports = showImportOptions;

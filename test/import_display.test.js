@@ -59,6 +59,24 @@ test('initial state: Docx is selected, its options are enabled, and the plaintex
   assert.strictEqual(plainTextOptionsSet.disabled, true);
 });
 
+//The dialog used to open on the Import button, which meant tabbing backwards to reach the choice
+//every import starts with. It opens on the checked file type instead, in both kinds of project.
+test('the dialog opens with the checked file type focused', function(t){
+  var showImportOptions = freshImportDisplay({ initiateImport: function(){} });
+
+  showImportOptions({}, function(){}, function(){});
+
+  assert.strictEqual(document.activeElement, document.getElementById('docxSelect'));
+});
+
+test("a screenplay project's dialog opens with Fountain focused", function(t){
+  var showImportOptions = freshImportDisplay({ initiateImport: function(){} });
+
+  showImportOptions({}, function(){}, function(){}, { type: 'screenplay' });
+
+  assert.strictEqual(document.activeElement, document.getElementById('fountainSelect'));
+});
+
 test('the italics marker input is placed exactly once, inside the plaintext options table', function(t){
   //Regression test: the field used to be appended directly to the fieldset and then immediately
   //moved into the options table by generateRow(), which was harmless only because appendChild()
