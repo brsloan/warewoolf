@@ -3,7 +3,7 @@
 A screenplay project saves its script as a single **.fountain** file, beside the .woolf project file and in the same chapters directory a novel’s .txt files live in. Fountain is a plain text screenplay format, published at fountain.io and read by most screenplay software, and it is to a script what MarkdownFic is to a chapter of a novel: readable as it stands, readable in a hundred years, and readable by other programs today.
 	You never have to type any of what follows. **Enter**, **Tab** and the element keys write it for you, and the editor shows you the layout rather than the markup. This chapter is for when you want to open the file in something else, or write one by hand and read it in.
 
-# How A Line Is Read
+## How A Line Is Read
 Fountain works out what a line is from the line itself and the blank lines around it.
 * A line beginning INT., EXT., EST., INT./EXT. or I/E, after a blank line, is a **scene heading**.
 * A line in capitals with a blank line above it and text below it is a **character cue**. An extension in brackets may be any case: “BOB (cont’d)”.
@@ -11,7 +11,7 @@ Fountain works out what a line is from the line itself and the blank lines aroun
 * A line in capitals ending in “TO:”, with blank lines both sides, is a **transition**.
 * Anything else is **action**.
 
-# Making A Line Be Something
+## Making A Line Be Something
 Where the rules above would read a line wrongly, a marker at the start of it settles the matter.
 * ‘.’ — a scene heading. (Two dots is not: a line opening with an ellipsis is action.)
 * ‘@’ — a character cue, for a name the rules would not take as one.
@@ -22,21 +22,21 @@ Where the rules above would read a line wrongly, a marker at the start of it set
 * ‘^’ at the end of a character cue — **dual dialogue**: this speech runs beside the one before it.
 * ‘===’ on a line of its own — a **page break**.
 
-# What Is Not Printed
+## What Is Not Printed
 Four kinds of line are the writer’s rather than the reader’s. They are shown greyed in the editor, left out of the PDF, and counted as nothing in the page estimate.
 * ‘#’, ‘##’, ‘###’ — a **section**, an outline heading over the scenes below it.
 * ‘=’ — a **synopsis** of the scene it stands in, which is what the Outliner shows as that scene’s summary.
 * ‘[[ ... ]]’ — a **note**, which may run over several lines.
 * ‘/\* ... \*/’ — a **boneyard**, text commented out of the script.
 
-# Emphasis
+## Emphasis
 * ‘\*italics\*’
 * ‘\*\*bold\*\*’
 * ‘\*\*\*bold italics\*\*\*’
 * ‘_underline_’
 A marker with no partner is just a character, so an action line about arithmetic (“5 \* 3”) is safe, and a backslash in front of a marker writes the marker itself.
 
-# The Title Page
+## The Title Page
 The file opens, if it has one, with the title page: a run of “Key: value” lines up to the first blank line, where a key with nothing after the colon takes the indented lines below it as its value.
 	  Title: The Big Fish
 	  Credit: Written by
@@ -46,5 +46,5 @@ The file opens, if it has one, with the title page: a run of “Key: value” li
 	    a.writer@example.com
 	This is what **File > Properties** edits—see ***Screenplay: Title Page***. WareWoolf writes it back at the head of the file on every save, keeping the keys in the order you had them, and on opening a project the file’s own title page is the one that is used.
 
-# What WareWoolf Writes
+## What WareWoolf Writes
 It reads all of the above, and writes back the plainest form of each: a heading is written as the words themselves where the rules will read them as a heading, and with a leading ‘.’ only where they would not. Scene headings, cues and transitions are written in capitals because they are kept in capitals as you type. So a file saved by WareWoolf carries no more markup than it needs, and a file written by hand in any of the forms above reads in as the script you meant.

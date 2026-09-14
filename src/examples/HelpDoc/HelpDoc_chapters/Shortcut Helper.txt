@@ -11,7 +11,7 @@ At any time, if you press **Ctrl+H (Cmd+Shift+H on Mac)**, a popup will appear r
 	The list a script is written with is its own section, ***Screenplay***, and those shortcuts are only in force while a script is the document you are in—which is how the element keys and the prose heading keys can share **Ctrl + 1** to **Ctrl + 6**. They are listed in the ***Screenplay: Elements And Shortcuts*** chapter rather than below.
 	Here is a summary of the defaults for prose (Ctrl is Cmd on Mac unless otherwise noted):
 
-# Navigation
+## Navigation
  View Previous Chapter / Scene	: **Ctrl + Up**
 	 View Next Chapter / Scene	: **Ctrl + Down**
 	 Shift Focus To Editor	: **Ctrl + Left**
@@ -22,12 +22,12 @@ At any time, if you press **Ctrl+H (Cmd+Shift+H on Mac)**, a popup will appear r
 	 Jump To Start	: **Ctrl + Home**
 	 Jump To End	: **Ctrl + End**
 
-# Alteration
+## Alteration
  Move Chapter / Scene Up	: **Ctrl + Shift + Up**
 	 Move Chapter / Scene Down	: **Ctrl + Shift + Down**
 	 Change Chapter Label	: **Ctrl + Shift + Left**
 
-# Formatting
+## Formatting
  Title (Heading 1, Centered)	: **Ctrl + T**
 	 Heading 1 through 4	: **Ctrl + 1**, **2**, **3**, **4**
 	 Clear Heading	: **Ctrl + 0**
@@ -44,13 +44,13 @@ At any time, if you press **Ctrl+H (Cmd+Shift+H on Mac)**, a popup will appear r
 	 Underline	: **Ctrl + U**
 	 Upper / Lower / Title Case	: **Ctrl + Shift + K**
 
-# Tool/Menu Navigation
+## Tool/Menu Navigation
  Open/Navigate File Menu	: **Alt, then arrow keys and Escape** (**Cmd + M** on Mac)
 	 Close Tool Dialog	: **Escape**
 	 Any Button With A Bold/Underlined Letter	: **Alt + (that letter)**
 	 Move Between Inputs	: **Tab**
 
-# Display
+## Display
  Decrease Editor Width	: **Ctrl + ,**
 	 Increase Editor Width	: **Ctrl + .**
 	 Decrease Font Size	: **Ctrl + -**

@@ -223,10 +223,23 @@
 	],
 	"reference": [],
 	"projectDictionary": [],
+	"type": "novel",
+	"titlePage": [],
+	"screenplayNames": {
+		"characters": {
+			"added": [],
+			"removed": []
+		},
+		"locations": {
+			"added": [],
+			"removed": []
+		}
+	},
 	"filters": [],
 	"trash": [],
 	"activeChapterIndex": 0,
 	"wordGoal": "0",
+	"pageGoal": 0,
 	"textCursorPosition": 0,
 	"corkboardColumns": 4
 }

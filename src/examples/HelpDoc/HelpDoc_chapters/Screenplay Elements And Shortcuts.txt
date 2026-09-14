@@ -2,20 +2,20 @@
 
 **Enter** and **Tab** cover most of a script, but not the line you want to change after the fact, and not the elements a scene reaches for rarely. Those are what the keys below are for. They only exist while a script is the document in the editor; in a Reference document, or in a novel, the same keys are the prose headings and alignments they have always been.
 
-# Insert An Element
+## Insert An Element
 **CMD/CTRL + 1** through **6** open a new line of a type: **1** Scene Heading, **2** Action, **3** Character, **4** Parenthetical, **5** Dialogue, **6** Transition.
 	“Open” is the word, because these never retype the line you are on. On an empty line the line becomes the type; on a line with text you get a new, empty line of the type—above it with the caret at the start of the line, below it with the caret at the end, and between the two halves anywhere else.
 
-# Change The Line You Are On
+## Change The Line You Are On
 **CMD/CTRL + ALT + 1** through **6** make the current line that type, whatever it holds. This is the one to reach for when a cue was typed as action, or a line of dialogue belongs to the character above after all. If text is selected, every line the selection touches is changed together. **CMD/CTRL + E** belongs with these rather than with the six above: it makes the current line ***centered text***—a title card, a “THE END”—which is what that key does to a paragraph of prose as well.
 
-# The Other Keys
+## The Other Keys
 * **CMD/CTRL + Enter** starts a new scene heading, which then offers you INT. and EXT.
 * **CMD/CTRL + SHIFT + Enter** opens the ***Insert/Convert Menu***, a list of every type a line can be. **Enter** on one inserts a new line of that type; **SHIFT + Enter** makes the current line that type instead; **Escape** closes it. This is where the types with no key of their own live, and where to go before you have learned the keys.
 * **CMD/CTRL + D** marks a character cue as ***dual dialogue***—two characters speaking at once, printed side by side. It goes on the cue of the second speaker, and the same keys take it off again. You can press it on the cue itself or anywhere in the speech under it.
 * **CMD/CTRL + SHIFT + K** cycles the word at the caret, or the selection, through capitals, lower case and Title Case. (This one works in prose too.)
 
-# All The Elements
+## All The Elements
 These six are the script itself:
 * **Scene Heading** — “INT. KITCHEN - DAY”. Kept in capitals, and what the Scenes list is built from.
 * **Action** — what happens, set flush at the margin. This is what a line is when it is nothing else.
@@ -33,5 +33,5 @@ And these are the rest:
 * **Boneyard** — text commented out of the script: a speech you cut but do not want to lose.
 The last four are the writer’s and not the reader’s. They are shown greyed in the editor, they are left out of the exported PDF, and they take up no room in the page count, so a script does not grow a page longer because you left yourself notes in it.
 
-# Which Element Am I On?
+## Which Element Am I On?
 The foot of the ***Project Notes*** panel carries a ***Format*** block naming the element of the line the caret is on—Scene Heading, Action, Dialogue. A script’s elements are invisible in the way a heading level is not: the layout is all there is to tell a cue from a transition, and two types can be laid out alike. The block shows and hides with the rest of the notes panel (**F3**), and shows nothing while you are in prose.
