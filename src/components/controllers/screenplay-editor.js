@@ -219,14 +219,16 @@ function toggleDual(quill){
 // Keys
 // ------------------------------------------------------------------------------------------
 
-//What Enter at the end of a line makes next: a cue is followed by dialogue and dialogue by the
-//next cue, a heading by action, a transition by a heading.
+//What Enter at the end of a line makes next: a cue is followed by dialogue, a heading by action,
+//a transition by a heading, and a speech by action - what comes after a speech is a beat of
+//action far more often than the next cue, and Tab from that empty action line is the one key to
+//a cue when it is not.
 const NEXT_ON_ENTER = {
   scene: 'action',
   action: 'action',
   character: 'dialogue',
   parenthetical: 'dialogue',
-  dialogue: 'character',
+  dialogue: 'action',
   transition: 'scene'
 };
 

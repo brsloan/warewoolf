@@ -194,7 +194,7 @@ test('Enter at the end of a line makes the element that follows it', function(){
     ['action', 'A room.', 'action'],
     ['character', 'BOB', 'dialogue'],
     ['parenthetical', '(low)', 'dialogue'],
-    ['dialogue', 'Hi.', 'character'],
+    ['dialogue', 'Hi.', 'action'],
     ['transition', 'CUT TO:', 'scene'],
     ['centered', 'THE END', 'action']
   ];
@@ -874,10 +874,15 @@ test('an empty cue offers the next speaker, and Enter takes the guess straight i
   var s = boxQuill(elementsToDelta(parseFountain('INT. A - DAY\n\nANNA\nOne.\n\nBOB\nTwo.\n').elements));
   var end = s.quill.getLength() - 1;
 
-  //Enter after the last speech opens an empty cue, which offers the speakers.
+  //Enter after the last speech opens an empty action line, and Tab turns that into the cue, which
+  //offers the speakers.
   var enter = s.quill.keyboard.bindings[13].find(function(b){ return b.screenplayKey === 'enter'; });
   s.quill.setSelection(end, 0, 'user');
   enter.handler.call(s.quill.keyboard, { index: end, length: 0 }, {});
+  assert.deepStrictEqual(lines(s.quill).slice(-1), [['action', '']]);
+  var tab = s.quill.keyboard.bindings[9].find(function(b){ return b.screenplayKey === 'tab'; });
+  s.quill.setSelection(end + 1, 0, 'user');
+  tab.handler.call(s.quill.keyboard, { index: end + 1, length: 0 }, {});
   assert.deepStrictEqual(lines(s.quill).slice(-1), [['character', '']]);
   assert.strictEqual(s.box.isOpen(), true);
   assert.deepStrictEqual(shown(), ['ANNA', 'BOB'], 'ANNA spoke before BOB, so ANNA is the guess');
@@ -889,8 +894,11 @@ test('an empty cue offers the next speaker, and Enter takes the guess straight i
   //Escape is the way past the guess: the cue is then empty with no list, and Enter makes it action.
   s = boxQuill(elementsToDelta(parseFountain('INT. A - DAY\n\nANNA\nOne.\n\nBOB\nTwo.\n').elements));
   enter = s.quill.keyboard.bindings[13].find(function(b){ return b.screenplayKey === 'enter'; });
+  tab = s.quill.keyboard.bindings[9].find(function(b){ return b.screenplayKey === 'tab'; });
   s.quill.setSelection(end, 0, 'user');
   enter.handler.call(s.quill.keyboard, { index: end, length: 0 }, {});
+  s.quill.setSelection(end + 1, 0, 'user');
+  tab.handler.call(s.quill.keyboard, { index: end + 1, length: 0 }, {});
   assert.strictEqual(s.key(27, end + 1), false);
   assert.strictEqual(s.box.isOpen(), false);
   assert.strictEqual(s.key(13, end + 1), true, 'closed, Enter is handed on');

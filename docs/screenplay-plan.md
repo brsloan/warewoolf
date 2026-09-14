@@ -141,7 +141,7 @@ reason. Because the editor upper-cases on the way in, forced forms stay rare.
 | Title page | Structured, on the project, round-tripped through the file; the file wins on load |
 | Case of cues and headings | Written as typed; forced with `@`/`.`/`>` when the text would not read back as its type. The editor upper-cases on the way in |
 | Literal `*`, `_`, `[[`, leading `.`/`!`/`@`/`>`/`~`/`=`/`#` in text | Escaped with a backslash on save, exactly as `convertDeltaToMDF` escapes MarkdownFic markers |
-| Enter after Dialogue | Character. The old branch went to Action; a second Enter on the empty cue gets there. **Confirm before Phase 4** |
+| Enter after Dialogue | Action, as the old branch had it. Enter ends the speech, and Tab from the empty action line is the one key to the next cue |
 | Element shortcuts | Ctrl+1..6 as before. Definitions carry a `mode`, and conflicts are checked within a mode, so Ctrl+1 can mean Heading 1 in prose and Scene Heading in a script |
 | Footnotes in a script | Inert: the Enter binding and the insert shortcut both return early in screenplay mode |
 | Big Fish as a test fixture | Read from `screenplay/` when present and skipped when not; the folder is gitignored, and the script is John August's, not ours to commit |
@@ -316,13 +316,12 @@ element cycle, applied when the caret is at the end of the line:
 | action | new action; if the line reads as a transition, convert it first | new action | becomes character |
 | character | new dialogue, with `(CONT'D)` added when the same character spoke last in the scene before something other than speech | becomes action | new parenthetical `()` with the caret inside; an empty cue becomes the parenthetical |
 | parenthetical | new dialogue | becomes action | new dialogue |
-| dialogue | new character | becomes action | new parenthetical `()`; an empty speech becomes the parenthetical |
+| dialogue | new action | becomes action | new parenthetical `()`; an empty speech becomes the parenthetical |
 | transition | new scene | becomes action | nothing at the start of the line; new action after it |
 | anything else | new action | becomes action | becomes action |
 
 Enter on an empty line of any type but action makes it action: the way out of
-a type chosen by mistake, and the double-Enter after a speech that gets from
-the next cue to action. Enter with the caret at the start of a non-empty line
+a type chosen by mistake. Enter with the caret at the start of a non-empty line
 pushes the line down and leaves an empty line of the same type above it, as
 a word processor would. Enter mid-line
 splits the line into two of the same type, with the dual and tight marks
