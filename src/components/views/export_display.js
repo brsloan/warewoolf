@@ -21,10 +21,16 @@ function showExportOptions(project, userSettings, sysDirectories){
 
     var exportForm = document.createElement("form");
 
+    //Each name and its button in one .radio-option, so the line can only break between the two
+    //choices and never between a choice and the button that answers it.
+    var expProjOption = document.createElement('span');
+    expProjOption.classList.add('radio-option');
+    exportForm.appendChild(expProjOption);
+
     var expProjLab = document.createElement('label');
     expProjLab.innerText = 'Project';
     expProjLab.htmlFor = 'proj-radio';
-    exportForm.appendChild(expProjLab);
+    expProjOption.appendChild(expProjLab);
 
     var expProjOp = document.createElement('input');
     expProjOp.type = 'radio';
@@ -32,19 +38,23 @@ function showExportOptions(project, userSettings, sysDirectories){
     expProjOp.name = 'export-what';
     expProjOp.value = 'project';
     expProjOp.checked = true;
-    exportForm.appendChild(expProjOp);
+    expProjOption.appendChild(expProjOp);
+
+    var expChapOption = document.createElement('span');
+    expChapOption.classList.add('radio-option');
+    exportForm.appendChild(expChapOption);
 
     var expChapLab = document.createElement('label');
     expChapLab.innerText = ' | Chapter';
     expChapLab.htmlFor = 'chap-radio';
-    exportForm.appendChild(expChapLab);
+    expChapOption.appendChild(expChapLab);
 
     var expChapOp = document.createElement('input');
     expChapOp.type = 'radio';
     expChapOp.id = 'chap-radio';
     expChapOp.name = 'export-what';
     expChapOp.value = 'chapter';
-    exportForm.appendChild(expChapOp);
+    expChapOption.appendChild(expChapOp);
 
     exportForm.appendChild(document.createElement('br'));
 
@@ -66,16 +76,22 @@ function showExportOptions(project, userSettings, sysDirectories){
 
     exportForm.appendChild(document.createElement('br'));
 
+    //The longest label in the dialog, and the box sits after it, so this is the pair likeliest to
+    //be split across a line break. Wrapped in one .checkbox-option to keep the box with it.
+    var sceneBreakOption = document.createElement('span');
+    sceneBreakOption.classList.add('checkbox-option');
+    exportForm.appendChild(sceneBreakOption);
+
     var sceneBreakLabel = document.createElement('label');
     sceneBreakLabel.innerText = 'Mark scene breaks with a centered #: ';
     sceneBreakLabel.htmlFor = 'scene-break-check';
-    exportForm.appendChild(sceneBreakLabel);
+    sceneBreakOption.appendChild(sceneBreakLabel);
 
     var sceneBreakCheck = document.createElement('input');
     sceneBreakCheck.type = 'checkbox';
     sceneBreakCheck.id = 'scene-break-check';
     sceneBreakCheck.checked = userSettings.markSceneBreaks;
-    exportForm.appendChild(sceneBreakCheck);
+    sceneBreakOption.appendChild(sceneBreakCheck);
 
     exportForm.appendChild(document.createElement('br'));
 

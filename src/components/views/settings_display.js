@@ -200,6 +200,13 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
 
   appearanceSet.appendChild(document.createElement('br'));
 
+  //Each choice and its name in one .radio-option: the three sit on lines of their own, and
+  //the wrapper keeps a name from being carried off its own button when a line is too narrow
+  //to hold the pair.
+  var darkModeSysOption = document.createElement('span');
+  darkModeSysOption.classList.add('radio-option');
+  appearanceSet.appendChild(darkModeSysOption);
+
   var darkModeSys = document.createElement('input');
   darkModeSys.type = 'radio';
   darkModeSys.name = 'dark-mode';
@@ -207,14 +214,18 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
   darkModeSys.id = 'dark-mode-sys';
   if(userSettings.darkMode == 'system' || (userSettings.darkMode != 'dark' && userSettings.darkMode != 'light'))
     darkModeSys.checked = true;
-  appearanceSet.appendChild(darkModeSys);
+  darkModeSysOption.appendChild(darkModeSys);
 
   var darkModeSysLabel = document.createElement('label');
   darkModeSysLabel.innerText = "System Default";
   darkModeSysLabel.htmlFor = 'dark-mode-sys';
-  appearanceSet.appendChild(darkModeSysLabel);
+  darkModeSysOption.appendChild(darkModeSysLabel);
 
   appearanceSet.appendChild(document.createElement('br'));
+
+  var darkModeDarkOption = document.createElement('span');
+  darkModeDarkOption.classList.add('radio-option');
+  appearanceSet.appendChild(darkModeDarkOption);
 
   var darkModeDark = document.createElement('input');
   darkModeDark.type = 'radio';
@@ -223,14 +234,18 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
   darkModeDark.id = 'dark-mode-dark';
   if(userSettings.darkMode == 'dark')
     darkModeDark.checked = true;
-  appearanceSet.appendChild(darkModeDark);
+  darkModeDarkOption.appendChild(darkModeDark);
 
   var darkModeDarkLabel = document.createElement('label');
   darkModeDarkLabel.innerText = "Dark";
   darkModeDarkLabel.htmlFor = 'dark-mode-dark';
-  appearanceSet.appendChild(darkModeDarkLabel);
+  darkModeDarkOption.appendChild(darkModeDarkLabel);
 
   appearanceSet.appendChild(document.createElement('br'));
+
+  var darkModeLightOption = document.createElement('span');
+  darkModeLightOption.classList.add('radio-option');
+  appearanceSet.appendChild(darkModeLightOption);
 
   var darkModeLight = document.createElement('input');
   darkModeLight.type = 'radio';
@@ -239,12 +254,12 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
   darkModeLight.id = 'dark-mode-light';
   if(userSettings.darkMode == 'light')
     darkModeLight.checked = true;
-  appearanceSet.appendChild(darkModeLight);
+  darkModeLightOption.appendChild(darkModeLight);
 
   var darkModeLightLabel = document.createElement('label');
   darkModeLightLabel.innerText = "Light";
   darkModeLightLabel.htmlFor = 'dark-mode-light';
-  appearanceSet.appendChild(darkModeLightLabel);
+  darkModeLightOption.appendChild(darkModeLightLabel);
 
   appearanceSet.appendChild(document.createElement('hr'));
 

@@ -234,6 +234,29 @@ test('defaults to the Send Chapter radio when userSettings.emailType is unset', 
   assert.strictEqual(document.getElementById('email-radio-project').checked, false);
 });
 
+//Regression: the three names and their buttons went into the fieldset as one flat run, so a line
+//too narrow for all three wrapped between a name and its own button. The name comes first here, so
+//each pair is held together the way it is written: label, then radio, in one wrapper.
+test('each attachment choice keeps its name and its button in one wrapper', async function(t){
+  var built = makePlatform(t);
+
+  var showEmailOptions = freshEmailDisplay({
+    prepareAndEmail: function(){},
+    showWorkingAndThen: function(status, cb){ cb(); },
+    hideWorking: function(){}
+  });
+
+  await showEmailOptions({ title: 'My Novel' }, makeUserSettings(), built.platform, {});
+
+  var radios = document.querySelectorAll('input[name="email-radio"]');
+  assert.strictEqual(radios.length, 3);
+  radios.forEach(function(radio){
+    var wrapper = radio.parentNode;
+    assert.ok(wrapper.classList.contains('radio-option'));
+    assert.strictEqual(wrapper.querySelector('label').htmlFor, radio.id);
+  });
+});
+
 //---------------------------------------------------------------------------
 // Phase 7: the saved password stops passing through the DOM
 //---------------------------------------------------------------------------

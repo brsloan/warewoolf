@@ -119,6 +119,29 @@ test('list renders with source tags and ticks the saved selection', async functi
   assert.strictEqual(rowFor('fr_FR').querySelector('input').checked, true);
 });
 
+//Regression: the box and the name went into the row side by side with nothing holding them, so a
+//dictionary whose name and source ran past the popup wrapped between the two - and in a list of
+//look-alike rows, a name sitting under the wrong box is a dictionary ticked by mistake.
+test('each row keeps its box and its name in one wrapper', async function(t){
+  const appDir = tempDir('warewoolf-dict-app-');
+  const userDataDir = tempDir('warewoolf-dict-userdata-');
+  writeDictFixture(appDir, 'en_US-large', ['hello']);
+  writeDictFixture(userDataDir, 'fr_FR', ['bonjour']);
+  installBridge({ paths: { app: appDir, userData: userDataDir, docs: '/docs', home: '/home' } });
+
+  const showDictionaries = freshDictionariesDisplay({});
+  await showDictionaries(makeUserSettings(), makeProject(), function(){});
+
+  const rows = Array.from(document.querySelectorAll('.dictionary-row'));
+  assert.strictEqual(rows.length, 2);
+  rows.forEach(function(row){
+    const box = row.querySelector('input[type="checkbox"]');
+    const wrapper = box.parentNode;
+    assert.ok(wrapper.classList.contains('checkbox-option'));
+    assert.strictEqual(wrapper.querySelector('label').htmlFor, box.id);
+  });
+});
+
 test('ticking and saving writes the array', async function(t){
   const appDir = tempDir('warewoolf-dict-app-');
   const userDataDir = tempDir('warewoolf-dict-userdata-');

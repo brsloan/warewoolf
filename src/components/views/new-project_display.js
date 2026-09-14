@@ -50,8 +50,13 @@ function requestProjectTitle(callback){
     label.htmlFor = radio.id;
     label.textContent = option.label;
 
-    typeGroup.appendChild(radio);
-    typeGroup.appendChild(label);
+    //The pair in one .radio-option, so a narrow dialog breaks between the two kinds of project
+    //rather than between a kind and the button that chooses it.
+    var typeOption = document.createElement('span');
+    typeOption.classList.add('radio-option');
+    typeOption.appendChild(radio);
+    typeOption.appendChild(label);
+    typeGroup.appendChild(typeOption);
     return radio;
   });
 

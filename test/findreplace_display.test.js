@@ -77,6 +77,21 @@ test.afterEach(function(){
   delete global.document;
 });
 
+//Regression: the boxes and their labels went into the form as a flat run, so a label too long for
+//the dialog wrapped away from the box it belonged to and read as the label of the box above it.
+test('each search option keeps its box and its label in one wrapper', function(){
+  var showFindReplace = freshFindReplaceDisplay({});
+  showFindReplace({}, makeEditorQuill(''), function(){});
+
+  var boxes = document.querySelectorAll('input[type="checkbox"]');
+  assert.strictEqual(boxes.length, 4);
+  boxes.forEach(function(box){
+    var wrapper = box.parentNode;
+    assert.ok(wrapper.classList.contains('checkbox-option'));
+    assert.strictEqual(wrapper.querySelector('label').htmlFor, box.id);
+  });
+});
+
 test('Case Sensitive checkbox is toggled by clicking its label', function(){
   var showFindReplace = freshFindReplaceDisplay({});
   showFindReplace({}, makeEditorQuill(''), function(){});

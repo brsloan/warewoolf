@@ -831,15 +831,42 @@ hr {
   margin-left: 3px;
 }
 
-/* A radio button and its name, kept together. A row of buttons that runs past the width of the
-   dialog - the eight file types in the Import dialog - wraps, and left to itself it will break
-   between a button and the name that belongs to it, stranding the name at the start of the next
-   line where it reads as the name of a different button. Each pair is one unbreakable box with a
-   gap after it, so the row only ever breaks between choices. */
-.radio-option {
+/* A button and its name, kept together. A row of buttons that runs past the width of the dialog -
+   the eight file types in the Import dialog - wraps, and left to itself it will break between a
+   button and the name that belongs to it, stranding the name at the start of the next line where
+   it reads as the name of a different button. A single long-labelled tickbox on its own line does
+   the same thing when the label alone is wider than the dialog. Each pair is one unbreakable box
+   with a gap after it, so a line only ever breaks between choices. Two names for the one rule so
+   that each use site says which kind of control it holds. */
+.radio-option,
+.checkbox-option {
   display: inline-block;
   white-space: nowrap;
   margin-right: 14px;
+}
+
+/* A tickbox's label is a sentence rather than a word - "Mark scene breaks with a centered #", a
+   dictionary named by the file it came from - and a sentence held on one line would run past the
+   popup, which hides its overflow rather than scrolling: the end of the label would simply be
+   gone. So the pair is laid out instead of held on a line. The label keeps wrapping inside itself
+   and the box, which does not shrink, stays beside it either way round - the label follows the box
+   in Find/Replace and the Dictionaries list, and precedes it in Export. */
+.checkbox-option {
+  white-space: normal;
+  display: inline-flex;
+  align-items: baseline;
+  max-width: 100%;
+}
+
+.checkbox-option input {
+  flex: none;
+}
+
+/* A flex item will not shrink below its longest word on its own, and the popup hides what runs
+   past it - so a dictionary named in one long unbroken string would have its end cut off. This is
+   what lets the popup's own overflow-wrap break such a name instead. */
+.checkbox-option label {
+  min-width: 0;
 }
 
 .popup a{

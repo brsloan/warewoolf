@@ -59,6 +59,35 @@ test.afterEach(function(){
   delete global.document;
 });
 
+//Regression: the names and their buttons went into the form as one flat run, so a narrow dialog
+//could wrap between a name and the button beside it and leave each name looking as though it went
+//with the wrong button. Here the name comes first, so the pair has to be held together as it is
+//written: label, then radio, in one wrapper.
+test('every choice in the dialog keeps its name and its control in one wrapper', function(t){
+  var showExportOptions = freshExportDisplay({
+    showFileDialog: function(){},
+    showWorkingAndThen: function(status, cb){ cb(); },
+    hideWorking: function(){},
+    exportProject: function(){}
+  });
+
+  showExportOptions({ title: 'My Novel', chapters: [] }, makeUserSettings(), sysDirectories());
+
+  var radios = document.querySelectorAll('input[name="export-what"]');
+  assert.strictEqual(radios.length, 2);
+  radios.forEach(function(radio){
+    var wrapper = radio.parentNode;
+    assert.ok(wrapper.classList.contains('radio-option'));
+    assert.strictEqual(wrapper.querySelector('label').htmlFor, radio.id);
+  });
+
+  //The same for the scene-break tickbox, whose label is a whole sentence and so is the likeliest
+  //of the lot to wrap away from its box.
+  var sceneBreak = document.getElementById('scene-break-check');
+  assert.ok(sceneBreak.parentNode.classList.contains('checkbox-option'));
+  assert.strictEqual(sceneBreak.parentNode.querySelector('label').htmlFor, sceneBreak.id);
+});
+
 //Regression: exportProject writes .docx/.epub chapters asynchronously, so getExportFilePath used
 //to call exportProject then immediately close the popup, before those writes had actually
 //finished. It should now show a working indicator (deferred so it can paint before the possibly
