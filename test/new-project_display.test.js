@@ -96,6 +96,24 @@ test('the project type is Novel unless Screenplay is chosen', function(){
   assert.deepStrictEqual(calls[1], ['New Project', 'screenplay']);
 });
 
+//A screenplay writer starting a second project is likelier to want another screenplay than to
+//switch kinds, so the dialog opens on whatever kind is already open.
+test('the dialog defaults to the type it is given', function(){
+  var calls = [];
+  requestProjectTitle(function(title, type){ calls.push([title, type]); }, 'screenplay');
+
+  assert.strictEqual(document.getElementById('project-type-screenplay').checked, true);
+  assert.strictEqual(document.getElementById('project-type-novel').checked, false);
+
+  submitForm();
+  assert.deepStrictEqual(calls, [['New Project', 'screenplay']]);
+
+  requestProjectTitle(function(title, type){ calls.push([title, type]); }, 'novel');
+  assert.strictEqual(document.getElementById('project-type-novel').checked, true);
+  submitForm();
+  assert.deepStrictEqual(calls[1], ['New Project', 'novel']);
+});
+
 test('Cancel closes the popup without calling back', function(){
   var titles = [];
   requestProjectTitle(function(title){ titles.push(title); });

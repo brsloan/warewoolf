@@ -1206,6 +1206,8 @@ function moveChapDown(chapInd){
 
 function createNewProject(){
   const requestProjectTitle = require('./components/views/new-project_display');
+  //Whichever kind is open is the likelier next one, so the dialog opens on it.
+  var currentType = project.isScreenplay() ? 'screenplay' : 'novel';
   requestProjectTitle(detached(async function(title, type){
     if(title && title != ""){
       project = newProject();
@@ -1222,7 +1224,7 @@ function createNewProject(){
       await addNewChapter();
       await displayProject();
     }
-  }));
+  }), currentType);
 }
 
 //A screenplay project starts with its script: one chapter, named after the project, saved as

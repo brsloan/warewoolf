@@ -1,6 +1,6 @@
 const { closePopups, createButton, removeElementsByClass, describeDialog } = require('../controllers/utils');
 
-function requestProjectTitle(callback){
+function requestProjectTitle(callback, defaultType){
   removeElementsByClass('popup');
   var popup = document.createElement("div");
   popup.classList.add("popup");
@@ -28,7 +28,10 @@ function requestProjectTitle(callback){
   titleForm.appendChild(document.createElement('br'));
 
   //Novel or screenplay - see docs/screenplay-plan.md. A radio group named so a screen reader
-  //reads the two as one question, defaulting to the kind of project this app has always made.
+  //reads the two as one question, defaulting to the kind of project already open: someone
+  //writing a screenplay is likelier to start another than to switch kinds mid-session.
+  var startingType = defaultType === 'screenplay' ? 'screenplay' : 'novel';
+
   var typeGroup = document.createElement('fieldset');
   typeGroup.id = 'project-type';
   var typeLegend = document.createElement('legend');
@@ -36,15 +39,15 @@ function requestProjectTitle(callback){
   typeGroup.appendChild(typeLegend);
 
   var typeInputs = [
-    { value: 'novel', label: 'Novel', checked: true },
-    { value: 'screenplay', label: 'Screenplay', checked: false }
+    { value: 'novel', label: 'Novel' },
+    { value: 'screenplay', label: 'Screenplay' }
   ].map(function(option){
     var radio = document.createElement('input');
     radio.type = 'radio';
     radio.name = 'project-type';
     radio.value = option.value;
     radio.id = 'project-type-' + option.value;
-    radio.checked = option.checked;
+    radio.checked = option.value === startingType;
 
     var label = document.createElement('label');
     label.htmlFor = radio.id;
