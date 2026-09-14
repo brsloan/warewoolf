@@ -1,0 +1,24 @@
+[>c] # Screenplay: Suggestions As You Type
+
+A screenplay says the same handful of things over and over: the same dozen names above the speeches, the same kitchen at the top of a dozen scenes, INT. and EXT. and DAY and NIGHT. WareWoolf offers them to you rather than making you type them again, in a little list under the caret.
+	The list is moved through with the **Up** and **Down** arrows, and taken with **Enter**, **Tab**, the **Right arrow** or a click—whichever entry is highlighted, which is the first one until the arrows say otherwise. **Escape** dismisses it, and **Escape** again brings it back if you want it after all. Typing on past anything it has to offer closes it by itself.
+	What makes a name a single keypress is what happens after: **Enter** takes the name and then does what Enter does on a cue, which is to open the speech under it. **Tab** on a cue does the same—you reached for the name, not for a parenthetical.
+
+# What Is Offered Where
+* **An empty character cue** — who speaks next. See below.
+* **A cue you have started typing** — every character in the script whose name begins with what you have typed.
+* **A cue with an open bracket** (“BOB (”) — the extensions: (V.O.), (O.S.), (O.C.), (CONT'D).
+* **An empty scene heading, or one begun** — INT., EXT., INT./EXT., EST. Taking one leaves you on the line, since an intro is the start of a heading and not the end of it.
+* **A heading after its intro** (“INT. KI”) — every place the script’s headings already name.
+* **A heading after its “ - ”** — DAY, NIGHT, CONTINUOUS, LATER, MOMENTS LATER, MORNING, AFTERNOON, EVENING, DAWN, DUSK, SAME TIME.
+* **A transition** — CUT TO:, DISSOLVE TO:, SMASH CUT TO:, MATCH CUT TO:, JUMP CUT TO:, INTERCUT WITH:, TIME CUT:, FADE TO:, FADE OUT., FADE TO BLACK.—and any other transition you have written into this script.
+
+# Who Speaks Next
+On an empty cue, the guess is made from the scene you are in. A scene is mostly two people taking turns, so the character who spoke ***before*** the last one is offered first, then the last speaker, then the rest of the scene’s speakers most recent first, then the speakers of earlier scenes, and last the rest of the cast. In a two-hander that means the name you want is the first entry almost every time, and a speech costs you **Enter, Enter**.
+
+# Where The Names Come From
+Nowhere but the script. Every character it has a cue for and every place it has a heading for is offered, which means a name typed into a cue for the first time is offered from that moment on with nothing to set up.
+	You can add to that list, and take names out of it, in **Tools > Characters/Locations**—see the next chapter.
+
+# Turning It Off
+**File > Settings**, under ***Automatic Substitutions***: ***Suggest Names, Places And Times In Scripts***. Untick it and no list is ever offered. The setting is remembered, and it takes effect at once, without closing your script.

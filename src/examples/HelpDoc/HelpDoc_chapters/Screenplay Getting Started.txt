@@ -1,0 +1,25 @@
+[>c] # Screenplay: Getting Started
+
+WareWoolf writes screenplays as well as novels. **File > New Project** asks which of the two you want, and everything that follows comes out of that answer.
+	A novel is a list of chapters, each kept in its own file. A screenplay is one script, held in one file and edited all at once, because that is what a screenplay is—nobody hands out act two as a separate document. So the sidebar on the left lists ***Scenes*** rather than chapters, reading them off the scene headings in the script itself, and the chapter keys become scene keys.
+	The script is saved as a **.fountain** file beside the .woolf project file. Fountain is a plain text screenplay format, so the file stays as readable in Notepad as a chapter .txt file is, and any other screenplay program worth having will open it. See the ***Screenplay: The Fountain File*** chapter.
+
+# What Is Different In A Screenplay Project
+* The Chapters list is a Scenes list, built from the script’s own headings.
+* **Enter** and **Tab** move you between screenplay elements, so you never type screenplay markup yourself. See ***Screenplay: Writing With Enter And Tab***.
+* Word Count is called **Page Count**, and is measured in pages rather than words.
+* The Outliner lists scenes rather than chapters.
+* **Export** writes one file—PDF, Final Draft, Fountain or plain text—rather than a folder of chapters, and **Import** reads Fountain, Final Draft and Fade In scripts.
+* **Properties** gains a Title Page.
+* **Tools** gains a Characters/Locations item, which a novel has no use for.
+* The script is drawn in ***Courier Prime***, the screenplay typeface, which WareWoolf ships with. A script therefore looks the same on every machine, and the same in the exported PDF, whatever manuscript font you have chosen for prose.
+* Menu items that mean nothing to a script are greyed out rather than hidden, so you can still see the tool is there and that it is not for this: Compile, Renumber Chapters and the manuscript-wide conversions are off for the whole project, and Split Chapter and Break Headings Into Chapters are off while the script is the document you are in.
+
+# Reference Documents
+A screenplay project holds one script and any number of ***Reference*** documents—the character bible, the research, the notes to yourself—and those are ordinary prose, written exactly as a novel’s chapters are. They are listed under Reference, below the scenes.
+	Since a script has no chapters to add, **CMD/CTRL + N** (Add New Chapter) in a screenplay project makes a Reference document instead, which is the only kind of document there is to add beside a script.
+	**CMD/CTRL + ALT + R** jumps straight down to Reference and, pressed again, back to the line you left. That saves walking past every scene in the script to reach it.
+
+# Opening An Older Project
+A .woolf file written before screenplays existed opens as a novel, exactly as it always did.
+	Going the other way, a screenplay project opened in an older build of WareWoolf comes up as prose with the Fountain markup showing. Nothing is lost, and this build reads it back as a script.

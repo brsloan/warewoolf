@@ -8,21 +8,23 @@ At any time, if you press **Ctrl+H (Cmd+Shift+H on Mac)**, a popup will appear r
 	The point about the F-row matters on a programmable or custom keyboard, of the sort a writerdeck is often built from. If your F-row only acts as **F1**-**F12** while you hold an **Fn** key, then without it your board is sending entirely different keys - and the keyboard decides that before the computer ever sees it, so no program can tell what you meant. You can simply bind whichever keys it does send. Most boards also have an Fn-lock that flips the two around for good.
 	Some of those keys have no name at all, and are listed by what the computer calls their position on the board instead - a key may show up as something like **Show All Windows**. That is the key itself rather than anything it will do here; bound to a shortcut, it runs that shortcut. A few report not even that, and are listed by number, as **Key 183** or the like. Any of them can be bound, and the number is there so you can match the row against what the popup told you when you pressed the key.
 	Only a key that reports nothing whatsoever is refused, since there would be no telling it from the key beside it. When that happens the popup prints exactly what your keyboard reported, which is worth quoting if you would like that key supported.
-	Here is a summary of the defaults (Ctrl is Cmd on Mac unless otherwise noted):
+	The list a script is written with is its own section, ***Screenplay***, and those shortcuts are only in force while a script is the document you are in—which is how the element keys and the prose heading keys can share **Ctrl + 1** to **Ctrl + 6**. They are listed in the ***Screenplay: Elements And Shortcuts*** chapter rather than below.
+	Here is a summary of the defaults for prose (Ctrl is Cmd on Mac unless otherwise noted):
 
 # Navigation
- View Previous Chapter	: **Ctrl + Up**
-	 View Next Chapter	: **Ctrl + Down**
+ View Previous Chapter / Scene	: **Ctrl + Up**
+	 View Next Chapter / Scene	: **Ctrl + Down**
 	 Shift Focus To Editor	: **Ctrl + Left**
 	 Shift Focus To Notes	: **Ctrl + Right**
+	 Jump To Reference / Back	: **Ctrl + Alt + R**
 	 Page Up	: **Page Up**
 	 Page Down	: **Page Down**
 	 Jump To Start	: **Ctrl + Home**
 	 Jump To End	: **Ctrl + End**
 
 # Alteration
- Move Chapter Up	: **Ctrl + Shift + Up**
-	 Move Chapter Down	: **Ctrl + Shift + Down**
+ Move Chapter / Scene Up	: **Ctrl + Shift + Up**
+	 Move Chapter / Scene Down	: **Ctrl + Shift + Down**
 	 Change Chapter Label	: **Ctrl + Shift + Left**
 
 # Formatting
@@ -40,6 +42,7 @@ At any time, if you press **Ctrl+H (Cmd+Shift+H on Mac)**, a popup will appear r
 	 Italics	: **Ctrl + I**
 	 Bold	: **Ctrl + B**
 	 Underline	: **Ctrl + U**
+	 Upper / Lower / Title Case	: **Ctrl + Shift + K**
 
 # Tool/Menu Navigation
  Open/Navigate File Menu	: **Alt, then arrow keys and Escape** (**Cmd + M** on Mac)

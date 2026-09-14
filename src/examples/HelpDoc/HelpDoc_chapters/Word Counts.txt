@@ -1,5 +1,7 @@
 [>c] # Word Count
 
+(In a screenplay project this dialog is called “Page Count” and measures pages instead—see the ***Screenplay: Page Count*** chapter. What follows is a novel’s word count.)
+
 WareWoolf allows you to view several word counts:
 * Entire project word count
 * Chapter word count

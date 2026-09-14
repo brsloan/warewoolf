@@ -159,6 +159,66 @@
 			"filename": "Word Counts.txt",
 			"filter": null,
 			"summary": null
+		},
+		{
+			"title": "Screenplay: Getting Started",
+			"filename": "Screenplay Getting Started.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Screenplay: Writing With Enter And Tab",
+			"filename": "Screenplay Writing With Enter And Tab.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Screenplay: Elements And Shortcuts",
+			"filename": "Screenplay Elements And Shortcuts.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Screenplay: Suggestions As You Type",
+			"filename": "Screenplay Suggestions As You Type.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Screenplay: Characters And Locations",
+			"filename": "Screenplay Characters And Locations.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Screenplay: Scenes",
+			"filename": "Screenplay Scenes.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Screenplay: Page Count",
+			"filename": "Screenplay Page Count.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Screenplay: Title Page",
+			"filename": "Screenplay Title Page.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Screenplay: Importing And Exporting",
+			"filename": "Screenplay Importing And Exporting.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
+			"title": "Screenplay: The Fountain File",
+			"filename": "Screenplay The Fountain File.txt",
+			"filter": null,
+			"summary": null
 		}
 	],
 	"reference": [],

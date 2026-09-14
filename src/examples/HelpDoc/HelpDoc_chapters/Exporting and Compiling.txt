@@ -1,6 +1,7 @@
 [>c] # Exporting and Compiling
 
 WareWoolf uses “Export” to mean exporting each chapter and your notes individually as their own files, while “Compile” exports everything joined together in one file.
+	This chapter is about a novel. A screenplay is one script, so it exports as one file—PDF, Final Draft, Fountain or plain text—and has no Compile at all. See ***Screenplay: Importing And Exporting***.
 
 # Export Options
 There are several file formats currently supported for export: .docx, .txt, .mdfc (which is the extension for MarkupFic text files), .md (normal Markdown), .html, and .epub.

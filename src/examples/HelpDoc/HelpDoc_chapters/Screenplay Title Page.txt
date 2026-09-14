@@ -1,0 +1,16 @@
+[>c] # Screenplay: Title Page
+
+A script carries its title page inside it, and **File > Properties** is where you fill it in. In a screenplay project the Properties dialog gains a ***Title Page*** block under the usual fields:
+* **Title** and **Author** are the two fields Properties has always had, at the top. They are the title page’s as well.
+* **Credit** — “Written by”, “Screenplay by”, “Based on a story by”.
+* **Source** — the novel, article or true story it comes from.
+* **Draft date**.
+* **Copyright**.
+* **Contact** — your name, address, agent, phone number. Several lines; type them as several lines.
+* **Notes** — anything else that belongs on the front page.
+A field left empty is left off the page entirely, so an unused key is never printed with nothing after it.
+
+# Where It Goes
+On the printed page—the exported PDF—the title, credit, author and source are centered a third of the way down, the contact and notes sit at the bottom left, and the draft date and copyright at the bottom right. That is the standard front page, and the same information is written into the Final Draft and Fountain exports in their own way.
+	In the file, the title page is written at the head of the .fountain on every save, so the script is self-contained: hand the file to someone else and it arrives with its front page. When a project is opened, the .fountain file’s own title page is what is used, so a page edited in another program comes back with your script.
+	A script imported into a screenplay project brings its title page with it—see ***Screenplay: Importing And Exporting***.
