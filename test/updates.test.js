@@ -212,6 +212,28 @@ test('getUpdates reports the release info when a newer version is available', as
   assert.strictEqual(latest.downloadInfo.name, 'warewoolf_2.0.0_amd64.deb');
 });
 
+//About shows the description through innerText, so whatever markdown a release was written in has
+//to be gone by the time it is packaged - otherwise the markers themselves are what reaches the
+//screen. strip-markdown.test.js covers the rules; this covers that they are applied at all.
+test('getUpdates reports the release notes as plain text, not as the markdown they were written in', async function(t){
+  mockReleaseResponse(t, { body: releaseJson('v2.0.0', {
+    body: '## Added\n\n- **Footnotes**, on `Ctrl+Alt+F`.\n- See [the docs](https://warewoolf.org/docs).'
+  }) });
+  const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
+  const origArch = Object.getOwnPropertyDescriptor(process, 'arch');
+  Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+  Object.defineProperty(process, 'arch', { value: 'x64', configurable: true });
+  t.after(function(){
+    Object.defineProperty(process, 'platform', origPlatform);
+    Object.defineProperty(process, 'arch', origArch);
+  });
+  const { getUpdates } = freshUpdates();
+
+  const latest = await new Promise(function(resolve){ getUpdates('1.0.0', resolve); });
+
+  assert.strictEqual(latest.description, 'Added\n\n- Footnotes, on Ctrl+Alt+F.\n- See the docs.');
+});
+
 test('getUpdates reports null when already on the latest version', async function(t){
   mockReleaseResponse(t, { body: releaseJson('v1.0.0') });
   const { getUpdates } = freshUpdates();

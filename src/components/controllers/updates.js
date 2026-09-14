@@ -1,6 +1,7 @@
 const { logError } = require('./error-log');
 const { createPlatform } = require('./platform');
 const { createIpcBacking } = require('./platform-ipc');
+const { stripMarkdown } = require('./strip-markdown');
 
 //checkForUpdate/downloadUpdate/installUpdate take no injected config - every argument is already a
 //full path/URL, or nothing at all - so this holds its own standing instance, the same reason
@@ -46,7 +47,11 @@ function packageReleaseData(releaseData){
     var packagedData = {
         tag: releaseData.tag_name,
         prerelease: releaseData.prerelease,
-        description: releaseData.body,
+        //Stripped here rather than in about_display.js, because this is where the GitHub API's own
+        //shape is translated into WareWoolf's: body is markdown because that is what a release is
+        //written in, and description is what About will show. Nothing in the app renders markdown,
+        //so a packaged description carrying live markers would only ever be read as its markers.
+        description: stripMarkdown(releaseData.body),
         date: releaseData.published_at,
         binaries: []
     };

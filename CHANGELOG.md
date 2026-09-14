@@ -19,6 +19,7 @@ Releases before v0.9.0 were never tagged or published; the work from that period
 - Keyboard shortcuts carry a mode: the heading, list, blockquote, alignment and footnote shortcuts are bound only while a prose document is shown, the screenplay element shortcuts only while a script is, so the two sets can share Ctrl+1 to Ctrl+6 and Ctrl+E. The Shortcuts popup lists a new Screenplay section, and the chapter navigation rows read "Chapter / Scene".
 - **Upper / Lower / Title Case** on `Ctrl+Shift+K`, in prose and scripts: the selection, or the word at the caret, cycles through capitals, lower case and Title Case.
 - The chapter-save commands take an optional file extension (`.txt` or `.fountain`), and the project file carries a `type`, a `titlePage` and a screenplay's added character and location names. Older builds open a screenplay project as prose with the Fountain markup visible, losing nothing, and write those fields back out untouched.
+- **Check For Updates shows a new version's release notes as plain text.** The notes are written in Markdown on GitHub, and About has nowhere to render Markdown, so until now every marker in them arrived on screen as itself — `### Fixed`, `**Footnotes**`, `[the docs](https://...)`. The markers are taken off and the notes keep their shape: a heading on its own line, one bullet per item, a link read as the words it was written on.
 
 ### Fixed
 
