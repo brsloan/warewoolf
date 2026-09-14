@@ -38,10 +38,10 @@ A 64-bit Raspberry Pi (3, 4, 5, Zero 2 W or later); WareWoolf’s current releas
 The WareWoolf source code includes a script, scripts/setup-writerdeck.sh, that does every step in the next section for you.
 	1. Write Raspberry Pi OS Lite (64-bit) to the card with the Raspberry Pi Imager. In the Imager’s settings, set a username and password, your Wi-Fi network, and enable SSH. Boot the Pi.
 	2. Log in, at the Pi’s keyboard or over SSH from another computer.
-	3. Download the script and read it:
+	3. Download the script and read it. Reading the source is the only real check on a script you are about to give sudo to; nothing it prints about itself can stand in for that:
 		curl -fsSLO https://raw.githubusercontent.com/brsloan/warewoolf/main/scripts/setup-writerdeck.sh
 		less setup-writerdeck.sh
-	4. See what it will do, without changing anything:
+	4. Once you trust it, preview what it will do on this machine (which release, which files, your username filled in), changing nothing:
 		bash setup-writerdeck.sh --dry-run
 	5. Run it, as your ordinary user, not with sudo (it asks for your password where it needs it):
 		bash setup-writerdeck.sh

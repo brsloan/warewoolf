@@ -31,7 +31,9 @@
 # and the block it adds to ~/.bash_profile sits between marker comments so the
 # script can be run again safely and the block can be removed by hand.
 #
-# Run with --dry-run from any machine to see exactly what it would do.
+# Run with --dry-run from any machine to preview what it would do here. That
+# is the script describing itself, so read the source first; the dry run is
+# for seeing your own machine's details filled in, not for deciding to trust it.
 #
 # Options:
 #   --deb PATH            Install this .deb instead of downloading one.
