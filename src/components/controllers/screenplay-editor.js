@@ -1306,6 +1306,8 @@ function startingWith(list, typed){
 //replacing the line's text from offset `from` to offset `to`. A list is offered before anything
 //is typed too - the next speaker on an empty cue, the intros on an empty heading, the times after
 //" - " - and Enter or Tab takes its first entry like any other; Escape is the way past it.
+//`handOnAs` names the key the accepted line is handed on to instead of the one pressed: a cue is
+//handed on as Enter either way, so Tab opens the speech rather than a parenthetical.
 //
 //  cue, empty                -> the speakers, next-speaker first
 //  cue, "BO"                 -> the names starting with it
@@ -1327,17 +1329,17 @@ function suggestionsFor(delta, type, lineText, lineStart, names){
         return null;
       var typedExtension = open[2].trim().toUpperCase();
       var extensions = startingWith(EXTENSIONS, typedExtension).map(function(extension){ return '(' + extension + ')'; });
-      return extensions.length > 0 ? { typed: typedExtension, prefix: name + ' ', suffix: '', from: 0, to: text.length, suggestions: extensions } : null;
+      return extensions.length > 0 ? { typed: typedExtension, prefix: name + ' ', suffix: '', from: 0, to: text.length, handOnAs: 'enter', suggestions: extensions } : null;
     }
 
     var typedName = text.trim().toUpperCase();
     if(typedName === ''){
       var speakers = speakersFor(delta, lineStart || 0, characterList);
-      return speakers.length > 0 ? { typed: '', prefix: '', suffix: '', from: 0, to: text.length, suggestions: speakers } : null;
+      return speakers.length > 0 ? { typed: '', prefix: '', suffix: '', from: 0, to: text.length, handOnAs: 'enter', suggestions: speakers } : null;
     }
 
     var cast = startingWith(mergeNames(characterNames(delta), characterList.added, characterList.removed), typedName);
-    return cast.length > 0 ? { typed: typedName, prefix: '', suffix: '', from: 0, to: text.length, suggestions: cast } : null;
+    return cast.length > 0 ? { typed: typedName, prefix: '', suffix: '', from: 0, to: text.length, handOnAs: 'enter', suggestions: cast } : null;
   }
 
   if(type === 'scene'){
@@ -1379,14 +1381,15 @@ function suggestionsFor(delta, type, lineText, lineStart, names){
 //The suggestion box: a list under the caret while a cue, heading or transition is being typed,
 //moved through with the arrow keys, accepted with Enter, Tab, the right arrow or a click - the
 //first entry unless the arrows chose another - dismissed with Escape (and brought back with
-//Escape again) or by typing on to something it has nothing for. Enter and Tab go on to do what they do on the line once the text is in - Enter on a
-//cue opens the speech, Tab the parenthetical - which is what makes a name one keypress. Its keys
-//are Quill bindings unshifted ahead of the screenplay ones and guarded on the box being open,
-//rather than one-shot listeners racing each other, which is what the abandoned first attempt
-//had. Positioned from quill.getBounds, so it needs no DOM of the editor's own read; the names and
-//places come from the delta. `isEnabled` is the Settings switch, asked on every refresh, and
-//`getAddedNames` the project's own { characters, locations } - asked on every refresh for the same
-//reason, since the Characters/Locations dialog can change it while the editor is open.
+//Escape again) or by typing on to something it has nothing for. Enter and Tab go on to do what
+//they do on the line once the text is in - and on a cue Tab does what Enter does, opening the
+//speech - which is what makes a name one keypress. Its keys are Quill bindings unshifted ahead of
+//the screenplay ones and guarded on the box being open, rather than one-shot listeners racing
+//each other, which is what the abandoned first attempt had. Positioned from quill.getBounds, so
+//it needs no DOM of the editor's own read; the names and places come from the delta. `isEnabled`
+//is the Settings switch, asked on every refresh, and `getAddedNames` the project's own
+//{ characters, locations } - asked on every refresh for the same reason, since the
+//Characters/Locations dialog can change it while the editor is open.
 function attachAutocomplete(quill, getMode, isEnabled, getAddedNames){
   var box = null;
   var current = null;
@@ -1468,7 +1471,10 @@ function attachAutocomplete(quill, getMode, isEnabled, getAddedNames){
 
   //The chosen text replaces the part of the line it completes, as one user change, and the caret
   //lands after it. Then the key that accepted it does what it would do there: `key` is 'enter' or
-  //'tab' for the screenplay binding to run, or null for a click or the right arrow.
+  //'tab' for the screenplay binding to run, or null for a click or the right arrow. A completed
+  //cue hands on as Enter whichever of the two accepted it - a name is one keypress from the
+  //speech that follows it either way, rather than Tab landing in a parenthetical the writer
+  //reached for the name, not it.
   function accept(key){
     if(!current)
       return;
@@ -1477,6 +1483,7 @@ function attachAutocomplete(quill, getMode, isEnabled, getAddedNames){
     var length = current.to - current.from;
     var replacement = current.prefix + current.suggestions[selected] + current.suffix;
     var handOn = current.handOn !== false;
+    var handOnKey = current.handOnAs || key;
     var Delta = Quill.import('delta');
 
     //Closed before the change goes in: the change is a user text-change, which would otherwise
@@ -1492,7 +1499,7 @@ function attachAutocomplete(quill, getMode, isEnabled, getAddedNames){
       accepting = false;
     }
 
-    var binding = key && handOn ? screenplayBindingFor(quill, key) : null;
+    var binding = key && handOn ? screenplayBindingFor(quill, handOnKey) : null;
     if(binding)
       binding.handler.call(quill.keyboard, { index: start + replacement.length, length: 0 }, {});
   }

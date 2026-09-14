@@ -510,9 +510,11 @@ like any other, so a guessed speaker is one keypress; Escape is the way past
 it, after which Enter on the empty cue makes it action as before. Enter, Tab,
 the right arrow or a click accepts, the first entry unless the arrows chose
 another; Enter and Tab then do what they do on the line once the text
-is in, so a name is one keypress from its speech and Tab after a location puts
-in the ` - ` and offers the times. Escape dismisses, and Escape again brings
-the list back. Up and Down move within it, wrapping. The box is a popup
+is in, so a name is one keypress from its speech - a completed cue is handed
+on as Enter whichever of the two accepted it, since a writer who reached for
+the name wants the speech, not the parenthetical Tab would otherwise open -
+and Tab after a location puts in the ` - ` and offers the times. Escape
+dismisses, and Escape again brings the list back. Up and Down move within it, wrapping. The box is a popup
 positioned from `quill.getBounds`, and its keys go through Quill bindings
 guarded on the box being open rather than the one-shot `keydown` listeners the
 branch used, which raced each other. The whole thing is a Settings switch

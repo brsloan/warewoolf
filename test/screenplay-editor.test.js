@@ -850,7 +850,7 @@ test('the suggestion box opens under a cue being typed, accepts with Enter, and 
   assert.strictEqual(s.key(13, end + 8), true);
 });
 
-test('Tab accepts and opens the parenthetical; the right arrow and a click accept and stay', function(){
+test('Tab on a cue accepts and opens the speech, as Enter does; the right arrow and a click accept and stay', function(){
   var s = boxQuill(elementsToDelta(parseFountain(CAST).elements));
   var end = s.quill.getLength() - 1;
   s.quill.insertText(end, '\n', 'user');
@@ -858,7 +858,17 @@ test('Tab accepts and opens the parenthetical; the right arrow and a click accep
 
   s.type(end + 1, 'E');
   assert.strictEqual(s.key(9, end + 2), false);
-  assert.deepStrictEqual(lines(s.quill).slice(-2), [['character', 'EDWARD'], ['parenthetical', '()']]);
+  assert.deepStrictEqual(lines(s.quill).slice(-2), [['character', 'EDWARD'], ['dialogue', '']], 'the speech the writer reached for the name for, not a parenthetical');
+  assert.strictEqual(s.quill.getSelection().index, end + 8, 'the caret is on the speech');
+
+  //An extension leaves a completed cue too: Tab there opens the speech, not the parenthetical.
+  s = boxQuill(elementsToDelta(parseFountain(CAST).elements));
+  end = s.quill.getLength() - 1;
+  s.quill.insertText(end, '\n', 'user');
+  s.quill.formatLine(end + 1, 1, 'element', 'character', 'user');
+  s.type(end + 1, 'EDWARD (v');
+  assert.strictEqual(s.key(9, end + 10), false);
+  assert.deepStrictEqual(lines(s.quill).slice(-2), [['character', 'EDWARD (V.O.)'], ['dialogue', '']]);
 
   s = boxQuill(elementsToDelta(parseFountain(CAST).elements));
   end = s.quill.getLength() - 1;
