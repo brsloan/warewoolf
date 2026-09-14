@@ -904,3 +904,72 @@ test('testChapsDirectory reports nothing missing, loudly, when the check itself 
   assert.deepStrictEqual(await proj.testChapsDirectory(), []);
   assert.strictEqual(logged.length, 1);
 });
+
+//---------------------------------------------------------------------------
+// Opening a novel after a screenplay
+//---------------------------------------------------------------------------
+
+//render.js opens every project into the one project object, and a novel's .woolf written before
+//there were screenplays carries none of the screenplay keys - so Object.assign left the last
+//project's type, title page and name lists in place, the novel opened with a script's menus and
+//dialogs, and the save every open ends in wrote `type: 'screenplay'` into the novel's own file.
+test('loadFile regression: a novel .woolf with no screenplay keys opened over a screenplay loads as a novel', async function(t){
+  const dir = tempDir(t);
+  const legacyNovel = { filename: '', directory: '', chapsDirectory: '', title: 'Old Book',
+    author: '', chapters: [], reference: [], filters: [], trash: [], activeChapterIndex: 0, wordGoal: 500 };
+  fs.writeFileSync(dir + 'novel.woolf', JSON.stringify(legacyNovel), 'utf8');
+
+  const proj = newProject();
+  proj.type = 'screenplay';
+  proj.titlePage = [{ key: 'Title', values: ['Big Fish'] }];
+  proj.screenplayNames = { characters: { added: ['ZELDA'], removed: [] }, locations: { added: [], removed: [] } };
+  proj.pageGoal = 90;
+
+  await proj.loadFile(dir + 'novel.woolf');
+
+  assert.strictEqual(proj.type, 'novel');
+  assert.strictEqual(proj.isScreenplay(), false);
+  assert.deepStrictEqual(proj.titlePage, []);
+  assert.deepStrictEqual(proj.screenplayNames, { characters: { added: [], removed: [] }, locations: { added: [], removed: [] } });
+  assert.strictEqual(proj.pageGoal, 0);
+  assert.strictEqual(proj.wordGoal, 500);
+  assert.strictEqual(proj.title, 'Old Book');
+});
+
+//The files that bug already wrote: a novel stamped as a screenplay. Its Chapters list gives it
+//away - a screenplay project's is its one .fountain script, a novel's is prose chapters.
+test('loadFile repairs a novel whose file the bug stamped as a screenplay', async function(t){
+  const dir = tempDir(t);
+  const chapsDir = 'p_chapters/';
+  fs.mkdirSync(dir + chapsDir);
+  fs.writeFileSync(dir + chapsDir + 'a.txt', 'Text.\n', 'utf8');
+  fs.writeFileSync(dir + chapsDir + 'b.fountain', 'INT. HOUSE - DAY\n', 'utf8');
+
+  const stamped = { title: 'Novel', author: 'A', chapsDirectory: chapsDir, type: 'screenplay',
+    titlePage: [{ key: 'Title', values: ['Big Fish'] }],
+    screenplayNames: { characters: { added: ['ZELDA'], removed: [] }, locations: { added: [], removed: [] } },
+    chapters: [{ title: 'One', filename: 'a.txt' }], reference: [], trash: [] };
+  fs.writeFileSync(dir + 'stamped.woolf', JSON.stringify(stamped), 'utf8');
+
+  const novel = newProject();
+  await novel.loadFile(dir + 'stamped.woolf');
+  assert.strictEqual(novel.type, 'novel');
+  assert.deepStrictEqual(novel.titlePage, []);
+  assert.deepStrictEqual(novel.screenplayNames, { characters: { added: [], removed: [] }, locations: { added: [], removed: [] } });
+
+  //A real screenplay - its Chapters list is the script - is left exactly as it is.
+  const script = Object.assign({}, stamped, { chapters: [{ title: 'Novel', filename: 'b.fountain' }] });
+  fs.writeFileSync(dir + 'script.woolf', JSON.stringify(script), 'utf8');
+  const screenplay = newProject();
+  await screenplay.loadFile(dir + 'script.woolf');
+  assert.strictEqual(screenplay.type, 'screenplay');
+  assert.deepStrictEqual(screenplay.titlePage, [{ key: 'Title', values: ['Big Fish'] }]);
+  assert.deepStrictEqual(screenplay.screenplayNames.characters.added, ['ZELDA']);
+
+  //And one with nothing in Chapters says nothing either way, so the file's word stands.
+  const emptied = Object.assign({}, stamped, { chapters: [] });
+  fs.writeFileSync(dir + 'emptied.woolf', JSON.stringify(emptied), 'utf8');
+  const kept = newProject();
+  await kept.loadFile(dir + 'emptied.woolf');
+  assert.strictEqual(kept.type, 'screenplay');
+});

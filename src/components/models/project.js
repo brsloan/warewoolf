@@ -99,7 +99,14 @@ function newProject(){
         //do.
         var opened = await platform.openProject({ path: projPath });
 
-        Object.assign(this, opened.project);
+        //Every key a fresh project has, at its default, laid down before the file's own - so a key
+        //the file does not carry is reset rather than kept from whatever this object held last.
+        //render.js opens every project into the one project object, and a novel's .woolf written
+        //before there were screenplays has no `type`, `titlePage` or `screenplayNames`: opening
+        //one after a screenplay used to keep all three from the screenplay, show the novel with a
+        //script's menus and dialogs, and then write the wrong type into the novel's own file on the
+        //save every open ends in (render.js's convertLegacyProject).
+        Object.assign(this, newProject(), opened.project);
 
         //Object.assign copies whatever was in the file and nothing validates it - the same hole the
         //isReadOnly comment above documents for a hand-edited .woolf. A `.woolf` with
@@ -135,6 +142,17 @@ function newProject(){
           trashChaps.push(newChapter(proj).parseChapter(tr));
         });
         this.trash = trashChaps;
+
+        //A novel whose file says screenplay: what the bug above left behind, since the mis-typed
+        //novel was saved back out as a screenplay. Told apart by its Chapters list, which for a
+        //screenplay project is its one .fountain script and nothing else (render.js never lets a
+        //prose document into it - restoreChapter sends one to Reference instead), and for a novel
+        //is prose chapters. An empty list says nothing either way and is left as the file has it.
+        if(this.type === 'screenplay' && this.chapters.length > 0 && !this.chapters.some(newChapter.isFountainChapter)){
+          this.type = 'novel';
+          this.titlePage = [];
+          this.screenplayNames = sanitizeNameLists(null);
+        }
 
         this.initNotesChap();
 
