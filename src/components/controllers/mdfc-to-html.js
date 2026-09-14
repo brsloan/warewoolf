@@ -285,7 +285,13 @@ function consolidateFootnotes(text, allMarkers){
     return text;
 }
 
-function convertMdfcToHtmlPage(text, title, author = null, insertTitle = false){
+//The measure a page is held to when the writer asks for one: 66 characters, the line length
+//typography has long held easiest to read, instead of prose run the full width of a maximised
+//browser window. In ch rather than px so the measure is counted in the reader's own font - a ch is
+//the width of its "0" - and so holds to 66 characters whatever face and size the page is read at.
+const READABLE_MAX_WIDTH = '66ch';
+
+function convertMdfcToHtmlPage(text, title, author = null, insertTitle = false, maxWidth = false){
     var titleElements = '';
     if(insertTitle){
         titleElements = '<h1 class="center">' + title + '<h1>';
@@ -295,20 +301,39 @@ function convertMdfcToHtmlPage(text, title, author = null, insertTitle = false){
     }
         
 
-    var htmlTemplate = getHtmlTemplate();
+    var htmlTemplate = getHtmlTemplate(maxWidth);
     htmlTemplate = htmlTemplate.replace('<!-- title -->', title);
     htmlTemplate = htmlTemplate.replace('<!-- page content -->', titleElements + convertMdfcToHtml(text));
   
     return htmlTemplate;
   }
   
-  function getHtmlTemplate(){
+  //An unasked-for page is written exactly as it always was, with no body rule at all, so a file
+  //already styled by whatever reads it is not given a width it never had.
+  function getHtmlTemplate(maxWidth = false){
+    //"margin: 0 auto" rather than a bare max-width: left and right margins of auto share whatever
+    //the window has over the measure evenly, so the text block sits in the middle of the page
+    //instead of hugging the left edge with all the empty space on one side.
+    //
+    //The padding is what the zeroed margin would otherwise cost a narrow window: below the measure
+    //there is no spare width for "auto" to divide, so the lines would run right up against both
+    //edges of a phone or a half-width window - where the browser's own default body margin had
+    //always kept a few pixels of gutter. In em, so the gutter scales with the text as the measure
+    //itself does.
+    var bodyStyle = maxWidth ?
+      "      body {" +
+      "        max-width: " + READABLE_MAX_WIDTH + ";" +
+      "        margin: 0 auto;" +
+      "        padding: 0 1em;" +
+      "      }" : "";
+
     return "<!DOCTYPE html>" +
       "<html lang=\"en\">" +
       "  <head>" +
       "    <meta charset=\"utf-8\">" +
       "    <title><!-- title --></title>" +
       "    <style>" +
+      bodyStyle +
       "      h1 {" +
       "        white-space: pre-wrap;" +
       "      }" +

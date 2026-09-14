@@ -57,6 +57,7 @@ const SETTINGS_SCHEMA = {
   compileInsertHeaders: { type: 'boolean' },
   compileGenTitlePage: { type: 'boolean' },
   markSceneBreaks: { type: 'boolean' },
+  htmlMaxWidth: { type: 'boolean' },
   backupDirectory: { type: 'string', nullable: true },
   autoBackup: { type: 'boolean' },
   backupsToKeep: { type: 'number' },
@@ -102,6 +103,10 @@ function getUserSettings(userSettingsFilepath){
     //convention whichever way the book leaves WareWoolf - a writer who marks their scene breaks
     //wants them marked in both. Off by default: a hash on a blank line is a change to the text.
     markSceneBreaks: false,
+    //Shared by Compile and Export for the same reason markSceneBreaks is: a writer who wants their
+    //HTML held to a readable measure wants it whichever way the book leaves WareWoolf. Off by
+    //default so a page exported by an older build is still written exactly as it was.
+    htmlMaxWidth: false,
     backupDirectory: null,
     autoBackup: true,
     backupsToKeep: 10,

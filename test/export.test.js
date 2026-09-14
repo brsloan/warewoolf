@@ -410,3 +410,30 @@ test('exportProject centers the scene-break mark in .html output', async functio
   var html = fs.readFileSync(path.join(dir, 'Test Project', '0001_Chapter One.html'), 'utf8');
   assert.match(html, /class="center">#</);
 });
+
+//The Export dialog's "Set Max Width For Readability", carried through to the page's stylesheet.
+test('exportProject holds .html to a readable measure when the option is set', async function(t){
+  var chap = makeChapter(sceneDelta('One.'));
+  chap.title = 'Chapter One';
+  var project = makeTestProject([chap]);
+  var dir = tempDir(t);
+  var options = { type: '.html', what: 'project', styleHeadingAsChapter: true, generateTitlePage: false, markSceneBreaks: false, htmlMaxWidth: true };
+
+  await exportProject(project, {}, options, dir);
+
+  var html = fs.readFileSync(path.join(dir, 'Test Project', '0001_Chapter One.html'), 'utf8');
+  assert.match(html, /max-width:\s*66ch/);
+});
+
+test('exportProject leaves .html unstyled by width when the option is off', async function(t){
+  var chap = makeChapter(sceneDelta('One.'));
+  chap.title = 'Chapter One';
+  var project = makeTestProject([chap]);
+  var dir = tempDir(t);
+  var options = { type: '.html', what: 'project', styleHeadingAsChapter: true, generateTitlePage: false, markSceneBreaks: false, htmlMaxWidth: false };
+
+  await exportProject(project, {}, options, dir);
+
+  var html = fs.readFileSync(path.join(dir, 'Test Project', '0001_Chapter One.html'), 'utf8');
+  assert.doesNotMatch(html, /max-width/);
+});

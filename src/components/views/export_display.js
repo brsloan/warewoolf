@@ -95,6 +95,31 @@ function showExportOptions(project, userSettings, sysDirectories){
 
     exportForm.appendChild(document.createElement('br'));
 
+    //Only .html carries a stylesheet for this to be written into, so the box greys out for every
+    //other file type - the same way Compile greys out its title page for the types that have
+    //nowhere to put one.
+    var maxWidthOption = document.createElement('span');
+    maxWidthOption.classList.add('checkbox-option');
+    exportForm.appendChild(maxWidthOption);
+
+    var maxWidthLabel = document.createElement('label');
+    maxWidthLabel.innerText = 'Set Max Width For Readability: ';
+    maxWidthLabel.htmlFor = 'max-width-check';
+    maxWidthOption.appendChild(maxWidthLabel);
+
+    var maxWidthCheck = document.createElement('input');
+    maxWidthCheck.type = 'checkbox';
+    maxWidthCheck.id = 'max-width-check';
+    maxWidthCheck.checked = userSettings.htmlMaxWidth;
+    maxWidthCheck.disabled = typeSelect.value !== '.html';
+    maxWidthOption.appendChild(maxWidthCheck);
+
+    typeSelect.onchange = function(){
+      maxWidthCheck.disabled = typeSelect.value !== '.html';
+    };
+
+    exportForm.appendChild(document.createElement('br'));
+
   /*
     var insertHeadLabel = document.createElement("label");
     insertHeadLabel.innerText = "Insert chapter titles as headings: ";
@@ -122,9 +147,10 @@ function showExportOptions(project, userSettings, sysDirectories){
     exportForm.onsubmit = function(e){
       e.preventDefault();
 
-      //The only thing this dialog has ever had worth remembering, and the same setting the Compile
+      //The two boxes worth remembering between exports, and the same two settings the Compile
       //dialog writes - see user-settings.js.
       userSettings.markSceneBreaks = sceneBreakCheck.checked;
+      userSettings.htmlMaxWidth = maxWidthCheck.checked;
       userSettings.save();
 
       var options = {
@@ -132,7 +158,8 @@ function showExportOptions(project, userSettings, sysDirectories){
         what: expProjOp.checked ? 'project' : 'chapter',
         styleHeadingAsChapter: true,
         generateTitlePage: false,
-        markSceneBreaks: sceneBreakCheck.checked
+        markSceneBreaks: sceneBreakCheck.checked,
+        htmlMaxWidth: maxWidthCheck.checked
         //insertHead: insertHeadCheck.checked
       }
       getExportFilePath(project, userSettings, options, sysDirectories, function(){

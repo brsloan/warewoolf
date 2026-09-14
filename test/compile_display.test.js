@@ -26,6 +26,7 @@ function makeUserSettings(overrides){
     compileInsertHeaders: false,
     compileGenTitlePage: true,
     markSceneBreaks: false,
+    htmlMaxWidth: false,
     save: function(){}
   }, overrides);
 }
@@ -194,6 +195,55 @@ test('the scene-break checkbox starts from the saved setting and is passed to co
 
   assert.strictEqual(capturedOptions.markSceneBreaks, true);
   assert.strictEqual(savedCalls, 1, 'the choice should be remembered for next time');
+});
+
+//Only .html has a stylesheet to write the measure into, so the box is offered for that type alone.
+test('the max-width checkbox starts from the saved setting and is passed to compileProject', function(t){
+  var userSettings = makeUserSettings({ compileType: '.html', htmlMaxWidth: true });
+  var capturedOptions = null;
+
+  var showCompileOptions = freshCompileDisplay({
+    showFileDialog: function(dialogOptions, callback){ callback('/docs/My Novel.html'); },
+    showWorking: function(){},
+    hideWorking: function(){},
+    compileProject: function(project, settings, options, filepath, cback){
+      capturedOptions = options;
+      cback();
+    }
+  });
+
+  showCompileOptions({ title: 'My Novel', chapters: [] }, { docs: '/docs', home: '/home' }, userSettings);
+
+  var check = document.getElementById('max-width-check');
+  var label = document.querySelector('label[for="max-width-check"]');
+
+  assert.ok(label, 'expected a label pointing at the max-width checkbox');
+  assert.strictEqual(check.checked, true, 'the box should start from the saved setting');
+  assert.strictEqual(check.disabled, false, 'the box should be live for .html');
+
+  document.querySelector('form').onsubmit({ preventDefault: function(){} });
+
+  assert.strictEqual(capturedOptions.htmlMaxWidth, true);
+  assert.strictEqual(userSettings.htmlMaxWidth, true, 'the choice should be remembered for next time');
+});
+
+test('the max-width checkbox is greyed out for a file type with no stylesheet', function(t){
+  var showCompileOptions = freshCompileDisplay({
+    showFileDialog: function(){},
+    showWorking: function(){},
+    hideWorking: function(){},
+    compileProject: function(){}
+  });
+
+  showCompileOptions({ title: 'My Novel', chapters: [] }, { docs: '/docs', home: '/home' }, makeUserSettings({ compileType: '.docx' }));
+
+  var check = document.getElementById('max-width-check');
+  assert.strictEqual(check.disabled, true, 'a .docx compile has nowhere to put a max width');
+
+  var typeSelect = document.getElementById('filetype-select');
+  typeSelect.value = '.html';
+  typeSelect.onchange();
+  assert.strictEqual(check.disabled, false, 'choosing .html should make the box available');
 });
 
 //The mark is not alignment-only formatting: it puts a character into the text, so it applies to

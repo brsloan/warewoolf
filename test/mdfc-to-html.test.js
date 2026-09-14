@@ -301,3 +301,25 @@ test('an escaped reference does not stop a real one in the same paragraph', func
       + '<div class="footnote" id="fnote_1"><p><sup><a href="#fnoteRef_1">1</a></sup>The note.\n</p></div>\n'
   );
 });
+
+//The Export/Compile option "Set Max Width For Readability": prose run the full width of a maximised
+//browser window is hard to read, so the page can be held to a measure of 66 characters. In ch, the
+//width of the reading font's own "0", so it stays 66 characters at whatever face and size.
+test('the page stylesheet holds the body to a readable measure when asked', function(){
+  const page = convertMdfcToHtmlPage('One.\n', 'Title', null, false, true);
+  const bodyRule = /body\s*\{([^}]*)\}/.exec(page);
+
+  assert.ok(bodyRule, 'expected a body rule in the page stylesheet');
+  assert.match(bodyRule[1], /max-width:\s*66ch/);
+  //Without auto side margins the measure sits against the left edge and every bit of the window's
+  //spare width piles up on the right.
+  assert.match(bodyRule[1], /margin:\s*0 auto/);
+  //And zeroing the margin takes the browser's own gutter with it, so a window narrower than the
+  //measure would run its lines into both edges without this.
+  assert.match(bodyRule[1], /padding:\s*0 1em/);
+});
+
+test('a page written without the option carries no body rule at all', function(){
+  assert.doesNotMatch(convertMdfcToHtmlPage('One.\n', 'Title'), /body\s*\{/);
+  assert.doesNotMatch(convertMdfcToHtmlPage('One.\n', 'Title', null, false, false), /body\s*\{/);
+});

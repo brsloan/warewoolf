@@ -188,7 +188,7 @@ async function exportChapter(project, chapterTitle, author, chapDelta, filepathN
             await exportChapAsMd(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.generateTitlePage);
             break;
         case ".html":
-            await exportChapAsHtml(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.generateTitlePage);
+            await exportChapAsHtml(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.generateTitlePage, options.htmlMaxWidth);
             break;
         case ".epub":
             exportChapAsEpub(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.generateTitlePage, taskStarted, taskDone);
@@ -242,10 +242,10 @@ async function exportChapAsMd(projectTitle, chapTitle, author, chapDelta, filepa
   await platform.writeTextFile({ path: filepathNameNoExt + '.md', contents: convertMdfcToMd(convertDeltaToMDF(chapDelta)) });
 }
 
-async function exportChapAsHtml(projectTitle, chapTitle, author, chapDelta, filepathNameNoExt, generateTitlePage){
+async function exportChapAsHtml(projectTitle, chapTitle, author, chapDelta, filepathNameNoExt, generateTitlePage, maxWidth){
   await platform.writeTextFile({
     path: filepathNameNoExt + '.html',
-    contents: convertMdfcToHtmlPage(convertDeltaToMDF(chapDelta), projectTitle + ": " + chapTitle, author, generateTitlePage)
+    contents: convertMdfcToHtmlPage(convertDeltaToMDF(chapDelta), projectTitle + ": " + chapTitle, author, generateTitlePage, maxWidth)
   });
 }
 

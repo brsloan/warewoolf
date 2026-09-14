@@ -41,7 +41,7 @@ function sysDirectories(){
 //(the scene-break box is remembered between exports), so a bare {} would throw where the app does
 //not.
 function makeUserSettings(overrides){
-  return Object.assign({ markSceneBreaks: false, save: function(){} }, overrides);
+  return Object.assign({ markSceneBreaks: false, htmlMaxWidth: false, save: function(){} }, overrides);
 }
 
 test.beforeEach(function(){
@@ -285,6 +285,41 @@ test('the scene-break checkbox starts from the saved setting and is passed to ex
 
   assert.strictEqual(capturedOptions.markSceneBreaks, true);
   assert.strictEqual(savedCalls, 1, 'the choice should be remembered for next time');
+});
+
+//Only .html has a stylesheet to write the measure into, so the box is offered for that type alone.
+test('the max-width checkbox starts from the saved setting and is passed to exportProject', function(t){
+  var userSettings = makeUserSettings({ htmlMaxWidth: true });
+  var capturedOptions = null;
+
+  var showExportOptions = freshExportDisplay({
+    showFileDialog: function(dialogOptions, callback){ callback('/docs/My Novel'); },
+    showWorkingAndThen: function(status, cb){ cb(); },
+    hideWorking: function(){},
+    exportProject: function(project, settings, options, filepath, cback){
+      capturedOptions = options;
+      cback(0);
+    }
+  });
+
+  showExportOptions({ title: 'My Novel', chapters: [] }, userSettings, sysDirectories());
+
+  var check = document.getElementById('max-width-check');
+  var label = document.querySelector('label[for="max-width-check"]');
+
+  assert.ok(label, 'expected a label pointing at the max-width checkbox');
+  assert.strictEqual(check.checked, true, 'the box should start from the saved setting');
+
+  var typeSelect = document.getElementById('filetype-select');
+  assert.strictEqual(check.disabled, true, 'the dialog opens on .docx, which has nowhere to put a max width');
+  typeSelect.value = '.html';
+  typeSelect.onchange();
+  assert.strictEqual(check.disabled, false, 'choosing .html should make the box available');
+
+  document.querySelector('form').onsubmit({ preventDefault: function(){} });
+
+  assert.strictEqual(capturedOptions.htmlMaxWidth, true);
+  assert.strictEqual(userSettings.htmlMaxWidth, true, 'the choice should be remembered for next time');
 });
 
 test('an unticked scene-break box exports without the mark', function(t){
