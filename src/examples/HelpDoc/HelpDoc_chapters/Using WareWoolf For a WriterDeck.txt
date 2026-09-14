@@ -88,7 +88,7 @@ When you run startx, X reads ~/.xinitrc and runs it. When the last command in it
 	Now test it, at the Pi’s keyboard (not over SSH): type “startx”. WareWoolf should open full screen, alone, with no desktop. Close it (Ctrl+Shift+X) and you should be back at the prompt.
 
 ### 7. Start X at login: ~/.bash_profile
-~/.bash_profile runs every time you log in. Add these lines to it (nano ~/.bash_profile). They run startx only when you are logging in at the first console of the machine itself, so an SSH login or a second console still gives you a normal shell:
+~/.bash_profile runs every time you log in. Add these lines to it (nano ~/.bash_profile). They run startx only when you are logging in at the first console of the machine itself, so an SSH login still gives you a normal shell:
 		if [ -z "$DISPLAY" ] && [ "$(tty)" = /dev/tty1 ]; then
 		    startx -- -nocursor
 		    echo "WareWoolf has closed. Type startx to open it again, or sudo poweroff to shut down."
@@ -107,7 +107,7 @@ WareWoolf’s Wi-Fi Manager talks to NetworkManager through nmcli. Raspberry Pi 
 	That last line is Advanced Options > Network Config > NetworkManager in the raspi-config menus. Switching network stacks may drop an SSH session and forget the Wi-Fi password, so do this last, at the Pi’s keyboard if you can, and reconnect afterwards through WareWoolf’s own Wi-Fi Manager.
 
 ## Living with it
-**Getting to a terminal.** Everything on the Pi is still there behind WareWoolf. Close WareWoolf (Ctrl+Shift+X) and you land at a shell prompt; “startx” reopens it. Or press Ctrl+Alt+F2 at any time for a second console, with WareWoolf still running on the first (Ctrl+Alt+F1 goes back). Or SSH in from another computer.
+**Getting to a terminal.** Everything on the Pi is still there behind WareWoolf. Close WareWoolf (Ctrl+Shift+X) and you land at a shell prompt; “startx” reopens it. Or SSH in from another computer.
 	**Updating WareWoolf.** The Check For Updates button in Help > About tells you when a new version is out. On Linux it cannot install it for you, so close WareWoolf, download the new .deb at the console or over SSH, and install it as in step 4. Or run the setup script again: it reinstalls the latest release and leaves everything else as it was.
 	**Email passwords.** A Lite image has no keyring service, so WareWoolf has nowhere secure to hand your Gmail app password to. When you save it, tick “Protect With Passphrase?” in the Send dialog; WareWoolf will ask for the passphrase once per session.
 	**Screen blanking.** The xset lines in ~/.xinitrc stop X from blanking the screen after ten minutes. If you would like it to blank, to save a battery, delete those three lines.
@@ -120,7 +120,7 @@ On Linux, the File menu ends with a **Reboot** item (it isn’t there on Windows
 ## Troubleshooting
 **It boots to a login prompt, not WareWoolf.** Autologin is not set. Do step 5.
 	**It logs in but just sits at a shell prompt.** The ~/.bash_profile block is missing or not running. Check the file, and that “tty” prints /dev/tty1.
-	**startx gives a black screen and returns.** Look for lines marked EE in ~/.local/share/xorg/Xorg.0.log. If X starts but WareWoolf does not, run warewoolf from a second console (Ctrl+Alt+F2, after “export DISPLAY=:0”) to see what it prints.
+	**startx gives a black screen and returns.** Look for lines marked EE in ~/.local/share/xorg/Xorg.0.log. If X starts but WareWoolf does not, SSH in from another computer and run “DISPLAY=:0 warewoolf” to see what it prints.
 	**WareWoolf closes and immediately reopens.** ~/.bash_profile has “exec startx” in it. Remove the “exec”.
 	**The machine turns off right after booting.** ~/.xinitrc ends with systemctl poweroff and WareWoolf is failing to start. SSH in, or mount the card on another computer, and remove that line, then find out why WareWoolf is not starting.
 	**The Wi-Fi Manager says nmcli is not installed, or shows nothing.** NetworkManager is not running. See step 9.

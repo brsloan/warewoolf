@@ -409,7 +409,6 @@ cat <<EOF
 
     Getting to a terminal later:
       - Close WareWoolf (Ctrl+Shift+X). $( "$POWEROFF_ON_EXIT" && printf '%s' "The machine will power off." || printf '%s' "You land at a shell prompt." )
-      - Or press Ctrl+Alt+F2 for a second console at any time (Ctrl+Alt+F1 to go back).
       - Or SSH in from another computer.
 
     To undo: delete the marker block from ~/.bash_profile, remove ~/.xinitrc,
