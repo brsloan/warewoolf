@@ -1,10 +1,10 @@
 <p align="center">
 	<img src="./src/assets/logo.png" style="width: 280px"/>
 </p>
-<p align="center">v3.0.0</p>
+<p align="center">v3.1.0</p>
 <p align="center">"The only writing software I use." -Virginia Woolf</p>
 
-WareWoolf is designed for one thing: writing fiction. It is intentionally simplified: beyond a choice of typeface for the manuscript and the sidebars, and light or dark, there is nothing to fiddle with--no colors, no styles. But it has everything you need to organize, edit, and revise a novel--and you don't even need a mouse.
+WareWoolf is designed for two things: writing fiction and screenplays. It is intentionally simplified: beyond a choice of typeface for the manuscript and the sidebars, and light or dark, there is little to fiddle with. But it has everything you need to organize, edit, and revise a novel or screenplay--and you don't even need a mouse.
 
 It is composed of three simple text-based panels with no icons: Chapters, Editor, and Notes.
 
