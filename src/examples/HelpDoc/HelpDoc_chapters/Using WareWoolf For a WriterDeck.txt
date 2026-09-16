@@ -1,53 +1,27 @@
 [>c] # Using WareWoolf For A WriterDeck
 
-WareWoolf runs happily on a desktop computer, but it was built for a writerDeck: a machine that does nothing but write. That is why it works without a mouse, why it can email drafts to you, and why on Linux it carries the few pieces of an operating system a writer still needs when there is no desktop behind it.
-	This chapter explains what a writerDeck is, what WareWoolf gives you on one, and how to turn a Raspberry Pi into a device that boots straight into WareWoolf, either with a script that does it all or by hand, one command at a time. The wiki page of the same name (github.com/brsloan/warewoolf/wiki) has the same steps with copy-and-paste command blocks, which may be easier to work from than this document.
+WareWoolf is designed to work on a desktop computer, but its primary purpose is for use on a writerDeck. This is why it is optimized for use without a mouse and has built-in email functions.
+	The wiki page of the same name (github.com/brsloan/warewoolf/wiki) has the same steps as this chapter with copy-and-paste command blocks.
 
 ## What is a writerDeck?
 A writerDeck is a device dedicated specifically and solely to writing. Technically, a typewriter is an analog writerDeck. But usually we mean some sort of computerized word processor, such as the Astrohaus Freewrite or the Alphasmart Neo, to name two of the most popular mass-produced versions. But these tend to be either too expensive or too limited for many writers, so many of us build our own.
-	The term “writerDeck” comes from “cyberDeck”. People argue over what counts as a cyberDeck, but in practice it basically means “a weird cobbled together computer, usually without a mouse and usually homemade, often with a retro-futuristic, cyberpunk vibe.” So a writerDeck is just a cyberDeck dedicated to writing.
 	For more on writerDecks, see www.writerdeck.org.
-
-## Why would anyone want one? Why not just use a computer?
-One major reason is distraction. If your writing machine is also your video watching machine, you may find it difficult to get much writing done. When you use a writerDeck, you can only do one thing: write.
-	A second reason is pleasure. If a significant focus of your life is on writing, and much of your day is spent writing, then having a beautiful, dedicated device for doing it is very nice!
-	A third reason is because they are fun to design and build.
-
-## What WareWoolf does for a writerDeck
-On a machine with no desktop, WareWoolf’s menu *is* the machine’s interface. These are the pieces that exist for that situation. Most are Linux-only, because on Windows and Mac you already have a desktop for all of this.
-	**Full-screen kiosk window.** On Linux, WareWoolf fills the screen with no title bar or borders, so a bare window manager is all it needs underneath.
-	**Wi-Fi Manager** (Tools menu, Ctrl+W, Linux only). Turn Wi-Fi on and off, see your connection and IP address, and join a new network with a password. It needs NetworkManager; see below.
-	**Battery Display** (File > Settings > Display Battery Charge, Linux only). A small charge readout in the corner, turning red below 10%.
-	**File > Reboot** (Linux only). Restart the machine from inside WareWoolf, after the usual unsaved-changes prompt and auto-backup. See the end of this chapter.
-	**File Manager** (Ctrl+Shift+F). Rename, move, copy, delete and unzip files without a desktop file browser.
-	**Send Via Email** (Ctrl+Alt+E). Back up a chapter, the compiled book, or the whole zipped project to your inbox at the end of a session.
-	**Shortcut Helper** (Ctrl+H). Rebind any shortcut, including the odd keys a home-built keyboard sends.
-	**Check For Updates** (Help > About). On Linux this hands you the new .deb to install yourself; see “Updating WareWoolf” below.
 
 ## What you need
 A 64-bit Raspberry Pi (3, 4, 5, Zero 2 W or later); WareWoolf’s current releases are 64-bit only. A microSD card, a screen, and a keyboard. Raspberry Pi OS *Lite* (64-bit), Bookworm or newer; “Lite” means no desktop, which is the point. A network connection during setup. And, optionally but very handily, a second computer to SSH in from, so you can paste commands instead of typing them at the Pi.
 	The same recipe works on any Debian-family machine with no desktop, such as an old laptop with Debian installed and the desktop left out.
 
-## The basic approach
-**OS With No Desktop** + **Display Server** + **Window Manager** + **Your App** = a single-app device.
-	In this case, that means:
-[>c] Raspberry Pi OS Lite + Xorg + Matchbox + WareWoolf
-	Xorg draws to the screen. Matchbox is a tiny window manager whose only job is to give WareWoolf’s window the keyboard. WareWoolf is started as the *last* thing X runs, so when you close it, X exits too, and you are back at a console (or the machine turns itself off, if you prefer).
-
 ## The quick way: the setup script
 The WareWoolf source code includes a script, scripts/setup-writerdeck.sh, that does every step in the next section for you.
 	1. Write Raspberry Pi OS Lite (64-bit) to the card with the Raspberry Pi Imager. In the Imager’s settings, set a username and password, your Wi-Fi network, and enable SSH. Boot the Pi.
-	2. Log in, at the Pi’s keyboard or over SSH from another computer.
-	3. Download the script and read it. Reading the source is the only real check on a script you are about to give sudo to; nothing it prints about itself can stand in for that:
+	2. Log in, at the Pi’s keyboard, or from another computer log in remotely with “ssh yourname@raspberrypi.local”.
+	3. Download the script:
 		curl -fsSLO https://raw.githubusercontent.com/brsloan/warewoolf/main/scripts/setup-writerdeck.sh
-		less setup-writerdeck.sh
-	4. Once you trust it, preview what it will do on this machine (which release, which files, your username filled in), changing nothing:
-		bash setup-writerdeck.sh --dry-run
-	5. Run it, as your ordinary user, not with sudo (it asks for your password where it needs it):
-		bash setup-writerdeck.sh
-	6. Reboot:
+	4. Run it, as your ordinary user, not with sudo (it asks for your password where it needs it):
+		bash setup-writerdeck.sh --poweroff-on-exit
+	5. Reboot:
 		sudo reboot
-	The Pi comes back up, logs you in, and opens WareWoolf.
+	The Pi comes back up, logs you in, and opens WareWoolf. That’s it!
 	Options you can add after the script’s name: **--poweroff-on-exit** shuts the machine down when you close WareWoolf instead of dropping to a console. **--keep-cursor** leaves the mouse pointer visible (it is hidden by default). **--network-manager** installs NetworkManager so the Wi-Fi Manager works on Bullseye (Bookworm and newer already have it). **--deb PATH** installs a .deb you already have instead of downloading the latest release. **--no-autologin** leaves you typing your password at each boot. **--reboot** reboots as soon as it finishes.
 	The script installs the xorg, matchbox-window-manager and x11-xserver-utils packages and the WareWoolf .deb, sets console autologin for your user, writes ~/.xinitrc (backing up any existing one beside it), and adds a marked block to ~/.bash_profile, leaving anything else in that file alone. Running it again is safe. To undo it, delete the marked block from ~/.bash_profile, delete ~/.xinitrc, and set raspi-config > System Options > Boot back to “Console”.
 
@@ -126,4 +100,4 @@ On Linux, the File menu ends with a **Reboot** item (it isn’t there on Windows
 	**The Wi-Fi Manager says nmcli is not installed, or shows nothing.** NetworkManager is not running. See step 9.
 	**File > Reboot says “Interactive authentication required.”** systemd is not treating your login as a local session, which usually means X was started from somewhere other than the console autologin. Reboot from the console, or from WareWoolf once you have booted normally.
 	**The keys on my keyboard are not what WareWoolf expects.** Open the Shortcut Helper (Ctrl+H) and rebind them.
-	**Something else went wrong.** Welcome to tinkering with Linux. The issue tracker at github.com/brsloan/warewoolf/issues and www.writerdeck.org are both good places to ask.
+	**Something else went wrong.** Welcome to tinkering with Linux. The issue tracker at github.com/brsloan/warewoolf/issues is a good place to ask.
