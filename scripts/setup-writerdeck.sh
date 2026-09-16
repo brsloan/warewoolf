@@ -56,7 +56,7 @@ REPO="brsloan/warewoolf"
 USER="${USER:-$(id -un)}"
 
 DEB_PATH=""
-VERSION=""
+WW_VERSION=""
 POWEROFF_ON_EXIT=false
 KEEP_CURSOR=false
 NETWORK_MANAGER=false
@@ -74,8 +74,8 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --deb) DEB_PATH="${2:-}"; shift 2;;
     --deb=*) DEB_PATH="${1#*=}"; shift;;
-    --version) VERSION="${2:-}"; shift 2;;
-    --version=*) VERSION="${1#*=}"; shift;;
+    --version) WW_VERSION="${2:-}"; shift 2;;
+    --version=*) WW_VERSION="${1#*=}"; shift;;
     --poweroff-on-exit) POWEROFF_ON_EXIT=true; shift;;
     --keep-cursor) KEEP_CURSOR=true; shift;;
     --network-manager) NETWORK_MANAGER=true; shift;;
@@ -178,7 +178,7 @@ if [ -n "$DEB_PATH" ] && [ ! -f "$DEB_PATH" ]; then
   require "--deb: $DEB_PATH is not a file."
 fi
 
-if [ -n "$DEB_PATH" ] && [ -n "$VERSION" ]; then
+if [ -n "$DEB_PATH" ] && [ -n "$WW_VERSION" ]; then
   die "--deb and --version cannot be used together."
 fi
 
@@ -195,11 +195,16 @@ if "$has_desktop" && ! "$FORCE"; then
   require "A desktop or display manager seems to be installed. This script is meant for Raspberry Pi OS *Lite* (no desktop). Re-run with --force if you know what you are doing."
 fi
 
+# Read the OS name out of os-release rather than sourcing it: the file is shell
+# syntax, but sourcing it would define its own VERSION, ID, NAME and so on in
+# this script's namespace. (That is how the first version of this script asked
+# GitHub for a WareWoolf release called "13 (trixie)".) The release variable is
+# WW_VERSION for the same reason.
+os_name=""
 if [ -r /etc/os-release ]; then
-  # shellcheck disable=SC1091
-  . /etc/os-release
-  note "System: ${PRETTY_NAME:-unknown} ($(uname -m))"
+  os_name="$(sed -n 's/^PRETTY_NAME="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' /etc/os-release | head -n 1)"
 fi
+note "System: ${os_name:-unknown} ($(uname -m))"
 note "User: $USER  Home: $HOME"
 
 # ---------------------------------------------------------------------------
@@ -218,12 +223,12 @@ run sudo apt-get install -y xorg matchbox-window-manager x11-xserver-utils curl 
 say "3. Installing WareWoolf"
 
 if [ -z "$DEB_PATH" ]; then
-  if [ -n "$VERSION" ]; then
-    api="https://api.github.com/repos/$REPO/releases/tags/v${VERSION#v}"
+  if [ -n "$WW_VERSION" ]; then
+    api="https://api.github.com/repos/$REPO/releases/tags/v${WW_VERSION#v}"
   else
     api="https://api.github.com/repos/$REPO/releases/latest"
   fi
-  note "Looking up the ${VERSION:+v${VERSION#v} }release for $DEB_ARCH at $api"
+  note "Looking up the ${WW_VERSION:+v${WW_VERSION#v} }release for $DEB_ARCH at $api"
   if "$DRY_RUN"; then
     DEB_PATH="/tmp/warewoolf_${DEB_ARCH}.deb"
     note "would download the *_${DEB_ARCH}.deb asset of that release to $DEB_PATH"
