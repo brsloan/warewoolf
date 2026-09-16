@@ -1,4 +1,5 @@
 const { closePopups, createButton, removeElementsByClass, generateRow, describeDialog } = require('../controllers/utils');
+const { getTitlePageValues, setTitlePageValues } = require('../controllers/fountain');
 
 function showProperties(project, userSettings){
     removeElementsByClass('popup');
@@ -38,6 +39,44 @@ function showProperties(project, userSettings){
 
     propForm.appendChild(propTable);
 
+    //A screenplay's title page (docs/screenplay-plan.md): the Fountain keys beyond Title and
+    //Author, which the two fields above already carry and are mirrored into on Apply. Written
+    //back through fountain.js's helpers so the order of keys the writer had is kept, and a field
+    //left empty takes its key out rather than writing "Credit:" with nothing after it.
+    var titlePageInputs = [];
+    if(project.type === 'screenplay'){
+      var titlePageSet = document.createElement('fieldset');
+      var titlePageLegend = document.createElement('legend');
+      titlePageLegend.innerText = 'Title Page';
+      titlePageSet.appendChild(titlePageLegend);
+
+      var titlePageTable = document.createElement('table');
+      [
+        { key: 'Credit', multiline: false },
+        { key: 'Source', multiline: false },
+        { key: 'Draft date', multiline: false },
+        { key: 'Copyright', multiline: false },
+        { key: 'Contact', multiline: true },
+        { key: 'Notes', multiline: true }
+      ].forEach(function(field){
+        var label = document.createElement('label');
+        label.innerText = field.key + ': ';
+        label.htmlFor = 'title-page-' + field.key.toLowerCase().replace(/\s+/g, '-');
+
+        var input = document.createElement(field.multiline ? 'textarea' : 'input');
+        if(!field.multiline)
+          input.type = 'text';
+        input.id = label.htmlFor;
+        input.value = getTitlePageValues(project.titlePage, field.key).join('\n');
+
+        titlePageTable.appendChild(generateRow(label, input));
+        titlePageInputs.push({ key: field.key, input: input });
+      });
+
+      titlePageSet.appendChild(titlePageTable);
+      propForm.appendChild(titlePageSet);
+    }
+
     var apply = document.createElement("input");
     apply.type = "submit";
     apply.value = "Apply";
@@ -45,6 +84,22 @@ function showProperties(project, userSettings){
       e.preventDefault();
       project.title = titleInput.value;
       project.author = authorInput.value;
+
+      if(project.type === 'screenplay'){
+        var page = setTitlePageValues(project.titlePage, 'Title', [titleInput.value]);
+        page = setTitlePageValues(page, 'Author', [authorInput.value]);
+        titlePageInputs.forEach(function(field){
+          page = setTitlePageValues(page, field.key, field.input.value.split(/\r\n|\r|\n/));
+        });
+        project.titlePage = page;
+
+        //The title page lives in the script's file, so the script is what has to be rewritten.
+        project.chapters.forEach(function(chap){
+          if(chap.format === 'fountain' || /\.fountain$/i.test(chap.filename || ''))
+            chap.hasUnsavedChanges = true;
+        });
+      }
+
       project.hasUnsavedChanges = true;
       closePopups();
     }

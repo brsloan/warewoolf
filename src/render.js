@@ -10,6 +10,24 @@ const { registerKeybindings } = require('./components/controllers/keybindings');
 const { applyQuillShortcuts, splitDeltaAtIndices } = require('./components/controllers/quill-utils');
 const { attachAutocorrect } = require('./components/controllers/autocorrect');
 const { registerFootnoteBlots } = require('./components/blots/footnotes');
+const { registerScreenplayFormats, SCREENPLAY_FORMATS } = require('./components/blots/screenplay');
+const {
+  loadScreenplayDelta,
+  attachScreenplayKeys,
+  attachAutocomplete,
+  attachScreenplayTyping,
+  markEstimatedPages,
+  sceneIndex,
+  sceneAt,
+  previousSceneStart,
+  nextSceneStart,
+  moveScenes,
+  sceneBlock,
+  splitScenes,
+  appendScenes,
+  renameName,
+  elementOf
+} = require('./components/controllers/screenplay-editor');
 const {
   applyStructuralFootnoteChanges,
   containsFootnotes,
@@ -34,7 +52,14 @@ const {
   disableSearchView
 } = require('./components/controllers/utils');
 const { showBattery } = require('./components/views/battery_display');
-const { renderChapterList, renameChapterInList, scrollIntoViewIfNeeded } = require('./components/views/chapter-list_display');
+const { showElementFormat } = require('./components/views/format_display');
+const {
+  renderChapterList,
+  renameChapterInList,
+  renameSceneInList,
+  markActiveSceneRow,
+  scrollIntoViewIfNeeded
+} = require('./components/views/chapter-list_display');
 
 //The single boundary to the OS and the main process - see platform.js. getAppPaths/
 //getFileRequestedOnOpen used to be sendSync calls made here at module load; both are now regular
@@ -52,6 +77,7 @@ var platform = createPlatform(createIpcBacking());
 //the `formats` option) is what makes 'footnote'/'footnoteBody' insertable at all, and Parchment has
 //to know the blot/attributor exists before that whitelist can even name it.
 registerFootnoteBlots();
+registerScreenplayFormats();
 
 var editorQuill = new Quill('#editor-container', {
   modules: {
@@ -66,7 +92,9 @@ var editorQuill = new Quill('#editor-container', {
   //footnote/footnoteBody are editor-only, deliberately absent from notesQuill's own list below - a
   //footnote pasted into notes degrades to literal "[^N]" text instead (see setUpQuills), since a
   //note has no chapter of its own for the body to belong to.
-  formats: ['bold', 'italic', 'strike', 'underline', 'blockquote', 'header', 'align', 'list', 'indent', 'footnote', 'footnoteBody', 'footnoteBodyCont']
+  //The screenplay formats are editor-only too, and absent from notesQuill's list for the same
+  //reason: a script pasted into notes degrades to plain paragraphs.
+  formats: ['bold', 'italic', 'strike', 'underline', 'blockquote', 'header', 'align', 'list', 'indent', 'footnote', 'footnoteBody', 'footnoteBodyCont'].concat(SCREENPLAY_FORMATS)
 });
 
 //Quill's own Enter handler is added unconditionally after the named `options.bindings` loop (see
@@ -255,6 +283,7 @@ async function loadPlatformState(){
       changeChapterTitle: changeChapterTitle,
       displayPreviousChapter: detached(displayPreviousChapter),
       displayNextChapter: detached(displayNextChapter),
+      jumpToReference: detached(jumpToReference),
       togglePanelDisplay: togglePanelDisplay,
       toggleChapterNotes: detached(toggleChapterNotes),
       updatePanelDisplays: updatePanelDisplays,
@@ -291,6 +320,11 @@ async function loadPlatformState(){
     splitChapter,
     editorHasFocus,
     editorIsVisible,
+    editorMode,
+    displayPreviousChapter,
+    displayNextChapter,
+    jumpToReference,
+    scriptPageSession,
     _unregisterKeybindings: unregisterKeybindings
   });
 }
@@ -397,8 +431,17 @@ async function loadInitialProject(){
 }
 
 function setUpQuills(){
-  applyQuillShortcuts(editorQuill, shortcutBindings);
+  applyEditorShortcuts();
   applyQuillShortcuts(notesQuill, shortcutBindings);
+  //Enter, Shift+Enter, Tab and Shift+Tab for a script. Attached once: each asks editorMode() when
+  //it fires and hands the key back to Quill while the editor shows prose. The autocomplete's own
+  //keys go on first, so an open suggestion box takes Enter and Tab before the element cycle does.
+  attachScreenplayKeys(editorQuill, editorMode);
+  //Typing goes on before the autocomplete so a line made a heading on its "INT. " is one when the
+  //suggestion list looks at it. The list itself is a Settings switch, read on every refresh.
+  attachScreenplayTyping(editorQuill, editorMode);
+  attachAutocomplete(editorQuill, editorMode, function(){ return userSettings.screenplayAutocomplete !== false; },
+    function(){ return project.screenplayNames; });
   //Attached once and never re-attached: unlike Quill's own bindings, these read the rules through
   //the getter below on every keystroke, so a change in Settings takes effect on the next character
   //typed. The returned detach functions are dropped because both editors live as long as the
@@ -428,7 +471,7 @@ function resolveAutocorrectSetting(){
 function applyShortcutChanges(overrides){
   userSettings.keyboardShortcuts = overrides;
   shortcutBindings = resolveShortcuts(overrides);
-  applyQuillShortcuts(editorQuill, shortcutBindings);
+  applyEditorShortcuts();
   applyQuillShortcuts(notesQuill, shortcutBindings);
   return userSettings.save();
 }
@@ -632,11 +675,39 @@ async function setWordCountOnLoad(){
   project.wordCountOnLoad = await getTotalWordCount(project);
 }
 
+//Each script's page estimate as it was when it first came into the editor this session - the
+//pages counterpart of wordCountOnLoad, for Word Count's session figure. Per script rather than per
+//project, keyed by the chapter itself, because a project can hold more than one .fountain (an
+//import beside the starter script does that) and the session has to be measured against the one
+//being shown: measured against the project's first script, an empty starter, the whole of an
+//imported script read as this session's writing. A script cannot be written in before it is
+//shown, so its first showing is the right moment; opening a project makes new chapter objects, so
+//nothing carries over between projects.
+var scriptPagesOnOpen = new WeakMap();
+
+function recordScriptPagesOnOpen(chap, contents){
+  if(scriptPagesOnOpen.has(chap))
+    return;
+
+  const { estimatePages, deltaToElements } = require('./components/controllers/fountain');
+  scriptPagesOnOpen.set(chap, estimatePages(deltaToElements(contents)).exact);
+}
+
+//What Word Count shows for the script in the editor: its estimate now, and the figure it opened at.
+function scriptPageSession(){
+  return {
+    pages: scriptPageEstimate(),
+    pagesOnLoad: scriptPagesOnOpen.get(project.getActiveChapter()) || 0
+  };
+}
+
 function updateFileList(){
   renderChapterList(project, {
     onSelect: selectChapterFromList,
-    onRename: changeChapterTitle
-  });
+    onRename: changeChapterTitle,
+    onSelectScene: selectScene,
+    onRenameScene: changeSceneTitle
+  }, sceneListForSidebar());
 }
 
 //A click from the sidebar loads the chapter, and that finishes asynchronously - after the file has
@@ -651,8 +722,10 @@ var pendingListSelections = 0;
 var listSelectionsSettled = Promise.resolve();
 
 function selectChapterFromList(ind){
-  var selection = displayChapterByIndex(ind);
+  return trackListSelection(displayChapterByIndex(ind));
+}
 
+function trackListSelection(selection){
   pendingListSelections++;
   listSelectionsSettled = listSelectionsSettled.then(function(){
     return selection.catch(reportDetachedFailure);
@@ -676,6 +749,7 @@ async function displayChapterByIndex(ind){
     project.activeChapterIndex = 0;
     editorQuill.disable();
     editorQuill.setText("");
+    applyEditorMode();
     updateFileList();
     return;
   }
@@ -712,10 +786,116 @@ async function displayChapterByIndex(ind){
     notes = savedNotes ? savedNotes : getEmptyDelta();
   }
 
-  editorQuill.setContents(contents, 'api');
+  //The one place a document goes into the editor, so the one place its mode is applied: the
+  //container class the screenplay CSS hangs on, and the load path. A script is loaded by building
+  //its HTML rather than through setContents - see screenplay-editor.js for why.
+  applyEditorMode();
+  if(editorMode() === 'screenplay'){
+    loadScreenplayDelta(editorQuill, contents);
+    recordScriptPagesOnOpen(chap, contents);
+  }
+  else
+    editorQuill.setContents(contents, 'api');
+  refreshPageMarks();
+  refreshFormatBlock();
   notesQuill.setContents(notes, 'api');
   updateFileList();
   announceChapter(chap);
+}
+
+//Whether the editor is showing a screenplay or prose. A function of the active document - a
+//.fountain chapter is a script, anything else is prose - and never a flag of its own, so nothing
+//has to be told when a project changes. Project type is policy (what New Project creates, what the
+//sidebar shows); this is mechanism. See docs/screenplay-plan.md, "The editor".
+function editorMode(){
+  var chap = project.getActiveChapter();
+  return chap && newChapter.isFountainChapter(chap) ? 'screenplay' : 'prose';
+}
+
+//Whether the script in the editor is the project's script - the one in the Chapters list - which is
+//what the scene keys are for. A .fountain document in Reference or Trash is the case this separates
+//out: a block of scenes stashed or thrown away (cutScenes), or the script an import replaced
+//(installScript). The editor still shows it as a script - that is what it is - but from there the
+//chapter keys move, reorder, trash and rename it as one document, the way they treat any other
+//document beside the script, rather than walking the scenes inside it. See docs/screenplay-plan.md,
+//"One script".
+function editingScript(){
+  if(editorMode() !== 'screenplay')
+    return false;
+
+  var loc = chapterList.activeLocator(project);
+  return Boolean(loc) && loc.list === 'chapters';
+}
+
+//The estimated page turns drawn in a script - screenplay-editor.js's markEstimatedPages. Redrawn
+//after a load, on the same debounce as the Scenes list after a keystroke, and when Settings
+//close, since the marks are a Settings switch (screenplayPageMarks). Prose clears them.
+function refreshPageMarks(){
+  markEstimatedPages(editorQuill, editorMode() === 'screenplay' && userSettings.screenplayPageMarks !== false);
+}
+
+function applyEditorMode(){
+  var mode = editorMode();
+  document.getElementById('editor-container').classList.toggle('screenplay', mode === 'screenplay');
+
+  //The prose headings and the screenplay elements share Ctrl+1..6, so which set Quill holds
+  //follows the mode - rebuilt only when it changes, not on every chapter.
+  if(mode !== shortcutsAppliedFor)
+    applyEditorShortcuts();
+
+  syncAppMenu(mode);
+
+  //Prose has no element to show, so this is what takes the Format block away again; for a script
+  //it reads the document being replaced, which is why displayChapterByIndex calls it a second time
+  //once the new one is in. Both land before the browser paints, so the stale reading is never seen.
+  refreshFormatBlock();
+}
+
+//The Format block at the foot of the notes panel (views/format_display.js): what the line the
+//caret is on is, while the editor is showing a script. The caret is the editor's own while it has
+//one and the remembered position otherwise, so clicking into the notes or the sidebar leaves the
+//block saying what the writer was last on rather than blanking - and the remembered position is
+//clamped, since it outlives the document it was taken in.
+function refreshFormatBlock(){
+  if(editorMode() !== 'screenplay'){
+    showElementFormat(null);
+    return;
+  }
+
+  var range = editorQuill.getSelection();
+  var index = range ? range.index : (project.textCursorPosition || 0);
+  var found = editorQuill.getLine(Math.min(index, Math.max(editorQuill.getLength() - 1, 0)));
+
+  showElementFormat(found && found[0] ? elementOf(found[0]) : null);
+}
+
+//The application menu is the host's (app-menu.js, through index.js), and follows the project and
+//the document the same way the shortcuts above do: Word Count reads Page Count for a screenplay
+//project, the manuscript conversions are disabled for one, the chapter tools while a script is
+//showing. Told only when either changes - a rebuild per chapter would be waste. The blocked-action
+//messages below stay as the answer for a command that reaches here anyway.
+var menuModeSent = null;
+
+function syncAppMenu(documentMode){
+  var projectMode = project.isScreenplay() ? 'screenplay' : 'novel';
+  var key = projectMode + '/' + documentMode;
+  if(key === menuModeSent)
+    return;
+
+  menuModeSent = key;
+  platform.setMenuMode({ project: projectMode, document: documentMode }).catch(function(err){
+    require('./components/controllers/error-log').logError(err);
+  });
+}
+
+//The manuscript editor's Quill-owned shortcuts, for the mode it is in. shortcutsAppliedFor is what
+//lets applyEditorMode skip the rebuild when nothing changed; a rebind from the Shortcuts popup
+//comes through here too, whatever the mode.
+var shortcutsAppliedFor = null;
+
+function applyEditorShortcuts(){
+  shortcutsAppliedFor = editorMode();
+  applyQuillShortcuts(editorQuill, shortcutBindings, shortcutsAppliedFor);
 }
 
 //Says which chapter the manuscript now shows, for a screen reader. Changing chapters from inside
@@ -843,15 +1023,43 @@ function removeSpecialDisplayClasses(el){
 
 //User Actions
 
+//In a script the same keys move between scenes - positions in the one document - rather than
+//between documents, until the script runs out of scenes below the caret and they go on to the
+//documents beside it. See docs/screenplay-plan.md, "Keyboard".
 async function displayPreviousChapter(){
+  if(editingScript()){
+    jumpToScene(previousSceneStart(currentScenes(), project.textCursorPosition || 0));
+    return;
+  }
+
   if(project.activeChapterIndex > 0){
     await displayChapterByIndex(project.activeChapterIndex - 1);
-    editorQuill.setSelection(0);
-    project.textCursorPosition = 0;
+
+    //Backing into the script from the reference document below it is the return trip of walking
+    //off its last scene, so it lands where that walk left: on the last heading, not the top of a
+    //document the writer has just come down the length of. A script with no headings yet has
+    //nowhere else to go but the top.
+    var scenes = editingScript() ? currentScenes() : [];
+    var landing = scenes.length > 0 ? scenes[scenes.length - 1].index : 0;
+
+    editorQuill.setSelection(landing);
+    project.textCursorPosition = landing;
   }
 }
 
 async function displayNextChapter(){
+  if(editingScript()){
+    var nextScene = nextSceneStart(currentScenes(), project.textCursorPosition || 0);
+
+    //Past the last scene the key leaves the script the way it leaves a chapter, so that holding it
+    //down walks off the end of the script and into the reference documents beside it, rather than
+    //stopping dead on the last heading.
+    if(nextScene != null){
+      jumpToScene(nextScene);
+      return;
+    }
+  }
+
   if(!chapterList.isLastOfAll(project, chapterList.activeLocator(project))){
     await displayChapterByIndex(project.activeChapterIndex + 1);
     editorQuill.setSelection(0);
@@ -860,8 +1068,111 @@ async function displayNextChapter(){
 
 }
 
+//The two ends of the Reference jump: where it was last pressed from, and where it last was inside
+//Reference. Each is the chapter object rather than its locator, because everything the sidebar can
+//do between one press and the next - adding a chapter above, moving a document, trashing one -
+//moves a locator off the document it named while the object stays the document it is.
+//
+//Never cleared on a project change, and does not need to be: a chapter from a project that has been
+//closed is in none of the new one's lists, so locatorOf answers null for it and the jump falls back
+//exactly as it does for a document since deleted.
+var referenceJump = { origin: null, reference: null };
+
+//Ctrl+Alt+R, and the only shortcut that goes somewhere and comes back. Reference sits under every
+//chapter or scene a project has, and the keys that reach it walk a row at a time - the length of a
+//novel, or in a script the length of its scenes before the documents beside it even begin. This
+//goes straight there: to the reference document it was last in, or the first one until it has been
+//in any. Pressed again from inside Reference it returns to the document AND the caret position it
+//left, so a look at the character bible costs two presses rather than two walks and a hunt back
+//down the page for the line that was being written.
+//
+//The same key in both kinds of project. A screenplay's reference documents are prose, and they are
+//the documents a novel keeps there too - see docs/screenplay-plan.md, "One script".
+async function jumpToReference(){
+  var here = chapterList.activeLocator(project);
+  var leaving = Boolean(here) && here.list == 'reference';
+
+  //Out and back are the same move with its two ends swapped. Each end is the remembered document,
+  //while it is still in the project, and otherwise that end's default: the first reference document
+  //on the way out, and the script or the first chapter on the way back.
+  var remembered = leaving ? referenceJump.origin : referenceJump.reference;
+  var target = spotOf(remembered) || (leaving ? defaultJumpOrigin() : firstReferenceSpot());
+
+  //Nothing to jump to - a project with an empty Reference list, or one whose documents have all
+  //been deleted out from under a jump already made. Better to stay put than to land on a stand-in.
+  if(target == null)
+    return;
+
+  //Remembered before the move rather than after: this end is what the other press comes back to.
+  var from = chapterList.resolve(project, here);
+  if(from){
+    var spot = { chap: from, caret: editorSelection().index };
+    if(leaving)
+      referenceJump.reference = spot;
+    else
+      referenceJump.origin = spot;
+  }
+
+  await displayChapterByIndex(chapterList.toCombinedIndex(project, target.locator));
+
+  //A caret remembered from before the document was edited elsewhere - a Find and Replace pass, a
+  //block of scenes cut out of the script - can be past the end of what is there now.
+  var caret = Math.min(target.caret, Math.max(0, editorQuill.getLength() - 1));
+
+  editorQuill.setSelection(caret);
+  project.textCursorPosition = caret;
+}
+
+//A remembered end of the jump as somewhere to go now: where that document sits at this moment, or
+//null once it is no longer in the project at all.
+function spotOf(spot){
+  var locator = spot ? chapterList.locatorOf(project, spot.chap) : null;
+  return locator ? { locator: locator, caret: spot.caret } : null;
+}
+
+//The top of the first reference document - where the jump goes before it has been anywhere.
+function firstReferenceSpot(){
+  if(chapterList.listOf(project, 'reference').length == 0)
+    return null;
+
+  return { locator: { list: 'reference', index: 0 }, caret: 0 };
+}
+
+//Where the trip back goes with no origin to return to: Reference was reached some other way - a
+//click on a row, or the Next key walking off the end of the script - and the key is being used to
+//leave it. The script if the project has one and the first chapter if it has not, which either way
+//is the document the project is. Asked of the documents rather than of the project's type, the way
+//editorMode() and scriptLocator() decide everything else about a script.
+function defaultJumpOrigin(){
+  var loc = scriptLocator();
+
+  if(!loc && chapterList.listOf(project, 'chapters').length > 0)
+    loc = { list: 'chapters', index: 0 };
+
+  return loc ? { locator: loc, caret: 0 } : null;
+}
+
 function moveChapUp(chapInd){
-  var landed = chapterList.moveUp(project, chapterList.toLocator(project, chapInd));
+  if(editingScript()){
+    moveCurrentScenes(-1);
+    return;
+  }
+
+  var loc = chapterList.toLocator(project, chapInd);
+
+  //The first Reference document of a screenplay project moving up: a block of scenes goes back
+  //into the script, at its end, as a chapter would go back into Chapters. A prose document stays
+  //where it is, since a screenplay's Chapters list has no room for prose.
+  if(project.isScreenplay() && loc && loc.list == 'reference' && loc.index == 0){
+    var chap = chapterList.resolve(project, loc);
+    if(newChapter.isFountainChapter(chap)){
+      chapterList.remove(project, loc);
+      return detached(mergeIntoScript)(chap);
+    }
+    return;
+  }
+
+  var landed = chapterList.moveUp(project, loc);
 
   if(landed){
     project.hasUnsavedChanges = true;
@@ -874,6 +1185,14 @@ function moveChapUp(chapInd){
 }
 
 function moveChapDown(chapInd){
+  if(editingScript()){
+    //The last block moving down leaves the script for the top of Reference, the way the last
+    //chapter of a novel does - a stashed scene, to be brought back the same way.
+    if(!moveCurrentScenes(1))
+      cutScenes('reference');
+    return;
+  }
+
   var landed = chapterList.moveDown(project, chapterList.toLocator(project, chapInd));
 
   if(landed){
@@ -887,16 +1206,48 @@ function moveChapDown(chapInd){
 
 function createNewProject(){
   const requestProjectTitle = require('./components/views/new-project_display');
-  requestProjectTitle(detached(async function(title){
+  //Whichever kind is open is the likelier next one, so the dialog opens on it.
+  var currentType = project.isScreenplay() ? 'screenplay' : 'novel';
+  requestProjectTitle(detached(async function(title, type){
     if(title && title != ""){
       project = newProject();
       project.title = title;
       project.author = userSettings.defaultAuthor;
       project.initNotesChap();
+
+      if(type === 'screenplay'){
+        await addScreenplayScript(title);
+        await displayProject();
+        return;
+      }
+
       await addNewChapter();
       await displayProject();
     }
-  }));
+  }), currentType);
+}
+
+//A screenplay project starts with its script: one chapter, named after the project, saved as
+//.fountain (the `format` stamp is what tells chapter.js so before the file exists), and a title
+//page carrying what the dialog and settings already know. Not addNewChapter(): that opens the
+//rename box on the new row, and the script's name is the project's.
+async function addScreenplayScript(title){
+  const { setTitlePageValues } = require('./components/controllers/fountain');
+
+  project.type = 'screenplay';
+  project.titlePage = setTitlePageValues([], 'Title', [title]);
+  if(project.author)
+    project.titlePage = setTitlePageValues(project.titlePage, 'Author', [project.author]);
+
+  var script = newChapter(project);
+  script.format = 'fountain';
+  script.title = title;
+  script.hasUnsavedChanges = true;
+  script.contents = getEmptyDelta();
+
+  var landed = chapterList.append(project, 'chapters', script);
+  project.hasUnsavedChanges = true;
+  project.activeChapterIndex = chapterList.toCombinedIndex(project, landed);
 }
 
 async function addNewChapter(){
@@ -908,9 +1259,15 @@ async function addNewChapter(){
   //A new chapter joins the Chapters list, right after the active one - except when a Reference
   //document is active, where it joins Reference instead. A Trash item active, or nothing in any
   //list yet, both fall through to appending onto the end of Chapters.
+  //
+  //A screenplay project's Chapters list is its script, and a script has no chapters: Ctrl+N with
+  //the script active makes a Reference document instead - the character bible, the notes - which
+  //is the only kind of document there is to add beside a script.
   var landed;
   if(currentLoc && currentLoc.list == 'reference')
     landed = chapterList.insertAt(project, 'reference', currentLoc.index + 1, newChap);
+  else if(project.isScreenplay())
+    landed = chapterList.append(project, 'reference', newChap);
   else if(currentLoc && currentLoc.list == 'chapters')
     landed = chapterList.insertAt(project, 'chapters', currentLoc.index + 1, newChap);
   else
@@ -1085,6 +1442,12 @@ editorQuill.on('text-change', function(delta, oldDelta, source) {
     }
 
     scheduleFootnoteRenumber();
+    scheduleSceneListRefresh();
+
+    //Not on the Scenes list's debounce: Tab and Shift+Tab reformat the line the caret is already
+    //on, so no selection-change follows to pick the new type up, and a block that took a third of
+    //a second to agree with what the writer just did would be the wrong answer for that long.
+    refreshFormatBlock();
   }
 });
 
@@ -1180,6 +1543,8 @@ function applyFootnoteRenumber(pass){
 editorQuill.on('selection-change', function(range, oldRange, source){
   if(range){
     project.textCursorPosition = range.index;
+    followCaretInSceneList(range.index);
+    refreshFormatBlock();
   }
 
   updateActiveFootnoteHighlight(range);
@@ -1250,6 +1615,15 @@ async function moveToTrash(ind){
   //Already in the trash, so the next step is permanent deletion rather than another move.
   if(loc.list == 'trash'){
     verifyToDelete(ind);
+    return;
+  }
+
+  //A screenplay project's script never leaves its Chapters list: Delete Chapter on it takes the
+  //block of scenes the selection covers out into Trash as a document of its own, and the script
+  //stays. See docs/screenplay-plan.md, "One script".
+  if(loc.list == 'chapters' && project.isScreenplay() && newChapter.isFountainChapter(chapterList.resolve(project, loc))){
+    if(ind == project.activeChapterIndex)
+      cutScenes('trash');
     return;
   }
 
@@ -1334,6 +1708,18 @@ async function restoreFromTrash(ind){
   //chapters for anything trashed before that stamp existed.
   var destList = chap.trashedFrom == 'reference' ? 'reference' : 'chapters';
   delete chap.trashedFrom;
+
+  //A screenplay project's Chapters list is its one script, so nothing is restored into it: a
+  //block of scenes goes back into the script, at its end, and a prose document trashed from
+  //Chapters (a novel's, before the project became what it is) lands in Reference instead.
+  if(project.isScreenplay() && destList == 'chapters'){
+    if(newChapter.isFountainChapter(chap)){
+      await mergeIntoScript(chap);
+      return;
+    }
+    destList = 'reference';
+  }
+
   var landed = chapterList.append(project, destList, chap);
 
   if(wasActive){
@@ -1350,6 +1736,14 @@ async function restoreFromTrash(ind){
 }
 
 function changeChapterTitle(ind){
+  //In a script with headings the sidebar's rows are scenes, and renaming one edits the heading
+  //line itself. A script with no headings yet shows its own chapter row, renamed like any other,
+  //and so does a trashed script, whose row is its own rather than the Scenes list's.
+  if(editingScript() && currentScenes().length > 0){
+    changeSceneTitle(sceneAt(currentScenes(), project.textCursorPosition || 0));
+    return;
+  }
+
   //Only a rename that follows a click has anything to wait for - see selectChapterFromList() above.
   //A rename from the keyboard, or the one that opens on a chapter just added or split off, still
   //runs straight through and puts its box in the row before returning.
@@ -1450,6 +1844,484 @@ function scrollChapterListToActiveChapter(){
   scrollIntoViewIfNeeded(document.getElementById('chapter-list-sidebar'), activeChapter);
 }
 
+// ------------------------------------------------------------------------------------------
+// Scenes - docs/screenplay-plan.md, "The Scenes sidebar"
+// ------------------------------------------------------------------------------------------
+
+//The scenes of the script in the editor, as of the last sidebar render or refresh. Cached so the
+//caret's every move (followCaretInSceneList) does not walk the document; a user text-change
+//refreshes it, debounced, and re-renders the rows only when the headings themselves changed.
+var cachedScenes = [];
+var cachedSceneTitles = null;
+var activeSceneRow = -1;
+var sceneListRefreshTimer = null;
+
+function currentScenes(){
+  return sceneIndex(editorQuill.getContents());
+}
+
+//The project's script: the .fountain chapter the Scenes rows are read from, whichever document is
+//in the editor. Found the same way editorMode() decides what the editor is showing - by asking the
+//document what it is rather than by a flag - so nothing has to be told when a project changes.
+function scriptLocator(){
+  var chapters = chapterList.listOf(project, 'chapters');
+
+  for(var i = 0; i < chapters.length; i++){
+    if(newChapter.isFountainChapter(chapters[i]))
+      return { list: 'chapters', index: i };
+  }
+
+  return null;
+}
+
+function scriptChapter(){
+  var loc = scriptLocator();
+  return loc ? chapterList.resolve(project, loc) : null;
+}
+
+//The script's scenes as of the last time they could be read, for the stretches when the script is
+//not the document in the editor: its contents are dropped the moment it is left unedited
+//(clearCurrentChapterIfUnchanged), and the sidebar still has to list its scenes. Keyed by the
+//chapter object, so a different project's script is never answered for with this one's.
+var scriptScenes = null;
+var scriptScenesFor = null;
+var loadingScriptScenes = false;
+
+function rememberScriptScenes(script, scenes){
+  scriptScenesFor = script;
+  scriptScenes = scenes;
+}
+
+//What renderChapterList is handed for its top section: null for a novel, otherwise the script's
+//scenes, the one the caret is in (none, while the caret is in another document) and whether the
+//script has unsaved changes - the header carries that marker, since no one scene row could.
+//
+//The rows come from the script whether or not it is the document being edited: a writer who steps
+//into a Reference document or the trash is still working on the same screenplay, and the scene
+//list is how a screenplay is navigated. Clicking one goes back to the script and lands on it.
+function sceneListForSidebar(){
+  var script = scriptChapter();
+
+  if(!script){
+    cachedScenes = [];
+    cachedSceneTitles = null;
+    activeSceneRow = -1;
+    scriptScenes = null;
+    scriptScenesFor = null;
+    return null;
+  }
+
+  if(editingScript()){
+    cachedScenes = currentScenes();
+    cachedSceneTitles = cachedScenes.map(function(scene){ return scene.title; });
+    activeSceneRow = sceneAt(cachedScenes, project.textCursorPosition || 0);
+    rememberScriptScenes(script, cachedScenes);
+
+    return { rows: cachedScenes, active: activeSceneRow, unsaved: Boolean(script.hasUnsavedChanges) };
+  }
+
+  //Another document is in the editor, so there is no caret in the script and no cached list for
+  //followCaretInSceneList to move a highlight around in.
+  cachedScenes = [];
+  cachedSceneTitles = null;
+  activeSceneRow = -1;
+
+  return { rows: scriptScenesNow(script), active: -1, unsaved: Boolean(script.hasUnsavedChanges) };
+}
+
+//The script's scenes without the editor: from its contents if it still holds them (an unsaved
+//script keeps them wherever the caret goes), otherwise from the last list read off it, otherwise
+//from its file - which is a read, so the rows it produces arrive in a later render.
+function scriptScenesNow(script){
+  if(script.contents != null)
+    return sceneIndex(script.contents);
+
+  if(scriptScenesFor === script)
+    return scriptScenes;
+
+  loadScriptScenes(script);
+  return [];
+}
+
+//A project opened onto a Reference document has never had its script in the editor, so the only
+//place its scene headings are is the file. Read once and remembered; a failure remembers an empty
+//list rather than nothing, so the render it triggers does not ask for the file again, and again.
+//An unsaved script with no file yet has nothing to read and no scenes to show.
+function loadScriptScenes(script){
+  if(loadingScriptScenes || !script.filename)
+    return;
+
+  loadingScriptScenes = true;
+
+  //keepProjectTitlePage, because this is a read for the sidebar's benefit and not a load of the
+  //document: the title page the writer has in Properties is not the file's to replace here.
+  Promise.resolve().then(function(){
+    return script.getFile({ keepProjectTitlePage: true });
+  }).then(function(contents){
+    rememberScriptScenes(script, sceneIndex(contents));
+  }).catch(function(err){
+    rememberScriptScenes(script, []);
+    reportDetachedFailure(err);
+  }).then(function(){
+    loadingScriptScenes = false;
+
+    if(scriptChapter() === script && !editingScript())
+      updateFileList();
+  });
+}
+
+function scheduleSceneListRefresh(){
+  if(editorMode() !== 'screenplay')
+    return;
+
+  if(sceneListRefreshTimer)
+    clearTimeout(sceneListRefreshTimer);
+
+  sceneListRefreshTimer = setTimeout(refreshSceneListIfChanged, 300);
+}
+
+//The indices are re-read on every refresh, since typing above a heading moves it; the rows are
+//rebuilt only when a heading's text changed, one appeared or went, or the unsaved marker on the
+//header has to change - which a keystroke does once, the first after a save.
+function refreshSceneListIfChanged(){
+  sceneListRefreshTimer = null;
+  //A debounce that outlives its editor - a test's render torn down under a pending timer - must
+  //not render into whatever sidebar is on the page now. The editor being on the page is the
+  //condition for any of this having somewhere to draw.
+  if(editorMode() !== 'screenplay' || !document.body.contains(editorQuill.root))
+    return;
+
+  refreshPageMarks();
+
+  //The page marks are the editor's, and a trashed script in it gets them like any other script.
+  //The rows are the project's script's, and typing in a document beside it cannot change them.
+  if(!editingScript())
+    return;
+
+  var scenes = currentScenes();
+  var titles = scenes.map(function(scene){ return scene.title; });
+  var sameTitles = cachedSceneTitles != null && titles.length === cachedSceneTitles.length &&
+    titles.every(function(title, i){ return title === cachedSceneTitles[i]; });
+
+  var chap = project.getActiveChapter();
+  var headerMarked = document.getElementById('chapters-header').textContent.slice(-1) === '*';
+  var markerRight = headerMarked === Boolean(chap && chap.hasUnsavedChanges);
+
+  if(sameTitles && markerRight){
+    cachedScenes = scenes;
+    followCaretInSceneList(project.textCursorPosition || 0);
+    return;
+  }
+
+  updateFileList();
+}
+
+//Moves the highlight with the caret: a class toggle on two rows, never a rebuild.
+function followCaretInSceneList(index){
+  if(editorMode() !== 'screenplay' || cachedScenes.length === 0)
+    return;
+
+  var k = sceneAt(cachedScenes, index);
+  if(k === activeSceneRow)
+    return;
+
+  activeSceneRow = k;
+  markActiveSceneRow(k);
+}
+
+//A click on a scene row. From another document the row is a way back into the script, so the
+//script is displayed first and the caret lands on the scene that was clicked - the same journey
+//clicking a chapter row makes, ending somewhere inside the document rather than at its top. Routed
+//through the pending-selection chain for the same reason a chapter click is: a double-click on the
+//row means a rename, and the load must be over before its box goes in.
+function selectScene(k){
+  if(!editingScript()){
+    var loc = scriptLocator();
+    if(!loc)
+      return;
+
+    return trackListSelection(displayChapterByIndex(chapterList.toCombinedIndex(project, loc)).then(function(){
+      jumpToSceneNumber(k);
+    }));
+  }
+
+  jumpToSceneNumber(k);
+}
+
+function jumpToSceneNumber(k){
+  var scenes = currentScenes();
+  if(!scenes[k])
+    return;
+
+  jumpToScene(scenes[k].index);
+}
+
+function jumpToScene(start){
+  if(start == null)
+    return;
+
+  editorQuill.setSelection(start, 0, 'user');
+  project.textCursorPosition = start;
+}
+
+//The editor's selection, for the keys that act on the block of scenes it covers. Asked of Quill
+//first; with the focus elsewhere (the sidebar, the notes) it has none, and the caret's last known
+//place stands in for it.
+function editorSelection(){
+  return editorQuill.getSelection() || { index: project.textCursorPosition || 0, length: 0 };
+}
+
+//The block of scenes the selection covers: the caret's scene, or every scene a range touches.
+function selectedSceneBlock(){
+  return sceneBlock(currentScenes(), editorSelection());
+}
+
+//The block of scenes the selection covers swaps places with the scene above or below it, as one
+//user change - one undo entry. A range selection covers the block again afterwards, so holding the
+//key walks the block; a caret follows the block's first heading. Answers whether there was a
+//neighbour to swap with. See moveScenes for what a block is.
+function moveCurrentScenes(direction){
+  var Delta = Quill.import('delta');
+  var current = editorQuill.getContents();
+  var range = editorSelection();
+  var block = sceneBlock(sceneIndex(current), range);
+  var moved = block ? moveScenes(current, block.from, block.to, direction) : null;
+
+  if(!moved)
+    return false;
+
+  editorQuill.updateContents(new Delta(current).diff(new Delta(moved.ops)), 'user');
+
+  if(range.length > 0){
+    //One short of the block's length: its last character is the newline before the next heading,
+    //and a selection ending there would read as reaching into that scene.
+    editorQuill.setSelection(moved.start, moved.length - 1, 'user');
+    project.textCursorPosition = moved.start;
+  }
+  else
+    jumpToScene(moved.start);
+
+  updateFileList();
+  return true;
+}
+
+//Takes the block of scenes the selection covers out of the script and makes a .fountain document
+//of it, titled by its first heading: appended to Trash, stamped as trashed from Chapters so
+//Restore knows to merge it back, or put at the top of Reference. The script stays in the editor
+//with the caret where the block was. Answers where the block landed, or null when the selection
+//covered no scene. See docs/screenplay-plan.md, "One script".
+//
+//The cut is applied with source 'api', which the editor's history does not record: an undo entry
+//that put the text back would leave the block in Trash as well. Restore is the undo. And because
+//the text-change handler only records a user change on the chapter, the cut records itself.
+function cutScenes(destList){
+  var block = selectedSceneBlock();
+  var split = block ? splitScenes(editorQuill.getContents(), block.from, block.to) : null;
+
+  if(!split)
+    return null;
+
+  var title = currentScenes()[block.from].title;
+  editorQuill.deleteText(split.start, split.length, 'api');
+  recordEditorContents();
+
+  var fragment = newChapter(project);
+  fragment.format = 'fountain';
+  fragment.title = title || 'Scene';
+  fragment.contents = split.extracted;
+  fragment.hasUnsavedChanges = true;
+
+  var landed;
+  if(destList == 'trash'){
+    fragment.trashedFrom = 'chapters';
+    landed = chapterList.append(project, 'trash', fragment);
+  }
+  else
+    landed = chapterList.insertAt(project, 'reference', 0, fragment);
+
+  //Neither landing place is before the script in the combined order, so the script's own index,
+  //and the editor showing it, are as they were.
+  project.hasUnsavedChanges = true;
+  jumpToScene(Math.min(split.start, editorQuill.getLength() - 1));
+  refreshPageMarks();
+  updateFileList();
+  return landed;
+}
+
+//What the text-change handler does for a user change, for a change made with another source.
+function recordEditorContents(){
+  var chap = project.getActiveChapter();
+  if(chap){
+    chap.contents = editorQuill.getContents();
+    chap.hasUnsavedChanges = true;
+    project.hasUnsavedChanges = true;
+  }
+}
+
+//Puts a .fountain document's scenes back into the script, at its end, and shows the script with
+//the caret on the first of them - from where the reorder keys carry the block up to where it
+//belongs. `chap` has already been taken out of its list. Its file goes once the script holds its
+//scenes: the script is saved first, when the project has a directory, so there is no moment in
+//which the scenes are in neither file, and the project file follows so the next load does not
+//expect a document whose file is gone - as deleteChapter() does for the same reason.
+//
+//Read from deltas, never file text: a fragment's file carries the project's title page at its head
+//on every save, and that page is not the fragment's to restore (keepProjectTitlePage).
+//
+//A project with no script - every scene of it cut away and the file gone, then a block restored -
+//gets the block as its script. See docs/screenplay-plan.md, "One script".
+async function mergeIntoScript(chap){
+  var loc = scriptLocator();
+
+  if(!loc){
+    project.hasUnsavedChanges = true;
+    var placed = chapterList.append(project, 'chapters', chap);
+    await displayChapterByIndex(chapterList.toCombinedIndex(project, placed));
+    return;
+  }
+
+  var script = chapterList.resolve(project, loc);
+  var extra = chap.contents != null ? chap.contents : await chap.getFile({ keepProjectTitlePage: true });
+  var base = script.contents != null ? script.contents : await script.getFile({ keepProjectTitlePage: true });
+  var merged = appendScenes(base || getEmptyDelta(), extra || getEmptyDelta());
+
+  script.contents = { ops: merged.ops };
+  script.hasUnsavedChanges = true;
+  project.hasUnsavedChanges = true;
+
+  if(project.directory != ''){
+    await script.saveFile();
+    await chap.deleteFile();
+    await project.saveFile();
+  }
+  else
+    await chap.deleteFile();
+
+  //The script is what to show, and clearCurrentChapterIfUnchanged() on the way in must look at it
+  //(unsaved, so kept) rather than at whatever the removed document's index now names.
+  var scriptIndex = chapterList.toCombinedIndex(project, loc);
+  project.activeChapterIndex = scriptIndex;
+  await displayChapterByIndex(scriptIndex);
+  jumpToScene(merged.start);
+  updateFileList();
+}
+
+//What Tools > Characters/Locations reads and writes: the script, whether or not it is the document
+//in the editor. The dialog asks for the delta again after every change it makes, so this has to be
+//the live copy each time - the editor's while the script is being edited, and the chapter's
+//contents when the caret is off in a Reference note.
+//
+//The one asynchronous part is getting those contents in the first place, for a project opened onto
+//another document (clearCurrentChapterIfUnchanged leaves the script holding none), so it is done
+//once here before the dialog opens and everything the dialog then does is synchronous. Read with
+//keepProjectTitlePage, as every read of a script that is not a load must be: the file carries the
+//project's title page at its head, and Properties may hold a newer one.
+async function screenplayNamesView(){
+  var script = scriptChapter();
+
+  if(script && !editingScript() && script.contents == null && script.filename)
+    script.contents = await script.getFile({ keepProjectTitlePage: true });
+
+  return {
+    getDelta: function(){
+      if(editingScript())
+        return editorQuill.getContents();
+
+      return script ? script.contents : null;
+    },
+    rename: function(type, from, to){
+      return renameInScript(script, type, from, to);
+    }
+  };
+}
+
+//Every use of a character's name, or every heading in a location, renamed at once - the lines
+//screenplay-editor.js's renameName rewrites. Answers how many of them there were.
+//
+//Applied as a 'user' change when the script is in the editor, so it is one entry in the editor's
+//history and Ctrl+Z puts the old name back the way it does for any other edit. With the script out
+//of the editor there is no history to put it in, so its contents are replaced and it is marked
+//unsaved, as a scene merged back into it is.
+function renameInScript(script, type, from, to){
+  if(!script)
+    return 0;
+
+  var current = editingScript() ? editorQuill.getContents() : script.contents;
+  var renamed = current ? renameName(current, type, from, to) : null;
+  if(!renamed)
+    return 0;
+
+  if(editingScript()){
+    var Delta = Quill.import('delta');
+    editorQuill.updateContents(new Delta(current).diff(new Delta(renamed.ops)), 'user');
+  }
+  else{
+    script.contents = { ops: renamed.ops };
+    script.hasUnsavedChanges = true;
+    project.hasUnsavedChanges = true;
+  }
+
+  //A renamed location is a renamed scene row, so the sidebar has to be rebuilt either way: the
+  //editor's own debounce would get there for a script being edited, but a third of a second after
+  //a dialog the writer is still looking at.
+  refreshPageMarks();
+  updateFileList();
+  return renamed.count;
+}
+
+//A double-click on a scene row from another document is two clicks first, so the script is already
+//on its way into the editor by the time the rename is asked for, and the box goes into the row that
+//load leaves behind. Waiting for it is what selectChapterFromList()'s chain is for.
+function changeSceneTitle(k){
+  if(pendingListSelections > 0){
+    listSelectionsSettled.then(function(){
+      openSceneRenameBox(k);
+    }).catch(reportDetachedFailure);
+    return;
+  }
+
+  openSceneRenameBox(k);
+}
+
+//Renaming a scene row edits the heading line itself, in place and as a user change, so it is
+//undoable and the sidebar follows through the ordinary refresh. Capitals, as a heading gets when
+//it is typed into being.
+function openSceneRenameBox(k){
+  var scenes = currentScenes();
+  if(k < 0 || k >= scenes.length)
+    return;
+
+  renameSceneInList(k, {
+    onCommit: function(newTitle){
+      replaceSceneHeading(k, newTitle);
+      updateFileList();
+      editorQuill.focus();
+    },
+    onCancel: function(){
+      updateFileList();
+      editorQuill.focus();
+    },
+    onDismiss: function(){
+      updateFileList();
+    }
+  });
+}
+
+//The script in the editor's page estimate, for Word Count - see fountain.js's estimatePages.
+function scriptPageEstimate(){
+  const { estimatePages, deltaToElements } = require('./components/controllers/fountain');
+  return estimatePages(deltaToElements(editorQuill.getContents()));
+}
+
+function replaceSceneHeading(k, title){
+  var Delta = Quill.import('delta');
+  var scene = currentScenes()[k];
+  if(!scene)
+    return;
+
+  editorQuill.updateContents(new Delta().retain(scene.index).delete(scene.title.length).insert(title.toUpperCase()), 'user');
+}
+
 //The Help doc is reference material, not the reader's own work: it has to describe the version
 //actually installed. Copying it to userData on first open (as the Frankenstein example does, since
 //that one is a starter project meant to be edited) meant the copy was made once and reused
@@ -1538,21 +2410,57 @@ function alertBackupResult(msg, skipBackup = null, skipLabel){
   showBackupAlert(msg, skipBackup, skipLabel);
 }
 
-async function addImportedChapter(chapDelta, title){
+//Makes `chap` a screenplay project's script - its one script. Whatever scripts its Chapters list
+//held go to Trash first, stamped as trashed from there, so nothing is lost and Restore can bring
+//one back, merged into the new script as a block of scenes (mergeIntoScript). Answers where the
+//new script landed. A screenplay project is one script and any number of Reference documents; this
+//is the one way a script enters the Chapters list other than New Project, and what keeps it to one.
+function installScript(chap){
+  var chapters = chapterList.listOf(project, 'chapters');
+
+  for(var i = chapters.length - 1; i >= 0; i--){
+    if(newChapter.isFountainChapter(chapters[i])){
+      var old = chapterList.remove(project, { list: 'chapters', index: i });
+      old.trashedFrom = 'chapters';
+      chapterList.append(project, 'trash', old);
+    }
+  }
+
+  project.hasUnsavedChanges = true;
+  return chapterList.append(project, 'chapters', chap);
+}
+
+//`format` is 'fountain' for an imported screenplay (import.js's importScreenplay), which is what
+//has it saved as a .fountain file and shown in screenplay mode; absent for everything else.
+async function addImportedChapter(chapDelta, title, format){
   var newChap = newChapter(project);
   newChap.hasUnsavedChanges = true;
   newChap.contents = chapDelta;
   newChap.title = title;
+  if(format === 'fountain')
+    newChap.format = 'fountain';
 
   //Same placement rule as addNewChapter(): joins Reference after the active document if that's
   //what's active, otherwise appends onto Chapters (which also covers a Trash item being active -
   //project.activeChapterIndex + 1 used to be passed straight to displayChapterByIndex() below,
   //which only happened to land correctly because a Chapter or Reference document being active
   //keeps that arithmetic in sync with the insert position; a Trash item active does not).
+  //
+  //A screenplay project holds one script, so a script imported into one takes the script's place
+  //(installScript), whatever document is showing. And, as in addNewChapter(), a prose document
+  //imported into one goes to Reference: the project's Chapters list is its script, and the Scenes
+  //sidebar shows that script's headings rather than chapter rows, so a chapter put beside the
+  //script would have no row at all.
   var currentLoc = chapterList.activeLocator(project);
-  var landed = (currentLoc && currentLoc.list == 'reference')
-    ? chapterList.insertAt(project, 'reference', currentLoc.index + 1, newChap)
-    : chapterList.insertAt(project, 'chapters', currentLoc && currentLoc.list == 'chapters' ? currentLoc.index + 1 : project.chapters.length, newChap);
+  var landed;
+  if(project.isScreenplay() && format === 'fountain')
+    landed = installScript(newChap);
+  else if(currentLoc && currentLoc.list == 'reference')
+    landed = chapterList.insertAt(project, 'reference', currentLoc.index + 1, newChap);
+  else if(project.isScreenplay())
+    landed = chapterList.append(project, 'reference', newChap);
+  else
+    landed = chapterList.insertAt(project, 'chapters', currentLoc && currentLoc.list == 'chapters' ? currentLoc.index + 1 : project.chapters.length, newChap);
 
   //displayChapterByIndex() below renders the sidebar itself as its last step, so this used to
   //render it a second time for nothing.
@@ -1616,10 +2524,19 @@ const menuCommands = {
     const { applyBookMetadata } = require('./components/controllers/import');
     showImportOptions(sysDirectories, detached(addImportedChapter), detached(async function(bookMetadata){
       applyBookMetadata(project, bookMetadata);
+      //An imported script takes the place of a screenplay project's script (installScript), and
+      //its title page comes with it: the project's title page, title and author become the
+      //imported script's, the way a .fountain's own title page wins on load. A script with no
+      //title page of its own leaves the project's alone.
+      if(bookMetadata && Array.isArray(bookMetadata.titlePage) && bookMetadata.titlePage.length > 0 &&
+          project.isScreenplay()){
+        newChapter.adoptTitlePage(project, bookMetadata.titlePage);
+        project.hasUnsavedChanges = true;
+      }
       await displayChapterByIndex(project.activeChapterIndex);
       if(project.chapters.length > 0)
         editorQuill.enable();
-    }));
+    }), project);
   } },
   'export-clicked': { run: function(){
     const showExportOptions = require('./components/views/export_display');
@@ -1635,7 +2552,7 @@ const menuCommands = {
   } },
   'word-count-clicked': { run: function(){
     const showWordCount = require('./components/views/wordcount_display');
-    return showWordCount(project, editorQuill, userSettings);
+    return showWordCount(project, editorQuill, userSettings, editorMode() === 'screenplay' ? scriptPageSession() : null);
   } },
   'find-replace-clicked': { requiresFocus: true, run: function(){
     const showFindReplace = require('./components/views/findreplace_display');
@@ -1673,13 +2590,21 @@ const menuCommands = {
     const showShortcutsHelp = require('./components/views/shortcuts-help_display');
     showShortcutsHelp({
       isMac: isMac,
+      //The project's, not the editor's: the list is of what this project's keys do, so it reads the
+      //same whether the caret happens to be in the script or in a note beside it - the same call
+      //the Outliner makes for the same reason.
+      isScreenplay: project.isScreenplay(),
       bindings: shortcutBindings,
       onSave: applyShortcutChanges
     });
   } },
   'outliner-clicked': { run: function(){
     const showOutliner = require('./components/views/outliner_display');
-    return showOutliner(project, userSettings);
+    //A screenplay project is outlined by scene rather than by document - its Chapters list holds
+    //only the script - so the Outliner is handed the script to break down. The project's, not the
+    //editor's: the outline is of the screenplay wherever the caret happens to be, the same way the
+    //sidebar's scene rows are.
+    return showOutliner(project, userSettings, project.isScreenplay() ? scriptChapter() : null);
   } },
   'convert-tabs-clicked': { run: function(){
     const showTabOptions = require('./components/views/convert-tabs-display');
@@ -1737,6 +2662,7 @@ const menuCommands = {
       updateFonts();
       updateLineHeight();
       autocorrectRules = resolveAutocorrectSetting();
+      refreshPageMarks();
     }, platformInfo);
   } },
   'dictionaries-clicked': { run: function(){
@@ -1750,6 +2676,20 @@ const menuCommands = {
   'corkboard-clicked': { run: function(){
     const showCorkboard = require('./components/views/corkboard_display');
     return showCorkboard(project, platformInfo);
+  } },
+  'screenplay-names-clicked': { run: async function(){
+    //Refused rather than shown empty for a novel: the lists are read from cues and scene headings,
+    //and a novel has neither. The menu leaves the item out of a novel's Tools entirely - this is
+    //for the command that arrives anyway, from an accelerator on a menu built before the project
+    //changed, and reads the same way every other blocked tool does.
+    if(!project.isScreenplay()){
+      const showBlockedActionAlert = require('./components/views/blocked-action_display');
+      return showBlockedActionAlert('Characters/Locations lists the names a screenplay is written'
+        + ' with - its cues and its scene headings - so it is for a screenplay project.');
+    }
+
+    const showScreenplayNames = require('./components/views/screenplay-names_display');
+    return showScreenplayNames(project, await screenplayNamesView());
   } },
   'tab-indent-paragraphs-clicked': { run: function(){
     const showTabIndentParagraphs = require('./components/views/tab-indent-paragraphs_display');
@@ -1776,11 +2716,52 @@ const menuCommands = {
 //that drifts from what index.js sends used to be silent - a menu item that simply did nothing, with
 //nothing anywhere saying why. It now throws here, at startup, out of the first pass through this
 //file.
+//What the menus offer a screenplay - docs/screenplay-plan.md, "What the menus offer". Two kinds of
+//refusal, told apart by what they are about: the chapter tools want a prose *document* in the
+//editor (a Reference note beside a script is one), and the manuscript-wide conversions want a
+//novel *project*. Everything else works on a script as it stands - Add New Chapter included, which
+//makes a Reference document there (see addNewChapter). The menu itself disables these items from
+//the same two lists (app-menu.js, told the mode by syncAppMenu); this is the answer for a command
+//that reaches here anyway - a shortcut, an accelerator on a menu built before the mode arrived.
+//app-menu.test.js holds the two sets of lists to each other.
+//Delete Chapter and Restore Deleted Chapter are not here: on a script they act on scenes - see
+//moveToTrash and restoreFromTrash.
+const PROSE_DOCUMENT_ONLY = {
+  'split-chapter-clicked': 'Split Chapter',
+  'headings-to-chaps-clicked': 'Break Headings Into Chapters'
+};
+
+const NOVEL_PROJECT_ONLY = {
+  'compile-clicked': 'Compile',
+  'renumber-chapters-clicked': 'Renumber Chapters',
+  'convert-first-lines-clicked': 'Convert First Lines To Titles',
+  'convert-italics-clicked': 'Convert Marked Italics',
+  'convert-tabs-clicked': 'Convert Marked Tabs',
+  'tab-indent-paragraphs-clicked': 'Tab-Indent Paragraphs',
+  'center-all-heads-clicked': 'Center All Headings'
+};
+
+function menuItemBlockedFor(channel){
+  if(PROSE_DOCUMENT_ONLY[channel] && editorMode() === 'screenplay')
+    return PROSE_DOCUMENT_ONLY[channel] + ' works on chapters, not on a screenplay. Select a Reference document to use it, or use Export for the script.';
+
+  if(NOVEL_PROJECT_ONLY[channel] && project.isScreenplay())
+    return NOVEL_PROJECT_ONLY[channel] + ' is for a novel project. A screenplay is one script, exported through File > Export.';
+
+  return null;
+}
+
 Object.keys(menuCommands).forEach(function(channel){
   var command = menuCommands[channel];
   platform.on(channel, function(){
     if(command.requiresFocus && !editorHasFocus())
       return;
+
+    var blocked = menuItemBlockedFor(channel);
+    if(blocked){
+      require('./components/views/blocked-action_display')(blocked);
+      return;
+    }
     //Wrapped because several of these are async now and nothing reads what a menu channel returns
     //- see detached(). The promise is handed back anyway: the bridge ignores it, but a test can
     //await the handler instead of guessing how many ticks the command needs.

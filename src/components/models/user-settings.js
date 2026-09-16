@@ -57,6 +57,8 @@ const SETTINGS_SCHEMA = {
   compileInsertHeaders: { type: 'boolean' },
   compileGenTitlePage: { type: 'boolean' },
   markSceneBreaks: { type: 'boolean' },
+  htmlMaxWidth: { type: 'boolean' },
+  justifyLeftAligned: { type: 'boolean' },
   backupDirectory: { type: 'string', nullable: true },
   autoBackup: { type: 'boolean' },
   backupsToKeep: { type: 'number' },
@@ -67,6 +69,8 @@ const SETTINGS_SCHEMA = {
   keyboardShortcuts: { type: 'object', sanitize: sanitizeOverrides },
   autocorrectEnabled: { type: 'boolean' },
   autocorrect: { type: 'object', sanitize: sanitizeAutocorrect },
+  screenplayAutocomplete: { type: 'boolean' },
+  screenplayPageMarks: { type: 'boolean' },
   spellcheckDictionaries: { type: 'object', sanitize: sanitizeDictionaryIds },
   wordsPerPage: { type: 'number' },
   editorFont: { type: 'string', sanitize: sanitizeFontId },
@@ -100,6 +104,14 @@ function getUserSettings(userSettingsFilepath){
     //convention whichever way the book leaves WareWoolf - a writer who marks their scene breaks
     //wants them marked in both. Off by default: a hash on a blank line is a change to the text.
     markSceneBreaks: false,
+    //Shared by Compile and Export for the same reason markSceneBreaks is: a writer who wants their
+    //HTML held to a readable measure wants it whichever way the book leaves WareWoolf. Off by
+    //default so a page exported by an older build is still written exactly as it was.
+    htmlMaxWidth: false,
+    //The other option the two web formats share: every paragraph the writer never aligned by hand
+    //is set justified on the way out. Off by default, since ragged-right is what the editor shows
+    //and what an export has always produced.
+    justifyLeftAligned: false,
     backupDirectory: null,
     autoBackup: true,
     backupsToKeep: 10,
@@ -118,6 +130,12 @@ function getUserSettings(userSettingsFilepath){
     //And, exactly like keyboardShortcuts above, only the individual rules a writer has actually
     //changed, keyed by the ids in autocorrect.js. A rule missing from here is on its default.
     autocorrect: {},
+    //The suggestion list in a script - names, places, times, transitions, extensions - which a
+    //writer who finds it in the way turns off here.
+    screenplayAutocomplete: true,
+    //The dotted rule and page number drawn in a script where each page is estimated to turn -
+    //screenplay-editor.js's markEstimatedPages - for a writer who would rather not see them.
+    screenplayPageMarks: true,
     //Ids of the dictionaries a writer ticked in the Dictionaries dialog. Empty means "whatever the
     //app ships as default" - see loadDictionaries' own fallback (platform.js, group I) - so a writer
     //who never opens that dialog keeps working after an update that changes the bundled default.

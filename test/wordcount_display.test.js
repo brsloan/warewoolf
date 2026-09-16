@@ -141,6 +141,90 @@ test('updating the goal recalculates the progress bar width and color', async fu
   assert.strictEqual(progressBarFill.style.width, '100%'); //capped even though 5/2 > 100%
 });
 
+//docs/screenplay-plan.md, Phase 6: a script is measured in pages and nothing else, so its dialog
+//is the page estimate, the session's change in it, and a goal in pages - no word rows, no project
+//line, no words-per-page.
+function pagesOf(exact){
+  var { estimatePages } = require('../src/components/controllers/fountain');
+  //estimatePages works from elements; the dialog only needs the shape it returns.
+  var whole = Math.floor(exact);
+  var eighths = Math.round((exact - whole) * 8);
+  return { pages: Math.ceil(exact), exact: exact, eighths: eighths === 0 ? String(whole) : whole + ' ' + eighths + '/8' };
+}
+
+test('a screenplay shows its page estimate, the session in pages and a page goal, and nothing about words', async function(){
+  var showWordCount = require(wordcountDisplayPath);
+
+  await showWordCount(makeProject(), makeEditorQuill('one two'), makeUserSettings(), { pages: pagesOf(111.375), pagesOnLoad: 110 });
+  assert.strictEqual(document.querySelector('h1').innerText, 'Page Count');
+  assert.strictEqual(document.getElementById('script-pages').innerText, '112 (111 3/8)');
+  assert.strictEqual(document.getElementById('script-session-pages').innerText, '1 3/8');
+
+  var labels = Array.from(document.querySelectorAll('table label')).map(function(l){ return l.innerText; });
+  assert.deepStrictEqual(labels, ['Script pages (estimate): ', 'Session (estimate): ', 'Goal (pages): ']);
+  assert.strictEqual(document.getElementById('words-per-page-input'), null);
+  assert.strictEqual(document.getElementById('word-goal-input'), null);
+
+  await showWordCount(makeProject(), makeEditorQuill('one two'), makeUserSettings(), { pages: pagesOf(3), pagesOnLoad: 0 });
+  assert.strictEqual(document.getElementById('script-pages').innerText, '3', 'a whole number is not repeated');
+});
+
+test('a novel shows nothing of the screenplay dialog', async function(){
+  var showWordCount = require(wordcountDisplayPath);
+
+  await showWordCount(makeProject(), makeEditorQuill('one two'), makeUserSettings());
+  assert.strictEqual(document.querySelector('h1').innerText, 'Word Count');
+  assert.strictEqual(document.getElementById('script-pages'), null);
+  assert.strictEqual(document.querySelector('label').innerText, 'Chapter: ');
+});
+
+test('a screenplay session that lost pages shows the loss, and one with no change shows 0', async function(){
+  var showWordCount = require(wordcountDisplayPath);
+
+  await showWordCount(makeProject(), makeEditorQuill(''), makeUserSettings(), { pages: pagesOf(10), pagesOnLoad: 11.25 });
+  assert.strictEqual(document.getElementById('script-session-pages').innerText, '-1 2/8');
+
+  await showWordCount(makeProject(), makeEditorQuill(''), makeUserSettings(), { pages: pagesOf(10), pagesOnLoad: 10 });
+  assert.strictEqual(document.getElementById('script-session-pages').innerText, '0');
+
+  //A project opened before this session figure existed has no baseline: the whole script is new.
+  await showWordCount(makeProject(), makeEditorQuill(''), makeUserSettings(), { pages: pagesOf(2.5) });
+  assert.strictEqual(document.getElementById('script-session-pages').innerText, '2 4/8');
+});
+
+test('the page goal is the project\'s own, kept apart from the word goal, and drives the progress bar', async function(){
+  var showWordCount = require(wordcountDisplayPath);
+  var project = makeProject({ wordGoal: 50000, pageGoal: 120 });
+
+  await showWordCount(project, makeEditorQuill(''), makeUserSettings(), { pages: pagesOf(60), pagesOnLoad: 0 });
+
+  var goalInput = document.getElementById('page-goal-input');
+  var progressBarFill = document.getElementById('prog-bar-fill');
+  assert.strictEqual(goalInput.value, '120');
+  assert.strictEqual(goalInput.min, '0');
+  assert.strictEqual(progressBarFill.style.width, '50%');
+
+  goalInput.value = '30';
+  goalInput.oninput();
+  assert.strictEqual(project.pageGoal, 30);
+  assert.strictEqual(project.wordGoal, 50000);
+  assert.strictEqual(progressBarFill.style.width, '100%'); //capped
+
+  goalInput.value = '';
+  goalInput.oninput();
+  assert.strictEqual(project.pageGoal, 0);
+  assert.strictEqual(progressBarFill.style.width, '100%'); //no goal set is a full bar
+});
+
+test('the page count popup is a dialog and its goal field is labelled', async function(){
+  var showWordCount = require(wordcountDisplayPath);
+  await showWordCount(makeProject(), makeEditorQuill(''), makeUserSettings(), { pages: pagesOf(1), pagesOnLoad: 0 });
+
+  var popup = document.querySelector('.popup');
+  assertDialogDescribed(popup, 'dialog');
+  assert.ok(assertControlsNamed(popup) >= 1, 'the page goal field should be there to check');
+});
+
 test('Close removes the popup', async function(){
   var showWordCount = require(wordcountDisplayPath);
   await showWordCount(makeProject(), makeEditorQuill(''), makeUserSettings());

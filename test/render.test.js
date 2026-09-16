@@ -107,11 +107,16 @@ function makeBridge(){
     secureStorage: null
   })));
 
+  var invocations = [];
+
   return {
     handlers: handlers,
     invoked: invoked,
+    //The same calls with their arguments, for a test that cares what was sent, not only that.
+    invocations: invocations,
     invoke: function(name, args){
       invoked.push(name);
+      invocations.push({ name: name, args: args });
       //Set by failBootAt() to make one command reject, so the boot-failure path is driven the way
       //it actually breaks rather than by stubbing render.js's own internals.
       if(bootFailure && bootFailure.command === name)
@@ -156,6 +161,10 @@ function bodyShell(){
     '<div id="project-notes" class="sidebar" role="complementary" aria-labelledby="notes-header">' +
       '<h1 id="notes-header">Project Notes</h1>' +
       '<div id="notes-editor"></div>' +
+      '<div id="format-block" role="group" aria-labelledby="format-header" hidden>' +
+        '<h1 id="format-header">Format</h1>' +
+        '<p id="format-element"></p>' +
+      '</div>' +
     '</div>';
 }
 
@@ -206,6 +215,8 @@ function makeChap(title, opts){
     notes: notes,
     hasUnsavedChanges: !!opts.hasUnsavedChanges,
     getFile: function(){ return contents; },
+    //As the real chapter.js does: whatever is loaded, else the file.
+    getContentsOrFile: async function(){ return this.contents ? this.contents : contents; },
     getNotesFile: function(){ return notes; },
     //Reads the live .notes property (as the real chapter.js does), not the closed-over `notes`
     //above, so a test that reassigns chap.notes after construction sees that value here too.
@@ -502,6 +513,567 @@ test('displayChapterByIndex clamps an out-of-range index to the last chapter', a
   assert.strictEqual(r.editorQuill.getText().trim(), 'c1');
 });
 
+//docs/screenplay-plan.md, Phase 3: the editor's mode follows the active document's file, and a
+//script goes in through the HTML load path rather than setContents.
+test('displaying a .fountain chapter puts the editor in screenplay mode, and a .txt one takes it out', async function(){
+  var r = await freshRender();
+  var scriptDelta = { ops: [
+    { insert: 'INT. HOUSE - DAY' }, { insert: '\n', attributes: { element: 'scene' } },
+    { insert: 'BOB' }, { insert: '\n', attributes: { element: 'character' } },
+    { insert: 'Hi.' }, { insert: '\n', attributes: { element: 'dialogue' } }
+  ] };
+  var script = makeChap('Script', { contents: scriptDelta });
+  script.filename = 'Script.fountain';
+  var prose = makeChap('Notes');
+  prose.filename = 'Notes.txt';
+  r.project.chapters = [script, prose];
+
+  await r.displayChapterByIndex(0);
+  assert.strictEqual(r.editorMode(), 'screenplay');
+  assert.ok(document.getElementById('editor-container').classList.contains('screenplay'));
+  assert.deepStrictEqual(r.editorQuill.getContents().ops, scriptDelta.ops);
+  assert.strictEqual(script.hasUnsavedChanges, false, 'a load is not an edit');
+
+  await r.displayChapterByIndex(1);
+  assert.strictEqual(r.editorMode(), 'prose');
+  assert.ok(!document.getElementById('editor-container').classList.contains('screenplay'));
+  assert.strictEqual(r.editorQuill.getText().trim(), 'Notes');
+});
+
+//The Format block at the foot of the notes panel: what the line the caret is on is. A script's
+//element types are invisible in the way a heading level is not, and two of them can be laid out
+//alike, so a writer who reformats by Tab needs telling which of the two they landed on.
+test('the Format block names the caret\'s element, follows a reformat, and goes away for prose', async function(){
+  var r = await freshRender();
+  var script = makeChap('Script', { contents: { ops: [
+    { insert: 'INT. HOUSE - DAY' }, { insert: '\n', attributes: { element: 'scene' } },
+    { insert: 'Bob waits.' }, { insert: '\n' },
+    { insert: 'BOB' }, { insert: '\n', attributes: { element: 'character' } },
+    { insert: 'Hi.' }, { insert: '\n', attributes: { element: 'dialogue' } }
+  ] } });
+  script.filename = 'Script.fountain';
+  var prose = makeChap('Notes');
+  prose.filename = 'Notes.txt';
+  r.project.chapters = [script, prose];
+
+  var block = document.getElementById('format-block');
+  var value = document.getElementById('format-element');
+
+  //Opening the script, before anything is focused: the block reads the top of the document rather
+  //than waiting for a caret.
+  await r.displayChapterByIndex(0);
+  assert.strictEqual(block.hidden, false);
+  assert.strictEqual(value.textContent, 'Scene Heading');
+
+  r.editorQuill.setSelection(20, 0, 'user');
+  assert.strictEqual(value.textContent, 'Action', 'action is the absence of an element in the delta');
+
+  r.editorQuill.setSelection(28, 0, 'user');
+  assert.strictEqual(value.textContent, 'Character');
+
+  r.editorQuill.setSelection(32, 0, 'user');
+  assert.strictEqual(value.textContent, 'Dialogue');
+
+  //A reformat of the line the caret is already on - what Tab and Shift+Tab do - moves no caret, so
+  //there is no selection-change behind this: the text-change is what it follows.
+  var { setElement } = require('../src/components/controllers/screenplay-editor');
+  setElement(r.editorQuill, 'parenthetical', { index: 32, length: 0 });
+  assert.strictEqual(value.textContent, 'Parenthetical');
+
+  await r.displayChapterByIndex(1);
+  assert.strictEqual(block.hidden, true, 'prose has no element to show');
+  assert.strictEqual(value.textContent, '');
+});
+
+//Inside the notes panel in index.html, not beside it: that containment is the whole of "it toggles
+//with the notes", since showing and hiding the panel is a display rule on #project-notes.
+test('the Format block lives inside the notes panel', function(){
+  var html = fs.readFileSync(path.join(__dirname, '..', 'src', 'index.html'), 'utf8');
+  var holder = document.createElement('div');
+  holder.innerHTML = html.replace(/[\s\S]*<body>/, '')
+    .replace(/<\/body>[\s\S]*/, '')
+    .replace(/<script[\s\S]*?<\/script>/g, '');
+
+  assert.ok(holder.querySelector('#project-notes #format-block'),
+    'the block has to be in the notes panel to hide with it');
+  assert.strictEqual(holder.querySelector('#format-block h1').textContent, 'Format');
+});
+
+//docs/screenplay-plan.md, Phase 5: the sidebar shows a script's scenes, and the chapter shortcuts
+//move between and reorder them.
+function scriptWithScenes(){
+  var { parseFountain, elementsToDelta } = require('../src/components/controllers/fountain');
+  var delta = elementsToDelta(parseFountain('FADE IN:\n\nINT. A - DAY\n\nOne.\n\nEXT. B - NIGHT\n\nTwo.\n\nINT. C - DAY\n\nThree.\n').elements);
+  var script = makeChap('Script', { contents: delta });
+  script.filename = 'Script.fountain';
+  return script;
+}
+
+function sceneRowTitles(){
+  return Array.from(document.querySelectorAll('#chapter-list li')).map(function(li){ return li.textContent; });
+}
+
+//Word Count's session figure for a script is in pages, measured from the script's estimate when it
+//first came into the editor. Per script, not per project: a project can hold more than one (an
+//import beside the starter script), and measured against the first one - an empty starter - the
+//whole of the imported script read as this session's writing.
+test('a script\'s session pages count from when it first came into the editor, each script on its own', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  var starter = makeChap('Starter', { contents: { ops: [{ insert: '\n' }] } });
+  starter.filename = 'Starter.fountain';
+  var imported = scriptWithScenes();
+  r.project.chapters = [starter, imported];
+
+  await r.displayChapterByIndex(1); //the imported script, opened straight onto it
+
+  var session = r.scriptPageSession();
+  assert.ok(session.pages.exact > 0);
+  assert.strictEqual(session.pagesOnLoad, session.pages.exact, 'nothing written yet: the session is zero');
+
+  //Writing moves the estimate but not the figure it opened at.
+  r.editorQuill.insertText(r.editorQuill.getLength() - 1, '\n' + 'Long new action. '.repeat(40), 'user');
+  session = r.scriptPageSession();
+  assert.ok(session.pages.exact > session.pagesOnLoad);
+
+  //The other script has its own baseline, taken when it is first shown.
+  await r.displayChapterByIndex(0);
+  session = r.scriptPageSession();
+  assert.strictEqual(session.pagesOnLoad, session.pages.exact);
+  assert.strictEqual(session.pages.exact, 0);
+
+  //Coming back to the first script keeps the baseline it opened with.
+  await r.displayChapterByIndex(1);
+  session = r.scriptPageSession();
+  assert.ok(session.pagesOnLoad > 0);
+  assert.ok(session.pagesOnLoad < session.pages.exact);
+});
+
+test('a script\'s sidebar lists its scenes, follows the caret, and jumps on a click', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [scriptWithScenes()];
+  r.project.reference = [makeChap('Bible')];
+
+  await r.displayChapterByIndex(0);
+
+  assert.strictEqual(document.getElementById('chapters-header').textContent, 'Scenes');
+  assert.deepStrictEqual(sceneRowTitles(), ['INT. A - DAY', 'EXT. B - NIGHT', 'INT. C - DAY']);
+  assert.deepStrictEqual(Array.from(document.querySelectorAll('#reference-list li')).map(function(li){ return li.textContent; }), ['Bible']);
+
+  r.editorQuill.setSelection(40, 0, 'user');
+  assert.strictEqual(document.querySelector('#chapter-list .activeChapter').textContent, 'EXT. B - NIGHT');
+
+  document.querySelectorAll('#chapter-list li')[2].onclick();
+  assert.strictEqual(r.editorQuill.getSelection().index, 47);
+  assert.strictEqual(document.querySelector('#chapter-list .activeChapter').textContent, 'INT. C - DAY');
+
+  //A reference document beside the script is prose, but it is still part of the same screenplay:
+  //the sidebar goes on listing the script's scenes, with none of them the active row, and the
+  //reference document it is showing is.
+  await r.displayChapterByIndex(1);
+  assert.strictEqual(document.getElementById('chapters-header').textContent, 'Scenes');
+  assert.deepStrictEqual(sceneRowTitles(), ['INT. A - DAY', 'EXT. B - NIGHT', 'INT. C - DAY']);
+  assert.strictEqual(document.querySelector('#chapter-list .activeChapter'), null);
+  assert.strictEqual(document.querySelector('#reference-list .activeChapter').textContent, 'Bible');
+
+  //And a scene row is the way back: it displays the script and lands on that scene.
+  document.querySelectorAll('#chapter-list li')[1].onclick();
+  await flushMicrotasks();
+  assert.strictEqual(r.project.activeChapterIndex, 0);
+  assert.strictEqual(r.editorQuill.getSelection().index, 27, 'EXT. B - NIGHT');
+  assert.strictEqual(document.querySelector('#chapter-list .activeChapter').textContent, 'EXT. B - NIGHT');
+});
+
+test('a trashed document shows the script\'s scenes too, read from its file when it has never been open', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  var script = scriptWithScenes();
+  r.project.trash = [makeChap('Cut scene')];
+
+  //The script as a project opened onto another document has it: a filename and no contents. Its
+  //scenes are on disk, and the sidebar reads them there.
+  var delta = script.contents;
+  script.contents = null;
+  script.getFile = async function(){ return delta; };
+  r.project.chapters = [script];
+
+  await r.displayChapterByIndex(1);
+  await flushMicrotasks();
+  assert.deepStrictEqual(sceneRowTitles(), ['INT. A - DAY', 'EXT. B - NIGHT', 'INT. C - DAY']);
+  assert.strictEqual(document.querySelector('#trash-list .activeChapter').textContent, 'Cut scene');
+});
+
+test('in a script the chapter shortcuts move between scenes and reorder them', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [scriptWithScenes()];
+  await r.displayChapterByIndex(0);
+
+  r.editorQuill.setSelection(0, 0, 'user');
+  await r.displayNextChapter();
+  assert.strictEqual(r.editorQuill.getSelection().index, 9, 'INT. A');
+  await r.displayNextChapter();
+  assert.strictEqual(r.editorQuill.getSelection().index, 27, 'EXT. B');
+  await r.displayPreviousChapter();
+  assert.strictEqual(r.editorQuill.getSelection().index, 9);
+  assert.strictEqual(r.project.activeChapterIndex, 0, 'the document never changed');
+
+  r.editorQuill.setSelection(27, 0, 'user');
+  r.moveChapUp(0);
+  assert.deepStrictEqual(sceneRowTitles(), ['EXT. B - NIGHT', 'INT. A - DAY', 'INT. C - DAY']);
+  assert.strictEqual(r.editorQuill.getSelection().index, 9, 'the caret followed the heading');
+  assert.strictEqual(r.editorQuill.getText(9, 14), 'EXT. B - NIGHT');
+  assert.strictEqual(r.project.chapters[0].hasUnsavedChanges, true);
+
+  r.editorQuill.history.undo();
+  assert.strictEqual(r.editorQuill.getText(9, 12), 'INT. A - DAY', 'one undo entry');
+});
+
+test('from the last scene the next-chapter shortcut goes on to the first reference document', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [scriptWithScenes()];
+  r.project.reference = [makeChap('Bible'), makeChap('Research')];
+  await r.displayChapterByIndex(0);
+
+  r.editorQuill.setSelection(47, 0, 'user');
+  await r.displayNextChapter();
+  assert.strictEqual(r.project.activeChapterIndex, 1, 'off the end of the script and into Reference');
+  assert.strictEqual(document.querySelector('#chapter-list .activeChapter'), null, 'no scene is the active row');
+
+  //And back up to the script, landing on the last scene it was left from rather than the top.
+  await r.displayPreviousChapter();
+  assert.strictEqual(r.project.activeChapterIndex, 0);
+  assert.strictEqual(document.getElementById('chapters-header').textContent, 'Scenes');
+  assert.strictEqual(r.editorQuill.getSelection().index, 47, 'INT. C - DAY');
+  assert.strictEqual(r.project.textCursorPosition, 47);
+  assert.strictEqual(document.querySelector('#chapter-list .activeChapter').textContent, 'INT. C - DAY');
+
+  //From there the shortcut carries on up the script, one scene at a time.
+  await r.displayPreviousChapter();
+  assert.strictEqual(r.editorQuill.getSelection().index, 27, 'EXT. B - NIGHT');
+
+  //With nothing beside the script, the last scene is still where the key stops.
+  r.project.reference = [];
+  r.editorQuill.setSelection(47, 0, 'user');
+  await r.displayNextChapter();
+  assert.strictEqual(r.project.activeChapterIndex, 0);
+  assert.strictEqual(r.editorQuill.getSelection().index, 47);
+});
+
+//Ctrl+Alt+R. The keys above walk to Reference a row at a time; this goes there and comes back.
+test('the Reference jump goes down to Reference and back to the caret it left', async function(){
+  var r = await freshRender();
+  r.project.chapters = [makeChap('One'),
+    makeChap('Two', { text: 'A chapter with room in it for a caret somewhere past the start.' })];
+  r.project.reference = [makeChap('Bible'), makeChap('Research')];
+
+  await r.displayChapterByIndex(1);
+  r.editorQuill.setSelection(24, 0, 'user');
+
+  await r.jumpToReference();
+  assert.strictEqual(r.project.activeChapterIndex, 2, 'the first reference document');
+  assert.strictEqual(r.editorQuill.getText().trim(), 'Bible');
+
+  //Back to the chapter, and to the line that was being written rather than the top of it.
+  await r.jumpToReference();
+  assert.strictEqual(r.project.activeChapterIndex, 1);
+  assert.strictEqual(r.editorQuill.getSelection().index, 24);
+  assert.strictEqual(r.project.textCursorPosition, 24);
+
+  //A second trip goes to the reference document it was last in, not back to the first one.
+  await r.displayChapterByIndex(3);
+  r.editorQuill.setSelection(4, 0, 'user');
+  await r.jumpToReference();
+  assert.strictEqual(r.project.activeChapterIndex, 1, 'out of Reference, to the chapter again');
+
+  await r.jumpToReference();
+  assert.strictEqual(r.project.activeChapterIndex, 3, 'Research, where Reference was left');
+  assert.strictEqual(r.editorQuill.getSelection().index, 4);
+});
+
+//The same key in a script, where the walk it saves is the longer one: the chapter keys step through
+//every scene in the one document before they reach the documents beside it.
+test('the Reference jump comes back to the scene it left in a script', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [scriptWithScenes()];
+  r.project.reference = [makeChap('Bible')];
+
+  await r.displayChapterByIndex(0);
+  r.editorQuill.setSelection(47, 0, 'user');
+
+  await r.jumpToReference();
+  assert.strictEqual(r.project.activeChapterIndex, 1);
+  assert.strictEqual(r.editorQuill.getText().trim(), 'Bible');
+
+  await r.jumpToReference();
+  assert.strictEqual(r.project.activeChapterIndex, 0);
+  assert.strictEqual(document.getElementById('chapters-header').textContent, 'Scenes');
+  assert.strictEqual(r.editorQuill.getSelection().index, 47, 'INT. C - DAY');
+  assert.strictEqual(r.project.textCursorPosition, 47);
+});
+
+test('the Reference jump stays put with nothing in Reference, and finds its way back without an origin', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [scriptWithScenes()];
+
+  await r.displayChapterByIndex(0);
+  r.editorQuill.setSelection(27, 0, 'user');
+
+  await r.jumpToReference();
+  assert.strictEqual(r.project.activeChapterIndex, 0, 'an empty Reference is nowhere to jump to');
+  assert.strictEqual(r.editorQuill.getSelection().index, 27, 'and the caret is left where it was');
+
+  //Reference reached some other way - here the Next key walking off the end of the script - and the
+  //jump used to leave it. With no origin remembered it goes to the script, that being the document
+  //the project is.
+  r.project.reference = [makeChap('Bible')];
+  r.editorQuill.setSelection(47, 0, 'user');
+  await r.displayNextChapter();
+  assert.strictEqual(r.project.activeChapterIndex, 1);
+
+  await r.jumpToReference();
+  assert.strictEqual(r.project.activeChapterIndex, 0, 'back to the script');
+  assert.strictEqual(r.editorQuill.getSelection().index, 0, 'at its top, having no caret to restore');
+});
+
+test('the Reference jump falls back when the document it would return to has gone', async function(){
+  var r = await freshRender();
+  r.project.chapters = [makeChap('One')];
+  r.project.reference = [makeChap('Bible'), makeChap('Research')];
+
+  //Reference entered by hand, so the trip out has no origin either: the first chapter, a novel
+  //having no script to make the document the project is.
+  await r.displayChapterByIndex(2);
+  await r.jumpToReference();
+  assert.strictEqual(r.project.activeChapterIndex, 0);
+
+  //And Research is deleted while the writer is back in the chapter. The next jump has no remembered
+  //document left to return to, so it goes to the first reference document rather than nowhere.
+  r.project.reference.pop();
+  await r.jumpToReference();
+  assert.strictEqual(r.project.activeChapterIndex, 1);
+  assert.strictEqual(r.editorQuill.getText().trim(), 'Bible');
+});
+
+test('a remembered caret past the end of a document that has since been cut down lands at its end', async function(){
+  var r = await freshRender();
+  var chapter = makeChap('Two', { text: 'Long enough to put a caret a good way into it.' });
+  r.project.chapters = [makeChap('One'), chapter];
+  r.project.reference = [makeChap('Bible')];
+
+  await r.displayChapterByIndex(1);
+  r.editorQuill.setSelection(40, 0, 'user');
+  await r.jumpToReference();
+
+  //Cut down while the writer is away - a Find and Replace pass, or a block of scenes taken out of
+  //a script - leaving the remembered caret past the end of what is there now.
+  chapter.contents = { ops: [{ insert: 'Short.\n' }] };
+
+  await r.jumpToReference();
+  assert.strictEqual(r.project.activeChapterIndex, 1);
+  assert.strictEqual(r.editorQuill.getSelection().index, r.editorQuill.getLength() - 1);
+  assert.strictEqual(r.editorQuill.getText().trim(), 'Short.');
+});
+
+test('backing into a script with no scene headings lands at the top of it', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  var script = makeChap('Script', { contents: { ops: [{ insert: 'FADE IN:\n' }] } });
+  script.filename = 'Script.fountain';
+  r.project.chapters = [script];
+  r.project.reference = [makeChap('Bible')];
+
+  await r.displayChapterByIndex(1);
+  await r.displayPreviousChapter();
+  assert.strictEqual(r.project.activeChapterIndex, 0);
+  assert.strictEqual(r.editorQuill.getSelection().index, 0);
+});
+
+//Importing a screenplay into a screenplay project puts the script it replaced in the Trash, so a
+//Trash holding a .fountain document is the ordinary case rather than an odd one. The editor still
+//shows it as a script, but the navigation keys are not its scenes' - from the Trash they move
+//between documents, the way they do from any other trashed document.
+test('from a trashed script the previous-chapter shortcut leaves the Trash rather than walking its scenes', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [scriptWithScenes()];
+  r.project.reference = [makeChap('Bible')];
+  var trashedScript = scriptWithScenes();
+  trashedScript.title = 'Old script';
+  r.project.trash = [trashedScript];
+
+  await r.displayChapterByIndex(2);
+  r.editorQuill.setSelection(47, 0, 'user');
+
+  await r.displayPreviousChapter();
+  assert.strictEqual(r.project.activeChapterIndex, 1, 'up into the last Reference document');
+  assert.strictEqual(r.editorQuill.getText().trim(), 'Bible');
+
+  //And with nothing beside the script, the key goes from the Trash to the script's last scene.
+  r.project.reference = [];
+  await r.displayChapterByIndex(1);
+  r.editorQuill.setSelection(47, 0, 'user');
+  await r.displayPreviousChapter();
+  assert.strictEqual(r.project.activeChapterIndex, 0);
+  assert.strictEqual(r.editorQuill.getSelection().index, 47, 'INT. C - DAY');
+});
+
+test('from a trashed script the next-chapter shortcut moves on through the Trash', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [scriptWithScenes()];
+  var trashedScript = scriptWithScenes();
+  trashedScript.title = 'Old script';
+  r.project.trash = [trashedScript, makeChap('Cut scene')];
+
+  await r.displayChapterByIndex(1);
+  r.editorQuill.setSelection(0, 0, 'user');
+
+  await r.displayNextChapter();
+  assert.strictEqual(r.project.activeChapterIndex, 2);
+  assert.strictEqual(r.editorQuill.getText().trim(), 'Cut scene');
+});
+
+//The rest of what a trashed script is not: its scenes are not the Scenes list, Ctrl+Shift+Up does
+//not reorder them, and a rename renames the document rather than a heading inside it.
+test('a trashed script is an ordinary document to the sidebar, the reorder keys and a rename', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [scriptWithScenes()];
+  var trashedScript = scriptWithScenes();
+  trashedScript.title = 'Old script';
+  r.project.trash = [trashedScript, makeChap('Cut scene')];
+
+  await r.displayChapterByIndex(1);
+  await flushMicrotasks();
+  r.editorQuill.setSelection(27, 0, 'user');
+
+  //The Scenes rows are the project's script's, none of them active, and the trashed script is the
+  //row that is - exactly as a trashed prose document behaves.
+  assert.deepStrictEqual(sceneRowTitles(), ['INT. A - DAY', 'EXT. B - NIGHT', 'INT. C - DAY']);
+  assert.strictEqual(document.querySelector('#chapter-list .activeChapter'), null);
+  assert.strictEqual(document.querySelector('#trash-list .activeChapter').textContent, 'Old script');
+
+  //Moving it down moves the document within the Trash rather than the scene the caret is in.
+  r.moveChapDown(1);
+  assert.deepStrictEqual(r.project.trash.map(function(c){ return c.title; }), ['Cut scene', 'Old script']);
+  assert.strictEqual(r.project.activeChapterIndex, 2);
+  assert.strictEqual(r.editorQuill.getText(27, 14), 'EXT. B - NIGHT', 'the script inside it is untouched');
+
+  //And a rename renames the document, not the heading the caret is on.
+  r.changeChapterTitle(2);
+  var box = document.querySelector('.name-box');
+  assert.strictEqual(box.getAttribute('aria-label'), 'Chapter title');
+  box.value = 'First draft';
+  box.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter' }));
+
+  assert.strictEqual(r.project.trash[1].title, 'First draft');
+  assert.strictEqual(r.editorQuill.getText(27, 14), 'EXT. B - NIGHT');
+
+  //A click on a scene row is still the way back into the script itself.
+  document.querySelectorAll('#chapter-list li')[2].onclick();
+  await flushMicrotasks();
+  assert.strictEqual(r.project.activeChapterIndex, 0);
+  assert.strictEqual(r.editorQuill.getSelection().index, 47, 'INT. C - DAY');
+});
+
+test('renaming a scene row rewrites the heading in the script', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [scriptWithScenes()];
+  await r.displayChapterByIndex(0);
+
+  r.editorQuill.setSelection(27, 0, 'user');
+  r.changeChapterTitle(0);
+  var box = document.querySelector('.name-box');
+  assert.strictEqual(box.getAttribute('aria-label'), 'Scene heading');
+  box.value = 'ext. beach - dawn';
+  box.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter' }));
+
+  assert.strictEqual(r.editorQuill.getText(27, 17), 'EXT. BEACH - DAWN');
+  assert.deepStrictEqual(sceneRowTitles(), ['INT. A - DAY', 'EXT. BEACH - DAWN', 'INT. C - DAY']);
+});
+
+//docs/screenplay-plan.md, Phase 7: what the menus refuse for a script, and that they say so.
+test('renaming a scene row from a reference document goes through the script', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [scriptWithScenes()];
+  r.project.reference = [makeChap('Bible')];
+  await r.displayChapterByIndex(1);
+  await flushMicrotasks();
+
+  //A double-click is two clicks and then the rename, so the script is still on its way in when the
+  //box is asked for; it goes into the row the load leaves behind.
+  var row = document.querySelectorAll('#chapter-list li')[1];
+  row.onclick();
+  row.onclick();
+  row.ondblclick();
+  await flushMicrotasks();
+
+  var box = document.querySelector('.name-box');
+  assert.strictEqual(box.getAttribute('aria-label'), 'Scene heading');
+  box.value = 'ext. beach - dawn';
+  box.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter' }));
+
+  assert.strictEqual(r.project.activeChapterIndex, 0);
+  assert.strictEqual(r.editorQuill.getText(27, 17), 'EXT. BEACH - DAWN');
+  assert.deepStrictEqual(sceneRowTitles(), ['INT. A - DAY', 'EXT. BEACH - DAWN', 'INT. C - DAY']);
+});
+
+test('the chapter tools refuse a script and the manuscript conversions refuse a screenplay project, each with a message', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [scriptWithScenes()];
+  r.project.reference = [makeChap('Bible')];
+  await r.displayChapterByIndex(0);
+  focusEditor();
+
+  await currentBridge().handlers['split-chapter-clicked']();
+  assert.match(document.getElementById('blocked-action-alert-text').innerText, /Split Chapter works on chapters/);
+  document.getElementById('blocked-action-alert').remove();
+
+  //Delete Chapter and Restore are not refused: on a script they act on scenes (cutScenes), so the
+  //menu item and its shortcut must reach them.
+  r.editorQuill.setSelection(30, 0, 'user');
+  await currentBridge().handlers['delete-chapter-clicked']();
+  assert.strictEqual(document.getElementById('blocked-action-alert'), null);
+  assert.deepStrictEqual(r.project.trash.map(function(c){ return c.title; }), ['EXT. B - NIGHT']);
+  await r.displayChapterByIndex(2);
+  focusEditor();
+  await currentBridge().handlers['restore-chapter-clicked']();
+  assert.strictEqual(document.getElementById('blocked-action-alert'), null);
+  assert.deepStrictEqual(r.project.trash, []);
+  assert.strictEqual(r.project.activeChapterIndex, 0);
+  await r.displayChapterByIndex(0);
+  focusEditor();
+
+  await currentBridge().handlers['renumber-chapters-clicked']();
+  assert.match(document.getElementById('blocked-action-alert-text').innerText, /Renumber Chapters is for a novel project/);
+  document.getElementById('blocked-action-alert').remove();
+
+  //Add New Chapter with the script active makes a Reference document - the one kind of document
+  //there is to add beside a script - and shows it, in prose mode.
+  await currentBridge().handlers['add-chapter-clicked']();
+  assert.strictEqual(document.getElementById('blocked-action-alert'), null);
+  assert.strictEqual(r.project.chapters.length, 1, 'the script is still the only chapter');
+  assert.strictEqual(r.project.reference.length, 2);
+  assert.strictEqual(r.project.getActiveChapter(), r.project.reference[1]);
+  assert.strictEqual(r.editorMode(), 'prose');
+  Array.from(document.querySelectorAll('.name-box')).forEach(function(box){ box.remove(); });
+
+  //And with a Reference document active it joins Reference after it, as in a novel.
+  await r.displayChapterByIndex(1);
+  focusEditor();
+  await currentBridge().handlers['add-chapter-clicked']();
+  assert.strictEqual(r.project.reference.length, 3);
+  assert.strictEqual(r.project.getActiveChapter(), r.project.reference[1]);
+});
+
 //The core editing loop: type in a chapter, look at a different one, come back. If this regresses,
 //edits are silently lost the moment the writer glances at another chapter - about the worst
 //possible failure mode for this app.
@@ -653,6 +1225,380 @@ test('addImportedChapter with a trashed chapter active appends onto Chapters and
   assert.strictEqual(r.project.chapters[1].title, 'Imported Title');
   assert.strictEqual(r.project.activeChapterIndex, 1);
   assert.strictEqual(r.editorQuill.getText().trim(), 'Imported');
+});
+
+//A screenplay project's Chapters list is its script, and the Scenes sidebar shows that script's
+//headings rather than chapter rows - so a prose import lands in Reference, as Ctrl+N's new
+//document does, where it has a row. A script import still joins Chapters, where Export looks.
+test('addImportedChapter puts a prose document imported into a screenplay project in Reference, with the script active', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [makeChap('Script')];
+  r.project.activeChapterIndex = 0;
+
+  await r.addImportedChapter({ ops: [{ insert: 'Notes\n' }] }, 'Character Bible');
+
+  assert.strictEqual(r.project.chapters.length, 1);
+  assert.strictEqual(r.project.reference.length, 1);
+  assert.strictEqual(r.project.reference[0].title, 'Character Bible');
+  assert.strictEqual(r.project.activeChapterIndex, 1);
+  assert.strictEqual(r.editorQuill.getText().trim(), 'Notes');
+});
+
+//The application menu follows the project and the document (app-menu.js): render.js tells the
+//host through setMenuMode whenever either changes, and only then.
+function menuModesSent(){
+  return currentBridge().invocations
+    .filter(function(call){ return call.name === 'setMenuMode'; })
+    .map(function(call){ return call.args.project + '/' + call.args.document; });
+}
+
+test('the host is told the menu mode when the project or the document showing changes, and only then', async function(){
+  var r = await freshRender();
+  var before = menuModesSent().length;
+  r.project.type = 'screenplay';
+  r.project.chapters = [scriptWithScenes()];
+  r.project.reference = [makeChap('Bible'), makeChap('Notes')];
+
+  await r.displayChapterByIndex(0); //the script
+  await flushMicrotasks();
+  assert.deepStrictEqual(menuModesSent().slice(before), ['screenplay/screenplay']);
+
+  await r.displayChapterByIndex(1); //a prose Reference document
+  await r.displayChapterByIndex(2); //another - no change in mode, so nothing more is sent
+  await flushMicrotasks();
+  assert.deepStrictEqual(menuModesSent().slice(before), ['screenplay/screenplay', 'screenplay/prose']);
+
+  await r.displayChapterByIndex(0);
+  await flushMicrotasks();
+  assert.deepStrictEqual(menuModesSent().slice(before), ['screenplay/screenplay', 'screenplay/prose', 'screenplay/screenplay']);
+});
+
+test('a novel project tells the host it is a novel showing prose', async function(){
+  var r = await freshRender();
+  var before = menuModesSent().length;
+  r.project.chapters = [makeChap('c0')];
+
+  await r.displayChapterByIndex(0);
+  await flushMicrotasks();
+  assert.deepStrictEqual(menuModesSent().slice(before), ['novel/prose']);
+});
+
+//A screenplay project holds one script. A script imported into one takes the script's place, and
+//the script it displaces goes to Trash rather than nowhere - Restore can bring it back, swapping
+//the other way.
+test('addImportedChapter makes an imported script the screenplay project\'s script, and trashes the one it replaces', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  var starter = makeChap('Starter');
+  starter.filename = 'Starter.fountain';
+  r.project.chapters = [starter];
+  r.project.activeChapterIndex = 0;
+  r.project.hasUnsavedChanges = false;
+
+  await r.addImportedChapter({ ops: [{ insert: 'INT. HOUSE - DAY\n' }] }, 'Big Fish', 'fountain');
+
+  assert.deepStrictEqual(r.project.chapters.map(function(c){ return c.title; }), ['Big Fish']);
+  assert.strictEqual(r.project.chapters[0].format, 'fountain');
+  assert.deepStrictEqual(r.project.trash, [starter]);
+  assert.strictEqual(starter.trashedFrom, 'chapters');
+  assert.strictEqual(r.project.reference.length, 0);
+  assert.strictEqual(r.project.activeChapterIndex, 0);
+  assert.strictEqual(r.project.hasUnsavedChanges, true);
+  assert.strictEqual(r.editorQuill.getText().trim(), 'INT. HOUSE - DAY');
+});
+
+test('a script imported while a Reference document is showing still becomes the script, not a Reference document', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  var starter = makeChap('Starter');
+  starter.filename = 'Starter.fountain';
+  r.project.chapters = [starter];
+  r.project.reference = [makeChap('Bible')];
+  await r.displayChapterByIndex(1);
+
+  await r.addImportedChapter({ ops: [{ insert: 'INT. HOUSE - DAY\n' }] }, 'Big Fish', 'fountain');
+
+  assert.deepStrictEqual(r.project.chapters.map(function(c){ return c.title; }), ['Big Fish']);
+  assert.deepStrictEqual(r.project.reference.map(function(c){ return c.title; }), ['Bible']);
+  assert.deepStrictEqual(r.project.trash, [starter]);
+});
+
+//A .fountain document beside the script: a block of scenes stashed in Reference or thrown into
+//Trash, or the script an import replaced. scriptWithScenes() by index: FADE IN: 0-8, INT. A - DAY
+//9-26 (One.), EXT. B - NIGHT 27-46 (Two.), INT. C - DAY 47-66 (Three.).
+function fountainChap(title, text, opts){
+  var { parseFountain, elementsToDelta } = require('../src/components/controllers/fountain');
+  var chap = makeChap(title, Object.assign({ contents: elementsToDelta(parseFountain(text).elements) }, opts || {}));
+  chap.filename = title.replace(/[^A-Za-z]/g, '') + '.fountain';
+  return chap;
+}
+
+function elementTexts(delta){
+  var { deltaToElements } = require('../src/components/controllers/fountain');
+  return deltaToElements(delta).map(function(e){ return e.text; }).filter(Boolean);
+}
+
+//A screenplay project's script never leaves Chapters. Delete Chapter on it takes the scene the
+//caret is in out into Trash as a document of its own - docs/screenplay-plan.md, "One script".
+test('Delete Chapter with the script active cuts the caret\'s scene into Trash and leaves the script', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  var script = scriptWithScenes();
+  r.project.chapters = [script];
+  await r.displayChapterByIndex(0);
+  await flushMicrotasks();
+
+  //The caret up in FADE IN: is in no scene, and there is nothing to cut.
+  r.editorQuill.setSelection(2, 0, 'user');
+  await r.moveToTrash(0);
+  assert.deepStrictEqual(r.project.trash, []);
+  assert.strictEqual(r.editorQuill.getText(9, 12), 'INT. A - DAY');
+
+  r.editorQuill.setSelection(30, 0, 'user'); //inside EXT. B - NIGHT
+  await r.moveToTrash(0);
+
+  assert.deepStrictEqual(r.project.chapters, [script], 'the script stays');
+  assert.strictEqual(r.project.trash.length, 1);
+  var cut = r.project.trash[0];
+  assert.strictEqual(cut.title, 'EXT. B - NIGHT', 'titled by its heading');
+  assert.strictEqual(cut.format, 'fountain');
+  assert.strictEqual(cut.trashedFrom, 'chapters');
+  assert.deepStrictEqual(elementTexts(cut.contents), ['EXT. B - NIGHT', 'Two.']);
+
+  assert.deepStrictEqual(elementTexts(r.editorQuill.getContents()), ['FADE IN:', 'INT. A - DAY', 'One.', 'INT. C - DAY', 'Three.']);
+  assert.strictEqual(r.project.activeChapterIndex, 0, 'still in the script');
+  assert.strictEqual(r.editorQuill.getSelection().index, 27, 'the caret where the scene was, now INT. C');
+  assert.strictEqual(script.hasUnsavedChanges, true);
+  assert.deepStrictEqual(elementTexts(script.contents), elementTexts(r.editorQuill.getContents()), 'recorded on the chapter, though not a user change');
+  assert.deepStrictEqual(sceneRowTitles(), ['INT. A - DAY', 'INT. C - DAY']);
+  assert.strictEqual(document.querySelector('#trash-list li').textContent, 'EXT. B - NIGHT*', 'its row, unsaved');
+
+  //Not an undo entry: undoing would put the scene back while the Trash kept its copy.
+  r.editorQuill.history.undo();
+  assert.deepStrictEqual(elementTexts(r.editorQuill.getContents()), ['FADE IN:', 'INT. A - DAY', 'One.', 'INT. C - DAY', 'Three.']);
+});
+
+test('a range over two scenes is cut as one block, a partly selected scene included', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [scriptWithScenes()];
+  await r.displayChapterByIndex(0);
+  await flushMicrotasks();
+
+  r.editorQuill.setSelection(12, 20, 'user'); //from inside INT. A's heading to inside EXT. B's
+  await r.moveToTrash(0);
+
+  assert.strictEqual(r.project.trash.length, 1, 'one document, not two');
+  assert.strictEqual(r.project.trash[0].title, 'INT. A - DAY');
+  assert.deepStrictEqual(elementTexts(r.project.trash[0].contents), ['INT. A - DAY', 'One.', 'EXT. B - NIGHT', 'Two.']);
+  assert.deepStrictEqual(elementTexts(r.editorQuill.getContents()), ['FADE IN:', 'INT. C - DAY', 'Three.']);
+  assert.strictEqual(r.editorQuill.getSelection().index, 9);
+});
+
+test('Restore on a trashed block appends it to the script and lands the caret on it', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  var script = scriptWithScenes();
+  var deleted = [];
+  var block = fountainChap('EXT. B - NIGHT', 'EXT. D - DUSK\n\nFour.\n', { deleteFile: function(){ deleted.push(this.title); } });
+  block.trashedFrom = 'chapters';
+  r.project.chapters = [script];
+  r.project.reference = [makeChap('Bible')];
+  r.project.trash = [block];
+  await r.displayChapterByIndex(2); //the trashed block, where Restore is pressed from
+
+  await r.restoreFromTrash(2);
+
+  assert.deepStrictEqual(r.project.chapters, [script], 'nothing joins Chapters');
+  assert.deepStrictEqual(r.project.trash, []);
+  assert.deepStrictEqual(r.project.reference.map(function(c){ return c.title; }), ['Bible']);
+  assert.deepStrictEqual(elementTexts(script.contents), ['FADE IN:', 'INT. A - DAY', 'One.', 'EXT. B - NIGHT', 'Two.', 'INT. C - DAY', 'Three.', 'EXT. D - DUSK', 'Four.']);
+  assert.strictEqual(script.hasUnsavedChanges, true);
+  assert.deepStrictEqual(deleted, ['EXT. B - NIGHT'], 'the block\'s own file goes');
+  assert.strictEqual(r.project.activeChapterIndex, 0, 'the script is shown');
+  assert.strictEqual(r.editorQuill.getText(67, 13), 'EXT. D - DUSK');
+  assert.strictEqual(r.editorQuill.getSelection().index, 67, 'on the restored heading');
+  assert.deepStrictEqual(sceneRowTitles(), ['INT. A - DAY', 'EXT. B - NIGHT', 'INT. C - DAY', 'EXT. D - DUSK']);
+});
+
+test('a block restored into an empty script becomes its text, with no blank line above', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  var script = makeChap('Script', { contents: { ops: [{ insert: '\n' }] } });
+  script.filename = 'Script.fountain';
+  var block = fountainChap('INT. A - DAY', 'INT. A - DAY\n\nOne.\n');
+  block.trashedFrom = 'chapters';
+  r.project.chapters = [script];
+  r.project.trash = [block];
+  await r.displayChapterByIndex(1);
+
+  await r.restoreFromTrash(1);
+
+  assert.deepStrictEqual(elementTexts(r.editorQuill.getContents()), ['INT. A - DAY', 'One.']);
+  assert.strictEqual(r.editorQuill.getSelection().index, 0);
+});
+
+test('restoring a prose document trashed from Chapters into a screenplay project lands it in Reference', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  var script = scriptWithScenes();
+  var prose = makeChap('Chapter 1');
+  prose.trashedFrom = 'chapters';
+  r.project.chapters = [script];
+  r.project.trash = [prose];
+  await r.displayChapterByIndex(1);
+
+  await r.restoreFromTrash(1);
+
+  assert.deepStrictEqual(r.project.chapters, [script]);
+  assert.deepStrictEqual(r.project.reference, [prose]);
+  assert.deepStrictEqual(r.project.trash, []);
+});
+
+test('moving the last block down stashes it at the top of Reference, and moving it back up merges it', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  var script = scriptWithScenes();
+  var deleted = [];
+  r.project.chapters = [script];
+  r.project.reference = [makeChap('Bible')];
+  await r.displayChapterByIndex(0);
+  await flushMicrotasks();
+
+  //A block with a scene below it just swaps with it, as before.
+  r.editorQuill.setSelection(30, 0, 'user'); //EXT. B
+  r.moveChapDown(0);
+  assert.deepStrictEqual(elementTexts(r.editorQuill.getContents()), ['FADE IN:', 'INT. A - DAY', 'One.', 'INT. C - DAY', 'Three.', 'EXT. B - NIGHT', 'Two.']);
+  assert.deepStrictEqual(r.project.reference.map(function(c){ return c.title; }), ['Bible']);
+  assert.strictEqual(r.editorQuill.getSelection().index, 47);
+
+  //Now the last one: down again leaves the script.
+  r.moveChapDown(0);
+  assert.deepStrictEqual(elementTexts(r.editorQuill.getContents()), ['FADE IN:', 'INT. A - DAY', 'One.', 'INT. C - DAY', 'Three.']);
+  assert.deepStrictEqual(r.project.reference.map(function(c){ return c.title; }), ['EXT. B - NIGHT', 'Bible']);
+  var stashed = r.project.reference[0];
+  assert.strictEqual(stashed.format, 'fountain');
+  assert.strictEqual(stashed.trashedFrom, undefined);
+  assert.strictEqual(r.project.activeChapterIndex, 0, 'the writer stays in the script');
+  assert.strictEqual(r.editorQuill.getSelection().index, 46, 'the caret where the block was, now the end of the script');
+  assert.deepStrictEqual(sceneRowTitles(), ['INT. A - DAY', 'INT. C - DAY']);
+  assert.strictEqual(document.querySelector('#reference-list li').textContent, 'EXT. B - NIGHT*');
+
+  //From the stashed block, up goes back into the script.
+  stashed.deleteFile = function(){ deleted.push(this.title); };
+  await r.displayChapterByIndex(1);
+  await r.moveChapUp(1);
+
+  assert.deepStrictEqual(r.project.reference.map(function(c){ return c.title; }), ['Bible']);
+  assert.deepStrictEqual(elementTexts(r.editorQuill.getContents()), ['FADE IN:', 'INT. A - DAY', 'One.', 'INT. C - DAY', 'Three.', 'EXT. B - NIGHT', 'Two.']);
+  assert.deepStrictEqual(deleted, ['EXT. B - NIGHT']);
+  assert.strictEqual(r.project.activeChapterIndex, 0);
+  assert.strictEqual(r.editorQuill.getSelection().index, 47);
+
+  //A prose document at the top of Reference has nowhere to go.
+  await r.displayChapterByIndex(1);
+  r.moveChapUp(1);
+  assert.deepStrictEqual(r.project.chapters, [script]);
+  assert.deepStrictEqual(r.project.reference.map(function(c){ return c.title; }), ['Bible']);
+  assert.strictEqual(r.project.activeChapterIndex, 1);
+});
+
+test('a range over two scenes moves as one block and stays selected, so the key walks it', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [scriptWithScenes()];
+  await r.displayChapterByIndex(0);
+  await flushMicrotasks();
+
+  r.editorQuill.setSelection(30, 25, 'user'); //from inside EXT. B to inside INT. C
+  r.moveChapUp(0);
+
+  assert.deepStrictEqual(elementTexts(r.editorQuill.getContents()), ['FADE IN:', 'EXT. B - NIGHT', 'Two.', 'INT. C - DAY', 'Three.', 'INT. A - DAY', 'One.']);
+  var range = r.editorQuill.getSelection();
+  assert.strictEqual(range.index, 9);
+  assert.strictEqual(range.length, 39, 'B and C, short of the newline before A');
+
+  //And once more, the same block: at the top now, so nothing happens.
+  r.moveChapUp(0);
+  assert.strictEqual(r.editorQuill.getSelection().index, 9);
+  assert.strictEqual(elementTexts(r.editorQuill.getContents())[1], 'EXT. B - NIGHT');
+
+  //Moving is a user change, so it is an undo entry - and the no-op above added none.
+  r.editorQuill.history.undo();
+  assert.deepStrictEqual(elementTexts(r.editorQuill.getContents()), ['FADE IN:', 'INT. A - DAY', 'One.', 'EXT. B - NIGHT', 'Two.', 'INT. C - DAY', 'Three.']);
+  r.editorQuill.history.redo();
+  assert.strictEqual(elementTexts(r.editorQuill.getContents())[1], 'EXT. B - NIGHT');
+
+  //Down again, as a block, past INT. A.
+  r.editorQuill.setSelection(9, 39, 'user');
+  r.moveChapDown(0);
+  assert.deepStrictEqual(elementTexts(r.editorQuill.getContents()), ['FADE IN:', 'INT. A - DAY', 'One.', 'EXT. B - NIGHT', 'Two.', 'INT. C - DAY', 'Three.']);
+  assert.strictEqual(r.editorQuill.getSelection().index, 27);
+});
+
+//A stashed block in Reference is a script to the editor and one document to everything else -
+//as a trashed script already is - however many scenes it holds.
+test('a .fountain document in Reference is one document to the keys and the sidebar', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [scriptWithScenes()];
+  var stash = scriptWithScenes();
+  stash.title = 'Stash';
+  r.project.reference = [makeChap('Bible'), stash];
+
+  await r.displayChapterByIndex(2);
+  await flushMicrotasks();
+  r.editorQuill.setSelection(30, 0, 'user');
+
+  assert.strictEqual(r.editorMode(), 'screenplay', 'edited as a script');
+  assert.deepStrictEqual(sceneRowTitles(), ['INT. A - DAY', 'EXT. B - NIGHT', 'INT. C - DAY'], 'the project\'s script\'s scenes');
+  assert.strictEqual(document.querySelector('#chapter-list .activeChapter'), null);
+  assert.strictEqual(document.querySelector('#reference-list .activeChapter').textContent, 'Stash');
+
+  //Typing a new heading into it does not change the Scenes rows.
+  r.editorQuill.insertText(0, 'INT. Z - DAY\n', { element: 'scene' }, 'user');
+  await new Promise(function(resolve){ setTimeout(resolve, 350); });
+  assert.deepStrictEqual(sceneRowTitles(), ['INT. A - DAY', 'EXT. B - NIGHT', 'INT. C - DAY']);
+
+  //The reorder key moves the document within Reference, not the scene the caret is in.
+  r.moveChapUp(2);
+  assert.deepStrictEqual(r.project.reference.map(function(c){ return c.title; }), ['Stash', 'Bible']);
+  assert.strictEqual(r.project.activeChapterIndex, 1);
+
+  //Delete Chapter trashes the whole document, and it comes back to Reference whole.
+  await r.moveToTrash(1);
+  assert.deepStrictEqual(r.project.trash.map(function(c){ return c.title; }), ['Stash']);
+  assert.strictEqual(r.project.trash[0].trashedFrom, 'reference');
+  await r.displayChapterByIndex(2);
+  await r.restoreFromTrash(2);
+  assert.deepStrictEqual(r.project.reference.map(function(c){ return c.title; }), ['Bible', 'Stash']);
+  assert.deepStrictEqual(r.project.trash, []);
+  assert.deepStrictEqual(elementTexts(r.project.chapters[0].contents || r.project.chapters[0].getFile()).slice(0, 2), ['FADE IN:', 'INT. A - DAY'], 'the script is untouched');
+
+  //The navigation keys leave it for the document above, as from any other document.
+  await r.displayChapterByIndex(2);
+  r.editorQuill.setSelection(30, 0, 'user');
+  await r.displayPreviousChapter();
+  assert.strictEqual(r.project.activeChapterIndex, 1);
+  assert.strictEqual(r.editorQuill.getText().trim(), 'Bible');
+});
+
+test('restoring a trashed prose document into a screenplay project does not touch the script', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  var script = makeChap('Script');
+  script.filename = 'Script.fountain';
+  var note = makeChap('Note');
+  note.trashedFrom = 'reference';
+  r.project.chapters = [script];
+  r.project.trash = [note];
+
+  await r.restoreFromTrash(1);
+
+  assert.deepStrictEqual(r.project.chapters, [script]);
+  assert.deepStrictEqual(r.project.reference, [note]);
+  assert.deepStrictEqual(r.project.trash, []);
 });
 
 //---------------------------------------------------------------------------
@@ -846,7 +1792,8 @@ var ALL_MENU_CHANNELS = [
   'save-copy-clicked', 'help-doc-clicked', 'renumber-chapters-clicked', 'send-via-email-clicked',
   'view-error-log-clicked', 'file-manager-clicked', 'wifi-manager-clicked', 'save-backup-clicked',
   'settings-clicked', 'corkboard-clicked', 'file-opened-from-outside-warewoolf',
-  'tab-indent-paragraphs-clicked', 'center-all-heads-clicked', 'dictionaries-clicked'
+  'tab-indent-paragraphs-clicked', 'center-all-heads-clicked', 'dictionaries-clicked',
+  'screenplay-names-clicked'
 ];
 
 //The bridge set up for the current freshRender() call - the same object render.js subscribed its
@@ -894,6 +1841,29 @@ test('a command with no focus guard runs regardless of where focus is', async fu
     currentBridge().handlers['outliner-clicked']();
   });
   assert.ok(document.querySelector('.popup-outliner'), 'outliner-clicked has no focus guard and should have run');
+});
+
+//A screenplay project is outlined by scene, so the Outliner is handed the project's script - the
+//one document in its Chapters list - whichever document the caret is in, the same way the sidebar's
+//scene rows come from the script either way. See outliner_display.js's showSceneOutliner.
+test('the Outliner of a screenplay project lists the scenes of its script, from a Reference document too', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [scriptWithScenes()];
+  r.project.reference = [makeChap('Bible')];
+
+  await r.displayChapterByIndex(0);
+  await currentBridge().handlers['outliner-clicked']();
+
+  var titles = Array.from(document.querySelectorAll('.outliner-title')).map(function(c){ return c.innerText; });
+  assert.deepStrictEqual(titles, ['INT. A - DAY', 'EXT. B - NIGHT', 'INT. C - DAY']);
+  assert.strictEqual(document.querySelectorAll('.outliner-word-count').length, 0, 'a screenplay is not counted in words');
+
+  await r.displayChapterByIndex(1); //the Reference document, after the script in the combined list
+  await currentBridge().handlers['outliner-clicked']();
+
+  assert.deepStrictEqual(Array.from(document.querySelectorAll('.outliner-title')).map(function(c){ return c.innerText; }),
+    ['INT. A - DAY', 'EXT. B - NIGHT', 'INT. C - DAY']);
 });
 
 //jsdom's innerText does not create real text nodes, so document.textContent cannot see text set
@@ -2122,6 +3092,199 @@ function saveSettingsPopup(){
   currentBridge().handlers['settings-clicked']();
   settingsPopupSaveButton().onclick();
 }
+
+//---------------------------------------------------------------------------
+// Characters/Locations - docs/screenplay-plan.md, "Characters and locations"
+//---------------------------------------------------------------------------
+
+//The dialog itself is test/screenplay-names_display.test.js. What is render.js's here is which
+//copy of the script the dialog is given: the editor's while the script is being edited, the
+//chapter's when it is not, and whether the rename lands somewhere Ctrl+Z can reach.
+function namesPopup(){
+  var fieldsets = Array.from(document.querySelectorAll('.popup-names fieldset'));
+  var fieldset = fieldsets.find(function(fs){ return fs.querySelector('legend').innerText === 'Characters'; });
+
+  return {
+    names: function(){
+      return Array.from(fieldset.querySelector('select').options).map(function(o){ return o.value; });
+    },
+    rename: function(from, to){
+      Array.from(fieldset.querySelector('select').options).forEach(function(opt){ opt.selected = opt.value === from; });
+      fieldset.querySelector('select').onchange();
+      buttonIn(fieldset, 'Rename').click();
+      fieldset.querySelector('input[type=text]').value = to;
+      fieldset.querySelector('input[type=text]').oninput();
+      buttonIn(fieldset, 'Save').click();
+      //A rename that reaches the script is asked about before it is made.
+      confirmRename();
+    }
+  };
+
+  function buttonIn(root, label){
+    return Array.from(root.querySelectorAll('button')).find(function(b){ return b.textContent === label; });
+  }
+}
+
+//Answers the warning the Characters/Locations dialog raises before it rewrites the script.
+function confirmRename(){
+  var popup = document.querySelector('.rename-confirm-popup');
+  assert.ok(popup, 'expected the rename to be asked about before it was made');
+  Array.from(popup.querySelectorAll('button')).find(function(b){
+    return b.textContent === 'Rename';
+  }).click();
+}
+
+function cueScript(){
+  return fountainChap('Script', 'INT. A - DAY\n\nBOB\nOne.\n\nEXT. B - NIGHT\n\nBOB\nTwo.\n\nANNA\nThree.\n');
+}
+
+test('screenplay-names-clicked opens the two lists, read from the script in the editor', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [cueScript()];
+  await r.displayChapterByIndex(0);
+
+  await currentBridge().handlers['screenplay-names-clicked']();
+
+  var popup = document.querySelector('.popup');
+  assert.strictEqual(popup.querySelector('h1').innerText, 'Characters/Locations');
+  assert.deepStrictEqual(namesPopup().names(), ['ANNA', 'BOB']);
+});
+
+test('renaming a character rewrites the script in the editor, as one thing to undo', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [cueScript()];
+  await r.displayChapterByIndex(0);
+  await flushMicrotasks();
+
+  await currentBridge().handlers['screenplay-names-clicked']();
+  namesPopup().rename('BOB', 'ROBERT');
+
+  var { nameCounts } = require('../src/components/controllers/screenplay-editor');
+  assert.deepStrictEqual(nameCounts(r.editorQuill.getContents()).characters, { ANNA: 1, ROBERT: 2 });
+  assert.strictEqual(r.project.chapters[0].hasUnsavedChanges, true, 'a user change marks the script');
+
+  //One entry in the editor's history, so the writer can take the whole rename back the way they
+  //take back anything else they did to the script.
+  r.editorQuill.history.undo();
+  assert.deepStrictEqual(nameCounts(r.editorQuill.getContents()).characters, { ANNA: 1, BOB: 2 });
+});
+
+test('renaming a location with a reference document in the editor writes the script and its scene rows', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [cueScript()];
+  r.project.reference = [makeChap('Bible')];
+  await r.displayChapterByIndex(1);
+  await flushMicrotasks();
+
+  await currentBridge().handlers['screenplay-names-clicked']();
+
+  var locations = Array.from(document.querySelectorAll('.popup-names fieldset')).find(function(fs){
+    return fs.querySelector('legend').innerText === 'Locations';
+  });
+  Array.from(locations.querySelector('select').options).forEach(function(opt){ opt.selected = opt.value === 'A'; });
+  locations.querySelector('select').onchange();
+  Array.from(locations.querySelectorAll('button')).find(function(b){ return b.textContent === 'Rename'; }).click();
+  locations.querySelector('input[type=text]').value = 'THE PIER';
+  locations.querySelector('input[type=text]').oninput();
+  Array.from(locations.querySelectorAll('button')).find(function(b){ return b.textContent === 'Save'; }).click();
+  confirmRename();
+
+  //The script is not the document in the editor, so the rename goes into its contents and marks
+  //both it and the project unsaved - and the Scenes rows, which are the script's wherever the
+  //caret is, are rebuilt with it.
+  assert.strictEqual(r.project.activeChapterIndex, 1, 'and the writer is left where they were');
+  assert.strictEqual(r.project.chapters[0].hasUnsavedChanges, true);
+  assert.strictEqual(r.project.hasUnsavedChanges, true);
+  assert.deepStrictEqual(elementTexts(r.project.chapters[0].contents)[0], 'INT. THE PIER - DAY');
+  assert.deepStrictEqual(sceneRowTitles(), ['INT. THE PIER - DAY', 'EXT. B - NIGHT']);
+});
+
+test('a name added in the dialog is offered on the next cue, without the script using it yet', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [cueScript()];
+  await r.displayChapterByIndex(0);
+
+  await currentBridge().handlers['screenplay-names-clicked']();
+
+  var characters = Array.from(document.querySelectorAll('.popup-names fieldset'))[0];
+  characters.querySelector('input[type=text]').value = 'zelda';
+  characters.querySelector('input[type=text]').oninput();
+  Array.from(characters.querySelectorAll('button')).find(function(b){ return b.textContent === 'Add'; }).click();
+
+  assert.deepStrictEqual(r.project.screenplayNames.characters.added, ['ZELDA']);
+
+  //attachAutocomplete asks the project for its lists on every refresh, so the new name is offered
+  //without the editor being reloaded.
+  var { suggestionsFor } = require('../src/components/controllers/screenplay-editor');
+  assert.deepStrictEqual(
+    suggestionsFor(r.editorQuill.getContents(), 'character', 'z', 0, r.project.screenplayNames).suggestions,
+    ['ZELDA']);
+});
+
+//A character's name is not only in his cues, and what it is replaced with takes the case of the
+//line it lands in - docs/screenplay-plan.md, "Characters and locations".
+test('renaming a character rewrites the whole script, in the case each line was written in', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [fountainChap('Script', 'INT. DAN\'S BEDROOM - NIGHT\n\nDAN\nI am Dan, and dan I remain.\n\nDAN crosses the room. DANIELLE does not.\n')];
+  await r.displayChapterByIndex(0);
+  await flushMicrotasks();
+
+  await currentBridge().handlers['screenplay-names-clicked']();
+  namesPopup().rename('DAN', 'BEN');
+
+  var text = r.editorQuill.getText();
+  assert.ok(text.indexOf("INT. BEN'S BEDROOM - NIGHT") > -1, 'the heading his room is in');
+  assert.ok(text.indexOf('I am Ben, and dan I remain.') > -1, 'capitalised in dialogue; lower case left alone');
+  assert.ok(text.indexOf('BEN crosses the room. DANIELLE does not.') > -1, 'capitals in action, and not a longer name');
+
+  //One entry in the editor's history still, however many lines it touched.
+  r.editorQuill.history.undo();
+  assert.ok(r.editorQuill.getText().indexOf("INT. DAN'S BEDROOM - NIGHT") > -1);
+  assert.ok(r.editorQuill.getText().indexOf('I am Dan, and dan I remain.') > -1);
+});
+
+//The reason the dialog exists - docs/screenplay-plan.md, "Characters and locations".
+test('a name removed in the dialog stops being offered, and the script keeps every line of it', async function(){
+  var r = await freshRender();
+  r.project.type = 'screenplay';
+  r.project.chapters = [fountainChap('Script', 'INT. A - DAY\n\nDAN\nOne line only.\n\nDANIELLE\nAll the rest.\n')];
+  await r.displayChapterByIndex(0);
+
+  await currentBridge().handlers['screenplay-names-clicked']();
+
+  var characters = Array.from(document.querySelectorAll('.popup-names fieldset'))[0];
+  Array.from(characters.querySelector('select').options).forEach(function(opt){ opt.selected = opt.value === 'DAN'; });
+  characters.querySelector('select').onchange();
+  Array.from(characters.querySelectorAll('button')).find(function(b){ return b.textContent === 'Remove'; }).click();
+
+  assert.deepStrictEqual(r.project.screenplayNames.characters.removed, ['DAN']);
+
+  //The script is untouched: DAN is still in the line he was written into.
+  var { suggestionsFor, nameCounts } = require('../src/components/controllers/screenplay-editor');
+  assert.deepStrictEqual(nameCounts(r.editorQuill.getContents()).characters, { DAN: 1, DANIELLE: 1 });
+
+  //And typing towards DANIELLE is no longer met with DAN.
+  assert.deepStrictEqual(
+    suggestionsFor(r.editorQuill.getContents(), 'character', 'DAN', 0, r.project.screenplayNames).suggestions,
+    ['DANIELLE']);
+});
+
+test('screenplay-names-clicked refuses a novel project, saying why', async function(){
+  var r = await freshRender();
+  r.project.chapters = [makeChap('One')];
+  await r.displayChapterByIndex(0);
+
+  await currentBridge().handlers['screenplay-names-clicked']();
+
+  assert.strictEqual(document.querySelector('.popup-names'), null);
+  assert.match(document.getElementById('blocked-action-alert-text').innerText,
+    /Characters\/Locations lists the names a screenplay is written with/);
+});
 
 test('dictionaries-clicked opens the Dictionaries popup', async function(){
   var r = await freshRender();

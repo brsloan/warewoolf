@@ -24,51 +24,69 @@ function showFindReplace(project, editorQuill, displayChapterByIndex){
 
     findForm.appendChild(document.createElement('br'));
 
+    //Each box and its label in one .checkbox-option, so a label too long for the line wraps
+    //inside itself rather than carrying its first words away from the box they belong to.
+    var caseSensOption = document.createElement("span");
+    caseSensOption.classList.add("checkbox-option");
+    findForm.appendChild(caseSensOption);
+
     var caseSensitive = document.createElement("input");
     caseSensitive.type = "checkbox";
     caseSensitive.id = "case-sensitive-check";
-    findForm.appendChild(caseSensitive);
+    caseSensOption.appendChild(caseSensitive);
 
     var caseSensLabel = document.createElement("label");
     caseSensLabel.htmlFor = "case-sensitive-check";
     caseSensLabel.innerText = "Case Sensitive";
-    findForm.appendChild(caseSensLabel);
+    caseSensOption.appendChild(caseSensLabel);
 
     findForm.appendChild(document.createElement('br'));
+
+    var wholeWordOption = document.createElement("span");
+    wholeWordOption.classList.add("checkbox-option");
+    findForm.appendChild(wholeWordOption);
 
     var wholeWordOnly = document.createElement("input");
     wholeWordOnly.type = "checkbox";
     wholeWordOnly.id = "whole-word-check";
-    findForm.appendChild(wholeWordOnly);
+    wholeWordOption.appendChild(wholeWordOnly);
 
     var wholeWordLabel = document.createElement("label");
     wholeWordLabel.htmlFor = "whole-word-check";
     wholeWordLabel.innerText = "Whole Word Only";
-    findForm.appendChild(wholeWordLabel);
+    wholeWordOption.appendChild(wholeWordLabel);
 
     findForm.appendChild(document.createElement('br'));
+
+    var useRegexOption = document.createElement("span");
+    useRegexOption.classList.add("checkbox-option");
+    findForm.appendChild(useRegexOption);
 
     var useRegex = document.createElement("input");
     useRegex.type = "checkbox";
     useRegex.id = "use-regex-check";
-    findForm.appendChild(useRegex);
+    useRegexOption.appendChild(useRegex);
 
     var useRegexLabel = document.createElement("label");
     useRegexLabel.htmlFor = "use-regex-check";
     useRegexLabel.innerText = "Use Regex";
-    findForm.appendChild(useRegexLabel);
+    useRegexOption.appendChild(useRegexLabel);
 
     findForm.appendChild(document.createElement('br'));
+
+    var inAllChapOption = document.createElement("span");
+    inAllChapOption.classList.add("checkbox-option");
+    findForm.appendChild(inAllChapOption);
 
     var inAllChapters = document.createElement("input");
     inAllChapters.type = "checkbox";
     inAllChapters.id = "in-all-chapters-check";
-    findForm.appendChild(inAllChapters)
+    inAllChapOption.appendChild(inAllChapters);
 
     var inAllChapLabel = document.createElement("label");
     inAllChapLabel.htmlFor = "in-all-chapters-check";
     inAllChapLabel.innerText = "In All Chapters";
-    findForm.appendChild(inAllChapLabel);
+    inAllChapOption.appendChild(inAllChapLabel);
 
     findForm.appendChild(document.createElement('br'));
 

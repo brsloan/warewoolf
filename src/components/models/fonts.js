@@ -3,12 +3,16 @@
 //ids into the --font-editor/--font-sidebar custom properties index.css reads, and user-settings.js
 //sanitizes what comes back off disk through sanitizeFontId.
 //
-//WareWoolf bundles no font files and never will - that is a megabyte of webfont in a program whose
-//whole point is starting instantly on a writerDeck with a slow disk. So a `stack` here is a CSS
-//font-family list, ordered best-first, and every one of them ends in a generic family (serif,
-//sans-serif, monospace). A writer who has none of the named faces installed still gets something
-//readable in roughly the right shape rather than a blank editor, and a writer who installs, say,
-//EB Garamond tomorrow finds this option using it with no change here.
+//WareWoolf bundles one font and only one: Courier Prime, in index.css, because a screenplay's
+//page count depends on the exact face and the script has to look the same on every machine. It is
+//not the start of a policy - webfonts are a megabyte apiece in a program whose whole point is
+//starting instantly on a writerDeck with a slow disk, and Chromium only reads that one when a
+//rule first asks for it. So a `stack` here is a CSS font-family list, ordered best-first, and
+//every one of them ends in a generic family (serif, sans-serif, monospace). A writer who has none
+//of the named faces installed still gets something readable in roughly the right shape rather
+//than a blank editor, and a writer who installs, say, EB Garamond tomorrow finds this option
+//using it with no change here. The Typewriter stack is the exception that proves it: its first
+//name is the bundled one, so it is the same face everywhere.
 //
 //Adding a face is adding a row. The id is what lands in user-settings.json and must never change
 //once shipped; the label and the stack may.

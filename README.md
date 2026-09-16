@@ -1,10 +1,10 @@
 <p align="center">
 	<img src="./src/assets/logo.png" style="width: 280px"/>
 </p>
-<p align="center">v3.0.0</p>
+<p align="center">v3.1.0</p>
 <p align="center">"The only writing software I use." -Virginia Woolf</p>
 
-WareWoolf is designed for one thing: writing fiction. It is intentionally simplified: beyond a choice of typeface for the manuscript and the sidebars, and light or dark, there is nothing to fiddle with--no colors, no styles. But it has everything you need to organize, edit, and revise a novel--and you don't even need a mouse.
+WareWoolf is designed for two things: writing fiction and screenplays. It is intentionally simplified: beyond a choice of typeface for the manuscript and the sidebars, and light or dark, there is little to fiddle with. But it has everything you need to organize, edit, and revise a novel or screenplay--and you don't even need a mouse.
 
 It is composed of three simple text-based panels with no icons: Chapters, Editor, and Notes.
 
@@ -53,6 +53,7 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 * Saves chapters as .txt files with light Markdown-style formatting, so even if WareWoolf disappears you will always be able to read/edit the documents you create with it. This is also widely considered the most "archival" file format, so people will still be able to open your files in 100 years (if people still read then).
 * Export as plain text, markdownFic, standard markdown, docx, HTML, or .epub 
 * Import HTML files and EPUB ebooks, splitting a whole book into chapters as it reads - at headings or horizontal rules for HTML, and by the ebook's own table of contents for EPUB.
+* Screenplays. A screenplay project is one script in [Fountain](https://fountain.io) syntax, saved as a plain `.fountain` file you can open anywhere. The sidebar lists its scenes, Enter and Tab move between screenplay elements, character names and locations complete as you type, a dotted line marks where each page is estimated to turn, and it exports as PDF, Final Draft `.fdx` or Fountain and imports from Fountain, Final Draft or Fade In.
 
 ## Installation
 
@@ -65,7 +66,7 @@ Binaries of the current release for Windows (installer and portable), MacOS, Deb
 > **On an older Mac?** The main MacOS builds are packaged against Electron 44, which needs macOS 13 "Ventura" or newer. If you are on macOS 10.15 "Catalina" through 12 "Monterey" — as many of the older laptops people turn into writerdecks are — download `warewoolf_<version>_MacOS_Legacy.dmg` instead. It is the same WareWoolf, built from the same source, packaged against Electron 32: the last release line that runs on those systems. It is an Intel build, so on Apple Silicon it runs under Rosetta. Electron 32 no longer receives Chromium security updates, so take a mainline build instead if your Mac can run one.
 
 > [!WARNING]
-> The Wi-Fi Manager uses nmcli/Network Manager, which Raspberry Pi OS does not have installed/enabled by default. You will have to install network-manager and enable it in raspi-config for this function to work. You may need to update raspi-config to be able to enable Network-Manager.
+> The Wi-Fi Manager uses nmcli/NetworkManager. Raspberry Pi OS Bookworm (October 2023) and newer use NetworkManager already; on Bullseye you will have to install network-manager and enable it in raspi-config (Advanced Options > Network Config), updating raspi-config first if that option is missing. The [writerDeck setup script](scripts/setup-writerdeck.sh) can do this for you with `--network-manager`.
 
 ## Run or Build From Source
 

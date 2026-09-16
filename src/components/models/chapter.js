@@ -1,6 +1,59 @@
 const { logError } = require('../controllers/error-log');
 const { parseMDF, convertDeltaToMDF } = require('../controllers/markdownFic');
 const { reconcileFootnotes } = require('../controllers/reconcile-footnotes');
+const { parseFountain, serializeFountain, elementsToDelta, deltaToElements, getTitlePageValues } = require('../controllers/fountain');
+
+//A screenplay project's script is a chapter like any other, held as a delta in memory and saved
+//through the same commands - the one difference is the codec its file goes through, and the file
+//extension is what chooses it (docs/screenplay-plan.md, "The editor"). A chapter that has not
+//been saved yet has no filename to ask, so createNewProject stamps `format: 'fountain'` on the
+//script it makes; once the file exists its name is the answer, and the stamp is only ever a
+//tie-breaker for a chapter with no name.
+const SCREENPLAY_EXTENSION = '.fountain';
+
+function isFountainFile(filename){
+  return typeof filename === 'string' && /\.fountain$/i.test(filename);
+}
+
+function isFountainChapter(chap){
+  if(chap.filename != null)
+    return isFountainFile(chap.filename);
+  return chap.format === 'fountain';
+}
+
+//The title page lives on the project, and the file wins on load: whatever the .fountain carries
+//replaces the project's copy, and the Title and Author keys are mirrored onto the fields the title
+//bar and every export already read.
+function adoptTitlePage(project, titlePage){
+  if(!project)
+    return;
+
+  project.titlePage = titlePage;
+
+  var title = getTitlePageValues(titlePage, 'Title');
+  if(title.length > 0)
+    project.title = title.join(' ');
+
+  var author = getTitlePageValues(titlePage, 'Author');
+  if(author.length === 0)
+    author = getTitlePageValues(titlePage, 'Authors');
+  if(author.length > 0)
+    project.author = author.join(' ');
+}
+
+//The text a chapter's file holds for its contents, by codec.
+function fileTextFor(chap){
+  if(isFountainChapter(chap)){
+    var titlePage = chap.parentProject && Array.isArray(chap.parentProject.titlePage) ? chap.parentProject.titlePage : [];
+    return serializeFountain(titlePage, deltaToElements(chap.contents));
+  }
+
+  return convertDeltaToMDF(reconcileFootnotes(chap.contents));
+}
+
+function extensionFor(chap){
+  return isFountainChapter(chap) ? SCREENPLAY_EXTENSION : undefined;
+}
 
 //Group C of the platform contract (see platform.js). This module used to be the largest single
 //user of `fs` in the renderer; it now knows nothing about where a chapter lives on disk beyond the
@@ -103,7 +156,10 @@ function newChapter(parentProject){
       return this;
     }
 
-    async function getFile(){
+    //`options.keepProjectTitlePage` reads a script without letting its file's title page replace
+    //the project's - what a save has to do when it reads the file back only to rewrite it, since
+    //the project's copy is then the newer one (Properties may have just changed it).
+    async function getFile(options){
       try{
         var chap = this;
         var where = chapterLocation(chap);
@@ -119,6 +175,13 @@ function newChapter(parentProject){
 
         if(chap.filename.includes('.pup'))
           return JSON.parse(fileText);
+
+        if(isFountainFile(chap.filename)){
+          var parsed = parseFountain(fileText);
+          if(!(options && options.keepProjectTitlePage))
+            adoptTitlePage(chap.parentProject, parsed.titlePage);
+          return elementsToDelta(parsed.elements);
+        }
 
         return parseMDF(fileText);
       }
@@ -159,7 +222,8 @@ function newChapter(parentProject){
           projectDir: where.projectDir,
           chapsDir: where.chapsDir,
           title: chap.title,
-          mdfc: convertDeltaToMDF(reconcileFootnotes(chap.contents))
+          mdfc: fileTextFor(chap),
+          extension: extensionFor(chap)
         });
 
         //Only point the chapter at the new file once the write has actually succeeded
@@ -188,14 +252,15 @@ function newChapter(parentProject){
         //is read back and rewritten under the new name. Round-tripped through the parser rather
         //than copied as text, because a .pup chapter is JSON and comes out as MarkdownFic.
         if(chap.contents == null && chap.filename != null)
-          chap.contents = await chap.getFile();
+          chap.contents = await chap.getFile({ keepProjectTitlePage: true });
 
         var saved = await platform.saveChapterAtomic({
           projectDir: where.projectDir,
           chapsDir: where.chapsDir,
           oldFilename: chap.filename,
           title: chap.title,
-          mdfc: convertDeltaToMDF(reconcileFootnotes(chap.contents)),
+          mdfc: fileTextFor(chap),
+          extension: extensionFor(chap),
           //Notes ride along in the same call because their filename is derived from the chapter's:
           //saving them separately would leave a window where they sat under the old name.
           notesMdfc: chap.notes != null ? convertDeltaToMDF(chap.notes) : null
@@ -273,3 +338,7 @@ module.exports = newChapter;
 //Hung off the factory rather than exported alongside it, so every existing
 //`require('./chapter')` call site keeps working unchanged.
 module.exports.setPlatform = setPlatform;
+module.exports.isFountainFile = isFountainFile;
+module.exports.adoptTitlePage = adoptTitlePage;
+module.exports.isFountainChapter = isFountainChapter;
+module.exports.SCREENPLAY_EXTENSION = SCREENPLAY_EXTENSION;

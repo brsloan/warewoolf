@@ -177,6 +177,47 @@ test('opening the popup twice removes the first one instead of stacking popups',
   assert.strictEqual(document.getElementsByClassName('popup').length, 1);
 });
 
+//docs/screenplay-plan.md, Phase 6: a screenplay's title page is edited here and written back
+//through the script's file, which is why the script is marked unsaved on Apply.
+test('a screenplay project shows its title page fields, and Apply writes them back in order', async function(t){
+  var showProperties = require(propertiesDisplayPath);
+  var script = { format: 'fountain', filename: null, hasUnsavedChanges: false };
+  var project = makeProject({
+    type: 'screenplay',
+    chapters: [script],
+    titlePage: [{ key: 'Title', values: ['My Book'] }, { key: 'Notes', values: ['one', 'two'] }, { key: 'Credit', values: ['written by'] }]
+  });
+
+  showProperties(project, makeUserSettings());
+
+  assert.strictEqual(document.getElementById('title-page-credit').value, 'written by');
+  assert.strictEqual(document.getElementById('title-page-notes').value, 'one\ntwo');
+  assert.strictEqual(document.getElementById('title-page-notes').tagName, 'TEXTAREA');
+  assert.strictEqual(document.getElementById('title-page-draft-date').value, '');
+
+  document.getElementById('title-input').value = 'Bigger Fish';
+  document.getElementById('title-page-credit').value = '';
+  document.getElementById('title-page-draft-date').value = '1/1/2026';
+  document.getElementById('title-page-notes').value = 'three';
+  document.querySelector('form').onsubmit({ preventDefault: function(){} });
+
+  assert.strictEqual(project.title, 'Bigger Fish');
+  assert.deepStrictEqual(project.titlePage, [
+    { key: 'Title', values: ['Bigger Fish'] },
+    { key: 'Notes', values: ['three'] },
+    { key: 'Author', values: ['Jane Doe'] },
+    { key: 'Draft date', values: ['1/1/2026'] }
+  ]);
+  assert.strictEqual(script.hasUnsavedChanges, true, 'the script is rewritten with the new title page');
+  assert.strictEqual(project.hasUnsavedChanges, true);
+});
+
+test('a novel shows no title page fields', function(){
+  var showProperties = require(propertiesDisplayPath);
+  showProperties(makeProject(), makeUserSettings());
+  assert.strictEqual(document.getElementById('title-page-credit'), null);
+});
+
 test('the properties popup is a dialog and every field is labelled', function(){
   var showProperties = require(propertiesDisplayPath);
   showProperties(makeProject(), makeUserSettings());

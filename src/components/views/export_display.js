@@ -1,10 +1,15 @@
 const { closePopups, createButton, removeElementsByClass, describeDialog } = require('../controllers/utils');
 const showFileDialog = require('./file-dialog_display');
-const { exportProject } = require('../controllers/export');
+const { exportProject, exportScreenplayFile, screenplayChapter } = require('../controllers/export');
 const { logError } = require('../controllers/error-log');
 const { showWorkingAndThen, showWorking, hideWorking } = require('./working_display');
 
 function showExportOptions(project, userSettings, sysDirectories){
+    if(project.type === 'screenplay'){
+      showScreenplayExportOptions(project, sysDirectories);
+      return;
+    }
+
     removeElementsByClass('popup');
     var popup = document.createElement("div");
     popup.classList.add("popup");
@@ -16,10 +21,16 @@ function showExportOptions(project, userSettings, sysDirectories){
 
     var exportForm = document.createElement("form");
 
+    //Each name and its button in one .radio-option, so the line can only break between the two
+    //choices and never between a choice and the button that answers it.
+    var expProjOption = document.createElement('span');
+    expProjOption.classList.add('radio-option');
+    exportForm.appendChild(expProjOption);
+
     var expProjLab = document.createElement('label');
     expProjLab.innerText = 'Project';
     expProjLab.htmlFor = 'proj-radio';
-    exportForm.appendChild(expProjLab);
+    expProjOption.appendChild(expProjLab);
 
     var expProjOp = document.createElement('input');
     expProjOp.type = 'radio';
@@ -27,19 +38,23 @@ function showExportOptions(project, userSettings, sysDirectories){
     expProjOp.name = 'export-what';
     expProjOp.value = 'project';
     expProjOp.checked = true;
-    exportForm.appendChild(expProjOp);
+    expProjOption.appendChild(expProjOp);
+
+    var expChapOption = document.createElement('span');
+    expChapOption.classList.add('radio-option');
+    exportForm.appendChild(expChapOption);
 
     var expChapLab = document.createElement('label');
     expChapLab.innerText = ' | Chapter';
     expChapLab.htmlFor = 'chap-radio';
-    exportForm.appendChild(expChapLab);
+    expChapOption.appendChild(expChapLab);
 
     var expChapOp = document.createElement('input');
     expChapOp.type = 'radio';
     expChapOp.id = 'chap-radio';
     expChapOp.name = 'export-what';
     expChapOp.value = 'chapter';
-    exportForm.appendChild(expChapOp);
+    expChapOption.appendChild(expChapOp);
 
     exportForm.appendChild(document.createElement('br'));
 
@@ -61,16 +76,71 @@ function showExportOptions(project, userSettings, sysDirectories){
 
     exportForm.appendChild(document.createElement('br'));
 
+    //The longest label in the dialog, and the box sits after it, so this is the pair likeliest to
+    //be split across a line break. Wrapped in one .checkbox-option to keep the box with it.
+    var sceneBreakOption = document.createElement('span');
+    sceneBreakOption.classList.add('checkbox-option');
+    exportForm.appendChild(sceneBreakOption);
+
     var sceneBreakLabel = document.createElement('label');
     sceneBreakLabel.innerText = 'Mark scene breaks with a centered #: ';
     sceneBreakLabel.htmlFor = 'scene-break-check';
-    exportForm.appendChild(sceneBreakLabel);
+    sceneBreakOption.appendChild(sceneBreakLabel);
 
     var sceneBreakCheck = document.createElement('input');
     sceneBreakCheck.type = 'checkbox';
     sceneBreakCheck.id = 'scene-break-check';
     sceneBreakCheck.checked = userSettings.markSceneBreaks;
-    exportForm.appendChild(sceneBreakCheck);
+    sceneBreakOption.appendChild(sceneBreakCheck);
+
+    exportForm.appendChild(document.createElement('br'));
+
+    //Only .html carries a stylesheet for this to be written into, so the box greys out for every
+    //other file type - the same way Compile greys out its title page for the types that have
+    //nowhere to put one.
+    var maxWidthOption = document.createElement('span');
+    maxWidthOption.classList.add('checkbox-option');
+    exportForm.appendChild(maxWidthOption);
+
+    var maxWidthLabel = document.createElement('label');
+    maxWidthLabel.innerText = 'Set Max Width For Readability: ';
+    maxWidthLabel.htmlFor = 'max-width-check';
+    maxWidthOption.appendChild(maxWidthLabel);
+
+    var maxWidthCheck = document.createElement('input');
+    maxWidthCheck.type = 'checkbox';
+    maxWidthCheck.id = 'max-width-check';
+    maxWidthCheck.checked = userSettings.htmlMaxWidth;
+    maxWidthOption.appendChild(maxWidthCheck);
+
+    exportForm.appendChild(document.createElement('br'));
+
+    //.epub as well as .html: an epub is a book of web pages, and it carries the same stylesheet
+    //written against the same classes, so the same rule reaches it.
+    var justifyOption = document.createElement('span');
+    justifyOption.classList.add('checkbox-option');
+    exportForm.appendChild(justifyOption);
+
+    var justifyLabel = document.createElement('label');
+    justifyLabel.innerText = 'Justify left-aligned text: ';
+    justifyLabel.htmlFor = 'justify-left-check';
+    justifyOption.appendChild(justifyLabel);
+
+    var justifyCheck = document.createElement('input');
+    justifyCheck.type = 'checkbox';
+    justifyCheck.id = 'justify-left-check';
+    justifyCheck.checked = userSettings.justifyLeftAligned;
+    justifyOption.appendChild(justifyCheck);
+
+    //Both boxes write a CSS rule, so each is live only for the formats that have a stylesheet to
+    //write it into - the measure for .html alone, the justification for .html and .epub.
+    function syncStyleOptions(){
+      maxWidthCheck.disabled = typeSelect.value !== '.html';
+      justifyCheck.disabled = typeSelect.value !== '.html' && typeSelect.value !== '.epub';
+    }
+
+    typeSelect.onchange = syncStyleOptions;
+    syncStyleOptions();
 
     exportForm.appendChild(document.createElement('br'));
 
@@ -101,9 +171,11 @@ function showExportOptions(project, userSettings, sysDirectories){
     exportForm.onsubmit = function(e){
       e.preventDefault();
 
-      //The only thing this dialog has ever had worth remembering, and the same setting the Compile
-      //dialog writes - see user-settings.js.
+      //The boxes worth remembering between exports, and the same settings the Compile dialog
+      //writes - see user-settings.js.
       userSettings.markSceneBreaks = sceneBreakCheck.checked;
+      userSettings.htmlMaxWidth = maxWidthCheck.checked;
+      userSettings.justifyLeftAligned = justifyCheck.checked;
       userSettings.save();
 
       var options = {
@@ -111,11 +183,110 @@ function showExportOptions(project, userSettings, sysDirectories){
         what: expProjOp.checked ? 'project' : 'chapter',
         styleHeadingAsChapter: true,
         generateTitlePage: false,
-        markSceneBreaks: sceneBreakCheck.checked
+        markSceneBreaks: sceneBreakCheck.checked,
+        htmlMaxWidth: maxWidthCheck.checked,
+        justifyLeftAligned: justifyCheck.checked
         //insertHead: insertHeadCheck.checked
       }
       getExportFilePath(project, userSettings, options, sysDirectories, function(){
           closePopups();
+      });
+    };
+
+    popup.appendChild(exportForm);
+    document.body.appendChild(popup);
+    exportBtn.focus();
+  }
+
+  //A screenplay project's export: one script, one file, wherever the writer puts it. The dialog is
+  //a format to choose and then a Save As, not the directory chooser above, since there is no set
+  //of numbered chapter files to make a folder for. See docs/screenplay-plan.md, Phase 7.
+  const SCREENPLAY_FORMATS = [
+    { type: '.pdf', name: 'PDF', extensions: ['pdf'] },
+    { type: '.fdx', name: 'Final Draft', extensions: ['fdx'] },
+    { type: '.fountain', name: 'Fountain', extensions: ['fountain'] },
+    { type: '.txt', name: 'Plain Text', extensions: ['txt'] }
+  ];
+
+  function showScreenplayExportOptions(project, sysDirectories){
+    removeElementsByClass('popup');
+    var popup = document.createElement("div");
+    popup.classList.add("popup");
+
+    var popupTitle = document.createElement('h1');
+    popupTitle.innerText = 'Export Screenplay';
+    popup.appendChild(popupTitle);
+    describeDialog(popup, popupTitle);
+
+    var exportForm = document.createElement("form");
+
+    var typeLabel = document.createElement("label");
+    typeLabel.innerText = "File Type: ";
+    typeLabel.htmlFor = "filetype-select";
+    exportForm.appendChild(typeLabel);
+
+    var typeSelect = document.createElement("select");
+    typeSelect.id = "filetype-select";
+    SCREENPLAY_FORMATS.forEach(function(format){
+      var option = document.createElement("option");
+      option.value = format.type;
+      option.innerText = format.type;
+      typeSelect.appendChild(option);
+    });
+    exportForm.appendChild(typeSelect);
+
+    exportForm.appendChild(document.createElement('br'));
+
+    var exportBtn = document.createElement("input");
+    exportBtn.type = "submit";
+    exportBtn.value = "Export";
+    exportForm.appendChild(exportBtn);
+
+    var cancelBtn = createButton("Cancel");
+    cancelBtn.onclick = function(){
+      closePopups();
+    };
+    exportForm.appendChild(cancelBtn);
+
+    exportForm.onsubmit = function(e){
+      e.preventDefault();
+
+      var format = SCREENPLAY_FORMATS.find(function(f){ return f.type === typeSelect.value; });
+      var chapter = screenplayChapter(project);
+
+      if(!chapter){
+        closePopups();
+        require('./blocked-action_display')('This project has no script to export.');
+        return;
+      }
+
+      showFileDialog({
+        title: 'Export screenplay as...',
+        defaultPath: sysDirectories.docs,
+        defaultFilename: project.title,
+        filters: [{ name: format.name, extensions: format.extensions }],
+        bookmarkedPaths: [sysDirectories.docs, sysDirectories.home],
+        projectDirectory: project.directory,
+        dialogType: 'save'
+      }, function(filepath){
+        if(!filepath){
+          closePopups();
+          return;
+        }
+
+        showWorkingAndThen('Exporting...', function(){
+          Promise.resolve(exportScreenplayFile(project, chapter, format.type, filepath)).then(function(){
+            hideWorking();
+            closePopups();
+          }).catch(function(err){
+            logError(err);
+            showWorking('The export failed - see the Error Log for details.');
+            setTimeout(function(){
+              hideWorking();
+              closePopups();
+            }, 2500);
+          });
+        });
       });
     };
 

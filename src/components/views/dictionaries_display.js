@@ -173,8 +173,14 @@ function buildDictionaryChecklist(initialAvailable, selectedIds){
     label.htmlFor = checkbox.id;
     label.innerText = dict.id + ' (' + dict.source + ')';
 
-    row.appendChild(checkbox);
-    row.appendChild(label);
+    //A dictionary is named by the file it came from, which can be long enough to wrap - and a
+    //name that wraps away from its own box, in a list where every row looks alike, is a row ticked
+    //by mistake. The pair goes in as one .checkbox-option.
+    var dictOption = document.createElement('span');
+    dictOption.classList.add('checkbox-option');
+    dictOption.appendChild(checkbox);
+    dictOption.appendChild(label);
+    row.appendChild(dictOption);
 
     //Highlighting (for Remove) is deliberately independent of the checkbox's own ticked state -
     //clicking anywhere in the row selects it for Remove, whether or not that click landed on the

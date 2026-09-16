@@ -68,7 +68,8 @@ const TEXT_PAIRS = [
   { fg: 'accent-hover', on: ['surface'] },
   { fg: 'link', on: ['surface'] },
   { fg: 'success', on: ['surface'] },
-  { fg: 'danger', on: ['surface'] },
+  //On sheet: the page-turn numbers drawn in a script (index.css, p[data-sp-page]::before).
+  { fg: 'danger', on: ['surface', 'sheet'] },
   { fg: 'warning-text', on: ['surface', 'warning-bg'] },
   { fg: 'btn-text', on: ['btn-bg', 'btn-hover', 'selected-bg'] },
   { fg: 'on-accent', on: ['accent'] },
@@ -145,11 +146,12 @@ test('index.css paints only with tokens both palettes define', function(){
     used[match[1]] = true;
   }
 
-  //The sizes index.css sets on its own :root, and the hue the word count view sets per element.
+  //The sizes index.css sets on its own :root, the hue the word count view sets per element, and
+  //the screenplay indents each element rule sets for its page-turn rule to undo.
   var ownTokens = ['main-font-size', 'dialog-font-size', 'dialog-font-size-small', 'dialog-heading-size',
     'editor-width', 'sidebar-width', 'sidebar-width-double-view', 'corkboard-column-width',
     'font-serif', 'font-sans', 'font-mono', 'font-editor', 'font-sidebar', 'line-height-editor',
-    'radius', 'radius-large', 'progress-hue'];
+    'radius', 'radius-large', 'progress-hue', 'sp-left', 'sp-right'];
 
   var undefinedTokens = Object.keys(used).filter(function(name){
     return !defined[name] && ownTokens.indexOf(name) === -1;

@@ -41,7 +41,7 @@ function sysDirectories(){
 //(the scene-break box is remembered between exports), so a bare {} would throw where the app does
 //not.
 function makeUserSettings(overrides){
-  return Object.assign({ markSceneBreaks: false, save: function(){} }, overrides);
+  return Object.assign({ markSceneBreaks: false, htmlMaxWidth: false, justifyLeftAligned: false, save: function(){} }, overrides);
 }
 
 test.beforeEach(function(){
@@ -57,6 +57,35 @@ test.afterEach(function(){
   delete require.cache[exportPath];
   delete global.window;
   delete global.document;
+});
+
+//Regression: the names and their buttons went into the form as one flat run, so a narrow dialog
+//could wrap between a name and the button beside it and leave each name looking as though it went
+//with the wrong button. Here the name comes first, so the pair has to be held together as it is
+//written: label, then radio, in one wrapper.
+test('every choice in the dialog keeps its name and its control in one wrapper', function(t){
+  var showExportOptions = freshExportDisplay({
+    showFileDialog: function(){},
+    showWorkingAndThen: function(status, cb){ cb(); },
+    hideWorking: function(){},
+    exportProject: function(){}
+  });
+
+  showExportOptions({ title: 'My Novel', chapters: [] }, makeUserSettings(), sysDirectories());
+
+  var radios = document.querySelectorAll('input[name="export-what"]');
+  assert.strictEqual(radios.length, 2);
+  radios.forEach(function(radio){
+    var wrapper = radio.parentNode;
+    assert.ok(wrapper.classList.contains('radio-option'));
+    assert.strictEqual(wrapper.querySelector('label').htmlFor, radio.id);
+  });
+
+  //The same for the scene-break tickbox, whose label is a whole sentence and so is the likeliest
+  //of the lot to wrap away from its box.
+  var sceneBreak = document.getElementById('scene-break-check');
+  assert.ok(sceneBreak.parentNode.classList.contains('checkbox-option'));
+  assert.strictEqual(sceneBreak.parentNode.querySelector('label').htmlFor, sceneBreak.id);
 });
 
 //Regression: exportProject writes .docx/.epub chapters asynchronously, so getExportFilePath used
@@ -170,6 +199,46 @@ test('a single export failure is reported in the singular', function(t){
 
 //Cancelling the "choose a directory" dialog (dirpath is falsy) should never call exportProject,
 //and should still close the export options popup.
+//A screenplay project's export is a format and a Save As for one file, not the directory chooser.
+test('a screenplay project offers its own formats and exports one file to the path chosen in a save dialog', async function(t){
+  var dialogs = [];
+  var exported = [];
+  var closed = [];
+  delete require.cache[exportDisplayPath];
+  require.cache[fileDialogPath] = { id: fileDialogPath, filename: fileDialogPath, loaded: true, exports: function(options, cb){
+    dialogs.push(options);
+    cb('/docs/big fish.fdx');
+  } };
+  require.cache[workingDisplayPath] = { id: workingDisplayPath, filename: workingDisplayPath, loaded: true, exports: {
+    showWorkingAndThen: function(msg, fn){ fn(); },
+    showWorking: function(){},
+    hideWorking: function(){ closed.push('hidden'); }
+  } };
+  var script = { format: 'fountain', title: 'Big Fish' };
+  require.cache[exportPath] = { id: exportPath, filename: exportPath, loaded: true, exports: {
+    exportProject: function(){ throw new Error('the chapter exporter must not run for a screenplay'); },
+    exportScreenplayFile: function(project, chapter, type, filepath){ exported.push([chapter, type, filepath]); return Promise.resolve(); },
+    screenplayChapter: function(){ return script; }
+  } };
+  var showExportOptions = require(exportDisplayPath);
+
+  showExportOptions({ type: 'screenplay', title: 'Big Fish', directory: '/proj/', chapters: [script], reference: [] }, makeUserSettings(), sysDirectories());
+
+  assert.deepStrictEqual(Array.from(document.querySelectorAll('#filetype-select option')).map(function(o){ return o.value; }), ['.pdf', '.fdx', '.fountain', '.txt']);
+  assert.strictEqual(document.querySelector('#proj-radio'), null, 'no project/chapter choice for one script');
+
+  document.getElementById('filetype-select').value = '.fdx';
+  document.querySelector('form').onsubmit({ preventDefault: function(){} });
+  await new Promise(function(r){ setImmediate(r); });
+
+  assert.strictEqual(dialogs[0].dialogType, 'save');
+  assert.strictEqual(dialogs[0].defaultFilename, 'Big Fish', 'the save box starts from the project title');
+  assert.deepStrictEqual(dialogs[0].filters, [{ name: 'Final Draft', extensions: ['fdx'] }]);
+  assert.deepStrictEqual(exported, [[script, '.fdx', '/docs/big fish.fdx']]);
+  assert.deepStrictEqual(closed, ['hidden']);
+  assert.strictEqual(document.querySelector('.popup'), null);
+});
+
 test('cancelling the directory chooser closes the popup without exporting', function(t){
   var exportProjectCalls = 0;
 
@@ -218,6 +287,41 @@ test('the scene-break checkbox starts from the saved setting and is passed to ex
   assert.strictEqual(savedCalls, 1, 'the choice should be remembered for next time');
 });
 
+//Only .html has a stylesheet to write the measure into, so the box is offered for that type alone.
+test('the max-width checkbox starts from the saved setting and is passed to exportProject', function(t){
+  var userSettings = makeUserSettings({ htmlMaxWidth: true });
+  var capturedOptions = null;
+
+  var showExportOptions = freshExportDisplay({
+    showFileDialog: function(dialogOptions, callback){ callback('/docs/My Novel'); },
+    showWorkingAndThen: function(status, cb){ cb(); },
+    hideWorking: function(){},
+    exportProject: function(project, settings, options, filepath, cback){
+      capturedOptions = options;
+      cback(0);
+    }
+  });
+
+  showExportOptions({ title: 'My Novel', chapters: [] }, userSettings, sysDirectories());
+
+  var check = document.getElementById('max-width-check');
+  var label = document.querySelector('label[for="max-width-check"]');
+
+  assert.ok(label, 'expected a label pointing at the max-width checkbox');
+  assert.strictEqual(check.checked, true, 'the box should start from the saved setting');
+
+  var typeSelect = document.getElementById('filetype-select');
+  assert.strictEqual(check.disabled, true, 'the dialog opens on .docx, which has nowhere to put a max width');
+  typeSelect.value = '.html';
+  typeSelect.onchange();
+  assert.strictEqual(check.disabled, false, 'choosing .html should make the box available');
+
+  document.querySelector('form').onsubmit({ preventDefault: function(){} });
+
+  assert.strictEqual(capturedOptions.htmlMaxWidth, true);
+  assert.strictEqual(userSettings.htmlMaxWidth, true, 'the choice should be remembered for next time');
+});
+
 test('an unticked scene-break box exports without the mark', function(t){
   var capturedOptions = null;
 
@@ -235,4 +339,65 @@ test('an unticked scene-break box exports without the mark', function(t){
   document.querySelector('form').onsubmit({ preventDefault: function(){} });
 
   assert.strictEqual(capturedOptions.markSceneBreaks, false);
+});
+
+//Unlike the measure above, this one reaches .epub too: an epub carries the same stylesheet, written
+//against the same classes.
+test('the justify checkbox starts from the saved setting and is passed to exportProject', function(t){
+  var userSettings = makeUserSettings({ justifyLeftAligned: true });
+  var capturedOptions = null;
+
+  var showExportOptions = freshExportDisplay({
+    showFileDialog: function(dialogOptions, callback){ callback('/docs/My Novel'); },
+    showWorkingAndThen: function(status, cb){ cb(); },
+    hideWorking: function(){},
+    exportProject: function(project, settings, options, filepath, cback){
+      capturedOptions = options;
+      cback(0);
+    }
+  });
+
+  showExportOptions({ title: 'My Novel', chapters: [] }, userSettings, sysDirectories());
+
+  var check = document.getElementById('justify-left-check');
+  var label = document.querySelector('label[for="justify-left-check"]');
+
+  assert.ok(label, 'expected a label pointing at the justify checkbox');
+  assert.strictEqual(check.checked, true, 'the box should start from the saved setting');
+
+  document.querySelector('form').onsubmit({ preventDefault: function(){} });
+
+  assert.strictEqual(capturedOptions.justifyLeftAligned, true);
+  assert.strictEqual(userSettings.justifyLeftAligned, true, 'the choice should be remembered for next time');
+});
+
+test('the justify checkbox is live for the two web formats and greyed out for the rest', function(t){
+  var showExportOptions = freshExportDisplay({
+    showFileDialog: function(){},
+    showWorkingAndThen: function(status, cb){ cb(); },
+    hideWorking: function(){},
+    exportProject: function(){}
+  });
+
+  showExportOptions({ title: 'My Novel', chapters: [] }, makeUserSettings(), sysDirectories());
+
+  var check = document.getElementById('justify-left-check');
+  var typeSelect = document.getElementById('filetype-select');
+
+  assert.strictEqual(check.disabled, true, 'the dialog opens on .docx, which has no stylesheet');
+
+  typeSelect.value = '.html';
+  typeSelect.onchange();
+  assert.strictEqual(check.disabled, false, '.html should offer it');
+
+  typeSelect.value = '.epub';
+  typeSelect.onchange();
+  assert.strictEqual(check.disabled, false, '.epub should offer it too');
+
+  //The measure is .html only, so the two boxes part company here.
+  assert.strictEqual(document.getElementById('max-width-check').disabled, true, '.epub has no page to set a width on');
+
+  typeSelect.value = '.txt';
+  typeSelect.onchange();
+  assert.strictEqual(check.disabled, true, 'plain text has nowhere to put a rule');
 });

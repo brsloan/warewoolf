@@ -151,7 +151,7 @@ input[type=radio] {
   accent-color: var(--accent);
   width: 1.05em;
   height: 1.05em;
-  margin-right: 0.45em;
+  margin-right: 0em;
   vertical-align: -0.15em;
 }
 
@@ -254,7 +254,7 @@ hr {
   width: var(--sidebar-width);
   display: none;
   float: left;
-  height: 93vh;
+  height: 95vh;
   font-size: var(--main-font-size);
   font-family: var(--font-sidebar);
   color: var(--text);
@@ -391,6 +391,49 @@ hr {
   right: 14px;
 }
 
+/* The notes panel is the one sidebar with something pinned under its scrolling part - the Format
+   block, which says what the caret's line is in a script. So it lays its children out in a column
+   rather than stacking them: the notes editor takes whatever height is left and the heading and
+   the block keep their own. Stated on the id with .visible so it beats the display: block that
+   .visible and the single/double view classes give every other sidebar - which of those the panel
+   is wearing depends on which panels are showing, and the column is wanted in all of them. */
+#project-notes.visible {
+  display: flex;
+  flex-direction: column;
+}
+
+/* A flex basis of zero rather than auto, deliberately: quill.core.css gives .ql-container (which
+   is this element - Quill puts the class on what it is constructed on) height: 100%, and an auto
+   basis in a column would take that as the editor's starting height, leaving the flex algorithm to
+   shrink the whole column back out of the overflow and squashing the heading with it. From zero
+   the editor simply grows into what is left, and min-height: 0 is what lets it be shorter than its
+   own text so .ql-editor scrolls instead of the panel. The editor's height: 100% then resolves
+   against that - a flex item's used size is definite, which is what the notes needed all along. */
+#notes-editor {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+#project-notes > h1,
+#format-block {
+  flex: 0 0 auto;
+}
+
+#format-block {
+  margin-top: 14px;
+}
+
+/* The name of the type, under the heading: the accent the sidebar already uses for the row the
+   writer is on, since this is the same idea - where you are - said about a line instead of a
+   document. */
+#format-element {
+  margin: 0 12px;
+  padding-bottom: 4px;
+  text-align: center;
+  font-weight: 600;
+  color: var(--accent);
+}
+
 /* ------------------------------------------------------------------------------------------
    The manuscript
    ------------------------------------------------------------------------------------------ */
@@ -505,6 +548,212 @@ hr {
 }
 
 /* ------------------------------------------------------------------------------------------
+   Screenplay mode - blots/screenplay.js, docs/screenplay-plan.md
+   ------------------------------------------------------------------------------------------
+   Gated on the `screenplay` class render.js puts on the container while a .fountain document is
+   displayed, so a prose chapter is untouched. The layout is a script page's: Courier, a blank
+   line between elements and none inside a dialogue group, dialogue indented rather than centred.
+   Capitals for headings, cues and transitions are drawn here; the text keeps its own case, and
+   the codec forces any line whose case would not read back. */
+
+/* The one typeface WareWoolf ships: Courier Prime (Quote-Unquote Apps, SIL Open Font License -
+   see Third-Party-Notices.txt), drawn for screenplays, where the page's length depends on the
+   exact face and "whatever Courier this machine has" is not good enough. Declared here so the
+   name resolves to the same files on every machine; Chromium reads a face only when a rule first
+   asks for it, so a writer who never opens a script never loads them. The PDF export embeds the
+   same four files itself, because its hidden window cannot reach these URLs - see index.js. */
+@font-face {
+  font-family: "Courier Prime";
+  font-weight: normal;
+  font-style: normal;
+  src: url("../assets/fonts/CourierPrime-Regular.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Courier Prime";
+  font-weight: bold;
+  font-style: normal;
+  src: url("../assets/fonts/CourierPrime-Bold.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Courier Prime";
+  font-weight: normal;
+  font-style: italic;
+  src: url("../assets/fonts/CourierPrime-Italic.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Courier Prime";
+  font-weight: bold;
+  font-style: italic;
+  src: url("../assets/fonts/CourierPrime-BoldItalic.ttf") format("truetype");
+}
+
+#editor-container.screenplay .ql-editor {
+  font-family: "Courier Prime", "Courier New", Courier, "Nimbus Mono PS", "Liberation Mono", monospace;
+  line-height: 1.25;
+}
+
+#editor-container.screenplay .ql-editor p {
+  margin-top: 1em;
+}
+
+#editor-container.screenplay .ql-editor p:first-child,
+#editor-container.screenplay .ql-editor .sp-character + .sp-parenthetical,
+#editor-container.screenplay .ql-editor .sp-character + .sp-dialogue,
+#editor-container.screenplay .ql-editor .sp-character + .sp-lyric,
+#editor-container.screenplay .ql-editor .sp-parenthetical + .sp-dialogue,
+#editor-container.screenplay .ql-editor .sp-parenthetical + .sp-lyric,
+#editor-container.screenplay .ql-editor .sp-dialogue + .sp-parenthetical,
+#editor-container.screenplay .ql-editor .sp-dialogue + .sp-lyric,
+#editor-container.screenplay .ql-editor .sp-lyric + .sp-dialogue,
+#editor-container.screenplay .ql-editor .sp-lyric + .sp-parenthetical,
+#editor-container.screenplay .ql-editor p[data-sp-tight] {
+  margin-top: 0;
+}
+
+.ql-editor .sp-scene {
+  text-transform: uppercase;
+  margin-top: 2em;
+}
+
+.ql-editor .sp-character {
+  text-transform: uppercase;
+  margin-left: 40%;
+  --sp-left: 0.4;
+}
+
+.ql-editor .sp-parenthetical {
+  margin-left: 30%;
+  margin-right: 25%;
+  --sp-left: 0.3;
+  --sp-right: 0.25;
+}
+
+.ql-editor .sp-dialogue {
+  margin-left: 20%;
+  margin-right: 20%;
+  --sp-left: 0.2;
+  --sp-right: 0.2;
+}
+
+.ql-editor .sp-lyric {
+  margin-left: 20%;
+  margin-right: 20%;
+  font-style: italic;
+  --sp-left: 0.2;
+  --sp-right: 0.2;
+}
+
+.ql-editor .sp-transition {
+  text-transform: uppercase;
+  text-align: right;
+}
+
+.ql-editor .sp-centered {
+  text-align: center;
+}
+
+.ql-editor .sp-section,
+.ql-editor .sp-synopsis,
+.ql-editor .sp-note,
+.ql-editor .sp-boneyard {
+  color: var(--text-muted);
+}
+
+.ql-editor .sp-section {
+  font-weight: bold;
+}
+
+.ql-editor .sp-pagebreak {
+  border-top: 1px dashed var(--border);
+  color: var(--text-muted);
+}
+
+/* Where the pages are estimated to turn. screenplay-editor.js's markEstimatedPages puts
+   data-sp-page - the page number - on the first paragraph of each page after the first, from
+   fountain.js's line model, and this draws it: a dotted rule across the page with the number at
+   its right, in the gap above the paragraph, which is widened to make room (the attribute is
+   doubled so the rule outweighs the tight-group rules above, which would close that gap). The
+   rule is a pseudo-element of the paragraph, so it scrolls with the text and Quill never sees it
+   as content. An indented element's rule is pushed back out to the page's margins with the
+   element's own indents (--sp-left/--sp-right, the fractions its margins take, set with them
+   above), since a paragraph's percentages are of its own width and not the page's. */
+#editor-container.screenplay .ql-editor p[data-sp-page][data-sp-page] {
+  position: relative;
+  margin-top: 2.75em;
+}
+
+#editor-container.screenplay .ql-editor p[data-sp-page]::before {
+  content: attr(data-sp-page) ".";
+  position: absolute;
+  top: -2.5em;
+  left: calc(-100% * var(--sp-left, 0) / (1 - var(--sp-left, 0) - var(--sp-right, 0)));
+  width: calc(100% / (1 - var(--sp-left, 0) - var(--sp-right, 0)));
+  box-sizing: border-box;
+  border-top: 1px dotted var(--danger);
+  padding-top: 0.15em;
+  color: var(--danger);
+  font-family: var(--font-sidebar);
+  font-size: 0.75em;
+  font-style: normal;
+  font-weight: normal;
+  line-height: 1.4;
+  text-align: right;
+  text-transform: none;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* The dual-dialogue marker, drawn rather than typed, so the cue's text stays the cue. */
+.ql-editor p[data-sp-dual]::after {
+  content: " ^";
+  color: var(--text-muted);
+}
+
+/* The autocomplete list under a cue or heading being typed - screenplay-editor.js's
+   attachAutocomplete positions it from the caret's bounds. */
+.suggestion-box {
+  position: fixed;
+  z-index: 5;
+  min-width: 12em;
+  max-height: 10em;
+  overflow-y: auto;
+  background-color: var(--sheet);
+  color: var(--text);
+  border: 1px solid var(--border);
+  box-shadow: var(--sheet-shadow);
+  font-family: var(--font-sidebar);
+  font-size: var(--dialog-font-size-small);
+}
+
+.suggestion {
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.suggestion-selected {
+  background-color: var(--selected-bg);
+}
+
+/* The element picker (element-picker_display.js): the same rows as the suggestion box, in a
+   popup, with the list scrolling rather than the popup. */
+#element-picker {
+  width: auto;
+  min-width: 18em;
+}
+
+#element-picker .element-picker-hint {
+  font-size: var(--dialog-font-size-small);
+  color: var(--text-muted);
+}
+
+#element-picker .element-picker-list {
+  max-height: 50vh;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  outline: none;
+}
+
+/* ------------------------------------------------------------------------------------------
    Popups
    ------------------------------------------------------------------------------------------ */
 
@@ -580,6 +829,44 @@ hr {
 
 .popup label{
   margin-left: 3px;
+}
+
+/* A button and its name, kept together. A row of buttons that runs past the width of the dialog -
+   the eight file types in the Import dialog - wraps, and left to itself it will break between a
+   button and the name that belongs to it, stranding the name at the start of the next line where
+   it reads as the name of a different button. A single long-labelled tickbox on its own line does
+   the same thing when the label alone is wider than the dialog. Each pair is one unbreakable box
+   with a gap after it, so a line only ever breaks between choices. Two names for the one rule so
+   that each use site says which kind of control it holds. */
+.radio-option,
+.checkbox-option {
+  display: inline-block;
+  white-space: nowrap;
+  margin-right: 14px;
+}
+
+/* A tickbox's label is a sentence rather than a word - "Mark scene breaks with a centered #", a
+   dictionary named by the file it came from - and a sentence held on one line would run past the
+   popup, which hides its overflow rather than scrolling: the end of the label would simply be
+   gone. So the pair is laid out instead of held on a line. The label keeps wrapping inside itself
+   and the box, which does not shrink, stays beside it either way round - the label follows the box
+   in Find/Replace and the Dictionaries list, and precedes it in Export. */
+.checkbox-option {
+  white-space: normal;
+  display: inline-flex;
+  align-items: baseline;
+  max-width: 100%;
+}
+
+.checkbox-option input {
+  flex: none;
+}
+
+/* A flex item will not shrink below its longest word on its own, and the popup hides what runs
+   past it - so a dictionary named in one long unbroken string would have its end cut off. This is
+   what lets the popup's own overflow-wrap break such a name instead. */
+.checkbox-option label {
+  min-width: 0;
 }
 
 .popup a{
@@ -825,7 +1112,8 @@ hr {
 
 /* Qualified by the popup and the cell so these outrank .popup td's blanket left alignment - as a
    bare class they lose to it on specificity and the numbers ragged-left against their columns. */
-.popup-outliner td.outliner-word-count, .popup-outliner td.outliner-page-count {
+.popup-outliner td.outliner-word-count, .popup-outliner td.outliner-page-count,
+.popup-outliner td.outliner-page-start {
   text-align: right;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
@@ -854,6 +1142,14 @@ hr {
 .outliner-summary input:focus {
   outline-offset: -2px;
   background-color: var(--input-bg);
+}
+
+/* A scene's summary in a screenplay project is its synopsis lines, read out of the script itself
+   rather than typed here, so the cell is text: no field to fill it, the table's own padding, and
+   free to wrap over as many lines as the synopsis takes. */
+.outliner-synopsis {
+  width: 99%;
+  white-space: normal;
 }
 
 /* --- About -------------------------------------------------------------------------------- */
@@ -926,7 +1222,7 @@ hr {
   text-decoration: line-through;
 }
 
-/* --- Dictionaries ------------------------------------------------------------------------- */
+/* --- Dictionaries, and the Characters/Locations lists that reuse this shape ----------------- */
 
 /* The filter and its count share one row above the list; the list and its buttons share one row
    below it. Flex rather than the floats the file browser uses above: these two rows have to size
@@ -994,6 +1290,64 @@ hr {
 .dictionary-row.selected {
   background-color: var(--selected-bg);
   border-left-color: var(--accent);
+}
+
+/* --- Characters/Locations ------------------------------------------------------------------ */
+
+/* Two lists where the Dictionaries popup has one, so this dialog is wider than the rest and lays
+   them out across: flex-basis is what decides, so a screen with room for two 300px columns gets
+   them and a narrower one - a writerDeck's - wraps to a single column and scrolls instead. The
+   lists themselves are shortened for the same reason. */
+.popup-names {
+  width: 70%;
+  overflow-y: auto;
+}
+
+.name-lists {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.name-lists fieldset {
+  flex: 1 1 300px;
+  /* Without this a flex item refuses to shrink below its content width, and the button column
+     beside each list would push the other fieldset off the edge of the dialog. */
+  min-width: 0;
+}
+
+.popup-names .word-list {
+  height: 150px;
+}
+
+/* What Remove would do to the name that is selected, or what the last change did. It holds its line
+   whether or not it has anything to say, so the buttons above it do not move under the pointer
+   every time the selection changes. Two lines, because the sentences it carries are a sentence
+   long and a list that jumped by a line as they came and went would be worse than the space. */
+.name-list-status {
+  min-height: 2.9em;
+  margin-top: 4px;
+  color: var(--text-muted);
+}
+
+/* A name that has been taken out of the list keeps its row, so it can be seen and put back. Marked
+   rather than hidden, and marked in the row itself as well as by colour - "(1, removed)" - since
+   colour alone is not something every reader has. */
+.word-list option.name-removed {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* The warning a rename raises, stacked over the list. Above it in the stacking order for the same
+   reason the delete confirmation is above what it is asked about. */
+.rename-confirm-popup {
+  z-index: 4;
+}
+
+/* What the rename can get wrong, which is the part of the dialog worth reading. Set apart the way
+   the delete confirmation's line is, since it is the same kind of sentence. */
+.rename-confirm-popup .warning-text {
+  margin-top: 8px;
 }
 
 /* --- Working / backup alerts -------------------------------------------------------------- */

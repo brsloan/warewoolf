@@ -10,6 +10,8 @@ const { convertFirstLineToTitle } = require('./convert-first-lines')
 const { convertMarkedItalics } = require('./convert-italics');
 const { convertMarkedTabs } = require('./convert-tabs');
 const { parseMDF } = require('./markdownFic');
+const { parseFountain, elementsToDelta, getTitlePageValues } = require('./fountain');
+const { parseFdx, parseFadeIn } = require('./screenplay-export');
 const { createPlatform } = require('./platform');
 const { createIpcBacking } = require('./platform-ipc');
 
@@ -79,6 +81,12 @@ function importFilesAsync(filepaths, options, addImportedChapter, cback, sysDire
     importMDF(filepath, options.mdfcOptions, function(delts){
       recurse(delts);
     });
+  else if(SCREENPLAY_FORMAT[options.fileType.id])
+    importScreenplay(filepath, SCREENPLAY_FORMAT[options.fileType.id], function(delts, metadata){
+      if(!bookMetadata && metadata)
+        bookMetadata = metadata;
+      recurse(delts);
+    });
   else {
     //Should be unreachable from the UI (import_display.js only ever offers these fileType ids),
     //but without this the working overlay hangs forever with no error surfaced if it happens.
@@ -98,7 +106,7 @@ function importFilesAsync(filepaths, options, addImportedChapter, cback, sysDire
     }
     else {
       importedDeltas.forEach((delt, i) => {
-        addImportedChapter(delt.delta, delt.title);
+        addImportedChapter(delt.delta, delt.title, delt.format);
       });
       hideWorking();
       cback(bookMetadata);
@@ -267,6 +275,48 @@ function importMDF(filepath, options, callback){
   });
 }
 
+//The screenplay import's file types (import_display.js) and the format each reads.
+const SCREENPLAY_FORMAT = { fountainSelect: 'fountain', fdxSelect: 'fdx', fadeinSelect: 'fadein' };
+
+//A screenplay, from Fountain, Final Draft or Fade In, as one document stamped `format: 'fountain'`
+//- which is what has it saved as a .fountain file and puts the editor in screenplay mode for it.
+//The file's title page travels out as metadata, the way an epub's title and author do, for a
+//screenplay project with no title page of its own to take (render.js's import finish). `format`
+//is one of SCREENPLAY_FORMAT's values.
+function importScreenplay(filepath, format, callback){
+  var read = format === 'fadein' ? readFadeIn(filepath) : platform.readTextFile({ path: filepath });
+
+  read.then(function(data){
+    var parsed = format === 'fdx' ? parseFdx(data) : format === 'fadein' ? parseFadeIn(data) : parseFountain(data);
+    var title = getTitlePageValues(parsed.titlePage, 'Title').join(' ') || getFilenameFromFilepath(filepath);
+
+    callback([{
+      title: title,
+      delta: elementsToDelta(parsed.elements),
+      format: 'fountain'
+    }], {
+      title: title,
+      author: getTitlePageValues(parsed.titlePage, 'Author').concat(getTitlePageValues(parsed.titlePage, 'Authors')).join(' '),
+      titlePage: parsed.titlePage
+    });
+  }).catch(function(err){
+    logError(err);
+    callback([], null);
+  });
+}
+
+//A .fadein is a zip holding one document.xml. importEpub is the platform's "text entries of a zip"
+//command - it never extracts, and reads only text - and that is exactly the read this needs, so
+//it is borrowed rather than mirrored by a command of its own.
+function readFadeIn(filepath){
+  return platform.importEpub({ path: filepath }).then(function(result){
+    var xml = result.entries['document.xml'];
+    if(typeof xml !== 'string')
+      throw new Error('Not a Fade In (.fadein) document: no document.xml in the archive.');
+    return xml;
+  });
+}
+
 //Splits off only the final extension, not every "." in the filename - splitting on the first "."
 //lost everything after it for a multi-dot name (e.g. "chapter 1.5.txt" became "chapter 1",
 //"my.novel.draft.txt" became "my"). stemOfPath is the shared helper file-manager.js applies for
@@ -284,5 +334,6 @@ module.exports = {
   applyBookMetadata,
   importPlainText,
   importMDF,
+  importScreenplay,
   getFilenameFromFilepath
 }

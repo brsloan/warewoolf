@@ -1,0 +1,19 @@
+[>c] # Screenplay: Scenes
+
+A screenplay is one script, but it is navigated by scene. The sidebar on the left, which for a novel lists chapters, lists ***Scenes*** instead: a row for every scene heading in the script, in order, reading the heading itself as the label. Nothing is stored to make this happen—write a heading and a row appears; change it and the row changes with it.
+	The rows are shown whichever document you are actually in, because a look at the character bible in Reference is still work on the same screenplay. Clicking a scene takes you back to the script and puts the caret on it.
+
+## The Keys
+They are the chapter keys, doing for scenes what they do for chapters.
+* **CMD/CTRL + Up / Down** — the previous or next scene.
+* **CMD/CTRL + SHIFT + Up / Down** — move this scene up or down the script, taking everything in it with it. If text is selected across several scenes, the whole block moves together.
+* **CMD/CTRL + SHIFT + Left** — rename. The heading line itself is rewritten, in capitals, as an ordinary edit you can undo.
+
+## Taking A Scene Out
+**Delete Chapter** (**CMD/CTRL + SHIFT + D**) on a script takes the scene the caret is in—or every scene a selection touches—out of the script and into ***Trash***, as a document of its own titled by its first heading. **Restore Deleted Chapter** (**CMD/CTRL + SHIFT + R**) puts it back at the end of the script, from where the move keys carry it up to where it belongs.
+	There is a quieter way to set a scene aside. Move the last scene in the script down one more time and it goes to the top of ***Reference***, exactly as the last chapter of a novel does; moving it up from there brings it back into the script. That is the drawer for a scene you are not sure about, where it is out of the page count and out of the way but not thrown away.
+	A scene set aside either way is still a script: it opens in the editor with its elements intact, and you can go on writing in it. However many scenes it grows to, it moves, renames and trashes as the one document it is.
+
+## The Outliner
+**Tools > Outliner** (**CMD/CTRL + O**) in a screenplay project lists scenes rather than chapters, with four columns: the heading, the page the scene is estimated to begin on, how many pages it runs to (in eighths, the way a screenwriter says it), and a summary.
+	The summary is not a field you fill in. It is the scene’s ***synopsis*** lines, read out of the script itself, so an outline is written where the scene is—see ***Screenplay: Elements And Shortcuts*** for how to put one in.

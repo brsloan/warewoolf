@@ -1,6 +1,7 @@
 const newChapter = require('./chapter');
 const chapterList = require('../controllers/chapter-list');
 const { logError } = require('../controllers/error-log');
+const { sanitizeTitlePage } = require('../controllers/fountain');
 const defaultProjectNotesName = 'project_.txt'; //Will have default notes prepend ('-notes_') as well (added by Chapter object's save function)
 
 //Group B of the platform contract (see platform.js). Like chapter.js, this module no longer knows
@@ -31,10 +32,35 @@ function newProject(){
         //moved between versions does not lose its word list even though the older build cannot use
         //it. See docs/dictionaries-plan.md.
         projectDictionary: [],
+        //'novel' or 'screenplay'. Policy, not mechanism: what New Project creates, what the sidebar's
+        //top section is, which tools the menus offer. Which codec a document goes through is the
+        //document's own business, by its file extension (see chapter.js) - so a screenplay project
+        //can hold prose Reference documents beside its script. docs/screenplay-plan.md.
+        type: 'novel',
+        //A screenplay's title page: an ordered list of { key, values[] }, edited in Properties and
+        //written into the .fountain at every save so the file stays self-contained. On load the
+        //file wins (chapter.js adoptTitlePage). Empty for a novel.
+        titlePage: [],
+        //What a screenplay's autocomplete offers beyond the script itself, kept per list as
+        //`{ added, removed }`. `added` is a name the script has not reached yet - a character due in
+        //act three; `removed` is one it is written with that is not to be offered - the one-off DAN
+        //in scene one who answers every attempt at DANIELLE. Edited in Tools >
+        //Characters/Locations, which offers the script's own names plus the first and minus the
+        //second (screenplay-editor.js's mergeNames), so a name typed into a cue needs no entry here
+        //to be completed from, and removing one changes no line of the script. Travels with the
+        //.woolf the way projectDictionary does, and for the same reason: a cast list belongs to one
+        //screenplay and to no other project. Empty for a novel.
+        screenplayNames: {
+          characters: { added: [], removed: [] },
+          locations: { added: [], removed: [] }
+        },
         filters: [],
         trash: [],
         activeChapterIndex: 0,
         wordGoal: 0,
+        //A screenplay project's goal, in script pages, since Word Count shows a script as pages and
+        //nothing else. Unused by a novel, which keeps wordGoal.
+        pageGoal: 0,
         hasUnsavedChanges: false,
         //Set for a project opened out of the read-only install directory (the bundled Help doc, and
         //the Frankenstein example when its copy out to userData fails).
@@ -45,6 +71,7 @@ function newProject(){
         textCursorPosition: 0,
         corkboardColumns: 4,
         getActiveChapter: getActiveChapter,
+        isScreenplay: isScreenplay,
         loadFile: loadFile,
         saveFile: saveFile,
         saveAs: saveAs,
@@ -54,6 +81,10 @@ function newProject(){
 
     function getActiveChapter(){
       return chapterList.chapterAt(this, this.activeChapterIndex);
+    }
+
+    function isScreenplay(){
+      return this.type === 'screenplay';
     }
 
     async function loadFile(projPath){
@@ -68,13 +99,25 @@ function newProject(){
         //do.
         var opened = await platform.openProject({ path: projPath });
 
-        Object.assign(this, opened.project);
+        //Every key a fresh project has, at its default, laid down before the file's own - so a key
+        //the file does not carry is reset rather than kept from whatever this object held last.
+        //render.js opens every project into the one project object, and a novel's .woolf written
+        //before there were screenplays has no `type`, `titlePage` or `screenplayNames`: opening
+        //one after a screenplay used to keep all three from the screenplay, show the novel with a
+        //script's menus and dialogs, and then write the wrong type into the novel's own file on the
+        //save every open ends in (render.js's convertLegacyProject).
+        Object.assign(this, newProject(), opened.project);
 
         //Object.assign copies whatever was in the file and nothing validates it - the same hole the
         //isReadOnly comment above documents for a hand-edited .woolf. A `.woolf` with
         //"projectDictionary": "Aurelion" must not turn into a spellchecker that accepts every single
         //letter of it.
         this.projectDictionary = sanitizeWordList(this.projectDictionary);
+        //Same discipline for the three screenplay fields: a .woolf from an older build has none of
+        //them, and a hand-edited one could hold anything.
+        this.type = this.type === 'screenplay' ? 'screenplay' : 'novel';
+        this.titlePage = sanitizeTitlePage(this.titlePage);
+        this.screenplayNames = sanitizeNameLists(this.screenplayNames);
 
         this.filename = opened.filename;
         this.directory = opened.directory;
@@ -99,6 +142,17 @@ function newProject(){
           trashChaps.push(newChapter(proj).parseChapter(tr));
         });
         this.trash = trashChaps;
+
+        //A novel whose file says screenplay: what the bug above left behind, since the mis-typed
+        //novel was saved back out as a screenplay. Told apart by its Chapters list, which for a
+        //screenplay project is its one .fountain script and nothing else (render.js never lets a
+        //prose document into it - restoreChapter sends one to Reference instead), and for a novel
+        //is prose chapters. An empty list says nothing either way and is left as the file has it.
+        if(this.type === 'screenplay' && this.chapters.length > 0 && !this.chapters.some(newChapter.isFountainChapter)){
+          this.type = 'novel';
+          this.titlePage = [];
+          this.screenplayNames = sanitizeNameLists(null);
+        }
 
         this.initNotesChap();
 
@@ -355,6 +409,35 @@ function sanitizeWordList(raw){
     return [];
 
   return raw.filter(function(word){ return typeof word === 'string' && word !== ''; });
+}
+
+//The two name lists, as the rest of the app expects them: a list each for characters and locations,
+//each an added and a removed array of non-empty capitalised names, whatever a file from an older
+//build (nothing) or a hand-edited one (anything) actually held. Capitalised here rather than only
+//where they are shown, so what is compared against the script's own names is comparable with them.
+function sanitizeNameLists(raw){
+  var lists = raw && typeof raw === 'object' ? raw : {};
+
+  return { characters: sanitizeNameList(lists.characters), locations: sanitizeNameList(lists.locations) };
+}
+
+function sanitizeNameList(raw){
+  var list = raw && typeof raw === 'object' ? raw : {};
+
+  return { added: sanitizeNames(list.added), removed: sanitizeNames(list.removed) };
+}
+
+function sanitizeNames(raw){
+  var seen = {};
+
+  return sanitizeWordList(raw).map(function(name){
+    return name.trim().toUpperCase();
+  }).filter(function(name){
+    if(name === '' || seen[name])
+      return false;
+    seen[name] = true;
+    return true;
+  });
 }
 
 //Louder than a silent no-op, which for a save would be data loss behind a clean-looking return.

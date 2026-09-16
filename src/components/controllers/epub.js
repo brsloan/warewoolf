@@ -1,4 +1,5 @@
 const { logError } = require('./error-log');
+const { getJustifyLeftCss } = require('./mdfc-to-html');
 const { createPlatform } = require('./platform');
 const { createIpcBacking } = require('./platform-ipc');
 
@@ -16,7 +17,7 @@ var platform = createPlatform(createIpcBacking());
 //entries and hand them to platform.sendEmail directly, without ever writing an epub to a path the
 //renderer would have to learn and clean up - the same "assembled content crosses, not a path"
 //shape buildEpub itself established in Phase 6.
-function assembleEpubEntries(title, author, htmlChapters, insertTitlePage){
+function assembleEpubEntries(title, author, htmlChapters, insertTitlePage, justifyLeft = false){
     //htmlChapters should be an array of objects with a title property and an html property.
     //Build a new array rather than unshift()-ing in place: callers construct this array fresh
     //today, but mutating an argument the caller still holds a reference to is a footgun waiting
@@ -43,13 +44,13 @@ function assembleEpubEntries(title, author, htmlChapters, insertTitlePage){
         entries.push({ name: contentDir + 'chapter_' + (i + 1) + '.xhtml', content: page });
     });
 
-    entries.push({ name: contentDir + 'CSS/template.css', content: getCss() });
+    entries.push({ name: contentDir + 'CSS/template.css', content: getCss(justifyLeft) });
 
     return entries;
 }
 
-function htmlChaptersToEpub(title, author, htmlChapters, filepath, insertTitlePage, callback){
-    const entries = assembleEpubEntries(title, author, htmlChapters, insertTitlePage);
+function htmlChaptersToEpub(title, author, htmlChapters, filepath, insertTitlePage, justifyLeft, callback){
+    const entries = assembleEpubEntries(title, author, htmlChapters, insertTitlePage, justifyLeft);
 
     platform.buildEpub({ filepath: filepath, entries: entries }).then(function(){
         callback(filepath);
@@ -241,7 +242,11 @@ function getTitlePageBody(title, author){
         '<h2 class="center">by ' + escapeXmlText(author) + '</h2>';
 }
 
-function getCss(){
+//The justify rules come from mdfc-to-html.js rather than being spelled out again here: the chapters
+//in an epub are that converter's output, class for class, so the two stylesheets have to agree about
+//what "left-aligned" looks like. Their position in the sheet matters as much as their content -
+//see getJustifyLeftCss.
+function getCss(justifyLeft = false){
     return ".contents { list-style-type: none; } " + 
         ".title { margin-top: 33% }" + 
       "      h1 {" +
@@ -252,6 +257,7 @@ function getCss(){
       "      margin-top: 0px;" +
       "      margin-bottom: 0px;" +
       "    }" +
+      (justifyLeft ? getJustifyLeftCss() : "") +
       "    .center {" +
       "      text-align: center;" +
       "    }" +

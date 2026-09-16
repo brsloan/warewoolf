@@ -64,12 +64,14 @@ function bodyShell(){
 }
 
 //A stand-in for a Quill instance, carrying only what keybindings.js itself calls: focus(),
-//getSelection()/setSelection()/root/container/selection.getBounds() for PageDown (see
-//quill-utils.test.js's own goPageDown tests for the geometry those cover), and on()/off() for
+//getSelection()/setSelection()/root/container/selection.getBounds() for the movement shortcuts (see
+//quill-utils.test.js's own tests for the geometry those cover), and on()/off() for
 //typewriter-mode.js's editor-change binding. `root` is the real DOM node a shortcut moves focus to.
-//A one-position document makes goPageDown() a same-value round trip (setSelection ends up called
-//with the index it started from) - enough to prove goPageDown ran against THIS instance
-//(setSelectionCallCount) without re-testing its own geometry here.
+//
+//getBounds() finds nothing, so both paging shortcuts run their "no further to go" path and land at
+//index 0 - enough to prove paging ran against THIS instance (setSelectionCallCount) without
+//re-testing its own geometry here. The six positions are what tells the two ENDS apart: goToStart
+//lands at 0 and goToEnd at 5, so selectionIndex says which of them a key reached.
 function stubQuill(root){
   //A real Quill root is contenteditable, which is always focusable regardless of tabindex; a
   //plain <div> is not focusable at all without one, so .focus() would silently no-op on it here.
@@ -82,8 +84,9 @@ function stubQuill(root){
     hasFocus: function(){ return document.activeElement === root; },
     getSelection: function(){ return selection; },
     setSelection: function(index){ selection = { index: index, length: 0 }; setSelectionCallCount++; },
-    getLength: function(){ return 1; },
+    getLength: function(){ return 6; },
     get setSelectionCallCount(){ return setSelectionCallCount; },
+    get selectionIndex(){ return selection.index; },
     container: { getBoundingClientRect: function(){ return { top: 0 }; } },
     selection: { getBounds: function(){ return null; } },
     on: function(){},
@@ -97,8 +100,9 @@ function recordingActions(){
   var calls = [];
   var actions = {};
   ['moveChapUp', 'moveChapDown', 'changeChapterTitle', 'displayPreviousChapter', 'displayNextChapter',
-    'togglePanelDisplay', 'toggleChapterNotes', 'updatePanelDisplays', 'increaseFontSizeSetting',
-    'decreaseFontSizeSetting', 'increaseEditorWidthSetting', 'descreaseEditorWidthSetting'
+    'jumpToReference', 'togglePanelDisplay', 'toggleChapterNotes', 'updatePanelDisplays',
+    'increaseFontSizeSetting', 'decreaseFontSizeSetting', 'increaseEditorWidthSetting',
+    'descreaseEditorWidthSetting'
   ].forEach(function(name){
     actions[name] = function(){ calls.push([name].concat(Array.prototype.slice.call(arguments))); };
   });
@@ -331,6 +335,40 @@ test('Ctrl/Cmd+Up/Down move between chapters and focus notes only when triggered
   assert.strictEqual(document.activeElement, env.notesQuill.root);
 
   assert.deepStrictEqual(env.actions.calls, [['displayPreviousChapter'], ['displayNextChapter']]);
+
+  teardown(env);
+});
+
+test('Ctrl/Cmd+Alt+R jumps to Reference from any pane, and leaves the focus where it lands', function(){
+  var env = setup();
+
+  keydown('editor-container', 'r', ctrl({ altKey: true }));
+  keydown('chapter-list-sidebar', 'r', ctrl({ altKey: true }));
+
+  //From the notes, unlike the chapter keys above, it does NOT hand the focus back to the notes: the
+  //jump is a move to a document to read or write in, so the editor is where it should end.
+  keydown('notes-editor', 'r', ctrl({ altKey: true }));
+  assert.notStrictEqual(document.activeElement, env.notesQuill.root);
+
+  assert.deepStrictEqual(env.actions.calls,
+    [['jumpToReference'], ['jumpToReference'], ['jumpToReference']]);
+
+  //A pane shortcut, so it is nothing at all from outside the three.
+  env.actions.calls.length = 0;
+  keydown(document.body, 'r', ctrl({ altKey: true }));
+  assert.deepStrictEqual(env.actions.calls, []);
+
+  teardown(env);
+});
+
+test('the Reference jump is rebindable like any other shortcut', function(){
+  var env = setup(null, { jumpToReference: { key: 'F9', mod: false, alt: false, shift: false } });
+
+  keydown('editor-container', 'r', ctrl({ altKey: true }));
+  assert.deepStrictEqual(env.actions.calls, [], 'no longer on its default');
+
+  keydown('editor-container', 'F9');
+  assert.deepStrictEqual(env.actions.calls, [['jumpToReference']]);
 
   teardown(env);
 });
@@ -570,5 +608,108 @@ test('the same shortcuts still work when the pane itself has focus', function(){
     ['moveChapUp', 0],
     ['changeChapterTitle', 0]
   ]);
+  teardown(env);
+});
+
+
+//---------------------------------------------------------------------------
+// Movement within a document
+//---------------------------------------------------------------------------
+
+test('Page Up pages up whichever Quill owns the pane it was pressed in', function(){
+  var env = setup();
+
+  keydown('editor-container', 'PageUp');
+  assert.strictEqual(env.editorQuill.setSelectionCallCount, 1);
+  assert.strictEqual(env.notesQuill.setSelectionCallCount, 0);
+
+  keydown('notes-editor', 'PageUp');
+  assert.strictEqual(env.notesQuill.setSelectionCallCount, 1);
+  assert.strictEqual(env.editorQuill.setSelectionCallCount, 1, 'unchanged from the first dispatch');
+
+  teardown(env);
+});
+
+test('Ctrl/Cmd+Home and Ctrl/Cmd+End reach the two ends of the pane they were pressed in', function(){
+  var env = setup();
+
+  keydown('editor-container', 'End', ctrl());
+  assert.strictEqual(env.editorQuill.selectionIndex, 5, 'the last position a caret can hold');
+
+  keydown('editor-container', 'Home', ctrl());
+  assert.strictEqual(env.editorQuill.selectionIndex, 0);
+
+  keydown('notes-editor', 'End', ctrl());
+  assert.strictEqual(env.notesQuill.selectionIndex, 5);
+  assert.strictEqual(env.editorQuill.selectionIndex, 0, 'the editor is left where it was');
+
+  teardown(env);
+});
+
+//The chapter list is on the same listener but holds no text, so there is no caret for these to
+//move. The keypress is left alone rather than swallowed to no effect, which is what keeps the list
+//scrolling by Page Down the way any list does.
+test('paging in the chapter list is left to the list itself', function(){
+  var env = setup();
+
+  var evt = keydown('chapter-list-sidebar', 'PageDown');
+
+  assert.strictEqual(env.editorQuill.setSelectionCallCount, 0, 'the editor should not have paged');
+  assert.strictEqual(env.notesQuill.setSelectionCallCount, 0);
+  assert.strictEqual(evt.defaultPrevented, false, 'the list keeps its own native paging');
+
+  teardown(env);
+});
+
+test('a caret key moved onto another shortcut runs that shortcut instead', function(){
+  var env = setup({}, { toggleNotes: { key: 'End' }, jumpToEnd: null });
+
+  keydown(document, 'End');
+
+  assert.deepStrictEqual(env.actions.calls, [['togglePanelDisplay', 3]]);
+  assert.strictEqual(env.editorQuill.selectionIndex, 0, 'End no longer reaches the end of a document');
+
+  teardown(env);
+});
+
+//The reason that guard is read off the keypress rather than off what is bound to it: while a name
+//is being typed, Home is the start of the name, whatever the popup has it doing elsewhere.
+test('a caret key bound to a shortcut is still left to a text field', function(){
+  var env = setup({}, { toggleNotes: { key: 'Home' }, jumpToStart: null });
+  var input = document.createElement('input');
+  document.body.appendChild(input);
+
+  var evt = keydown(input, 'Home');
+
+  assert.deepStrictEqual(env.actions.calls, [], 'no shortcut should have fired');
+  assert.strictEqual(evt.defaultPrevented, false);
+
+  teardown(env);
+});
+
+//A matched shortcut swallows its key, without exception. The font-size and editor-width shortcuts
+//used to let the keypress through, which was harmless only while they sat on keys with nothing
+//native to do - a writer may now put either on a caret key, where it would have meant one press
+//doing two things.
+test('a shortcut that nudges a setting swallows its key like any other', function(){
+  var env = setup({}, { increaseFontSize: { key: 'End' }, jumpToEnd: null });
+
+  var evt = keydown(document, 'End');
+
+  assert.deepStrictEqual(env.actions.calls, [['increaseFontSizeSetting']]);
+  assert.strictEqual(evt.defaultPrevented, true);
+
+  teardown(env);
+});
+
+test('paging follows a rebind off its own key', function(){
+  var env = setup({}, { pageDown: { key: 'J', mod: true } });
+
+  keydown('editor-container', 'PageDown');
+  assert.strictEqual(env.editorQuill.setSelectionCallCount, 0, 'the key it was moved off does nothing');
+
+  keydown('editor-container', 'J', ctrl());
+  assert.strictEqual(env.editorQuill.setSelectionCallCount, 1);
+
   teardown(env);
 });

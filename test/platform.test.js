@@ -363,6 +363,27 @@ testOnce('an error that is already a PlatformError passes through unchanged', as
   assert.strictEqual(err.message, 'already ours');
 });
 
+//docs/screenplay-plan.md, Phase 7. The printing is the host's (a hidden window in index.js); the
+//backing only carries the call, and without a printer it must say so rather than resolve to a PDF
+//that was never written.
+test('printToPdf hands the page to the host\'s printer, and rejects UNAVAILABLE without one', async function(t){
+  const printed = [];
+  const withPrinter = createPlatform(createNodeBacking({
+    paths: { userData: fs.mkdtempSync(path.join(os.tmpdir(), 'warewoolf-print-')) },
+    onPrintToPdf: function(html, filePath){ printed.push([html, filePath]); return Promise.resolve('ignored'); }
+  }));
+
+  assert.strictEqual(await withPrinter.printToPdf({ html: '<p>x</p>', path: '/out/script.pdf' }), undefined);
+  assert.deepStrictEqual(printed, [['<p>x</p>', '/out/script.pdf']]);
+
+  const withoutPrinter = platformIn(t).platform;
+  const err = await rejection(withoutPrinter.printToPdf({ html: '<p>x</p>', path: '/out/script.pdf' }));
+  assert.strictEqual(err.code, CODES.UNAVAILABLE);
+
+  const bad = await rejection(withPrinter.printToPdf({ html: '<p>x</p>' }));
+  assert.strictEqual(bad.code, CODES.INVALID_ARGUMENT);
+});
+
 test('every command is documented and takes a single object argument', function(t){
   const platform = platformIn(t).platform;
 
@@ -400,7 +421,7 @@ test('events are validated by name and unsubscribe cleanly', function(t){
   const seen = [];
   const handler = function(){ seen.push(1); };
 
-  assert.strictEqual(EVENTS.length, 41);
+  assert.strictEqual(EVENTS.length, 42);
   assert.ok(EVENTS.indexOf('save-clicked') > -1);
 
   const unsubscribe = built.platform.on('save-clicked', handler);
@@ -422,9 +443,14 @@ test('events are validated by name and unsubscribe cleanly', function(t){
 //ipcRenderer.on() - so a name that drifts from the main process subscribes to a channel nothing
 //sends, with no error anywhere. Phase 1 shipped exactly that mistake in one of the 36 entries.
 testOnce('every event name matches a channel the main process actually sends', function(){
+  //The menu's channels are sent from app-menu.js's template (through index.js's `send`), the rest
+  //straight from index.js.
   const main = fs.readFileSync(path.join(__dirname, '..', 'src', 'index.js'), 'utf8');
+  const menu = fs.readFileSync(path.join(__dirname, '..', 'src', 'components', 'controllers', 'app-menu.js'), 'utf8');
   const sent = new Set(Array.from(main.matchAll(/webContents\.send\(['"]([^'"]+)['"]/g),
-    function(match){ return match[1]; }));
+    function(match){ return match[1]; }).concat(
+    Array.from(menu.matchAll(/\bsend\(['"]([^'"]+)['"]/g), function(match){ return match[1]; }),
+    Array.from(menu.matchAll(/item\([^,]+,\s*['"]([^'"]+)['"]/g), function(match){ return match[1]; })));
 
   assert.deepStrictEqual(EVENTS.filter(function(event){ return !sent.has(event); }), [],
     'declared events the main process never sends');
@@ -531,20 +557,25 @@ test('getFileRequestedOnOpen returns whatever the backing was constructed with, 
 //setTheme/showAppMenu/confirmExit/notifyRendererReady have no return value - what a backing does
 //with them is entirely the injected hook's business, which is exactly what these assert.
 test('setTheme, showAppMenu, confirmExit, and notifyRendererReady call their injected hooks', async function(){
-  const seen = { mode: undefined, menu: 0, exit: 0, ready: 0 };
+  const seen = { mode: undefined, menu: 0, exit: 0, ready: 0, menuMode: [] };
   const platform = wrap(createNodeBacking({
     onSetTheme: function(mode){ seen.mode = mode; },
     onShowAppMenu: function(){ seen.menu++; },
+    onSetMenuMode: function(project, document){ seen.menuMode.push([project, document]); },
     onConfirmExit: function(){ seen.exit++; },
     onNotifyRendererReady: function(){ seen.ready++; }
   }));
 
   await platform.setTheme({ mode: 'dark' });
   await platform.showAppMenu({});
+  await platform.setMenuMode({ project: 'screenplay', document: 'prose' });
+  //Anything but 'screenplay' is a novel and prose - the menu every project had before screenplays.
+  await platform.setMenuMode({ project: 'whatever', document: 'screenplay' });
   await platform.confirmExit({});
   await platform.notifyRendererReady({});
 
-  assert.deepStrictEqual(seen, { mode: 'dark', menu: 1, exit: 1, ready: 1 });
+  assert.deepStrictEqual(seen, { mode: 'dark', menu: 1, exit: 1, ready: 1,
+    menuMode: [['screenplay', 'prose'], ['novel', 'screenplay']] });
 });
 
 test('setTheme, showAppMenu, confirmExit, and notifyRendererReady are no-ops without injected hooks', async function(){
@@ -552,6 +583,7 @@ test('setTheme, showAppMenu, confirmExit, and notifyRendererReady are no-ops wit
 
   await assert.doesNotReject(platform.setTheme({ mode: 'light' }));
   await assert.doesNotReject(platform.showAppMenu({}));
+  await assert.doesNotReject(platform.setMenuMode({ project: 'screenplay', document: 'screenplay' }));
   await assert.doesNotReject(platform.confirmExit({}));
   await assert.doesNotReject(platform.notifyRendererReady({}));
 });

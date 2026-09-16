@@ -117,6 +117,8 @@ Mostly already IPC. Small, and the first group to move.
 | `showAppMenu()` | `show-menu` (`index.js:563`) | `keybindings.js:87`. |
 | `confirmExit()` | `exit-app-confirmed` (`index.js:480`) | `render.js:846,849,865`. |
 | `notifyRendererReady()` | `renderer-ready` (`index.js:486`) | `render.js:1126`. Fire-and-forget startup signal; the only command here with no return value. |
+| `setMenuMode(project, document)` | new with screenplay mode (`docs/screenplay-plan.md`, "What the menus offer") | `project` is `novel` \| `screenplay`, `document` is `prose` \| `screenplay`. The host rebuilds the application menu from it (`app-menu.js`): Word Count reads Page Count for a screenplay project, the manuscript conversions are disabled for one, the chapter tools while a script is showing. Sent by `render.js` whenever either changes. Tauri: the menu API. |
+| `printToPdf(html, path)` | new with screenplay mode (`docs/screenplay-plan.md`, Phase 7) | The renderer builds a script's print page as HTML; the host loads it in a hidden window and writes `webContents.printToPDF` to `path` (Letter, 1.5in left margin, 1in elsewhere, page number top right). Rejects `UNAVAILABLE` where no printer callback was supplied. Tauri: webview print API. |
 
 ### Events (main → renderer) — **(corrected in Phase 1)**
 
@@ -256,8 +258,13 @@ not writable at all, so the same distinction has to survive the port.
 | Command | Replaces |
 |---|---|
 | `loadChapter(projectDir, chapsDir, filename)` → mdfc text | `chapter.js:73` |
-| `saveChapter(projectDir, chapsDir, filename, mdfc)` | `chapter.js:112` |
-| `saveChapterAtomic({projectDir, chapsDir, oldFilename, title, mdfc, notesMdfc})` → `{filename, notesFilename, notesError}` | the rename → write → restore-on-failure dance at `chapter.js:134-165` |
+| `saveChapter(projectDir, chapsDir, filename, mdfc, [extension])` | `chapter.js:112` |
+| `saveChapterAtomic({projectDir, chapsDir, oldFilename, title, mdfc, notesMdfc, [extension]})` → `{filename, notesFilename, notesError}` | the rename → write → restore-on-failure dance at `chapter.js:134-165` |
+
+`extension` (added with screenplay mode, `docs/screenplay-plan.md` Phase 2) is
+the one the allocated filename ends in: `.txt` when absent, `.fountain` for a
+screenplay's script. The native side accepts only those two, since the value is
+the tail of a filename it writes to. `mdfc` is the file's text in either format.
 | `deleteChapterFiles(projectDir, chapsDir, filename)` | `chapter.js:47-50` (chapter + notes) |
 | `loadChapterNotes(...)` / `saveChapterNotes(...)` | `chapter.js:187-188`, `:205` |
 

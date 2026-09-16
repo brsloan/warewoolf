@@ -1,5 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert');
+//For the one test that asks a real DOM how the stylesheet's cascade actually resolves, rather
+//than reading the rules off the page as text.
+const { JSDOM } = require('jsdom');
 
 const { convertMdfcToHtml, convertMdfcToHtmlPage } = require('../src/components/controllers/mdfc-to-html');
 
@@ -300,4 +303,98 @@ test('an escaped reference does not stop a real one in the same paragraph', func
     '<p>A real<sup><a href="#fnote_1" id="fnoteRef_1">1</a></sup> and a literal [^2] one.</p>\n'
       + '<div class="footnote" id="fnote_1"><p><sup><a href="#fnoteRef_1">1</a></sup>The note.\n</p></div>\n'
   );
+});
+
+//The Export/Compile option "Set Max Width For Readability": prose run the full width of a maximised
+//browser window is hard to read, so the page can be held to a measure of 66 characters. In ch, the
+//width of the reading font's own "0", so it stays 66 characters at whatever face and size.
+test('the page stylesheet holds the body to a readable measure when asked', function(){
+  const page = convertMdfcToHtmlPage('One.\n', 'Title', null, false, true);
+  const bodyRule = /body\s*\{([^}]*)\}/.exec(page);
+
+  assert.ok(bodyRule, 'expected a body rule in the page stylesheet');
+  assert.match(bodyRule[1], /max-width:\s*66ch/);
+  //Without auto side margins the measure sits against the left edge and every bit of the window's
+  //spare width piles up on the right.
+  assert.match(bodyRule[1], /margin:\s*0 auto/);
+  //And zeroing the margin takes the browser's own gutter with it, so a window narrower than the
+  //measure would run its lines into both edges without this.
+  assert.match(bodyRule[1], /padding:\s*0 1em/);
+});
+
+test('a page written without the option carries no body rule at all', function(){
+  assert.doesNotMatch(convertMdfcToHtmlPage('One.\n', 'Title'), /body\s*\{/);
+  assert.doesNotMatch(convertMdfcToHtmlPage('One.\n', 'Title', null, false, false), /body\s*\{/);
+});
+
+//The Export/Compile option "Justify left-aligned text": the prose a writer never aligned by hand
+//goes out justified, while an alignment actually chosen in the editor is left as chosen.
+//
+//Two rules, not one selector list, and both written in ahead of .center/.right/.justified - see
+//getJustifyLeftCss in mdfc-to-html.js for why the shape and the position are what they are.
+const bareJustifyRule = /p, li, blockquote \{\s*text-align: justify;/;
+const leftJustifyRule = /p\.left, li\.left, blockquote\.left \{\s*text-align: justify;/;
+
+function justifiedPage(){
+  return convertMdfcToHtmlPage('One.\n', 'Title', null, false, false, true);
+}
+
+test('the page stylesheet justifies unset and left-aligned text when asked', function(){
+  const page = justifiedPage();
+
+  //The bare elements carry the text a writer never aligned; the .left rule the text they set left
+  //by hand.
+  assert.match(page, bareJustifyRule);
+  assert.match(page, leftJustifyRule);
+});
+
+//A justified heading is a line of stretched-out words, which is not what "justify the prose" means.
+test('the justify rules leave headings out', function(){
+  const page = justifiedPage();
+
+  [bareJustifyRule, leftJustifyRule].forEach(function(rule){
+    assert.doesNotMatch(rule.exec(page)[0], /h[1-6]/);
+  });
+});
+
+//However the reading engine resolves the cascade, an alignment the writer actually chose has to
+//survive: by specificity (a class beats a bare element) and by source order (these rules come
+//first), which is what makes the split shape and the position worth keeping.
+test('the justify rules come before the alignment classes they must lose to', function(){
+  const page = justifiedPage();
+
+  assert.ok(page.search(bareJustifyRule) < page.indexOf('.center {'), 'the bare rule must precede .center');
+  assert.ok(page.search(leftJustifyRule) < page.indexOf('.center {'), 'the .left rule must precede .center');
+  assert.ok(page.search(leftJustifyRule) < page.indexOf('.right {'), 'the .left rule must precede .right');
+  assert.ok(page.search(leftJustifyRule) < page.indexOf('.justified {'), 'the .left rule must precede .justified');
+  //Neither rule names an alignment class, so neither can claim a paragraph that carries one.
+  [bareJustifyRule, leftJustifyRule].forEach(function(rule){
+    assert.doesNotMatch(rule.exec(page)[0], /\.center|\.right|\.justified/);
+  });
+});
+
+//The cascade the two rules are written for, resolved by a real DOM rather than read off the text.
+test('a centered or right-aligned paragraph is left alone while the rest justifies', function(){
+  const mdfc = '# A Heading\nUnset prose.\n[>l] Left by hand.\n[>c] Centered.\n[>r] Right.\n> A quotation.\n- An item.\n';
+  const dom = new JSDOM(convertMdfcToHtmlPage(mdfc, 'Title', null, false, false, true));
+  const align = function(selector){
+    return dom.window.getComputedStyle(dom.window.document.querySelector(selector)).textAlign;
+  };
+
+  assert.strictEqual(align('p:not([class])'), 'justify', 'prose the writer never aligned should justify');
+  assert.strictEqual(align('p.left'), 'justify', 'and so should prose they set left by hand');
+  assert.strictEqual(align('blockquote'), 'justify');
+  assert.strictEqual(align('li'), 'justify');
+  assert.strictEqual(align('p.center'), 'center', 'a centered paragraph must stay centered');
+  assert.strictEqual(align('p.right'), 'right', 'a right-aligned paragraph must stay right');
+  assert.ok(!align('h1'), 'a heading should be left to the reading engine\'s own default');
+});
+
+test('a page written without the option carries no justify rules', function(){
+  //.justified, the class an explicitly justified paragraph carries, is in the stylesheet either
+  //way - what should be missing is the blanket rules on the bare elements and on .left.
+  const page = convertMdfcToHtmlPage('One.\n', 'Title');
+
+  assert.doesNotMatch(page, bareJustifyRule);
+  assert.doesNotMatch(page, leftJustifyRule);
 });

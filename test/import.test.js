@@ -174,6 +174,61 @@ test('importPlainText regression: a split marker containing regex metacharacters
 // importMDF
 //---------------------------------------------------------------------------
 
+//docs/screenplay-plan.md, Phase 7: a screenplay comes in from Fountain or Final Draft as one
+//document stamped for the .fountain codec, with its title page as metadata.
+test('importScreenplay reads a .fountain file as one fountain-format chapter titled from its title page', async function(){
+  const dir = tempDir();
+  const filepath = path.join(dir, 'script.fountain').replaceAll('\\', '/');
+  fs.writeFileSync(filepath, 'Title: Big Fish\nAuthor: John August\n\nINT. HOUSE - DAY\n\nBOB\nHi.\n', 'utf8');
+
+  const result = await new Promise(function(resolve){
+    importCtrl.importScreenplay(filepath, 'fountain', function(delts, metadata){ resolve({ delts: delts, metadata: metadata }); });
+  });
+
+  assert.strictEqual(result.delts.length, 1);
+  assert.strictEqual(result.delts[0].title, 'Big Fish');
+  assert.strictEqual(result.delts[0].format, 'fountain');
+  assert.deepStrictEqual(result.delts[0].delta.ops[1], { insert: '\n', attributes: { element: 'scene' } });
+  assert.strictEqual(result.metadata.title, 'Big Fish');
+  assert.strictEqual(result.metadata.author, 'John August');
+  assert.deepStrictEqual(result.metadata.titlePage[0], { key: 'Title', values: ['Big Fish'] });
+});
+
+test('importScreenplay reads an .fdx file, and titles it from the filename when there is no title page', async function(){
+  const { JSDOM } = require('jsdom');
+  global.DOMParser = new JSDOM().window.DOMParser;
+  const dir = tempDir();
+  const filepath = path.join(dir, 'my.script.fdx').replaceAll('\\', '/');
+  fs.writeFileSync(filepath, '<?xml version="1.0"?><FinalDraft DocumentType="Script"><Content>' +
+    '<Paragraph Type="Scene Heading"><Text>INT. HOUSE - DAY</Text></Paragraph>' +
+    '<Paragraph Type="Character"><Text>BOB</Text></Paragraph>' +
+    '<Paragraph Type="Dialogue"><Text>Hi.</Text></Paragraph>' +
+    '</Content></FinalDraft>', 'utf8');
+
+  const result = await new Promise(function(resolve){
+    importCtrl.importScreenplay(filepath, 'fdx', function(delts, metadata){ resolve({ delts: delts, metadata: metadata }); });
+  });
+
+  assert.strictEqual(result.delts[0].title, 'my.script');
+  assert.strictEqual(result.delts[0].format, 'fountain');
+  assert.deepStrictEqual(result.delts[0].delta.ops.map(function(op){ return op.insert; }), ['INT. HOUSE - DAY', '\n', 'BOB', '\n', 'Hi.', '\n']);
+  assert.deepStrictEqual(result.metadata.titlePage, []);
+});
+
+test('importScreenplay regression: a missing file logs an error and calls back with no chapters instead of throwing', async function(){
+  var logged = [];
+  errorLog.logError = function(err){ logged.push(err); };
+  const fresh = freshImportCtrl();
+
+  const result = await new Promise(function(resolve){
+    fresh.importScreenplay(path.join(tempDir(), 'missing.fountain').replaceAll('\\', '/'), 'fountain', function(delts, metadata){ resolve({ delts: delts, metadata: metadata }); });
+  });
+
+  assert.deepStrictEqual(result.delts, []);
+  assert.strictEqual(result.metadata, null);
+  assert.strictEqual(logged.length, 1);
+});
+
 test('importMDF reads a .mdfc file and packages it as a chapter delta', async function(){
   const dir = tempDir();
   const file = path.join(dir, 'story.mdfc');
@@ -660,4 +715,66 @@ test('applyBookMetadata does nothing at all for a format that reported no metada
   assert.strictEqual(importCtrl.applyBookMetadata(project, null), false);
   assert.strictEqual(importCtrl.applyBookMetadata(project, undefined), false);
   assert.strictEqual(project.hasUnsavedChanges, false);
+});
+
+//---------------------------------------------------------------------------
+// Fade In
+//---------------------------------------------------------------------------
+
+//A .fadein is a zip around one document.xml; these build one the way the epub tests build theirs.
+function writeFadeIn(filepath, documentXml, entryName){
+  return new Promise(function(resolve, reject){
+    const output = fs.createWriteStream(filepath);
+    const archive = archiver('zip');
+    output.on('close', resolve);
+    archive.on('error', reject);
+    archive.pipe(output);
+    archive.append(documentXml, { name: entryName || 'document.xml' });
+    archive.finalize();
+  });
+}
+
+test('importScreenplay reads a .fadein archive as one fountain-format chapter, with its title page as metadata', async function(){
+  const { JSDOM } = require('jsdom');
+  global.DOMParser = new JSDOM().window.DOMParser;
+  const filepath = path.join(tempDir(), 'script.fadein').replaceAll('\\', '/');
+
+  await writeFadeIn(filepath, '<?xml version="1.0"?><document type="Open Screenplay Format document" version="50"><paragraphs>' +
+    '<para><style basestyle="Scene Heading"/><text>INT. HOUSE - DAY</text></para>' +
+    '<para><style basestyle="Character"/><text>BOB</text></para>' +
+    '<para><style basestyle="Dialogue"/><text>Hi.</text></para>' +
+    '</paragraphs><titlepage>' +
+    '<para><style basestyle="Normal Text" align="center"/><text>Big Fish</text></para>' +
+    '<para><style basestyle="Normal Text" align="center"/><text>by</text></para>' +
+    '<para><style basestyle="Normal Text" align="center"/><text>John August</text></para>' +
+    '</titlepage></document>');
+
+  const result = await new Promise(function(resolve){
+    importCtrl.importScreenplay(filepath, 'fadein', function(delts, metadata){ resolve({ delts: delts, metadata: metadata }); });
+  });
+
+  assert.strictEqual(result.delts.length, 1);
+  assert.strictEqual(result.delts[0].title, 'Big Fish');
+  assert.strictEqual(result.delts[0].format, 'fountain');
+  assert.deepStrictEqual(result.delts[0].delta.ops.map(function(op){ return op.insert; }), ['INT. HOUSE - DAY', '\n', 'BOB', '\n', 'Hi.', '\n']);
+  assert.deepStrictEqual(result.delts[0].delta.ops[1], { insert: '\n', attributes: { element: 'scene' } });
+  assert.strictEqual(result.metadata.author, 'John August');
+});
+
+test('importScreenplay regression: a .fadein with no document.xml logs an error and calls back with no chapters', async function(){
+  var logged = [];
+  errorLog.logError = function(err){ logged.push(err); };
+  const fresh = freshImportCtrl();
+  const filepath = path.join(tempDir(), 'empty.fadein').replaceAll('\\', '/');
+
+  await writeFadeIn(filepath, 'nothing', 'readme.txt');
+
+  const result = await new Promise(function(resolve){
+    fresh.importScreenplay(filepath, 'fadein', function(delts, metadata){ resolve({ delts: delts, metadata: metadata }); });
+  });
+
+  assert.deepStrictEqual(result.delts, []);
+  assert.strictEqual(result.metadata, null);
+  assert.strictEqual(logged.length, 1);
+  assert.match(logged[0].message, /document\.xml/);
 });

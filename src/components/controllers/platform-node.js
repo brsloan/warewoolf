@@ -66,6 +66,10 @@ const getCredentialStore = require('../models/credential-store');
 //renderer knows how a chapter is laid out on disk; after Phase 4 it knows only titles and the
 //filenames it was handed back.
 const CHAPTER_EXT = '.txt';
+//A screenplay project's script. The extension is what tells chapter.js which codec a file goes
+//through, so it is the one other extension a chapter command may be asked for.
+const SCREENPLAY_EXT = '.fountain';
+const CHAPTER_EXTENSIONS = [CHAPTER_EXT, SCREENPLAY_EXT];
 const NOTES_PREPEND = '-notes_';
 const OLD_VERSION_FLAG = 'old_v_temp';
 const PROJECT_EXT = '.woolf';
@@ -211,7 +215,10 @@ function createNodeBacking(deps){
   var readFileRequestedOnOpen = options.getFileRequestedOnOpen || function(){ return fileRequestedOnOpen; };
   var onSetTheme = options.onSetTheme || function(){};
   var onShowAppMenu = options.onShowAppMenu || function(){};
+  var onSetMenuMode = options.onSetMenuMode || function(){};
   var onConfirmExit = options.onConfirmExit || function(){};
+  //Absent rather than a no-op: a PDF that was never written must not look written. See printToPdf.
+  var onPrintToPdf = options.onPrintToPdf || null;
   var onNotifyRendererReady = options.onNotifyRendererReady || function(){};
   //Group K's Windows update pair. Not group A, despite living beside its neighbours here in the
   //options destructuring - autoUpdater is a main-process API exactly like nativeTheme/the
@@ -233,7 +240,9 @@ function createNodeBacking(deps){
     getPlatform: getPlatform,
     getFileRequestedOnOpen: getFileRequestedOnOpen,
     setTheme: setTheme,
+    printToPdf: printToPdf,
     showAppMenu: showAppMenu,
+    setMenuMode: setMenuMode,
     confirmExit: confirmExit,
     notifyRendererReady: notifyRendererReady,
 
@@ -408,8 +417,30 @@ function createNodeBacking(deps){
     onSetTheme(args == null ? null : args.mode);
   }
 
+  //The screenplay PDF. The HTML is the renderer's (screenplay-export.js) and the printing is the
+  //host's: index.js supplies onPrintToPdf, which loads the page in a hidden window and writes
+  //webContents.printToPDF's bytes to `path`. Without one - a test, a backing with no window -
+  //this rejects rather than resolving to a file that does not exist.
+  function printToPdf(args){
+    requireText(args == null ? null : args.html, 'html');
+    requireText(args == null ? null : args.path, 'path');
+
+    if(onPrintToPdf == null)
+      throw PlatformError(CODES.UNAVAILABLE, 'PDF printing is not available in this environment.');
+
+    return Promise.resolve(onPrintToPdf(args.html, args.path)).then(function(){ return undefined; });
+  }
+
   function showAppMenu(){
     onShowAppMenu();
+  }
+
+  //Anything but 'screenplay' is a novel project and a prose document, so a caller that sends
+  //nothing gets the menu every project had before there were screenplays.
+  function setMenuMode(args){
+    onSetMenuMode(
+      args != null && args.project === 'screenplay' ? 'screenplay' : 'novel',
+      args != null && args.document === 'screenplay' ? 'screenplay' : 'prose');
   }
 
   function confirmExit(){
@@ -674,14 +705,14 @@ function createNodeBacking(deps){
   //reading it and writing is a race the renderer would own. Folding the loop into the same command
   //as the write closes it, and it is why the inventory's original signature - which passed
   //`newFilename` in, implying a separate findAvailableChapterFilename call - could not be right.
-  function allocateChapterFilename(chaptersDir, title){
+  function allocateChapterFilename(chaptersDir, title, extension){
     var root = sanitizeFilename(title != null && title !== '' ? title : 'untitled');
-    var filename = root + CHAPTER_EXT;
+    var filename = root + extension;
     var copyNum = 1;
 
     while(fs.existsSync(chaptersDir + filename)){
       copyNum++;
-      filename = root + '_' + copyNum + CHAPTER_EXT;
+      filename = root + '_' + copyNum + extension;
     }
 
     return filename;
@@ -692,7 +723,7 @@ function createNodeBacking(deps){
     var chaptersDir = chaptersDirOf(args);
     requireText(args.mdfc, 'mdfc');
 
-    var filename = allocateChapterFilename(chaptersDir, args.title);
+    var filename = allocateChapterFilename(chaptersDir, args.title, chapterExtensionOf(args));
     fs.writeFileSync(chaptersDir + filename, args.mdfc, 'utf8');
 
     return { filename: filename };
@@ -734,7 +765,7 @@ function createNodeBacking(deps){
     }
 
     //2. Allocate, now that the chapter's own file is out of the way.
-    var filename = allocateChapterFilename(chaptersDir, args.title);
+    var filename = allocateChapterFilename(chaptersDir, args.title, chapterExtensionOf(args));
 
     //3. Write, and put the old version back if it fails.
     try{
@@ -797,6 +828,20 @@ function createNodeBacking(deps){
   function requireText(value, name){
     if(typeof value !== 'string')
       throw PlatformError(CODES.INVALID_ARGUMENT, 'Expected ' + name + ' to be text.');
+  }
+
+  //The extension a chapter save allocates its filename under: .txt unless asked for the other one.
+  //A closed list rather than whatever string arrives, for the same reason every other path piece
+  //the renderer sends is checked - an extension is the tail of a filename this writes to.
+  function chapterExtensionOf(args){
+    if(args.extension == null)
+      return CHAPTER_EXT;
+
+    if(CHAPTER_EXTENSIONS.indexOf(args.extension) === -1)
+      throw PlatformError(CODES.INVALID_ARGUMENT,
+        'A chapter file extension must be one of ' + CHAPTER_EXTENSIONS.join(', ') + ', not ' + JSON.stringify(args.extension) + '.');
+
+    return args.extension;
   }
 
   // ------------------------------------------------------------------------------------------
@@ -2621,6 +2666,7 @@ function createNodeBacking(deps){
 module.exports = {
   createNodeBacking: createNodeBacking,
   CHAPTER_EXT: CHAPTER_EXT,
+  SCREENPLAY_EXT: SCREENPLAY_EXT,
   NOTES_PREPEND: NOTES_PREPEND,
   OLD_VERSION_FLAG: OLD_VERSION_FLAG,
   PROJECT_EXT: PROJECT_EXT,

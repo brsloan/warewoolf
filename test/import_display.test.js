@@ -59,6 +59,24 @@ test('initial state: Docx is selected, its options are enabled, and the plaintex
   assert.strictEqual(plainTextOptionsSet.disabled, true);
 });
 
+//The dialog used to open on the Import button, which meant tabbing backwards to reach the choice
+//every import starts with. It opens on the checked file type instead, in both kinds of project.
+test('the dialog opens with the checked file type focused', function(t){
+  var showImportOptions = freshImportDisplay({ initiateImport: function(){} });
+
+  showImportOptions({}, function(){}, function(){});
+
+  assert.strictEqual(document.activeElement, document.getElementById('docxSelect'));
+});
+
+test("a screenplay project's dialog opens with Fountain focused", function(t){
+  var showImportOptions = freshImportDisplay({ initiateImport: function(){} });
+
+  showImportOptions({}, function(){}, function(){}, { type: 'screenplay' });
+
+  assert.strictEqual(document.activeElement, document.getElementById('fountainSelect'));
+});
+
 test('the italics marker input is placed exactly once, inside the plaintext options table', function(t){
   //Regression test: the field used to be appended directly to the fieldset and then immediately
   //moved into the options table by generateRow(), which was harmless only because appendChild()
@@ -72,6 +90,40 @@ test('the italics marker input is placed exactly once, inside the plaintext opti
   assert.strictEqual(matches.length, 1);
   assert.strictEqual(matches[0].closest('table') !== null, true);
   assert.strictEqual(matches[0].parentNode.tagName, 'TD');
+});
+
+//Regression test: the radios and their labels used to be appended straight into the fieldset as a
+//flat run, so a row too wide for the dialog could wrap between a button and its own label and make
+//every label look like it named the button before it. Each pair now sits in its own wrapper, which
+//is what the .radio-option rule holds on one line.
+test('every file type radio is wrapped together with its own label', function(t){
+  var showImportOptions = freshImportDisplay({ initiateImport: function(){} });
+
+  showImportOptions({}, function(){}, function(){});
+
+  var radios = document.querySelectorAll('input[name="typeSelect"]');
+  assert.ok(radios.length > 1);
+  radios.forEach(function(radio){
+    var wrapper = radio.parentNode;
+    assert.ok(wrapper.classList.contains('radio-option'));
+    var labels = wrapper.querySelectorAll('label');
+    assert.strictEqual(labels.length, 1);
+    assert.strictEqual(labels[0].htmlFor, radio.id);
+  });
+});
+
+test('the chapter label radios are wrapped with their labels too', function(t){
+  var showImportOptions = freshImportDisplay({ initiateImport: function(){} });
+
+  showImportOptions({}, function(){}, function(){});
+
+  var radios = document.querySelectorAll('input[name="chapLabelSelect"]');
+  assert.strictEqual(radios.length, 2);
+  radios.forEach(function(radio){
+    var wrapper = radio.parentNode;
+    assert.ok(wrapper.classList.contains('radio-option'));
+    assert.strictEqual(wrapper.querySelector('label').htmlFor, radio.id);
+  });
 });
 
 test('switching the file type toggles which options fieldset is enabled', function(t){
@@ -230,4 +282,111 @@ test('the chapter label choice is shared by every file type, EPUB included', fun
   }, 'epubSelect');
 
   assert.strictEqual(capturedOptions.epubOptions.chapLabels, 'filename');
+});
+
+//A screenplay project's dialog - docs/screenplay-plan.md, Phase 7. A script has no chapters, so
+//the chapter machinery (docx, HTML, EPUB, splitting, the label choice) stays out of the dialog, and
+//Fountain is what a screenwriter most likely has, so it is the default.
+function showForScreenplay(mocks){
+  var showImportOptions = freshImportDisplay(mocks || { initiateImport: function(){} });
+  showImportOptions({ docs: '/proj/docs' }, function(){}, function(){}, { type: 'screenplay' });
+}
+
+function offeredTypeIds(){
+  return Array.from(document.querySelectorAll('input[name="typeSelect"]')).map(function(radio){ return radio.id; });
+}
+
+test('a screenplay project offers the script formats and plain text, Fountain first and selected', function(t){
+  showForScreenplay();
+
+  assert.deepStrictEqual(offeredTypeIds(), ['fountainSelect', 'fdxSelect', 'fadeinSelect', 'txtSelect']);
+  assert.strictEqual(document.getElementById('fountainSelect').checked, true);
+});
+
+test('a screenplay project leaves out the docx, HTML, EPUB and chapter label options', function(t){
+  showForScreenplay();
+
+  assert.strictEqual(document.getElementById('docx-split-chaps-check'), null);
+  assert.strictEqual(document.getElementById('html-split-chaps-check'), null);
+  assert.strictEqual(document.getElementById('epub-strip-boilerplate-check'), null);
+  assert.strictEqual(document.querySelector('input[name="chapLabelSelect"]'), null);
+});
+
+test('a screenplay project\'s plaintext options keep the italics and tabs rows but not the chapter rows', function(t){
+  showForScreenplay();
+
+  assert.ok(document.getElementById('convert-italics-check'));
+  assert.ok(document.getElementById('convert-tabs-check'));
+  assert.strictEqual(document.getElementById('split-chaps-check'), null);
+  assert.strictEqual(document.getElementById('convert-first-lines-check'), null);
+
+  //Disabled while a script format is selected, enabled once Plain Text is.
+  var plainTextOptionsSet = document.getElementById('convert-italics-check').closest('fieldset');
+  assert.strictEqual(plainTextOptionsSet.disabled, true);
+  checkAndFireChange(document.getElementById('txtSelect'));
+  assert.strictEqual(plainTextOptionsSet.disabled, false);
+});
+
+test('a novel project\'s dialog offers the prose formats and none of the script formats', function(t){
+  var showImportOptions = freshImportDisplay({ initiateImport: function(){} });
+  showImportOptions({ docs: '/proj/docs' }, function(){}, function(){}, { type: 'novel' });
+
+  assert.deepStrictEqual(offeredTypeIds(), ['docxSelect', 'txtSelect', 'mdfcSelect', 'htmlSelect', 'epubSelect']);
+  assert.strictEqual(document.getElementById('docxSelect').checked, true);
+  assert.ok(document.querySelector('input[name="chapLabelSelect"]'));
+});
+
+//A dialog opened with no project at all is the novel dialog, and leaves the script formats out the
+//same way - nothing about a missing project should hand them back.
+test('a dialog opened without a project leaves the script formats out too', function(t){
+  var showImportOptions = freshImportDisplay({ initiateImport: function(){} });
+  showImportOptions({ docs: '/proj/docs' }, function(){}, function(){});
+
+  assert.deepStrictEqual(offeredTypeIds(), ['docxSelect', 'txtSelect', 'mdfcSelect', 'htmlSelect', 'epubSelect']);
+});
+
+//The submit path reads the chosen type back out of the filetypes array by the radio's index, so a
+//filtered list has to stay in step with the radios built from it: the last prose type must send
+//itself, not whatever sat at that index before the script formats were dropped.
+test('a novel project submits the file type its last radio names', function(t){
+  var capturedOptions;
+  var showImportOptions = freshImportDisplay({
+    initiateImport: function(sysDirectories, options){ capturedOptions = options; }
+  });
+  showImportOptions({ docs: '/proj/docs' }, function(){}, function(){}, { type: 'novel' });
+
+  checkAndFireChange(document.getElementById('epubSelect'));
+  document.querySelector('form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+
+  assert.strictEqual(capturedOptions.fileType.id, 'epubSelect');
+  assert.deepStrictEqual(capturedOptions.fileType.extensions, ['epub']);
+});
+
+test('submitting a screenplay project\'s dialog sends the Fountain type without touching the missing controls', function(t){
+  var capturedOptions;
+  showForScreenplay({
+    initiateImport: function(sysDirectories, options){ capturedOptions = options; }
+  });
+
+  document.querySelector('form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+
+  assert.strictEqual(capturedOptions.fileType.id, 'fountainSelect');
+  assert.strictEqual(capturedOptions.txtOptions.chapLabels, 'firstLine');
+});
+
+//Plain text in a screenplay project is one Reference document: whatever the plaintext rows would
+//have said about chapters, the importer is told not to split or retitle it.
+test('a screenplay project\'s plain text import asks for no chapter splitting or first-line titles', function(t){
+  var capturedOptions;
+  showForScreenplay({
+    initiateImport: function(sysDirectories, options){ capturedOptions = options; }
+  });
+
+  checkAndFireChange(document.getElementById('txtSelect'));
+  document.querySelector('form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+
+  assert.strictEqual(capturedOptions.fileType.id, 'txtSelect');
+  assert.strictEqual(capturedOptions.txtOptions.splitChapters.split, false);
+  assert.strictEqual(capturedOptions.txtOptions.convertFirstLines, false);
+  assert.strictEqual(capturedOptions.txtOptions.convertItalics.convert, true);
 });

@@ -1,4 +1,4 @@
-const { codeForKey } = require('../models/shortcuts');
+const { codeForKey, getShortcutDef } = require('../models/shortcuts');
 
 function getTempQuill(){
   const Quill = require('quill');
@@ -89,6 +89,10 @@ function flattenInserts(ops){
     if(ops[i].insert == '\n')
       flattened.push(ops[i]);
     else{
+      //Every character of an op carries its attributes, the newlines included: Quill merges
+      //adjacent ops with equal attributes, so two empty lines of the same type come back as one
+      //"\n\n" op with the line format on it, and a newline split out without the attributes
+      //would read as a plain paragraph.
       var lines = ops[i].insert.split('\n');
       for(let l=0;l<lines.length;l++){
         var op = { insert: lines[l] };
@@ -96,8 +100,12 @@ function flattenInserts(ops){
           op.attributes = ops[i].attributes;
         flattened.push(op);
 
-        if(l != lines.length -1)
-          flattened.push({ insert: '\n'} );
+        if(l != lines.length -1){
+          var newline = { insert: '\n' };
+          if(ops[i].attributes)
+            newline.attributes = ops[i].attributes;
+          flattened.push(newline);
+        }
       }
     }
   }
@@ -271,8 +279,103 @@ const QUILL_HANDLERS = {
   insertFootnote: function(){
     const { insertOrJumpFootnote } = require('./footnote-navigation');
     insertOrJumpFootnote(this.quill);
+  },
+
+  //The screenplay elements (docs/screenplay-plan.md, Phase 4). In the same table as the prose
+  //formatting so applyQuillShortcuts has one list to walk; which of them are bound is decided by
+  //each definition's `mode` in shortcuts.js. Required lazily for the same reason insertFootnote is:
+  //screenplay-editor.js requires this module for parseDelta.
+  //Ctrl+1..6: a new element on a line with text, the type itself on an empty
+  //line or a selection. Ctrl+Alt+1..6 make the current line the type whatever it holds, and so
+  //does Centered on Ctrl+E, which is an alignment there and a reformat here.
+  elementScene: elementHandler('scene'),
+  elementAction: elementHandler('action'),
+  elementCharacter: elementHandler('character'),
+  elementParenthetical: elementHandler('parenthetical'),
+  elementDialogue: elementHandler('dialogue'),
+  elementTransition: elementHandler('transition'),
+  elementCentered: reformatHandler('centered'),
+  reformatScene: reformatHandler('scene'),
+  reformatAction: reformatHandler('action'),
+  reformatCharacter: reformatHandler('character'),
+  reformatParenthetical: reformatHandler('parenthetical'),
+  reformatDialogue: reformatHandler('dialogue'),
+  reformatTransition: reformatHandler('transition'),
+  toggleDualDialogue: function(){
+    const { toggleDual } = require('./screenplay-editor');
+    toggleDual(this.quill);
+  },
+  cycleCase: function(){
+    cycleCase(this.quill);
   }
 };
+
+function elementHandler(type){
+  return function(){
+    const { insertElement } = require('./screenplay-editor');
+    insertElement(this.quill, type);
+  };
+}
+
+function reformatHandler(type){
+  return function(){
+    const { setElement } = require('./screenplay-editor');
+    setElement(this.quill, type);
+  };
+}
+
+//Replaces the text from `index` for `length` with `transform` applied to each run of it, so the
+//inline formats survive, as one user change. Embeds pass through untouched. What the screenplay
+//editor's capitals and the case shortcut below are made of.
+function replaceTextPreservingFormats(quill, index, length, transform){
+  const Quill = require('quill');
+  var Delta = Quill.import('delta');
+  var ops = quill.getContents(index, length).ops;
+  var change = new Delta().retain(index).delete(length);
+
+  ops.forEach(function(op){
+    change.insert(typeof op.insert === 'string' ? transform(op.insert) : op.insert, op.attributes);
+  });
+
+  quill.updateContents(change, 'user');
+}
+
+//Upper/Lower/Title Case: the selection, or the word at the caret, goes to capitals;
+//capitals go to lower case; lower case goes to Title Case. The selection is kept so the key can
+//be pressed again to get the next. Word boundaries are found in the editor's own index space
+//(getIndexableText), so a footnote marker counts as one character as it does to Quill.
+function cycleCase(quill){
+  var range = quill.getSelection(true);
+  if(!range)
+    return;
+
+  if(range.length === 0){
+    var text = getIndexableText(quill);
+    var start = range.index;
+    var end = range.index;
+    while(start > 0 && /[\w'’]/.test(text[start - 1])) start--;
+    while(end < text.length && /[\w'’]/.test(text[end])) end++;
+    if(start === end)
+      return;
+    range = { index: start, length: end - start };
+  }
+
+  var current = quill.getText(range.index, range.length);
+  var transform;
+  if(current === current.toUpperCase() && current !== current.toLowerCase())
+    transform = function(run){ return run.toLowerCase(); };
+  else if(current === current.toLowerCase())
+    transform = titleCase;
+  else
+    transform = function(run){ return run.toUpperCase(); };
+
+  replaceTextPreservingFormats(quill, range.index, range.length, transform);
+  quill.setSelection(range.index, range.length, 'silent');
+}
+
+function titleCase(run){
+  return run.toLowerCase().replace(/(^|[^\w'’])(\w)/g, function(match, before, letter){ return before + letter.toUpperCase(); });
+}
 
 function headingHandler(level){
   return function(){
@@ -327,10 +430,19 @@ const KEY_CODES = {
 //Bold/italic/underline are in the table too, though Quill binds those itself by default. They are
 //in the popup's list, so they have to be rebindable like everything else - which means Quill's own
 //three are switched off where the editors are built (see render.js) and re-added from here.
-function applyQuillShortcuts(q, bindings){
+//`mode` is which kind of document the editor is showing - 'prose' (the default, and the only mode
+//the notes pane has) or 'screenplay' - and decides which of the handlers are bound: an action whose
+//definition carries a mode is bound only in that one, so the prose headings and the screenplay
+//elements can share Ctrl+1..6. Re-applied when the mode changes, which the tagging makes cheap.
+function applyQuillShortcuts(q, bindings, mode){
   removeAppliedBindings(q);
+  mode = mode || 'prose';
 
   Object.keys(QUILL_HANDLERS).forEach(function(id){
+    var def = getShortcutDef(id);
+    if(def && def.mode && def.mode !== mode)
+      return;
+
     var binding = toQuillBinding(bindings ? bindings[id] : null);
 
     if(binding == null)
@@ -455,6 +567,67 @@ function goPageDown(quillObj){
   quillObj.setSelection(textIndex - 1);
 }
 
+//The inverse of goPageDown: back one screenful, leaving the caret at the top of the screen exactly
+//as going down does, so that a page down and a page up are a round trip.
+//
+//The target is the last position a full viewport ABOVE the caret, not the first one off the top of
+//the screen. That distinction is the whole point: stopping at the first position above the fold
+//would move the caret a single line, which is the too-small step that made the native Page Down
+//unusable here and got goPageDown written in the first place.
+function goPageUp(quillObj){
+  var selectedRange = quillObj.getSelection();
+
+  if(!selectedRange)
+    return;
+
+  var startingScrolltop = 0 + quillObj.root.scrollTop;
+  var destinationY = -quillObj.root.clientHeight;
+  var containerTop = quillObj.container.getBoundingClientRect().top;
+
+  var textIndex = selectedRange.index - 1;
+
+  //No clamp to defend against on the way up, unlike goPageDown: Quill clamps a too-LARGE index and
+  //then hands back the last position forever, which is what spun that loop. Index 0 is a real
+  //position, so this walk ends at it.
+  while(textIndex >= 0){
+    var rawBounds = quillObj.selection.getBounds(textIndex, 1);
+    if(rawBounds == null)
+      break;
+
+    var bounds = { top: rawBounds.top - containerTop, height: rawBounds.height };
+
+    if(bounds.top <= destinationY){
+      quillObj.setSelection(textIndex);
+      //bounds.top is negative here - the position is above the screen - so this scrolls up. Held at
+      //zero rather than let past it: a browser would clamp a negative scrollTop silently, and a
+      //number that only works because something else corrects it is not worth writing.
+      quillObj.root.scrollTop = Math.max(0, startingScrolltop + bounds.top - bounds.height);
+      return;
+    }
+
+    textIndex -= 1;
+  }
+
+  //Nothing a screenful above the caret, so this is the first page: land on the opening position,
+  //which is where a native PageUp ends up too.
+  goToStart(quillObj);
+}
+
+//The two ends of whichever document the editor is showing. Slight next to the paging above, and
+//kept beside it for the same reason: Quill binds neither Home nor End, so reaching either end by a
+//shortcut is the app's own doing (see keybindings.js).
+function goToStart(quillObj){
+  quillObj.setSelection(0);
+  quillObj.root.scrollTop = 0;
+}
+
+function goToEnd(quillObj){
+  //getLength() counts the trailing newline Quill always keeps, so the last position a caret can sit
+  //at is the one before it - the same bound goPageDown walks up to.
+  quillObj.setSelection(Math.max(0, quillObj.getLength() - 1));
+  quillObj.root.scrollTop = quillObj.root.scrollHeight;
+}
+
 
 module.exports = {
   getTempQuill,
@@ -469,5 +642,10 @@ module.exports = {
   getListLevel,
   getListMarker,
   applyQuillShortcuts,
-  goPageDown
+  replaceTextPreservingFormats,
+  cycleCase,
+  goPageDown,
+  goPageUp,
+  goToStart,
+  goToEnd
 }

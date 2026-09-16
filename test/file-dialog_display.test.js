@@ -128,6 +128,29 @@ test('save dialog: an empty filters list does not throw and defaults the filenam
   assert.strictEqual(filenameIn.value, '');
 });
 
+//A screenplay export starts the name from the project title; everything else keeps the bare
+//extension it always had, and a blank title is the same as none.
+test('save dialog: defaultFilename pre-fills the box with the name and the extension', async function(t){
+  var showFileDialog = freshFileDialogDisplay({
+    getFileList: async function(){ return []; }
+  });
+
+  //Each call adds a dialog of its own, so the newest box is the last one on the page.
+  function latestBox(){
+    var boxes = document.querySelectorAll('.save-input[type="text"]');
+    return boxes[boxes.length - 1];
+  }
+
+  await showFileDialog(baseOptions({ defaultFilename: 'Big Fish' }), function(){});
+  assert.strictEqual(latestBox().value, 'Big Fish.docx');
+
+  await showFileDialog(baseOptions({ defaultFilename: '   ' }), function(){});
+  assert.strictEqual(latestBox().value, '.docx');
+
+  await showFileDialog(baseOptions(), function(){});
+  assert.strictEqual(latestBox().value, '.docx');
+});
+
 test('open dialog: pressing Enter on a directory entry navigates into it', async function(t){
   var getFileListCalls = [];
   var showFileDialog = freshFileDialogDisplay({

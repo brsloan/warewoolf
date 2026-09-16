@@ -9,6 +9,8 @@ const { getCorkboardForExport } = require('./corkboard');
 const { convertToPlainText } = require('./quill-utils');
 const { getTotalWordCount } = require('./wordcount');
 const { markSceneBreaks } = require('./mark-scene-breaks');
+const { serializeFountain, deltaToElements } = require('./fountain');
+const { screenplayToPrintHtml, elementsToFdx } = require('./screenplay-export');
 const { createPlatform } = require('./platform');
 const { createIpcBacking } = require('./platform-ipc');
 const notesNamePrepend = '-notes_';
@@ -130,6 +132,43 @@ async function exportProject(project, userSettings, options, filepath, cback = f
     cback(errorCount);
 }
 
+//A screenplay is one script, so its export is one file wherever the writer chose to put it - a
+//Save As, not a directory of numbered chapters (docs/screenplay-plan.md, Phase 7). `filepath`
+//already carries the extension the file dialog settled on; `type` says which of the four formats
+//to write into it. Rejects on failure so the dialog can say so.
+async function exportScreenplayFile(project, chapter, type, filepath){
+  var delta = await chapter.getContentsOrFile();
+  var elements = deltaToElements(delta);
+  var titlePage = project.titlePage || [];
+
+  switch(type){
+    case '.pdf':
+      await platform.printToPdf({ path: filepath, html: screenplayToPrintHtml(titlePage, elements) });
+      break;
+    case '.fdx':
+      await platform.writeTextFile({ path: filepath, contents: elementsToFdx(titlePage, elements) });
+      break;
+    case '.fountain':
+      await platform.writeTextFile({ path: filepath, contents: serializeFountain(titlePage, elements) });
+      break;
+    case '.txt':
+      await platform.writeTextFile({ path: filepath, contents: convertToPlainText(delta) });
+      break;
+    default:
+      throw new Error('No screenplay export for "' + type + '".');
+  }
+}
+
+//The script of a screenplay project: the active document when it is one, otherwise the first
+//.fountain document in Chapters. Null for a project with no script at all.
+function screenplayChapter(project){
+  var isScript = function(chap){ return chap && (chap.format === 'fountain' || /\.fountain$/i.test(chap.filename || '')); };
+  var active = project.getActiveChapter ? project.getActiveChapter() : null;
+  if(isScript(active))
+    return active;
+  return (project.chapters || []).find(isScript) || null;
+}
+
 //.txt/.mdfc/.md/.html are awaited directly rather than routed through taskStarted/taskDone: their
 //writes are a single platform call each with no further async work of their own (unlike .docx and
 //.epub, which finish on their own callback well after this returns), so awaiting them here is what
@@ -149,10 +188,25 @@ async function exportChapter(project, chapterTitle, author, chapDelta, filepathN
             await exportChapAsMd(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.generateTitlePage);
             break;
         case ".html":
-            await exportChapAsHtml(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.generateTitlePage);
+            await exportChapAsHtml(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.generateTitlePage, options.htmlMaxWidth, options.justifyLeftAligned);
             break;
         case ".epub":
-            exportChapAsEpub(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.generateTitlePage, taskStarted, taskDone);
+            exportChapAsEpub(project.title, chapterTitle, author, chapDelta, filepathNameNoExt, options.generateTitlePage, options.justifyLeftAligned, taskStarted, taskDone);
+            break;
+        //The screenplay formats (docs/screenplay-plan.md, Phase 7). A document that is not a
+        //script - a Reference note beside one - goes out the same way, as action lines, which is
+        //what Fountain would make of it too.
+        case ".fountain":
+            await platform.writeTextFile({ path: filepathNameNoExt + ".fountain",
+              contents: serializeFountain(project.titlePage || [], deltaToElements(chapDelta)) });
+            break;
+        case ".fdx":
+            await platform.writeTextFile({ path: filepathNameNoExt + ".fdx",
+              contents: elementsToFdx(project.titlePage || [], deltaToElements(chapDelta)) });
+            break;
+        case ".pdf":
+            await platform.printToPdf({ path: filepathNameNoExt + ".pdf",
+              html: screenplayToPrintHtml(project.titlePage || [], deltaToElements(chapDelta)) });
             break;
         default:
             console.log("No valid filetype selected for export.");
@@ -188,14 +242,14 @@ async function exportChapAsMd(projectTitle, chapTitle, author, chapDelta, filepa
   await platform.writeTextFile({ path: filepathNameNoExt + '.md', contents: convertMdfcToMd(convertDeltaToMDF(chapDelta)) });
 }
 
-async function exportChapAsHtml(projectTitle, chapTitle, author, chapDelta, filepathNameNoExt, generateTitlePage){
+async function exportChapAsHtml(projectTitle, chapTitle, author, chapDelta, filepathNameNoExt, generateTitlePage, maxWidth, justifyLeft){
   await platform.writeTextFile({
     path: filepathNameNoExt + '.html',
-    contents: convertMdfcToHtmlPage(convertDeltaToMDF(chapDelta), projectTitle + ": " + chapTitle, author, generateTitlePage)
+    contents: convertMdfcToHtmlPage(convertDeltaToMDF(chapDelta), projectTitle + ": " + chapTitle, author, generateTitlePage, maxWidth, justifyLeft)
   });
 }
 
-function exportChapAsEpub(projectTitle, chapTitle, author, chapDelta, filepathNameNoExt, generateTitlePage, taskStarted, taskDone){
+function exportChapAsEpub(projectTitle, chapTitle, author, chapDelta, filepathNameNoExt, generateTitlePage, justifyLeft, taskStarted, taskDone){
   var htmlChap = {
         title: chapTitle,
         html: convertMdfcToHtml(convertDeltaToMDF(chapDelta))
@@ -205,7 +259,7 @@ function exportChapAsEpub(projectTitle, chapTitle, author, chapDelta, filepathNa
   //Same reasoning as exportChapAsDocx: guard against a synchronous throw leaving pendingTasks
   //stuck above zero forever.
   try{
-    htmlChaptersToEpub(projectTitle + ': ' + chapTitle, author, [htmlChap], filepathNameNoExt + '.epub', generateTitlePage, function(resp){
+    htmlChaptersToEpub(projectTitle + ': ' + chapTitle, author, [htmlChap], filepathNameNoExt + '.epub', generateTitlePage, justifyLeft, function(resp){
       console.log('epub exported: ' + resp);
       taskDone(resp === 'error');
     });
@@ -222,5 +276,7 @@ function generateChapterFilename(num, title, what){
 }
 
 module.exports = {
-  exportProject
+  exportProject,
+  exportScreenplayFile,
+  screenplayChapter
 }

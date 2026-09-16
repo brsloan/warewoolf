@@ -151,6 +151,90 @@ test('does not throw when the project has no chapters', function(t){
   assert.strictEqual(document.querySelectorAll('#outliner-table tr').length, 1, 'only the header row should be present');
 });
 
+//---- a screenplay project -----------------------------------------------------------------------
+
+//A screenplay project's Chapters list holds one script, so the outline is of the scenes in it:
+//a row per heading, the pages the scene fills said in eighths the way Page Count says the script's
+//own length, and no word count or words-per-page estimate, neither of which measures a screenplay.
+function makeScript(fountain){
+  const { parseFountain, elementsToDelta } = require('../src/components/controllers/fountain');
+  var parsed = parseFountain(fountain);
+
+  return {
+    title: 'Script',
+    getContentsOrFile: function(){ return elementsToDelta(parsed.elements); }
+  };
+}
+
+const A_SCRIPT = 'INT. HOUSE - DAY\n\n= She finds the letter.\n\nAction.\n\nEXT. STREET - NIGHT\n\nBOB\nHi.\n';
+
+test('a screenplay project is outlined by scene, with pages in eighths and the synopsis as the summary', async function(){
+  var showOutliner = require(outlinerDisplayPath);
+
+  await showOutliner(makeProject({ chapters: [] }), makeSettings(), makeScript(A_SCRIPT));
+
+  var headers = Array.from(document.querySelectorAll('#outliner-table th')).map(function(h){ return h.innerText; });
+  assert.deepStrictEqual(headers, ['', 'Title', 'Page', 'Pgs', 'Summary']);
+
+  var titles = Array.from(document.querySelectorAll('.outliner-title')).map(function(c){ return c.innerText; });
+  assert.deepStrictEqual(titles, ['INT. HOUSE - DAY', 'EXT. STREET - NIGHT']);
+
+  var starts = Array.from(document.querySelectorAll('.outliner-page-start')).map(function(c){ return c.innerText; });
+  assert.deepStrictEqual(starts, [1, 1], 'both scenes of a short script begin on page one');
+
+  var pages = Array.from(document.querySelectorAll('.outliner-page-count')).map(function(c){ return c.innerText; });
+  assert.deepStrictEqual(pages, ['0 1/8', '0 1/8']);
+
+  var summaries = Array.from(document.querySelectorAll('.outliner-synopsis')).map(function(c){ return c.innerText; });
+  assert.deepStrictEqual(summaries, ['She finds the letter.', ''], 'a scene with no synopsis has no summary');
+});
+
+//Where a scene falls, not how long it runs: the writer reading down the column is looking for the
+//page they would turn to, so a scene pushed onto page two says 2 however short it is.
+test('the page column is the page each scene begins on', async function(){
+  var showOutliner = require(outlinerDisplayPath);
+
+  var script = 'INT. HOUSE - DAY\n\n' + 'Action.\n\n'.repeat(40) + 'EXT. STREET - NIGHT\n\nAction.\n';
+  await showOutliner(makeProject({ chapters: [] }), makeSettings(), makeScript(script));
+
+  var starts = Array.from(document.querySelectorAll('.outliner-page-start')).map(function(c){ return c.innerText; });
+  assert.deepStrictEqual(starts, [1, 2]);
+});
+
+//The two prose columns are gone rather than left empty: a word count says nothing about a script,
+//and the words-per-page estimate is a prose figure the screenplay dialogs do not offer at all.
+test('a screenplay outline shows neither the word count nor the words-per-page page estimate', async function(){
+  var showOutliner = require(outlinerDisplayPath);
+
+  await showOutliner(makeProject({ chapters: [] }), makeSettings({ wordsPerPage: 2 }), makeScript(A_SCRIPT));
+
+  assert.strictEqual(document.querySelectorAll('.outliner-word-count').length, 0);
+  assert.ok(Array.from(document.querySelectorAll('.outliner-page-count')).every(function(c){
+    return c.innerText.indexOf('~') === -1;
+  }), 'the page cells are script pages, not the prose estimate');
+});
+
+//A script with nothing in it yet, or one whose opening action has no heading over it: the table is
+//its header row and nothing else, and Close still takes the focus.
+test('a script with no scene headings leaves an empty table and focuses Close', async function(){
+  var showOutliner = require(outlinerDisplayPath);
+
+  await showOutliner(makeProject({ chapters: [] }), makeSettings(), makeScript('FADE IN:\n'));
+
+  assert.strictEqual(document.querySelectorAll('#outliner-table tr').length, 1);
+  assert.strictEqual(document.activeElement.textContent, 'Close');
+});
+
+test('the screenplay outline is a named dialog', async function(){
+  var showOutliner = require(outlinerDisplayPath);
+
+  await showOutliner(makeProject({ chapters: [] }), makeSettings(), makeScript(A_SCRIPT));
+
+  var popup = document.querySelector('.popup');
+  assertDialogDescribed(popup, 'dialog');
+  assertControlsNamed(popup);
+});
+
 //The outliner has no heading of its own, so it is named outright, and each summary box - a bare
 //field in a table cell - says which chapter it belongs to.
 test('the outliner is a named dialog and each summary field says which chapter it is for', async function(){

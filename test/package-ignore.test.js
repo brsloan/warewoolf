@@ -38,6 +38,8 @@ const DEV_ONLY = [
   '/docs/upgrade-and-isolation-plan.md',
   '/.github/workflows/release.yml',
   '/.gitignore',
+  '/.gitattributes',
+  '/scripts/setup-writerdeck.sh',
   '/README.md',
   '/error_log.txt',
   '/user-settings.json',

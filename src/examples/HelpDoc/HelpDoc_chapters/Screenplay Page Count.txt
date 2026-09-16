@@ -1,0 +1,18 @@
+[>c] # Screenplay: Page Count
+
+A novel is measured in words and a screenplay in pages: a page a minute is the old rule, and it is how long a script is said to be. So in a screenplay project the Word Count item on the Tools menu reads ***Page Count*** (**CMD/CTRL + 8**), and shows three things and no word figures at all.
+* **Script pages (estimate)** — how long the script is.
+* **Session (estimate)** — how much longer or shorter the script has grown since you opened it.
+* **Goal (pages)** — your own target, with the progress bar that fills from red to green as you reach it. It is remembered with the project.
+
+## Eighths
+A script is written as “112 (111 3/8)”: it ends on page 112, having filled 111 pages and three eighths of the next. The whole number rounds up, since a part-filled page is still a page, and the figure in brackets is the length itself. Eighths are how a script is broken down for a schedule, so they are how the length of anything shorter than a page is said. The session figure is written the same way, and so is the length of each scene in the Outliner.
+
+## What Is Counted
+The estimate is a layout, not a division. WareWoolf lays the script out as the printed page has it—the margins for each kind of element, a blank line between elements and none inside a speech, and the rule that a page never turns between a scene heading, a cue or a parenthetical and what it introduces—and counts the lines. It is the same layout the exported PDF uses, so the two agree.
+	Sections, synopses, notes and boneyards take no space in it. They are not printed, so a script does not become a page longer because you have left yourself notes in it.
+	Because it is an estimate of a print page rather than a measurement of one, treat it as close rather than exact.
+
+## Page Turns In The Editor
+Where a page is estimated to turn, the editor draws a dotted rule across the script with the page number at its right, in the gap above the line that begins the new page. It is not text and cannot be typed into or selected; it moves as you write.
+	If you would rather not see them, **File > Settings** has ***Mark Estimated Page Turns In Scripts***.

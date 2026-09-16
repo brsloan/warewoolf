@@ -210,41 +210,55 @@ async function showEmailOptions(project, userSettings, platform, editorQuill){
     responseText.innerText = "";
     attachSet.appendChild(responseText);
 
+    //Each name and its button in one .radio-option, so three choices on one line break between
+    //choices rather than between a choice and the button that answers it.
+    var chapOption = document.createElement('span');
+    chapOption.classList.add('radio-option');
+    attachSet.appendChild(chapOption);
+
     var chapRadioLabel = document.createElement('label');
     chapRadioLabel.innerText = "Send Chapter";
     chapRadioLabel.htmlFor = 'email-radio-chap';
-    attachSet.appendChild(chapRadioLabel);
+    chapOption.appendChild(chapRadioLabel);
 
     var chapRadio = document.createElement('input');
     chapRadio.type = 'radio';
     chapRadio.name = 'email-radio';
     chapRadio.id = 'email-radio-chap';
     chapRadio.value = 'chapter';
-    attachSet.appendChild(chapRadio);
+    chapOption.appendChild(chapRadio);
+
+    var compiledOption = document.createElement('span');
+    compiledOption.classList.add('radio-option');
+    attachSet.appendChild(compiledOption);
 
     var compiledRadioLabel = document.createElement('label');
     compiledRadioLabel.innerText = " | Send Compiled";
     compiledRadioLabel.htmlFor = 'email-radio-compiled';
-    attachSet.appendChild(compiledRadioLabel);
+    compiledOption.appendChild(compiledRadioLabel);
 
     var compiledRadio = document.createElement('input');
     compiledRadio.type = 'radio';
     compiledRadio.name = 'email-radio';
     compiledRadio.id = 'email-radio-compiled';
     compiledRadio.value = 'compiled';
-    attachSet.appendChild(compiledRadio);
+    compiledOption.appendChild(compiledRadio);
+
+    var projectOption = document.createElement('span');
+    projectOption.classList.add('radio-option');
+    attachSet.appendChild(projectOption);
 
     var projectRadioLabel = document.createElement('label');
     projectRadioLabel.innerText = " | Send Project";
     projectRadioLabel.htmlFor = 'email-radio-project';
-    attachSet.appendChild(projectRadioLabel);
+    projectOption.appendChild(projectRadioLabel);
 
     var projectRadio = document.createElement('input');
     projectRadio.type = 'radio';
     projectRadio.name = 'email-radio';
     projectRadio.id = 'email-radio-project';
     projectRadio.value = 'project';
-    attachSet.appendChild(projectRadio);
+    projectOption.appendChild(projectRadio);
 
     attachSet.appendChild(document.createElement('br'));
 

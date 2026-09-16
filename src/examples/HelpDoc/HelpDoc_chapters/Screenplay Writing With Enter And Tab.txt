@@ -1,0 +1,30 @@
+[>c] # Screenplay: Writing With Enter And Tab
+
+A screenplay is not written in paragraphs but in ***elements***: a scene heading, a line of action, a character cue, a parenthetical, a line of dialogue, a transition. Each sits differently on the page, and getting that layout right by hand is most of what screenplay software is for.
+	In WareWoolf you get it from **Enter** and **Tab**. Between them they walk you round the shape a scene has, and you never type a markup character of your own.
+
+## Enter
+What **Enter** does depends on where the caret is on the line.
+* At the end of a line, it opens the line that usually comes next: a scene heading is followed by action, a character cue by dialogue, a parenthetical by dialogue, a speech or a line of action by more action, and a transition by a scene heading.
+* In the middle of a line, it splits the line in two, both halves keeping the type.
+* At the start of a line, it pushes the line down and leaves you on an empty line of the same type above it.
+* On an empty line that is not action, it makes that line action. That is the way out of a type you chose by mistake, without reaching for a shortcut.
+Why is action what follows a speech, rather than the next character’s cue? Because a beat of action between two speeches is far more common than two speeches running together—and where it is not, **Tab** on that empty action line is a single key to the next cue.
+
+## Tab
+**Tab** asks for the element you would most likely reach for next from where you are.
+* On an action line, it makes the line a character cue.
+* On a cue or a line of dialogue, it opens a parenthetical underneath, with the caret between the brackets.
+* On a parenthetical, it opens the dialogue under it.
+* On an empty scene heading, it types the “INT. ” a heading almost always begins with.
+* On a scene heading you have written a place into, it adds the “ - ” that the time of day follows, and offers you the times.
+* On a transition, it opens a line of action under it.
+
+## Shift+Enter
+**SHIFT + Enter** gives you a new line of the same type with no blank line between it and the one above: a second paragraph of action that belongs with the first, or a line break inside a speech.
+
+## What Is Done For You
+You never have to shout. A scene heading, a character cue and a transition are kept in capitals as you type them, whatever case you type in, and they are written into the file that way too.
+	Type “INT. ” at the start of an action line—or EXT., EST., INT./EXT.—and the line becomes a scene heading on the space, so a new scene needs nothing from you but the words. In the same way, an action line that reads as a transition (capitals ending in “TO:”) becomes one when you press Enter at the end of it.
+	When the same character speaks again in the same scene after a beat of action, their cue is given “(CONT'D)” as you leave it.
+	Inside a parenthetical, Enter just before the closing bracket counts as the end of the line rather than as a split, so you can type the aside and carry on into the speech without stepping over the bracket yourself. (**SHIFT + Enter** is still the way to a second line inside one.) Trailing spaces are stepped over in the same way, so they never start the next line.

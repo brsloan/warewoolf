@@ -33,19 +33,28 @@ async function showSpellcheck(editorQuill, project, displayChapterByIndex, start
     var suggestions = document.createElement("ul");
 
     if(invalidWord != null && invalidWord.suggestions.length > 0){
+      //One .radio-option item per suggestion. The buttons and their words used to be dropped
+      //straight into the list as a flat run, so a row of suggestions too wide for the dialog broke
+      //between a button and the word it offers - and a list of near-identical spellings of the same
+      //word is exactly where being one line out about which button means which is worst. The item
+      //holds the pair on one line and lets the list break between suggestions.
       for(let i=0;i<invalidWord.suggestions.length;i++){
+        var sugItem = document.createElement("li");
+        sugItem.classList.add("radio-option");
+        suggestions.appendChild(sugItem);
+
         var sugLi = document.createElement("input");
         sugLi.type = "radio";
         sugLi.name = "suggestions";
         sugLi.id = "suggestion-" + i;
         sugLi.value = invalidWord.suggestions[i];
-        suggestions.appendChild(sugLi);
+        sugItem.appendChild(sugLi);
         var sugLabel = document.createElement("label");
         sugLabel.htmlFor = sugLi.id;
         sugLabel.innerText = (i + 1) + ": " + invalidWord.suggestions[i];
         if(i==0)
           sugLi.checked = true;
-        suggestions.appendChild(sugLabel);
+        sugItem.appendChild(sugLabel);
       }
     }
     else {

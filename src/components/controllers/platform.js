@@ -141,6 +141,7 @@ var EVENTS = [
   'outliner-clicked', 'properties-clicked', 'reboot-clicked', 'renumber-chapters-clicked',
   'restore-chapter-clicked',
   'save-as-clicked', 'save-backup-clicked', 'save-clicked', 'save-copy-clicked',
+  'screenplay-names-clicked',
   'send-via-email-clicked', 'settings-clicked', 'shortcuts-clicked', 'spellcheck-clicked',
   'split-chapter-clicked', 'tab-indent-paragraphs-clicked', 'view-error-log-clicked',
   'wifi-manager-clicked', 'word-count-clicked',
@@ -165,6 +166,19 @@ var COMMANDS = {
   showAppMenu: { group: 'A', params: [], returns: 'void' },
   confirmExit: { group: 'A', params: [], returns: 'void' },
   notifyRendererReady: { group: 'A', params: [], returns: 'void' },
+  //A screenplay's PDF export (docs/screenplay-plan.md, Phase 7). The renderer builds the page as
+  //HTML; printing it is a main-process affair (a hidden window and webContents.printToPDF), so it
+  //is a command here rather than anything the renderer could do. Group A because the backing
+  //reaches it through a callback index.js supplies, like setTheme. Tauri: a webview print API.
+  printToPdf: { group: 'A', params: ['html', 'path'], returns: 'void',
+    note: 'Letter, an inch and a half on the left and an inch elsewhere, a page number top right. Rejects UNAVAILABLE where no printer callback was supplied (tests, a headless backing).' },
+  //What the application menu is for: `project` is \'novel\' | \'screenplay\', `document` is
+  //\'prose\' | \'screenplay\' (the document in the editor - a Reference note in a screenplay project
+  //is prose). The host rebuilds the menu from it (app-menu.js): Word Count reads Page Count for a
+  //screenplay project, the manuscript conversions are disabled for one, and the chapter tools are
+  //disabled while a script is showing. Group A, like setTheme: the menu is the host's. Sent by
+  //render.js whenever either changes. Tauri: the menu API.
+  setMenuMode: { group: 'A', params: ['project', 'document'], returns: 'void' },
 
   // --- B. Project lifecycle -----------------------------------------------------------------
   openProject: { group: 'B', params: ['path'],
@@ -201,12 +215,17 @@ var COMMANDS = {
 
   // --- C. Chapter I/O -----------------------------------------------------------------------
   loadChapter: { group: 'C', params: ['projectDir', 'chapsDir', 'filename'], returns: 'mdfc text' },
+  //`extension` is the one the allocated filename ends in: ".txt" when absent, or ".fountain" for a
+  //screenplay project's script (docs/screenplay-plan.md, Phase 2). A closed list on the native
+  //side, since it is the tail of a filename the command writes to. `mdfc` is the file's text in
+  //either format - the name predates the second format and is not worth a contract change.
   saveChapter: { group: 'C', params: ['projectDir', 'chapsDir', 'title', 'mdfc'],
+    optional: ['extension'],
     returns: '{ filename }',
     note: 'Save Copy (chapter.js:107-120): allocate a fresh name and write. No old file, so no transaction.' },
   saveChapterAtomic: { group: 'C',
     params: ['projectDir', 'chapsDir', 'oldFilename', 'title', 'mdfc'],
-    optional: ['notesMdfc'],
+    optional: ['notesMdfc', 'extension'],
     returns: '{ filename, notesFilename }',
     note: 'Takes the title and returns the allocated filename - it does not take one. See the node backing below for why.' },
   deleteChapterFiles: { group: 'C', params: ['projectDir', 'chapsDir', 'filename'], returns: 'void' },
@@ -280,7 +299,7 @@ var COMMANDS = {
   //all three sample books does - so without the .css entries every class-driven italic in the book
   //resolves to nothing, which is the exact failure html-import.js exists to avoid.
   importEpub: { group: 'F', params: ['path'], returns: '{ entries: { [path]: string } }',
-    note: 'Text entries only - xhtml/html/xml/opf/ncx/css/txt, plus the "mimetype" file. Images, fonts and audio are never read, which is where "images are stripped" is actually enforced: they cannot reach the renderer to be stripped later. Paths are archive-relative with forward slashes, exactly as the zip stores them, because that is what the hrefs inside container.xml/the OPF/the nav document resolve against.' },
+    note: 'Text entries only - xhtml/html/xml/opf/ncx/css/txt, plus the "mimetype" file. Images, fonts and audio are never read, which is where "images are stripped" is actually enforced: they cannot reach the renderer to be stripped later. Paths are archive-relative with forward slashes, exactly as the zip stores them, because that is what the hrefs inside container.xml/the OPF/the nav document resolve against. The Fade In import (import.js\'s readFadeIn) reads its zip through this same command: a .fadein is one document.xml in an archive, and this is already "the text entries of a zip".' },
 
   // --- G. Export and compile ----------------------------------------------------------------
   ensureDirectory: { group: 'G', params: ['path'], returns: 'void' },

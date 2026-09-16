@@ -1,0 +1,20 @@
+[>c] # Screenplay: Importing And Exporting
+
+## Exporting
+A screenplay is one script, so exporting it is a Save As of one file rather than a folder of numbered chapters. **File > Export** in a screenplay project asks two things: which format, and where to put it.
+* **PDF** — the script laid out as a script: Courier Prime twelve point, the standard margins, the title page in front, and a page that never turns between a scene heading, a cue or a parenthetical and what follows it. This is the one to send to someone who is going to read it.
+* **Final Draft (.fdx)** — for anyone working in Final Draft, and for most other screenplay programs, which read it.
+* **Fountain (.fountain)** — the format the script is already saved in, written out wherever you want a copy.
+* **Plain Text (.txt)** — the words of the script with no markup and no layout at all.
+Sections, synopses, notes and boneyards are yours and not the reader’s, so they are left out of the PDF. The other three formats keep them.
+	There is no Compile in a screenplay project—it is greyed out—because there is nothing to compile: the script is already one document.
+	Export always writes the script, whichever document you happen to be in when you open it: the Reference documents beside a script are not exported. If what you are editing is itself a script—a block of scenes you have set aside in Reference or in Trash—then that is what is written out.
+
+## Importing
+**File > Import** in a screenplay project offers the script formats first, and the prose ones not at all:
+* **Fountain** (.fountain, .txt)
+* **Final Draft** (.fdx)
+* **Fade In** (.fadein)
+* **Plain Text**, which comes in as a ***Reference*** document beside the script rather than as part of it. (Chapter splitting and the chapter-label choice are left out for the same reason: one document does not split.)
+An imported script ***takes the place of*** the project’s script, title page and all, since a screenplay project holds one script. The script it replaces is not thrown away: it goes to Trash as one document, from where Restore puts its scenes back.
+	The other way round, a novel project’s Import dialog leaves the script formats out. A script has no business arriving as a chapter of a novel, in a project whose sidebar, word count and export would all treat it as prose.

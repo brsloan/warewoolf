@@ -139,6 +139,28 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
 
   substitutionTbl.appendChild(generateRow(autocorrectLabel, autocorrectCheck));
 
+  var autocompleteLabel = document.createElement('label');
+  autocompleteLabel.innerText = 'Suggest Names, Places And Times In Scripts: ';
+  autocompleteLabel.htmlFor = 'screenplay-autocomplete-check';
+
+  var autocompleteCheck = document.createElement('input');
+  autocompleteCheck.type = 'checkbox';
+  autocompleteCheck.id = 'screenplay-autocomplete-check';
+  autocompleteCheck.checked = userSettings.screenplayAutocomplete !== false;
+
+  substitutionTbl.appendChild(generateRow(autocompleteLabel, autocompleteCheck));
+
+  var pageMarksLabel = document.createElement('label');
+  pageMarksLabel.innerText = 'Mark Estimated Page Turns In Scripts: ';
+  pageMarksLabel.htmlFor = 'screenplay-page-marks-check';
+
+  var pageMarksCheck = document.createElement('input');
+  pageMarksCheck.type = 'checkbox';
+  pageMarksCheck.id = 'screenplay-page-marks-check';
+  pageMarksCheck.checked = userSettings.screenplayPageMarks !== false;
+
+  substitutionTbl.appendChild(generateRow(pageMarksLabel, pageMarksCheck));
+
   //Shown as what is in force - the defaults with the writer's saved changes over them - rather
   //than as the stored overrides, which are only the handful that differ.
   var rules = resolveAutocorrect(userSettings.autocorrect);
@@ -178,6 +200,13 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
 
   appearanceSet.appendChild(document.createElement('br'));
 
+  //Each choice and its name in one .radio-option: the three sit on lines of their own, and
+  //the wrapper keeps a name from being carried off its own button when a line is too narrow
+  //to hold the pair.
+  var darkModeSysOption = document.createElement('span');
+  darkModeSysOption.classList.add('radio-option');
+  appearanceSet.appendChild(darkModeSysOption);
+
   var darkModeSys = document.createElement('input');
   darkModeSys.type = 'radio';
   darkModeSys.name = 'dark-mode';
@@ -185,14 +214,18 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
   darkModeSys.id = 'dark-mode-sys';
   if(userSettings.darkMode == 'system' || (userSettings.darkMode != 'dark' && userSettings.darkMode != 'light'))
     darkModeSys.checked = true;
-  appearanceSet.appendChild(darkModeSys);
+  darkModeSysOption.appendChild(darkModeSys);
 
   var darkModeSysLabel = document.createElement('label');
   darkModeSysLabel.innerText = "System Default";
   darkModeSysLabel.htmlFor = 'dark-mode-sys';
-  appearanceSet.appendChild(darkModeSysLabel);
+  darkModeSysOption.appendChild(darkModeSysLabel);
 
   appearanceSet.appendChild(document.createElement('br'));
+
+  var darkModeDarkOption = document.createElement('span');
+  darkModeDarkOption.classList.add('radio-option');
+  appearanceSet.appendChild(darkModeDarkOption);
 
   var darkModeDark = document.createElement('input');
   darkModeDark.type = 'radio';
@@ -201,14 +234,18 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
   darkModeDark.id = 'dark-mode-dark';
   if(userSettings.darkMode == 'dark')
     darkModeDark.checked = true;
-  appearanceSet.appendChild(darkModeDark);
+  darkModeDarkOption.appendChild(darkModeDark);
 
   var darkModeDarkLabel = document.createElement('label');
   darkModeDarkLabel.innerText = "Dark";
   darkModeDarkLabel.htmlFor = 'dark-mode-dark';
-  appearanceSet.appendChild(darkModeDarkLabel);
+  darkModeDarkOption.appendChild(darkModeDarkLabel);
 
   appearanceSet.appendChild(document.createElement('br'));
+
+  var darkModeLightOption = document.createElement('span');
+  darkModeLightOption.classList.add('radio-option');
+  appearanceSet.appendChild(darkModeLightOption);
 
   var darkModeLight = document.createElement('input');
   darkModeLight.type = 'radio';
@@ -217,12 +254,12 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
   darkModeLight.id = 'dark-mode-light';
   if(userSettings.darkMode == 'light')
     darkModeLight.checked = true;
-  appearanceSet.appendChild(darkModeLight);
+  darkModeLightOption.appendChild(darkModeLight);
 
   var darkModeLightLabel = document.createElement('label');
   darkModeLightLabel.innerText = "Light";
   darkModeLightLabel.htmlFor = 'dark-mode-light';
-  appearanceSet.appendChild(darkModeLightLabel);
+  darkModeLightOption.appendChild(darkModeLightLabel);
 
   appearanceSet.appendChild(document.createElement('hr'));
 
@@ -286,6 +323,8 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
     userSettings.defaultAuthor = defAuthIn.value;
     userSettings.addressInfo = addressIn.value;
     userSettings.autocorrectEnabled = autocorrectCheck.checked;
+    userSettings.screenplayAutocomplete = autocompleteCheck.checked;
+    userSettings.screenplayPageMarks = pageMarksCheck.checked;
     //Stored as only what differs from the defaults - see diffFromDefaults in models/autocorrect.js.
     userSettings.autocorrect = diffFromDefaults(checkedRules());
     if(platformInfo.platform == 'linux'){
@@ -366,8 +405,9 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
     return select;
   }
 
-  //WareWoolf ships no font files, so a face is only ever the best one of its stack a writer happens
-  //to have installed, and there is no honest way to say which that is in the dropdown. The sample
+  //WareWoolf ships one font file (Courier Prime, for screenplays), so a face is otherwise only the
+  //best one of its stack a writer happens to have installed, and there is no honest way to say
+  //which that is in the dropdown. The sample
   //answers it by showing the result: whatever is drawn here is what the panel will be drawn in.
   //
   //A pangram, because what is being shown is the shape of the letters and a pangram is the shortest

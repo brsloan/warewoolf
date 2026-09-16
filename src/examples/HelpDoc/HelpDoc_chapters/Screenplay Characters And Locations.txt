@@ -1,0 +1,22 @@
+[>c] # Screenplay: Characters And Locations
+
+**Tools > Characters/Locations**, which only a screenplay project has, shows the two lists your cues and your scene headings are completed from: every character the script has a cue for, and every place it has a heading for, with the number of lines of the script each name is written into.
+	It is not a store that the script is copied into. It is the script, read back—which is why nothing has to be entered here for a name to be suggested, and why the number beside a name is the whole story of where it is used. What the dialog adds is four things you can do to that list.
+
+## Add
+A name the script has not reached yet: a character due in act three, a location you know you are heading for. It is offered from then on, so the first cue you ever type for them completes like any other. Until the script has a line for it, the list shows it as “added”.
+
+## Rename
+This is the one that touches the script. Renaming a character rewrites every use of the name: his cues, and the action, dialogue, parentheticals and scene headings he is named in—each in the case that line wrote it, so DAN becomes BEN and Dan becomes Ben.
+	A lower-case spelling is left alone outside his cues, because a name is also a word: ***will***, ***mark***, ***rose***. What that cannot settle is the start of a sentence, where every word is capitalized and there is no telling the name from the word. So the change is described before it is made—how many cues it rewrites, how many other lines it reaches, and a warning that a sentence opening with a word spelled like the name (“Will you come?”, for a character called WILL) may be caught by mistake. If it goes wrong, **CMD/CTRL + Z** takes the whole rename back in one step, as it is one edit.
+	A location is renamed in its scene headings and nowhere else. The kitchen mentioned in a line of action is a kitchen, not a slug line.
+
+## Remove
+Takes a name out of the suggestions and changes the script not at all. This is for the one-off DAN in scene one who answers every attempt at DANIELLE: he cannot be unwritten, and while he is offered he is in the way. A removed name keeps its row, marked as removed, and the same button reads ***Restore*** when you select one, so nothing is hidden from you.
+
+## Refresh
+Puts a list back to what the script itself holds, dropping your additions and removals. Nothing needs refreshing for a name you have just typed into a cue—that is offered already. This is for the additions and removals that turned out not to be wanted.
+
+## Notes
+There is no Save button, because every change is made as you ask for it. A rename in particular belongs in the editor’s own undo history beside your typing, not applied to the script at some later moment when you have stopped thinking about it.
+	The two lists travel with the project, in the .woolf file, so they belong to this screenplay and to no other.

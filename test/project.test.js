@@ -670,6 +670,142 @@ test('a non-array projectDictionary value is sanitized to an empty array on load
   assert.deepStrictEqual(proj.projectDictionary, []);
 });
 
+//---------------------------------------------------------------------------
+// project type and title page (docs/screenplay-plan.md, Phase 2)
+//---------------------------------------------------------------------------
+
+test('a new project is a novel with an empty title page', function(){
+  const proj = newProject();
+  assert.strictEqual(proj.type, 'novel');
+  assert.strictEqual(proj.isScreenplay(), false);
+  assert.deepStrictEqual(proj.titlePage, []);
+});
+
+test('type and titlePage round-trip through save/load', async function(t){
+  const dir = tempDir(t);
+  const proj = newProject();
+  proj.directory = dir;
+  proj.filename = 'script.woolf';
+  proj.chapsDirectory = '';
+  proj.type = 'screenplay';
+  proj.titlePage = [{ key: 'Title', values: ['Big Fish'] }, { key: 'Notes', values: ['one', 'two'] }];
+  await proj.saveFile();
+
+  const reloaded = newProject();
+  await reloaded.loadFile(dir + 'script.woolf');
+
+  assert.strictEqual(reloaded.type, 'screenplay');
+  assert.strictEqual(reloaded.isScreenplay(), true);
+  assert.deepStrictEqual(reloaded.titlePage, [{ key: 'Title', values: ['Big Fish'] }, { key: 'Notes', values: ['one', 'two'] }]);
+});
+
+test('a .woolf from an older build, or a hand-edited one, loads as a novel with a clean title page', async function(t){
+  const dir = tempDir(t);
+  const legacyProject = { filename: '', directory: '', chapsDirectory: '', title: 'Old Book',
+    author: '', chapters: [], reference: [], filters: [], trash: [], activeChapterIndex: 0 };
+  fs.writeFileSync(dir + 'legacy.woolf', JSON.stringify(legacyProject), 'utf8');
+  const badProject = Object.assign({}, legacyProject, { type: 'poem', titlePage: 'Big Fish' });
+  fs.writeFileSync(dir + 'bad.woolf', JSON.stringify(badProject), 'utf8');
+
+  const legacy = newProject();
+  await legacy.loadFile(dir + 'legacy.woolf');
+  assert.strictEqual(legacy.type, 'novel');
+  assert.deepStrictEqual(legacy.titlePage, []);
+
+  const bad = newProject();
+  await bad.loadFile(dir + 'bad.woolf');
+  assert.strictEqual(bad.type, 'novel');
+  assert.deepStrictEqual(bad.titlePage, []);
+});
+
+//The names a screenplay's autocomplete offers beyond the ones the script is written with - Tools >
+//Characters/Locations. Kept in the .woolf the way projectDictionary is, and sanitized on the way in
+//for the same reason: nothing validates what Object.assign copies out of the file.
+test('screenplayNames round-trips through save/load, capitalised and once each', async function(t){
+  const dir = tempDir(t);
+  const proj = newProject();
+  proj.directory = dir;
+  proj.filename = 'script.woolf';
+  proj.chapsDirectory = '';
+  proj.type = 'screenplay';
+  proj.screenplayNames = {
+    characters: { added: ['zelda ', 'ZELDA', 'Yolanda'], removed: ['dan'] },
+    locations: { added: ['the zoo'], removed: [] }
+  };
+  await proj.saveFile();
+
+  const reloaded = newProject();
+  await reloaded.loadFile(dir + 'script.woolf');
+
+  assert.deepStrictEqual(reloaded.screenplayNames, {
+    characters: { added: ['ZELDA', 'YOLANDA'], removed: ['DAN'] },
+    locations: { added: ['THE ZOO'], removed: [] }
+  });
+});
+
+test('a .woolf with no name lists, or malformed ones, loads with lists it can use', async function(t){
+  const dir = tempDir(t);
+  const base = { filename: '', directory: '', chapsDirectory: '', title: 'Old Book',
+    author: '', chapters: [], reference: [], filters: [], trash: [], activeChapterIndex: 0 };
+  const empty = { characters: { added: [], removed: [] }, locations: { added: [], removed: [] } };
+
+  fs.writeFileSync(dir + 'legacy.woolf', JSON.stringify(base), 'utf8');
+  fs.writeFileSync(dir + 'bad.woolf', JSON.stringify(Object.assign({}, base,
+    { screenplayNames: 'ZELDA' })), 'utf8');
+  fs.writeFileSync(dir + 'half.woolf', JSON.stringify(Object.assign({}, base,
+    { screenplayNames: { characters: { added: ['ZELDA', '', 7], removed: 'DAN' } } })), 'utf8');
+
+  const legacy = newProject();
+  await legacy.loadFile(dir + 'legacy.woolf');
+  assert.deepStrictEqual(legacy.screenplayNames, empty);
+
+  const bad = newProject();
+  await bad.loadFile(dir + 'bad.woolf');
+  assert.deepStrictEqual(bad.screenplayNames, empty);
+
+  const half = newProject();
+  await half.loadFile(dir + 'half.woolf');
+  assert.deepStrictEqual(half.screenplayNames, {
+    characters: { added: ['ZELDA'], removed: [] },
+    locations: { added: [], removed: [] }
+  });
+});
+
+test('a screenplay project saves its script as .fountain and its reference documents as .txt', async function(t){
+  const dir = tempDir(t);
+  const proj = newProject();
+  proj.directory = dir;
+  proj.filename = 'script.woolf';
+  proj.chapsDirectory = '';
+  proj.type = 'screenplay';
+  proj.titlePage = [{ key: 'Title', values: ['Test'] }];
+
+  const script = newChapter(proj);
+  script.format = 'fountain';
+  script.title = 'Test';
+  script.hasUnsavedChanges = true;
+  script.contents = { ops: [{ insert: 'INT. HOUSE - DAY' }, { insert: '\n', attributes: { element: 'scene' } }] };
+  proj.chapters.push(script);
+
+  const bible = newChapter(proj);
+  bible.title = 'Characters';
+  bible.hasUnsavedChanges = true;
+  bible.contents = { ops: [{ insert: 'Bob is tall.\n' }] };
+  proj.reference.push(bible);
+
+  await proj.saveFile();
+
+  assert.strictEqual(script.filename, 'Test.fountain');
+  assert.strictEqual(bible.filename, 'Characters.txt');
+  assert.strictEqual(fs.readFileSync(dir + 'Test.fountain', 'utf8'), 'Title: Test\n\nINT. HOUSE - DAY\n');
+
+  const reloaded = newProject();
+  await reloaded.loadFile(dir + 'script.woolf');
+  assert.strictEqual(reloaded.chapters[0].filename, 'Test.fountain');
+  assert.deepStrictEqual((await reloaded.chapters[0].getFile()).ops[0].insert, 'INT. HOUSE - DAY');
+  assert.match((await reloaded.reference[0].getFile()).ops[0].insert, /Bob is tall/);
+});
+
 test('projectDictionary survives Save As and Save a Copy', async function(t){
   const oldDir = tempDir(t);
   const newDir = tempDir(t);
@@ -767,4 +903,73 @@ test('testChapsDirectory reports nothing missing, loudly, when the check itself 
 
   assert.deepStrictEqual(await proj.testChapsDirectory(), []);
   assert.strictEqual(logged.length, 1);
+});
+
+//---------------------------------------------------------------------------
+// Opening a novel after a screenplay
+//---------------------------------------------------------------------------
+
+//render.js opens every project into the one project object, and a novel's .woolf written before
+//there were screenplays carries none of the screenplay keys - so Object.assign left the last
+//project's type, title page and name lists in place, the novel opened with a script's menus and
+//dialogs, and the save every open ends in wrote `type: 'screenplay'` into the novel's own file.
+test('loadFile regression: a novel .woolf with no screenplay keys opened over a screenplay loads as a novel', async function(t){
+  const dir = tempDir(t);
+  const legacyNovel = { filename: '', directory: '', chapsDirectory: '', title: 'Old Book',
+    author: '', chapters: [], reference: [], filters: [], trash: [], activeChapterIndex: 0, wordGoal: 500 };
+  fs.writeFileSync(dir + 'novel.woolf', JSON.stringify(legacyNovel), 'utf8');
+
+  const proj = newProject();
+  proj.type = 'screenplay';
+  proj.titlePage = [{ key: 'Title', values: ['Big Fish'] }];
+  proj.screenplayNames = { characters: { added: ['ZELDA'], removed: [] }, locations: { added: [], removed: [] } };
+  proj.pageGoal = 90;
+
+  await proj.loadFile(dir + 'novel.woolf');
+
+  assert.strictEqual(proj.type, 'novel');
+  assert.strictEqual(proj.isScreenplay(), false);
+  assert.deepStrictEqual(proj.titlePage, []);
+  assert.deepStrictEqual(proj.screenplayNames, { characters: { added: [], removed: [] }, locations: { added: [], removed: [] } });
+  assert.strictEqual(proj.pageGoal, 0);
+  assert.strictEqual(proj.wordGoal, 500);
+  assert.strictEqual(proj.title, 'Old Book');
+});
+
+//The files that bug already wrote: a novel stamped as a screenplay. Its Chapters list gives it
+//away - a screenplay project's is its one .fountain script, a novel's is prose chapters.
+test('loadFile repairs a novel whose file the bug stamped as a screenplay', async function(t){
+  const dir = tempDir(t);
+  const chapsDir = 'p_chapters/';
+  fs.mkdirSync(dir + chapsDir);
+  fs.writeFileSync(dir + chapsDir + 'a.txt', 'Text.\n', 'utf8');
+  fs.writeFileSync(dir + chapsDir + 'b.fountain', 'INT. HOUSE - DAY\n', 'utf8');
+
+  const stamped = { title: 'Novel', author: 'A', chapsDirectory: chapsDir, type: 'screenplay',
+    titlePage: [{ key: 'Title', values: ['Big Fish'] }],
+    screenplayNames: { characters: { added: ['ZELDA'], removed: [] }, locations: { added: [], removed: [] } },
+    chapters: [{ title: 'One', filename: 'a.txt' }], reference: [], trash: [] };
+  fs.writeFileSync(dir + 'stamped.woolf', JSON.stringify(stamped), 'utf8');
+
+  const novel = newProject();
+  await novel.loadFile(dir + 'stamped.woolf');
+  assert.strictEqual(novel.type, 'novel');
+  assert.deepStrictEqual(novel.titlePage, []);
+  assert.deepStrictEqual(novel.screenplayNames, { characters: { added: [], removed: [] }, locations: { added: [], removed: [] } });
+
+  //A real screenplay - its Chapters list is the script - is left exactly as it is.
+  const script = Object.assign({}, stamped, { chapters: [{ title: 'Novel', filename: 'b.fountain' }] });
+  fs.writeFileSync(dir + 'script.woolf', JSON.stringify(script), 'utf8');
+  const screenplay = newProject();
+  await screenplay.loadFile(dir + 'script.woolf');
+  assert.strictEqual(screenplay.type, 'screenplay');
+  assert.deepStrictEqual(screenplay.titlePage, [{ key: 'Title', values: ['Big Fish'] }]);
+  assert.deepStrictEqual(screenplay.screenplayNames.characters.added, ['ZELDA']);
+
+  //And one with nothing in Chapters says nothing either way, so the file's word stands.
+  const emptied = Object.assign({}, stamped, { chapters: [] });
+  fs.writeFileSync(dir + 'emptied.woolf', JSON.stringify(emptied), 'utf8');
+  const kept = newProject();
+  await kept.loadFile(dir + 'emptied.woolf');
+  assert.strictEqual(kept.type, 'screenplay');
 });

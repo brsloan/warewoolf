@@ -58,6 +58,34 @@ test('no two default shortcuts share a binding', function(){
   });
 });
 
+//docs/screenplay-plan.md, Phase 4: a shortcut bound only while the editor shows one kind of
+//document never meets one bound only for the other, so the two may share a key.
+test('the screenplay elements share their keys with the prose headings, and only with those', function(){
+  var defaults = shortcuts.getDefaultBindings();
+  var defs = shortcuts.getShortcutDefs();
+  var byId = function(id){ return defs.find(function(def){ return def.id === id; }); };
+
+  assert.strictEqual(byId('elementScene').mode, 'screenplay');
+  assert.strictEqual(byId('formatHeading1').mode, 'prose');
+  assert.strictEqual(byId('formatBold').mode, undefined, 'bound in both modes');
+  assert.ok(shortcuts.bindingsEqual(defaults.elementScene, defaults.formatHeading1));
+  assert.ok(shortcuts.bindingsEqual(defaults.elementCentered, defaults.formatAlignCenter));
+
+  assert.strictEqual(shortcuts.findConflict(defaults.elementScene, 'elementScene', defaults), null);
+  assert.strictEqual(shortcuts.findConflict(defaults.formatHeading1, 'formatHeading1', defaults), null);
+
+  //A key held by a shortcut with no mode is taken in both.
+  var conflict = shortcuts.findConflict(defaults.formatBold, 'elementScene', defaults);
+  assert.strictEqual(conflict && conflict.id, 'formatBold');
+  //And a screenplay key is still taken from another screenplay shortcut.
+  assert.strictEqual(shortcuts.findConflict(defaults.elementAction, 'elementScene', defaults).id, 'elementAction');
+
+  //Ctrl+T is the prose Title shortcut, so a script may take it; Ctrl+2 is Action and may not.
+  assert.deepStrictEqual(shortcuts.validateBinding(defaults.formatTitle, 'elementScene', defaults), { valid: true });
+  assert.strictEqual(shortcuts.validateBinding(defaults.formatHeading2, 'elementScene', defaults).valid, false);
+  assert.strictEqual(shortcuts.validateBinding(defaults.formatBold, 'elementScene', defaults).valid, false);
+});
+
 test('action ids are unique', function(){
   var ids = shortcuts.getShortcutDefs().map(function(def){ return def.id; });
   assert.strictEqual(new Set(ids).size, ids.length);
@@ -570,16 +598,91 @@ test('a key that types nothing may be bound on its own', function(){
   });
 });
 
-//The awkward middle case: these type nothing either, but the editor moves its own cursor by them, so
-//a bare shortcut on one would take that away.
-test('a navigation key still needs a modifier, though it types nothing', function(){
+//The keys a caret moves by: bindable on their own like anything else that types nothing. They used
+//to be refused, which cost the writers this app is built for the most - a compact keyboard with no
+//Page or Home cluster had no way to put those actions anywhere it could reach.
+test('a caret key may be bound on its own, at a price the writer is told', function(){
+  //With the paging shortcuts cleared out of the way: Page Up and Page Down ship ON these keys, so
+  //leaving them bound would have this refusing for a conflict and proving nothing about the policy.
+  var bindings = Object.assign(shortcuts.getDefaultBindings(), { pageUp: null, pageDown: null });
+
+  ['PageUp', 'PageDown', 'Home', 'End'].forEach(function(key){
+    assert.strictEqual(shortcuts.canBindAlone(key), true, key + ' should stand alone');
+
+    var result = shortcuts.validateBinding(shortcuts.makeBinding(key), 'formatBold', bindings);
+    assert.strictEqual(result.valid, true, key + ' should be bindable bare');
+    assert.match(result.warning, /gives that up/, key + ' should say what it costs');
+  });
+});
+
+//The other half of the same rule: a caret key already spent is a conflict like any other, named by
+//the shortcut holding it rather than warned about.
+test('a caret key another shortcut holds is refused, not warned about', function(){
+  var bindings = shortcuts.getDefaultBindings();
+  var result = shortcuts.validateBinding(shortcuts.makeBinding('PageDown'), 'formatBold', bindings);
+
+  assert.strictEqual(result.valid, false);
+  assert.match(result.message, /Page Down/);
+});
+
+//Insert is the freest of the lot and was only ever refused by being on the same list: a
+//contenteditable has no overtype mode, so the key does nothing here to take away.
+test('Insert costs nothing and is bound without a word about it', function(){
+  var bindings = shortcuts.getDefaultBindings();
+  var result = shortcuts.validateBinding(shortcuts.makeBinding('Insert'), 'formatBold', bindings);
+
+  assert.strictEqual(shortcuts.canBindAlone('Insert'), true);
+  assert.deepStrictEqual(result, { valid: true });
+});
+
+//The keys that stay refused. Space types, and a writer who lost an arrow to a fumbled modifier
+//would be unable to move through their own text - neither is a trade this offers.
+test('a typing or arrow key still needs a modifier', function(){
   var bindings = shortcuts.getDefaultBindings();
 
-  ['ArrowUp', 'PageDown', 'Home', 'End', 'Insert', 'Space'].forEach(function(key){
+  ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].forEach(function(key){
     assert.strictEqual(shortcuts.canBindAlone(key), false, key + ' should not stand alone');
 
     var result = shortcuts.validateBinding(shortcuts.makeBinding(key), 'formatBold', bindings);
     assert.strictEqual(result.valid, false, key + ' should be refused bare');
+  });
+});
+
+//The warning is about the key being spent, so it belongs only where the key itself is what was
+//taken. Ctrl+Home is a shortcut like any other, and Shift+Home is the same movement made to a
+//selection - which is gone either way, so it is warned about the same.
+test('a caret key is only warned about when nothing is held with it', function(){
+  var bindings = shortcuts.getDefaultBindings();
+
+  assert.strictEqual(shortcuts.nativeKeyWarning(shortcuts.makeBinding('Home', { mod: true })), null);
+  assert.strictEqual(shortcuts.nativeKeyWarning(shortcuts.makeBinding('Home', { alt: true })), null);
+  assert.match(shortcuts.nativeKeyWarning(shortcuts.makeBinding('Home', { shift: true })), /start of the line/);
+  assert.strictEqual(shortcuts.nativeKeyWarning(shortcuts.makeBinding('F5')), null);
+  assert.strictEqual(shortcuts.nativeKeyWarning(null), null);
+
+  //An action put back on the key it shipped on is giving up nothing: the shortcut on the key does
+  //what the key did.
+  assert.deepStrictEqual(
+    shortcuts.validateBinding(shortcuts.makeBinding('PageDown'), 'pageDown', bindings),
+    { valid: true });
+});
+
+//The four are the app's own actions rather than the browser's, so they have to be dispatchable from
+//the pane listener like the other movement shortcuts - see keybindings.js.
+test('paging and the ends of a document are rebindable pane actions', function(){
+  var defs = shortcuts.getShortcutDefs();
+
+  [['pageUp', 'PageUp', {}], ['pageDown', 'PageDown', {}],
+    ['jumpToStart', 'Home', { mod: true }], ['jumpToEnd', 'End', { mod: true }]
+  ].forEach(function(expected){
+    var def = defs.find(function(candidate){ return candidate.id === expected[0]; });
+
+    assert.ok(def, expected[0] + ' should be a listed shortcut');
+    assert.strictEqual(def.section, 'Navigation');
+    assert.strictEqual(def.target, 'pane');
+    assert.strictEqual(shortcuts.bindingsEqual(def.defaultBinding,
+      shortcuts.makeBinding(expected[1], expected[2])), true,
+      expected[0] + ' should default to its own key');
   });
 });
 
@@ -667,17 +770,20 @@ test('an unusable binding, or an unknown action, is refused rather than thrown a
 // drift guard
 //---------------------------------------------------------------------------
 
-//MENU_ACCELERATORS is a copy of what src/index.js hands Electron, because the renderer has no way
+//MENU_ACCELERATORS is a copy of what app-menu.js hands Electron, because the renderer has no way
 //to ask the main process for the menu. A copy drifts; this reads the real list and fails when it
 //does. One-directional on purpose: the model also lists accelerators Electron supplies for a menu
 //ROLE (Toggle Full Screen's F11), which never appear as an `accelerator:` line to be found here.
 test('every accelerator in the menu is one the model knows about', function(){
-  var indexSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'index.js'), 'utf8');
-  //Anchored to the start of the line so that prose mentioning the word - the File menu's note on
-  //why Backup no longer has one - is not read as a menu entry.
-  var acceleratorLines = indexSource.match(/^\s*accelerator:[^\n]+/gm) || [];
+  //The menu template lives in app-menu.js (index.js builds the real menu from it).
+  var indexSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'components', 'controllers', 'app-menu.js'), 'utf8');
+  //Comment lines are skipped, so that prose mentioning the word - the File menu's note on why
+  //Backup no longer has one - is not read as a menu entry.
+  var acceleratorLines = (indexSource.match(/^(?![ \t]*\/\/).*accelerator:[^\n]+/gm) || [])
+    //From the key to the next comma: the entry's other fields (a role, say) sit on the same line.
+    .map(function(line){ return line.slice(line.indexOf('accelerator:')).split(',')[0]; });
 
-  assert.ok(acceleratorLines.length > 20, 'expected to find the menu accelerators in index.js');
+  assert.ok(acceleratorLines.length > 20, 'expected to find the menu accelerators in app-menu.js');
 
   acceleratorLines.forEach(function(line){
     //Every quoted string on such a line is an accelerator - the label is always its own line, and
@@ -687,13 +793,13 @@ test('every accelerator in the menu is one the model knows about', function(){
     assert.ok(quotedStrings.length > 0, 'could not read the accelerator out of: ' + line);
 
     quotedStrings.forEach(function(quoted){
-      //index.js is JavaScript source, so a lone backslash key is written '\\' in it.
+      //app-menu.js is JavaScript source, so a lone backslash key is written '\\' in it.
       var accelerator = quoted.slice(1, -1).replace(/\\\\/g, '\\');
       var binding = bindingFromAccelerator(accelerator);
 
-      assert.ok(binding != null, 'could not parse the accelerator ' + accelerator + ' from src/index.js');
+      assert.ok(binding != null, 'could not parse the accelerator ' + accelerator + ' from app-menu.js');
       assert.ok(shortcuts.findMenuAccelerator(binding) != null,
-        'src/index.js binds ' + shortcuts.formatBinding(binding, false) +
+        'app-menu.js binds ' + shortcuts.formatBinding(binding, false) +
         ' but shortcuts.js does not list it - add it to MENU_ACCELERATORS');
     });
   });

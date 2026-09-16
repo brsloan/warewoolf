@@ -37,3 +37,6 @@ WareWoolf saves its chapters as plain text files with light markup. There is a p
 ## Help
 And of course, if you ever need help remembering a shortcut, simply remember the shortcut **CTRL **+ **H (CMD + Shift + H on Mac)**, or use the file menu to open the Help menu, and all will be revealed.
 	This help document, and any other project that ships with WareWoolf, opens **read-only**—the title bar says so. You can still type in it, and you are welcome to: **Ctrl+S** simply offers **Save As** instead of saving in place, so your annotated copy gets a home you chose rather than being written back into the program folder, where the next update would overwrite it.
+
+## Screenwriting
+Everything above describes a novel project, which is what WareWoolf makes unless you tell it otherwise. It writes screenplays too: **File > New Project** asks which kind you want, and a screenplay is one script written in scenes rather than a set of chapters. The chapters at the end of this help file, each beginning ***Screenplay:***, cover what is different about one.

@@ -1,9 +1,20 @@
 const { closePopups, createButton, removeElementsByClass, generateRow, describeDialog } = require('../controllers/utils');
 const { countWords, getTotalWordCount } = require('../controllers/wordcount');
+const { describeEighths } = require('../controllers/fountain');
 
 //Async because the project-wide total needs every chapter's text, which for a chapter not already
 //in memory is now an asynchronous read through the platform facade.
-async function showWordCount(project, editorQuill, userSettings){
+//
+//`options.pages`, when given, is a screenplay's page estimate ({ pages, exact, eighths } from
+//fountain.js's estimatePages) for the script in the editor, and `options.pagesOnLoad` the same
+//script's exact figure as of the project's load (render.js's setWordCountOnLoad). A script is
+//counted in pages and nothing else, so it gets a dialog of its own - see showScriptPageCount.
+async function showWordCount(project, editorQuill, userSettings, options){
+    if(options && options.pages){
+      showScriptPageCount(project, options);
+      return;
+    }
+
     removeElementsByClass('popup');
     var popup = document.createElement("div");
     popup.classList.add("popup");
@@ -67,16 +78,7 @@ async function showWordCount(project, editorQuill, userSettings){
 
     popup.appendChild(cntTbl);
 
-    var progressBarLabel = document.createElement('label');
-    progressBarLabel.innerText = "Progress";
-    popup.appendChild(progressBarLabel);
-
-    var progressBarContainer = document.createElement('div');
-    progressBarContainer.id = "prog-bar-container";
-    var progressBarFill = document.createElement('div');
-    progressBarFill.id = "prog-bar-fill";
-    progressBarContainer.appendChild(progressBarFill);
-    popup.appendChild(progressBarContainer);
+    var progressBarFill = appendProgressBar(popup);
 
     var closeBtn = createButton("Close");
     closeBtn.onclick = function(){
@@ -129,18 +131,117 @@ async function showWordCount(project, editorQuill, userSettings){
     }
 
     function updateProgressBar(){
-      var percentOfGoal = project.wordGoal > 0 ? (total / project.wordGoal) * 100 : 100;
-      progressBarFill.style.width = (percentOfGoal <= 100 ? percentOfGoal : 100) + "%";
-      progressBarFill.style.setProperty('--progress-hue', getHue(percentOfGoal/100 <= 1 ? percentOfGoal/100 : 1));
+      fillProgressBar(progressBarFill, total, project.wordGoal);
     }
-
-    //Only the hue is decided here - red at nothing written, through amber, to green at the goal.
-    //Saturation and lightness belong to the theme (index.css, #prog-bar-fill), which is what keeps
-    //the fill readable against the track on both palettes; a colour fixed here could only suit one.
-    function getHue(value){
-      //value from 0 to 1
-      return ((value)*120).toString(10);
-  }
   };
+
+  //A screenplay is measured in pages, so its dialog is three rows of pages and nothing about words:
+  //the script's estimate, the session's change in it, and a goal in pages (project.pageGoal, kept
+  //apart from a novel's wordGoal) that the bar below fills towards. All of it said to be an
+  //estimate, since a real count needs the PDF. No project line - the script is the project - and
+  //no words-per-page, which is a prose figure. docs/screenplay-plan.md, Phase 6.
+  function showScriptPageCount(project, options){
+    removeElementsByClass('popup');
+    var popup = document.createElement("div");
+    popup.classList.add("popup");
+
+    var popupTitle = document.createElement('h1');
+    popupTitle.innerText = 'Page Count';
+    popup.appendChild(popupTitle);
+    describeDialog(popup, popupTitle);
+
+    var cntTbl = document.createElement('table');
+
+    var pagesLabel = document.createElement('label');
+    pagesLabel.innerText = 'Script pages (estimate): ';
+
+    var pagesDisplay = document.createElement('p');
+    pagesDisplay.id = 'script-pages';
+    pagesDisplay.innerText = describePages(options.pages);
+
+    cntTbl.appendChild(generateRow(pagesLabel, pagesDisplay));
+
+    var sessLabel = document.createElement('label');
+    sessLabel.innerText = 'Session (estimate): ';
+
+    var sessionDisplay = document.createElement('p');
+    sessionDisplay.id = 'script-session-pages';
+    sessionDisplay.innerText = describeEighths(options.pages.exact - (options.pagesOnLoad || 0));
+
+    cntTbl.appendChild(generateRow(sessLabel, sessionDisplay));
+
+    var goalLabel = document.createElement('label');
+    goalLabel.innerText = "Goal (pages): ";
+    goalLabel.htmlFor = "page-goal-input";
+
+    var goalInput = document.createElement('input');
+    goalInput.type = "number";
+    goalInput.min = "0";
+    goalInput.value = project.pageGoal || 0;
+    goalInput.id = "page-goal-input";
+
+    cntTbl.appendChild(generateRow(goalLabel, goalInput));
+
+    popup.appendChild(cntTbl);
+
+    var progressBarFill = appendProgressBar(popup);
+
+    var closeBtn = createButton("Close");
+    closeBtn.onclick = function(){
+      closePopups();
+    };
+    popup.appendChild(closeBtn);
+
+    document.body.appendChild(popup);
+
+    goalInput.oninput = function(){
+      var parsedGoal = Number(goalInput.value);
+      project.pageGoal = Number.isFinite(parsedGoal) ? parsedGoal : 0;
+      updateProgressBar();
+    };
+
+    updateProgressBar();
+    closeBtn.focus();
+
+    function updateProgressBar(){
+      fillProgressBar(progressBarFill, options.pages.exact, project.pageGoal);
+    }
+  }
+
+  //"112 (111 3/8)": the page the script ends on, with the eighths when it ends part way down it.
+  function describePages(estimate){
+    return estimate.pages + (estimate.eighths !== String(estimate.pages) ? ' (' + estimate.eighths + ')' : '');
+  }
+
+  function appendProgressBar(popup){
+    var progressBarLabel = document.createElement('label');
+    progressBarLabel.innerText = "Progress";
+    popup.appendChild(progressBarLabel);
+
+    var progressBarContainer = document.createElement('div');
+    progressBarContainer.id = "prog-bar-container";
+    var progressBarFill = document.createElement('div');
+    progressBarFill.id = "prog-bar-fill";
+    progressBarContainer.appendChild(progressBarFill);
+    popup.appendChild(progressBarContainer);
+
+    return progressBarFill;
+  }
+
+  //Full, and green, with no goal set; otherwise as far along as the count is towards the goal,
+  //capped at the goal.
+  function fillProgressBar(progressBarFill, count, goal){
+    var percentOfGoal = goal > 0 ? (count / goal) * 100 : 100;
+    progressBarFill.style.width = (percentOfGoal <= 100 ? percentOfGoal : 100) + "%";
+    progressBarFill.style.setProperty('--progress-hue', getHue(percentOfGoal/100 <= 1 ? percentOfGoal/100 : 1));
+  }
+
+  //Only the hue is decided here - red at nothing written, through amber, to green at the goal.
+  //Saturation and lightness belong to the theme (index.css, #prog-bar-fill), which is what keeps
+  //the fill readable against the track on both palettes; a colour fixed here could only suit one.
+  function getHue(value){
+    //value from 0 to 1
+    return ((value)*120).toString(10);
+  }
 
   module.exports = showWordCount;

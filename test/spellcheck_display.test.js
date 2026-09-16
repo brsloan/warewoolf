@@ -213,6 +213,31 @@ test('clicking a suggestion label selects its radio button', async function(){
   assert.strictEqual(secondRadio.checked, true);
 });
 
+//Regression: the buttons and their words went into the list as one flat run, so a set of
+//suggestions too wide for the dialog wrapped between a button and the word it stood for, and every
+//word on the line then read as the button before it. Each suggestion is now its own list item,
+//which is what the .radio-option rule keeps on one line.
+test('each suggestion keeps its button and its word in one list item', async function(){
+  var showSpellcheck = freshSpellcheckDisplay({
+    runSpellcheck: function(){
+      return { word: 'thier', index: 0, suggestions: ['their', 'thief', 'tier', 'ther'] };
+    }
+  });
+
+  await showSpellcheck(makeEditorQuill(), {}, {}, function(){});
+
+  var radios = document.querySelectorAll('input[name="suggestions"]');
+  assert.strictEqual(radios.length, 4);
+  radios.forEach(function(radio){
+    var item = radio.parentNode;
+    assert.strictEqual(item.tagName, 'LI');
+    assert.ok(item.classList.contains('radio-option'));
+    var labels = item.querySelectorAll('label');
+    assert.strictEqual(labels.length, 1);
+    assert.strictEqual(labels[0].htmlFor, radio.id);
+  });
+});
+
 test('displaying spellcheck replaces any existing popup and selects the first suggestion', async function(){
   var stalePopup = document.createElement('div');
   stalePopup.classList.add('popup');

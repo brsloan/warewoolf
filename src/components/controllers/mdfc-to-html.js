@@ -285,7 +285,40 @@ function consolidateFootnotes(text, allMarkers){
     return text;
 }
 
-function convertMdfcToHtmlPage(text, title, author = null, insertTitle = false){
+//The measure a page is held to when the writer asks for one: 66 characters, the line length
+//typography has long held easiest to read, instead of prose run the full width of a maximised
+//browser window. In ch rather than px so the measure is counted in the reader's own font - a ch is
+//the width of its "0" - and so holds to 66 characters whatever face and size the page is read at.
+const READABLE_MAX_WIDTH = '66ch';
+
+//The rules the "Justify left-aligned text" option writes, exported so epub.js's stylesheet can carry
+//the same ones: both stylesheets dress the same converter's output, so the selectors are the same
+//either way, and a writer who ticks the box in one format should not get a different page in the
+//other.
+//
+//Only the text the writer never aligned by hand is touched: a bare paragraph, item or quotation,
+//and one they explicitly set left. Headings are left out - "Justify left-aligned text" means the
+//prose, and a justified heading is a line of stretched-out words.
+//
+//Two rules rather than one list, written into the stylesheet ahead of .center/.right/.justified,
+//so an alignment actually chosen in the editor survives however the reading engine resolves the
+//cascade. By the standard, each selector in a list carries its own specificity, so .center (0,1,0)
+//would beat a bare "p" (0,0,1) wherever the rule sat - but jsdom, for one, takes a list's
+//specificity from its strongest member, which would let a list containing "p.left" (0,1,1)
+//outrank .center and justify a centered paragraph. Split in two, the bare-element rule can never
+//outrank an alignment class, the ".left" rule only ever matches elements that carry no other
+//alignment, and coming first means source order settles it the same way for an engine that
+//ignores specificity altogether.
+function getJustifyLeftCss(){
+  return "      p, li, blockquote {" +
+    "        text-align: justify;" +
+    "      }" +
+    "      p.left, li.left, blockquote.left {" +
+    "        text-align: justify;" +
+    "      }";
+}
+
+function convertMdfcToHtmlPage(text, title, author = null, insertTitle = false, maxWidth = false, justifyLeft = false){
     var titleElements = '';
     if(insertTitle){
         titleElements = '<h1 class="center">' + title + '<h1>';
@@ -295,20 +328,39 @@ function convertMdfcToHtmlPage(text, title, author = null, insertTitle = false){
     }
         
 
-    var htmlTemplate = getHtmlTemplate();
+    var htmlTemplate = getHtmlTemplate(maxWidth, justifyLeft);
     htmlTemplate = htmlTemplate.replace('<!-- title -->', title);
     htmlTemplate = htmlTemplate.replace('<!-- page content -->', titleElements + convertMdfcToHtml(text));
   
     return htmlTemplate;
   }
   
-  function getHtmlTemplate(){
+  //An unasked-for page is written exactly as it always was, with no body rule at all, so a file
+  //already styled by whatever reads it is not given a width it never had.
+  function getHtmlTemplate(maxWidth = false, justifyLeft = false){
+    //"margin: 0 auto" rather than a bare max-width: left and right margins of auto share whatever
+    //the window has over the measure evenly, so the text block sits in the middle of the page
+    //instead of hugging the left edge with all the empty space on one side.
+    //
+    //The padding is what the zeroed margin would otherwise cost a narrow window: below the measure
+    //there is no spare width for "auto" to divide, so the lines would run right up against both
+    //edges of a phone or a half-width window - where the browser's own default body margin had
+    //always kept a few pixels of gutter. In em, so the gutter scales with the text as the measure
+    //itself does.
+    var bodyStyle = maxWidth ?
+      "      body {" +
+      "        max-width: " + READABLE_MAX_WIDTH + ";" +
+      "        margin: 0 auto;" +
+      "        padding: 0 1em;" +
+      "      }" : "";
+
     return "<!DOCTYPE html>" +
       "<html lang=\"en\">" +
       "  <head>" +
       "    <meta charset=\"utf-8\">" +
       "    <title><!-- title --></title>" +
       "    <style>" +
+      bodyStyle +
       "      h1 {" +
       "        white-space: pre-wrap;" +
       "      }" +
@@ -317,6 +369,7 @@ function convertMdfcToHtmlPage(text, title, author = null, insertTitle = false){
       "      margin-top: 0px;" +
       "      margin-bottom: 0px;" +
       "    }" +
+      (justifyLeft ? getJustifyLeftCss() : "") +
       "    .center {" +
       "      text-align: center;" +
       "    }" +
@@ -360,5 +413,6 @@ function convertWindowsToLinuxLineEndings(text) {
 
 module.exports = {
     convertMdfcToHtml,
-    convertMdfcToHtmlPage
+    convertMdfcToHtmlPage,
+    getJustifyLeftCss
 };

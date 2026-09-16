@@ -86,6 +86,24 @@ function chapterAt(project, combinedIndex){
   return resolve(project, toLocator(project, combinedIndex));
 }
 
+//Where a chapter object sits right now, or null when it is not in this project at all - the
+//counterpart to resolve(), for a caller holding the document rather than its position. A locator
+//goes stale the moment anything above it is added, moved or trashed, so a caller that has to point
+//at the same document across those (the Reference jump's return trip, in render.js) keeps the
+//object and asks this for its locator at the moment it needs one.
+function locatorOf(project, chap){
+  if(chap == null)
+    return null;
+
+  for(let i = 0; i < LIST_ORDER.length; i++){
+    var index = listOf(project, LIST_ORDER[i]).indexOf(chap);
+    if(index > -1)
+      return { list: LIST_ORDER[i], index: index };
+  }
+
+  return null;
+}
+
 function activeLocator(project){
   return toLocator(project, project.activeChapterIndex);
 }
@@ -189,6 +207,7 @@ module.exports = {
   toCombinedIndex,
   resolve,
   chapterAt,
+  locatorOf,
   activeLocator,
   isFirstInList,
   isLastInList,

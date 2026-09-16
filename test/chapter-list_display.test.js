@@ -219,6 +219,82 @@ function pressKey(nameBox, key){
   nameBox.dispatchEvent(new window.KeyboardEvent('keydown', { key: key, bubbles: true, cancelable: true }));
 }
 
+//---------------------------------------------------------------------------
+// scenes (docs/screenplay-plan.md, Phase 5)
+//---------------------------------------------------------------------------
+
+const { renameSceneInList, markActiveSceneRow } = require('../src/components/views/chapter-list_display');
+
+function sceneRows(){
+  return { rows: [{ title: 'INT. A - DAY', index: 0 }, { title: '', index: 20 }, { title: 'EXT. C', index: 40 }], active: 2, unsaved: true };
+}
+
+test('a script shows its scenes in the top section under a Scenes header, with the reference and trash lists as usual', function(){
+  var selected = [], renamed = [];
+  renderChapterList(
+    makeProject([chap('Script')], [chap('r0')], [chap('t0')]),
+    { onSelect: function(){}, onRename: function(){}, onSelectScene: function(k){ selected.push(k); }, onRenameScene: function(k){ renamed.push(k); } },
+    sceneRows()
+  );
+
+  assert.strictEqual(document.getElementById('chapters-header').textContent, 'Scenes*');
+  assert.deepStrictEqual(rowTitles('chapter-list'), ['INT. A - DAY', '(untitled scene)', 'EXT. C']);
+  assert.deepStrictEqual(rowTitles('reference-list'), ['r0']);
+  assert.deepStrictEqual(rowTitles('trash-list'), ['t0']);
+
+  var rows = document.querySelectorAll('#chapter-list li');
+  assert.strictEqual(rows[2].classList.contains('activeChapter'), true);
+  assert.strictEqual(rows[2].getAttribute('aria-selected'), 'true');
+  assert.strictEqual(rows[0].getAttribute('role'), 'option');
+  assert.strictEqual(document.getElementById('chapter-list-sidebar').getAttribute('aria-activedescendant'), 'scene-row-2');
+
+  rows[1].onclick();
+  rows[0].ondblclick();
+  assert.deepStrictEqual(selected, [1]);
+  assert.deepStrictEqual(renamed, [0]);
+});
+
+test('a script with no headings yet shows its chapter row under the Scenes header', function(){
+  renderChapterList(makeProject([chap('Script')]), noopHandlers(), { rows: [], active: -1, unsaved: false });
+  assert.strictEqual(document.getElementById('chapters-header').textContent, 'Scenes');
+  assert.deepStrictEqual(rowTitles('chapter-list'), ['Script']);
+});
+
+test('a novel keeps its Chapters header', function(){
+  renderChapterList(makeProject([chap('c0')]), noopHandlers(), null);
+  assert.strictEqual(document.getElementById('chapters-header').textContent, 'Chapters');
+});
+
+test('markActiveSceneRow moves the highlight without rebuilding the rows', function(){
+  renderChapterList(makeProject([chap('Script')]), noopHandlers(), sceneRows());
+  var rows = document.querySelectorAll('#chapter-list li');
+
+  markActiveSceneRow(0);
+  assert.strictEqual(rows[0].classList.contains('activeChapter'), true);
+  assert.strictEqual(rows[2].classList.contains('activeChapter'), false);
+  assert.strictEqual(rows[2].getAttribute('aria-selected'), 'false');
+  assert.strictEqual(document.getElementById('chapter-list-sidebar').getAttribute('aria-activedescendant'), 'scene-row-0');
+  assert.strictEqual(document.querySelectorAll('#chapter-list li')[0], rows[0], 'the same row elements');
+
+  markActiveSceneRow(-1);
+  assert.strictEqual(document.querySelector('#chapter-list .activeChapter'), null);
+  assert.strictEqual(document.getElementById('chapter-list-sidebar').hasAttribute('aria-activedescendant'), false);
+});
+
+test('renaming a scene row opens a box labelled for the heading and commits through its handler', function(){
+  renderChapterList(makeProject([chap('Script')]), noopHandlers(), sceneRows());
+  var committed = [];
+  var box = renameSceneInList(2, { onCommit: function(t){ committed.push(t); }, onCancel: function(){}, onDismiss: function(){} });
+
+  assert.strictEqual(box.getAttribute('aria-label'), 'Scene heading');
+  assert.strictEqual(document.activeElement, box);
+  box.value = 'ext. d - dusk';
+  box.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter' }));
+  assert.deepStrictEqual(committed, ['ext. d - dusk']);
+
+  assert.strictEqual(renameSceneInList(9, { onCommit: function(){}, onCancel: function(){}, onDismiss: function(){} }), null);
+});
+
 test('renaming swaps the row text for an empty box and focuses it', function(){
   var nameBox = renderThenRename({ onCommit: function(){}, onCancel: function(){}, onDismiss: function(){} });
 

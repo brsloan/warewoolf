@@ -79,6 +79,32 @@ function showCompileOptions(project, sysDirectories, userSettings){
 
     compTbl.appendChild(generateRow(sceneBreakLabel, sceneBreakCheck));
 
+    //Only .html carries a stylesheet for this to be written into, so it greys out for the other
+    //types exactly as the title-page box does.
+    var maxWidthLabel = document.createElement('label');
+    maxWidthLabel.innerText = 'Set Max Width For Readability: ';
+    maxWidthLabel.htmlFor = 'max-width-check';
+
+    var maxWidthCheck = document.createElement('input');
+    maxWidthCheck.type = 'checkbox';
+    maxWidthCheck.id = 'max-width-check';
+    maxWidthCheck.checked = userSettings.htmlMaxWidth;
+
+    compTbl.appendChild(generateRow(maxWidthLabel, maxWidthCheck));
+
+    //.epub as well as .html: an epub is a book of web pages, and it carries the same stylesheet
+    //written against the same classes, so the same rule reaches it.
+    var justifyLabel = document.createElement('label');
+    justifyLabel.innerText = 'Justify left-aligned text: ';
+    justifyLabel.htmlFor = 'justify-left-check';
+
+    var justifyCheck = document.createElement('input');
+    justifyCheck.type = 'checkbox';
+    justifyCheck.id = 'justify-left-check';
+    justifyCheck.checked = userSettings.justifyLeftAligned;
+
+    compTbl.appendChild(generateRow(justifyLabel, justifyCheck));
+
     compileForm.appendChild(compTbl);
 
     var compileBtn = document.createElement("input");
@@ -98,6 +124,8 @@ function showCompileOptions(project, sysDirectories, userSettings){
       else {
         titlePageCheck.disabled = false;
       }
+      maxWidthCheck.disabled = typeSelect.value != '.html';
+      justifyCheck.disabled = typeSelect.value != '.html' && typeSelect.value != '.epub';
     }
 
     compileForm.onsubmit = function(e){
@@ -108,6 +136,8 @@ function showCompileOptions(project, sysDirectories, userSettings){
       userSettings.compileChapMark = insertStrInput.value;
       userSettings.compileGenTitlePage = titlePageCheck.checked;
       userSettings.markSceneBreaks = sceneBreakCheck.checked;
+      userSettings.htmlMaxWidth = maxWidthCheck.checked;
+      userSettings.justifyLeftAligned = justifyCheck.checked;
       userSettings.save();
 
       var options = {
@@ -116,6 +146,8 @@ function showCompileOptions(project, sysDirectories, userSettings){
         insertHead: insertHeadCheck.checked,
         generateTitlePage: titlePageCheck.checked,
         markSceneBreaks: sceneBreakCheck.checked,
+        htmlMaxWidth: maxWidthCheck.checked,
+        justifyLeftAligned: justifyCheck.checked,
         styleHeadingAsChapter: true
       }
       getCompileFilepath(project, userSettings, options, sysDirectories, function(){
@@ -125,6 +157,9 @@ function showCompileOptions(project, sysDirectories, userSettings){
 
     if(userSettings.compileType != '.docx' && userSettings.compileType != '.html' && userSettings.compileType != '.epub')
       titlePageCheck.disabled = true;
+
+    maxWidthCheck.disabled = typeSelect.value != '.html';
+    justifyCheck.disabled = typeSelect.value != '.html' && typeSelect.value != '.epub';
 
     popup.appendChild(compileForm);
     document.body.appendChild(popup);
