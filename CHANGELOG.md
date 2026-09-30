@@ -8,6 +8,10 @@ Releases before v0.9.0 were never tagged or published; the work from that period
 
 ## [Unreleased]
 
+### Changed
+
+- **File > Reboot asks first.** It warns "This will reboot your computer, not the program. Continue?" before the unsaved-work prompt and the backup, and starts on No.
+
 ## [3.1.0] - 2026-09-16
 
 ### Added

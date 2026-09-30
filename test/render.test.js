@@ -1998,23 +1998,45 @@ test('exit-app-clicked refreshes the sidebar and asks to save first when there a
 //to it everywhere, so these run on any machine: what they check is that the channel routes through
 //the same unsaved-work prompt Exit does before anything reaches the platform. Whether the command
 //then finds a systemctl is platform-node.js's business, covered in platform.test.js.
-test('reboot-clicked reboots directly when there are no unsaved changes', async function(){
+test('reboot-clicked warns that it reboots the computer, not the program, before anything else', async function(){
+  var r = await freshRender();
+  r.project.hasUnsavedChanges = false;
+  r.project.filename = '';
+
+  currentBridge().handlers['reboot-clicked']();
+  await flushMicrotasks();
+
+  var popup = document.querySelector('.reboot-confirm-popup');
+  assert.ok(popup);
+  assert.match(popup.querySelector('p').innerText, /reboot your computer, not the program/);
+  assert.ok(!currentBridge().invoked.includes('rebootSystem'),
+    'should not take the machine down before the warning is answered');
+
+  findButton('No').onclick();
+  await flushMicrotasks();
+  assert.ok(!currentBridge().invoked.includes('rebootSystem'));
+  assert.strictEqual(document.querySelector('.reboot-confirm-popup'), null);
+});
+
+test('reboot-clicked reboots once confirmed when there are no unsaved changes', async function(){
   var r = await freshRender();
   r.project.hasUnsavedChanges = false;
   r.project.filename = ''; //no autoBackup path to route through
 
   currentBridge().handlers['reboot-clicked']();
+  findButton('Yes').onclick();
   await flushMicrotasks();
 
   assert.ok(currentBridge().invoked.includes('rebootSystem'));
 });
 
-test('reboot-clicked asks to save first when there are unsaved changes', async function(){
+test('reboot-clicked asks to save first, once confirmed, when there are unsaved changes', async function(){
   var r = await freshRender();
   r.project.chapters = [makeChap('Unsaved', { hasUnsavedChanges: true })];
   r.project.hasUnsavedChanges = true;
 
   currentBridge().handlers['reboot-clicked']();
+  findButton('Yes').onclick();
 
   assert.ok(findButton('Continue Without Saving'));
   assert.ok(!currentBridge().invoked.includes('rebootSystem'),

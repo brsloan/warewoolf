@@ -2625,7 +2625,10 @@ const menuCommands = {
   'exit-app-clicked': { run: function(){ proceedOrConfirmSave(exitApp, true); } },
   //Only ever sent on Linux - index.js does not put the menu item anywhere else. Same shape as Exit
   //because it has the same consequence for unsaved work.
-  'reboot-clicked': { run: function(){ proceedOrConfirmSave(rebootMachine, true); } },
+  'reboot-clicked': { run: function(){
+    const displayRebootConfirmation = require('./components/views/reboot-confirmation_display');
+    displayRebootConfirmation(function(){ proceedOrConfirmSave(rebootMachine, true); });
+  } },
   'save-copy-clicked': { run: function(){ saveProjectCopy(); } },
   'help-doc-clicked': { run: function(){ return openHelpDoc(); } },
   'renumber-chapters-clicked': { run: function(){
