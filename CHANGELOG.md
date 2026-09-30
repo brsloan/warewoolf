@@ -8,9 +8,15 @@ Releases before v0.9.0 were never tagged or published; the work from that period
 
 ## [Unreleased]
 
+## [3.1.1] - 2026-09-30
+
 ### Changed
 
 - **File > Reboot asks first.** It warns "This will reboot your computer, not the program. Continue?" before the unsaved-work prompt and the backup, and starts on No.
+
+### Fixed
+
+- **Joining screenplay lines keeps the upper line's case and type.** Backspace at the start of a cue, or deleting a selection that ran into one, turned the speech above it to capitals; Delete at the end of a speech turned it into a cue.
 
 ## [3.1.0] - 2026-09-16
 
@@ -350,7 +356,8 @@ WareWoolf was developed in the open for two and a half years before the first ta
 - **2022-12** — Fixed data loss when changing a chapter title, the missing-pups alert not taking focus, and the spellcheck dictionary path. README screenshot added.
 - **2023-05** — The error log gained a viewer with send and clear, the Help doc was expanded, `Alt+H` was bound to Change All and `Ctrl+Shift+D` to delete a chapter, DevTools was turned off, and a welcome explanation was added to the head of the sample novel. Released as v0.9.0 beta.
 
-[Unreleased]: https://github.com/brsloan/warewoolf/compare/v3.1.0...HEAD
+[Unreleased]: https://github.com/brsloan/warewoolf/compare/v3.1.1...HEAD
+[3.1.1]: https://github.com/brsloan/warewoolf/compare/v3.1.0...v3.1.1
 [3.1.0]: https://github.com/brsloan/warewoolf/compare/v3.0.0...v3.1.0
 [3.0.0]: https://github.com/brsloan/warewoolf/compare/v2.5.0...v3.0.0
 [2.5.0]: https://github.com/brsloan/warewoolf/compare/v2.4.0...v2.5.0
