@@ -510,6 +510,38 @@ function screenplayShiftTabBinding(getMode){
   };
 }
 
+//Delete at the end of a line joins the line below onto it, and the joined line keeps this line's
+//type, as Backspace at the start of the line below already does. Quill's own Delete means to do
+//the same (modules/keyboard.js handleDelete), but reads the upper line's formats where it meant to
+//read the lower's, finds no difference, and leaves the joined line the lower line's type - a
+//speech with Delete pressed at its end became the cue under it. An empty line is left to Quill:
+//deleting it takes it away, and the line below keeps its own type. So is a selection, and every
+//keypress while the editor shows prose.
+function screenplayDeleteBinding(quill, getMode){
+  return {
+    key: 46,
+    handler: function(range){
+      if(getMode() !== 'screenplay' || range.length > 0 || range.index >= quill.getLength() - 1)
+        return true;
+
+      var info = lineAt(quill, range.index);
+      var textLength = info.length - 1;
+      if(textLength === 0 || info.offset < textLength)
+        return true;
+
+      var upper = info.line.formats();
+      var lower = lineAt(quill, info.index + info.length).line.formats();
+      var formats = {};
+      Object.keys(lower).forEach(function(name){ formats[name] = false; });
+      Object.keys(upper).forEach(function(name){ formats[name] = upper[name]; });
+
+      quill.deleteText(range.index, 1, 'user');
+      quill.formatLine(range.index, 1, formats, 'user');
+      return false;
+    }
+  };
+}
+
 //The modifier Quill's own bindings call shortKey - Cmd on a Mac, Ctrl elsewhere. Quill resolves
 //it in addBinding's normalize(); the bindings below go on without addBinding (see
 //attachScreenplayKeys), so it is resolved here the same way.
@@ -548,7 +580,7 @@ function screenplayPickerBinding(quill, getMode){
   return binding;
 }
 
-//Installs the six bindings ahead of Quill's own for the same keys. Unshifted straight onto the
+//Installs the seven bindings ahead of Quill's own for the same keys. Unshifted straight onto the
 //keyboard's lists rather than added through addBinding, which appends - Quill's Enter and Tab
 //handlers are added in its constructor after the named options.bindings, so nothing added later
 //by the supported route can run before them (see render.js's setup for the footnote Enter binding,
@@ -558,6 +590,7 @@ function attachScreenplayKeys(quill, getMode){
   var bindings = quill.keyboard.bindings;
   bindings[13] = bindings[13] || [];
   bindings[9] = bindings[9] || [];
+  bindings[46] = bindings[46] || [];
 
   bindings[13].unshift(screenplayPickerBinding(quill, getMode));
   bindings[13].unshift(screenplayNewSceneBinding(quill, getMode));
@@ -565,6 +598,7 @@ function attachScreenplayKeys(quill, getMode){
   bindings[13].unshift(screenplayEnterBinding(quill, getMode));
   bindings[9].unshift(screenplayShiftTabBinding(getMode));
   bindings[9].unshift(screenplayTabBinding(quill, getMode));
+  bindings[46].unshift(screenplayDeleteBinding(quill, getMode));
 }
 
 //The screenplay binding for a key, for the autocomplete to hand the keypress on to once it has
@@ -590,6 +624,13 @@ const HEADING_START = /^(?:INT\.?\/EXT|EXT\.?\/INT|INT|EXT|EST|I\/E)\.\s$/i;
 //in as user changes within Quill's history delay, so Ctrl+Z takes the typed character and its
 //consequence off together. Nothing is done while an IME composition is open, which a replacement
 //under it would break, and nothing on the changes made here (the busy guard) or on a load.
+//
+//Nor on a change that only deletes. A deletion puts no new letters into a line, except by joining
+//two lines, and a join is exactly when a line's type is not yet settled: Quill's Backspace at the
+//start of a line and its delete of a range across lines (modules/keyboard.js handleBackspace,
+//handleDeleteRange) delete first, which leaves the joined line with the lower line's type, and
+//only then format it back to the upper line's. Read in between, a speech joined to the cue below
+//it was a cue, and every word of it went to capitals before it went back to being dialogue.
 function attachScreenplayTyping(quill, getMode){
   var busy = false;
   var composing = false;
@@ -602,7 +643,7 @@ function attachScreenplayTyping(quill, getMode){
       return;
 
     var span = touchedSpan(delta);
-    if(!span)
+    if(!span || span.deletedOnly)
       return;
 
     busy = true;
@@ -625,20 +666,23 @@ function attachScreenplayTyping(quill, getMode){
   });
 }
 
-//The index range a change delta touched, walked the way Quill applies it, and whether it was a
-//single typed space - the one keystroke the heading detection above waits for.
+//The index range a change delta touched, walked the way Quill applies it, whether it was a
+//single typed space - the one keystroke the heading detection above waits for - and whether it
+//did nothing but delete.
 function touchedSpan(delta){
   var index = 0;
   var start = null;
   var end = 0;
   var insertedSpace = false;
   var inserts = 0;
+  var formatted = false;
 
   (delta.ops || []).forEach(function(op){
     if(typeof op.retain === 'number'){
       if(op.attributes){
         if(start === null) start = index;
         end = index + op.retain;
+        formatted = true;
       }
       index += op.retain;
     }
@@ -659,7 +703,12 @@ function touchedSpan(delta){
   if(start === null)
     return null;
 
-  return { start: start, end: Math.max(end, start), insertedSpace: insertedSpace && inserts === 1 };
+  return {
+    start: start,
+    end: Math.max(end, start),
+    insertedSpace: insertedSpace && inserts === 1,
+    deletedOnly: inserts === 0 && !formatted
+  };
 }
 
 // ------------------------------------------------------------------------------------------
@@ -1645,6 +1694,7 @@ module.exports = {
   screenplayShiftEnterBinding,
   screenplayTabBinding,
   screenplayShiftTabBinding,
+  screenplayDeleteBinding,
   screenplayNewSceneBinding,
   screenplayPickerBinding,
   SCENE_INTROS,

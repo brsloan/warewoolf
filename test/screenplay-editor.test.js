@@ -546,6 +546,50 @@ test('typing "INT. " on an action line makes it a heading, and typed text in a c
   assert.deepStrictEqual(lines(s.quill), [['character', 'bob']]);
 });
 
+//Quill's Backspace at the start of a line, and its delete of a range across lines, join the lines
+//with the lower one's type and only then put the upper one's back. A speech joined to the cue
+//under it must not be read as a cue in between and go to capitals.
+test('joining a speech to the cue under it leaves the speech in its own case', function(){
+  var script = delta([['character', 'BOB'], ['dialogue', 'I am going home now.'], ['character', 'ALICE'], ['dialogue', 'Fine.']]);
+
+  function quillHandler(quill, key, name){
+    return quill.keyboard.bindings[key].find(function(binding){ return binding.handler.name === name; });
+  }
+
+  var s = scriptQuill(script);
+  attachScreenplayTyping(s.quill, function(){ return s.state.mode; });
+  press(s.quill, quillHandler(s.quill, 8, 'handleBackspace'), 25);
+  assert.deepStrictEqual(lines(s.quill), [['character', 'BOB'], ['dialogue', 'I am going home now.ALICE'], ['dialogue', 'Fine.']], 'Backspace at the start of the cue');
+
+  s = scriptQuill(script);
+  attachScreenplayTyping(s.quill, function(){ return s.state.mode; });
+  press(s.quill, quillHandler(s.quill, 46, 'handleDeleteRange'), 14, 13);
+  assert.deepStrictEqual(lines(s.quill), [['character', 'BOB'], ['dialogue', 'I am goingICE'], ['dialogue', 'Fine.']], 'a selection deleted into the cue');
+});
+
+test('Delete at the end of a line joins the line below onto it with this line\'s type', function(){
+  var script = delta([['character', 'BOB', { dual: true }], ['dialogue', 'I am going home now.'], ['character', 'ALICE', { dual: true }], ['dialogue', 'Fine.'], ['action', ''], ['action', 'Later.']]);
+  var s = scriptQuill(script);
+  attachScreenplayTyping(s.quill, function(){ return s.state.mode; });
+  var del = s.quill.keyboard.bindings[46][0];
+
+  assert.strictEqual(press(s.quill, del, 24), false);
+  assert.deepStrictEqual(lines(s.quill), [['character', 'BOB', 'dual'], ['dialogue', 'I am going home now.ALICE'], ['dialogue', 'Fine.'], ['action', ''], ['action', 'Later.']],
+    'a speech keeps its type and its case, and the cue\'s dual mark does not come with it');
+
+  assert.strictEqual(press(s.quill, del, 3), false);
+  assert.deepStrictEqual(lines(s.quill), [['character', 'BOBI AM GOING HOME NOW.ALICE', 'dual'], ['dialogue', 'Fine.'], ['action', ''], ['action', 'Later.']],
+    'a cue keeps its type, and what joins it goes to capitals');
+
+  s = scriptQuill(script);
+  del = s.quill.keyboard.bindings[46][0];
+  assert.strictEqual(press(s.quill, del, 2), true, 'mid-line is left to Quill');
+  assert.strictEqual(press(s.quill, del, 4, 3), true, 'so is a selection');
+  assert.strictEqual(press(s.quill, del, 37), true, 'and an empty line');
+  s.state.mode = 'prose';
+  assert.strictEqual(press(s.quill, del, 3), true, 'and prose');
+});
+
 test('toggleDual marks the cue the caret is on or under, and unmarks it again', function(){
   var s = scriptQuill(delta([['character', 'BOB'], ['dialogue', 'Hi.'], ['action', 'Later.']]));
 
