@@ -204,7 +204,10 @@ function assignLoadedCards() {
       thisCardLabel.value = loadedCards[i].label;
       thisCardLabel.disabled = false;
       thisCardLabel.dataset.cardIndex = i;
-      thisCardLabel.addEventListener('keyup', function(e){
+      //'input' rather than 'keyup': a keyup fires for any key let go of on the field - the Ctrl and 9
+      //of the shortcut that opened the board, a Ctrl+Arrow that moved focus here - and marked a board
+      //nobody had edited as unsaved. 'input' fires only when the text itself changes.
+      thisCardLabel.addEventListener('input', function(e){
         loadedCards[parseInt(this.dataset.cardIndex)].label = this.value;
         markUnsavedChanges();
       });
@@ -213,7 +216,7 @@ function assignLoadedCards() {
       thisCardDescr.value = loadedCards[i].descr;
       thisCardDescr.disabled = false;
       thisCardDescr.dataset.cardIndex = i;
-      thisCardDescr.addEventListener('keyup', function(e){
+      thisCardDescr.addEventListener('input', function(e){
         loadedCards[parseInt(this.dataset.cardIndex)].descr = this.value;
         markUnsavedChanges();
       });

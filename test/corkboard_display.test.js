@@ -153,12 +153,31 @@ test('typing in a card marks unsaved changes immediately, so Escape prompts to s
 
   var label = document.getElementById('card-label1');
   label.value = 'Changed';
-  label.dispatchEvent(new window.Event('keyup', { bubbles: true }));
+  label.dispatchEvent(new window.Event('input', { bubbles: true }));
 
   keydown(label, 'Escape', {});
 
   assert.ok(document.querySelector('.popup-dialog'), 'the unsaved-changes prompt should appear');
   assert.ok(document.querySelector('.popup-corkboard'), 'the corkboard itself should stay open behind the prompt');
+});
+
+//Regression: the fields marked the board unsaved on every keyup, so letting go of the Ctrl+9 that
+//opened it - or of a Ctrl+Arrow that moved between cards - made Escape ask to save a board nobody
+//had touched. Only a change to the text counts.
+test('letting go of a key on a card without changing its text leaves Escape closing the board', async function(t){
+  var cards = [{ label: 'A', descr: 'a', color: 0, checked: false }];
+  var showCorkboard = freshCorkboardDisplay({ getCardsFromFile: function(){ return cards; }, saveCards: function(){} });
+  await showCorkboard(makeProject({ corkboardColumns: 1 }), platformInfo());
+
+  var label = document.getElementById('card-label1');
+  label.dispatchEvent(new window.KeyboardEvent('keyup', { key: '9', ctrlKey: true, bubbles: true }));
+  label.dispatchEvent(new window.KeyboardEvent('keyup', { key: 'Control', bubbles: true }));
+  document.getElementById('card-descr1').dispatchEvent(new window.KeyboardEvent('keyup', { key: 'Tab', bubbles: true }));
+
+  keydown(label, 'Escape', {});
+
+  assert.strictEqual(document.querySelector('.popup-dialog'), null);
+  assert.strictEqual(document.querySelector('.popup-corkboard'), null);
 });
 
 test('Escape with no unsaved changes closes the corkboard immediately, without prompting', async function(t){
@@ -186,7 +205,7 @@ test('Ctrl+S saves the cards and the project, then clears the unsaved-changes fl
 
   var label = document.getElementById('card-label1');
   label.value = 'Changed';
-  label.dispatchEvent(new window.Event('keyup', { bubbles: true }));
+  label.dispatchEvent(new window.Event('input', { bubbles: true }));
 
   var popup = document.querySelector('.popup-corkboard');
   //A keydown listener's return value is dropped by dispatchEvent, and the handler is async now
@@ -214,7 +233,7 @@ test('Continue Without Saving clears the unsaved flag instead of leaving it stuc
 
   var label = document.getElementById('card-label1');
   label.value = 'Changed';
-  label.dispatchEvent(new window.Event('keyup', { bubbles: true }));
+  label.dispatchEvent(new window.Event('input', { bubbles: true }));
 
   keydown(document.querySelector('.popup-corkboard'), 'Escape', {});
 
