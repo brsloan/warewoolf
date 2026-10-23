@@ -321,8 +321,9 @@ function host(){
       //be refused - so the same four files go in as @font-face rules with the bytes inlined.
       //
       //A novel's compiled PDF (layout 'book') takes the same window with a book's page instead: an
-      //inch all round and the page number centred at the foot. Its page asks only for serif faces
-      //the system already has, so nothing is inlined into it.
+      //inch all round, and no header or footer template - its running header comes from the page's
+      //own @page rules (mdfc-to-html.js), which can leave the first page bare where a template
+      //cannot. Its page asks only for serif faces the system already has, so nothing is inlined.
       onPrintToPdf: function(html, filePath, layout){
         var isBook = layout === 'book';
         var printer = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true } });
@@ -333,9 +334,7 @@ function host(){
               pageSize: 'Letter',
               printBackground: false,
               margins: { marginType: 'custom', top: 1, bottom: 1, left: 1, right: 1 },
-              displayHeaderFooter: true,
-              headerTemplate: '<div></div>',
-              footerTemplate: '<div style="width:100%;font-family:Georgia,serif;font-size:10pt;text-align:center;padding-bottom:0.4in"><span class="pageNumber"></span></div>'
+              displayHeaderFooter: false
             } : {
               pageSize: 'Letter',
               printBackground: false,

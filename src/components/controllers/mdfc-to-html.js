@@ -337,9 +337,8 @@ function convertMdfcToHtmlPage(text, title, author = null, insertTitle = false, 
 
   //A compiled novel's PDF page: the same HTML the .html compile writes, with a printed book's
   //stylesheet on top - a serif face at 12pt, every chapter heading starting a fresh page, and the
-  //title page (when asked for) alone on the first. The page size, margins and page numbers are the
-  //printToPdf command's 'book' layout, not this page's; Chromium's header/footer templates are the
-  //only place a page number can come from.
+  //title page (when asked for) alone on the first. The page size and margins are the printToPdf
+  //command's 'book' layout, not this page's.
   //
   //The title page is built here rather than through convertMdfcToHtmlPage's insertTitle, which
   //only stacks the title above chapter one - a book's title wants a page to itself, and some room
@@ -353,9 +352,46 @@ function convertMdfcToHtmlPage(text, title, author = null, insertTitle = false, 
       titlePage += '</div>';
     }
 
-    var page = convertMdfcToHtmlPage(text, title, author, false, false, justifyLeft);
-    page = page.replace('</style>', getPrintCss() + '    </style>');
+    //Escaped on the way in: the template writes the title into <title> as-is, ahead of the
+    //stylesheet, so a title holding "</style>" would otherwise be what the replace below finds.
+    var page = convertMdfcToHtmlPage(text, escapeHtmlText(title), author, false, false, justifyLeft);
+    page = page.replace('</style>', getPrintCss() + getRunningHeaderCss(title, author) + '    </style>');
     return page.replace('<body>', '<body>' + titlePage);
+  }
+
+  //The manuscript running header - "Surname / Title / 12", top right - on every page but the first,
+  //which is the title page or the opening of chapter one and carries none in manuscript format.
+  //
+  //A CSS page-margin box, not printToPDF's headerTemplate: a template is stamped on every page
+  //alike and runs no script, so it cannot leave the first page out. Chromium has drawn @page
+  //margin boxes since 131, and with them present it draws no header of its own. The surname is the
+  //last word of the author's name; a missing author or title is left out of the line rather than
+  //leaving an empty slot between slashes.
+  function getRunningHeaderCss(title, author){
+    var surname = author ? String(author).trim().split(/\s+/).pop() : '';
+    var parts = [surname, title ? String(title).trim() : ''].filter(function(part){ return part.length > 0; });
+    var lead = parts.length > 0 ? cssString(parts.join(' / ') + ' / ') + ' ' : '';
+
+    return "    @page {" +
+      "      @top-right {" +
+      "        content: " + lead + "counter(page);" +
+      "        font-family: Georgia, \"Times New Roman\", \"Liberation Serif\", \"DejaVu Serif\", serif;" +
+      "        font-size: 10pt;" +
+      "        vertical-align: bottom;" +
+      "        padding-bottom: 0.25in;" +
+      "      }" +
+      "    }" +
+      "    @page :first {" +
+      "      @top-right {" +
+      "        content: none;" +
+      "      }" +
+      "    }";
+  }
+
+  //A CSS string literal. "<" is escaped too: this lands inside a <style> element, where a title
+  //containing "</style>" would otherwise end the stylesheet early.
+  function cssString(text){
+    return '"' + String(text).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/</g, '\\3C ').replace(/[\r\n]+/g, ' ') + '"';
   }
 
   function getPrintCss(){

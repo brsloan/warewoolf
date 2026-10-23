@@ -414,6 +414,22 @@ test('the PDF page puts the title page alone first, escaped, and starts each cha
   assert.deepStrictEqual(Array.from(doc.querySelectorAll('body > h1')).map(function(h){ return h.textContent; }), ['One', 'Two']);
 });
 
+test('the PDF page carries a "Surname / Title / page" header top right, left off the first page', function(){
+  const css = new JSDOM(convertMdfcToPdfPage('Text.\n', 'Frankenstein', 'Mary  Shelley', true)).window.document.querySelector('style').textContent;
+  assert.match(css, /@page \{\s*@top-right \{\s*content: "Shelley \/ Frankenstein \/ " counter\(page\);/);
+  assert.match(css, /@page :first \{\s*@top-right \{\s*content: none;/);
+});
+
+test('the running header drops a missing author and cannot close the stylesheet early', function(){
+  const doc = new JSDOM(convertMdfcToPdfPage('Text.\n', 'Say "hi" </style>', null, false)).window.document;
+  assert.strictEqual(doc.querySelectorAll('style').length, 1);
+  assert.match(doc.querySelector('style').textContent, /content: "Say \\"hi\\" \\3C \/style> \/ " counter\(page\);/);
+  assert.strictEqual(doc.body.textContent.trim(), 'Text.');
+
+  const bare = new JSDOM(convertMdfcToPdfPage('Text.\n', '', '', false)).window.document.querySelector('style').textContent;
+  assert.match(bare, /content: counter\(page\);/);
+});
+
 test('the PDF page has no title page unless asked', function(){
   const doc = new JSDOM(convertMdfcToPdfPage('Text.\n', 'Title', 'Author', false)).window.document;
   assert.strictEqual(doc.querySelector('.title-page'), null);
