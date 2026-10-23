@@ -7,7 +7,7 @@ const unzipper = require('unzipper');
 
 const BACKSLASH = String.fromCharCode(92);
 
-const { backupProject, archiveProject, deleteOldBackups } = require('../src/components/controllers/backup-project');
+const { backupProject, archiveProject, deleteOldBackups, selectBackupsToKeep, listProjectBackups, restoreBackup } = require('../src/components/controllers/backup-project');
 const { normalizeSlashes } = require('../src/components/controllers/path-utils');
 
 //The modules under test hold their own createPlatform(createIpcBacking()) instance and reach the
@@ -194,4 +194,114 @@ test('deleteOldBackups does nothing when backupsToKeep is 0', async function(t){
   await deleteOldBackups(project, userSettings);
 
   assert.strictEqual(fs.readdirSync(backupDir).length, 1);
+});
+
+function backupName(project, date){
+  function pad(n){ return String(n).padStart(2, '0'); }
+  return project + date.getFullYear() + pad(date.getMonth() + 1) + pad(date.getDate())
+    + pad(date.getHours()) + pad(date.getMinutes()) + pad(date.getSeconds()) + '.zip';
+}
+
+//The reason the tiers exist: a busy day used to push out everything older than its own closes.
+test('selectBackupsToKeep keeps a busy day\'s backups without losing the days before it', function(){
+  const now = new Date(2026, 9, 23, 18, 0, 0);
+  const names = [];
+  for(let d = 1; d <= 7; d++)
+    names.push(backupName('novel', new Date(2026, 9, 23 - d, 12, 0, 0)));
+  for(let h = 0; h < 15; h++)
+    names.push(backupName('novel', new Date(2026, 9, 23, 8, h, 0)));
+
+  const kept = selectBackupsToKeep(names, 10, now);
+
+  //The ten newest closes of today, plus one for each of the seven days before.
+  assert.strictEqual(kept.length, 17);
+  for(let d = 1; d <= 7; d++)
+    assert.ok(kept.includes(backupName('novel', new Date(2026, 9, 23 - d, 12, 0, 0))), 'lost day -' + d);
+});
+
+test('selectBackupsToKeep keeps the newest of each day for 30 days, then the newest of each week', function(){
+  const now = new Date(2026, 9, 23, 18, 0, 0); //a Friday
+  const names = [];
+  //Two backups a day for 90 days.
+  for(let d = 0; d < 90; d++){
+    names.push(backupName('novel', new Date(2026, 9, 23 - d, 9, 0, 0)));
+    names.push(backupName('novel', new Date(2026, 9, 23 - d, 17, 0, 0)));
+  }
+
+  const kept = selectBackupsToKeep(names, 1, now);
+
+  //Inside the month: only the evening backup of each day survives.
+  assert.ok(kept.includes(backupName('novel', new Date(2026, 9, 10, 17, 0, 0))));
+  assert.ok(!kept.includes(backupName('novel', new Date(2026, 9, 10, 9, 0, 0))));
+
+  //Past it: one per Monday-to-Sunday week - the Sunday evening one, the newest in its week. The
+  //newest of them is the exception: the week the cutoff falls in only has its days before the
+  //cutoff in this tier, so its newest is the last day before the month began.
+  const old = kept.filter(function(fn){ return fn < backupName('novel', new Date(2026, 8, 23)); });
+  assert.strictEqual(old[old.length - 1], backupName('novel', new Date(2026, 8, 22, 17, 0, 0)));
+  old.slice(0, -1).forEach(function(fn){
+    const ts = fn.slice(5, 13);
+    assert.strictEqual(new Date(+ts.slice(0, 4), +ts.slice(4, 6) - 1, +ts.slice(6, 8)).getDay(), 0, fn + ' is not a Sunday');
+  });
+  //And no two of those in the same week.
+  assert.strictEqual(new Set(old).size, old.length);
+  assert.ok(old.length >= 8 && old.length <= 10, 'expected about nine weekly backups, got ' + old.length);
+});
+
+test('deleteOldBackups ignores folders and stray files in the backup directory', async function(t){
+  const backupDir = makeTempDir(t, 'wwbackup-prune-');
+  const project = { filename: 'novel.woolf' };
+  const userSettings = { backupDirectory: backupDir, backupsToKeep: 1 };
+
+  fs.writeFileSync(path.join(backupDir, 'novel20250101000001.zip'), '');
+  fs.writeFileSync(path.join(backupDir, 'novel20250101000002.zip'), '');
+  fs.mkdirSync(path.join(backupDir, 'novel20250101000001'));
+  fs.writeFileSync(path.join(backupDir, 'novel-notes.txt'), '');
+
+  await deleteOldBackups(project, userSettings, new Date(2026, 9, 23));
+
+  assert.deepStrictEqual(fs.readdirSync(backupDir).sort(), [
+    'novel-notes.txt', 'novel20250101000001', 'novel20250101000002.zip'
+  ]);
+});
+
+test('listProjectBackups lists one project\'s backups or every project\'s, newest first', async function(t){
+  const backupDir = makeTempDir(t, 'wwbackup-list-');
+  ['novel20250101000001.zip', 'novel20250301000001.zip', 'other20250201000001.zip', 'readme.txt'].forEach(function(fn){
+    fs.writeFileSync(path.join(backupDir, fn), '');
+  });
+  fs.mkdirSync(path.join(backupDir, 'novel20250101000001'));
+
+  const mine = await listProjectBackups(backupDir, 'novel.woolf');
+  assert.deepStrictEqual(mine.map(b => b.filename), ['novel20250301000001.zip', 'novel20250101000001.zip']);
+  assert.strictEqual(mine[0].project, 'novel');
+  assert.strictEqual(mine[0].date.getMonth(), 2);
+
+  const all = await listProjectBackups(backupDir, null);
+  assert.deepStrictEqual(all.map(b => b.filename), [
+    'novel20250301000001.zip', 'other20250201000001.zip', 'novel20250101000001.zip'
+  ]);
+});
+
+test('restoreBackup unzips beside the archive, never over an earlier restore, and returns the project path', async function(t){
+  const project = makeProjectFixture(t);
+  const archiveDir = makeTempDir(t, 'wwbackup-restore-');
+
+  const archiveName = await new Promise(function(resolve, reject){
+    archiveProject(project, archiveDir, function(err, name){ err ? reject(err) : resolve(name); });
+  });
+  const archivePath = normalizeSlashes(path.join(archiveDir, archiveName));
+  const folder = archivePath.slice(0, -4);
+
+  const first = await restoreBackup(archivePath);
+  assert.strictEqual(first, folder + '/' + project.filename);
+  assert.strictEqual(fs.readFileSync(path.join(folder, 'chapters', 'chap1.txt'), 'utf8'), 'chapter one');
+
+  const second = await restoreBackup(archivePath);
+  assert.strictEqual(second, folder + ' (2)/' + project.filename);
+  assert.ok(fs.existsSync(second));
+});
+
+test('restoreBackup refuses a file that is not a backup', async function(t){
+  await assert.rejects(restoreBackup('/somewhere/notes.zip'), /Not a WareWoolf backup/);
 });

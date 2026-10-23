@@ -1412,27 +1412,31 @@ function openAProject() {
 
   const showFileDialog = require('./components/views/file-dialog_display');
   showFileDialog(options, detached(async function(filepath){
-    if (filepath) {
-      var missingChaps = await project.loadFile(filepath[0]);
-      if(await projectFailedToLoad(filepath[0]))
-        return;
-      //Before displayProject() below, for the same reason setProject sets it before anything else:
-      //a writer who browses to the bundled Help doc gets it read-only, exactly as Help > Open Help
-      //Document already gives them.
-      project.isReadOnly = isInsideInstallDirectory(filepath[0]);
-      if(missingChaps.length > 0){
-        const promptForMissingPups = require('./components/views/missing-pups_display');
-        await promptForMissingPups(project, function(resp){
-          displayProject().catch(reportDetachedFailure);
-        });
-      }
-      else{
-        await displayProject();
-      }
-      userSettings.lastProject = filepath[0];
-      userSettings.save();
-    }
+    if (filepath)
+      await openProjectAt(filepath[0]);
   })).catch(reportDetachedFailure);
+}
+
+//Shared by Open Project and Restore Backup, which differ only in how they come by the path.
+async function openProjectAt(filepath){
+  var missingChaps = await project.loadFile(filepath);
+  if(await projectFailedToLoad(filepath))
+    return;
+  //Before displayProject() below, for the same reason setProject sets it before anything else:
+  //a writer who browses to the bundled Help doc gets it read-only, exactly as Help > Open Help
+  //Document already gives them.
+  project.isReadOnly = isInsideInstallDirectory(filepath);
+  if(missingChaps.length > 0){
+    const promptForMissingPups = require('./components/views/missing-pups_display');
+    await promptForMissingPups(project, function(resp){
+      displayProject().catch(reportDetachedFailure);
+    });
+  }
+  else{
+    await displayProject();
+  }
+  userSettings.lastProject = filepath;
+  userSettings.save();
 }
 
 
@@ -2684,6 +2688,14 @@ const menuCommands = {
   'save-backup-clicked': { run: function(){
     const { backupProject } = require('./components/controllers/backup-project');
     backupProject(project, userSettings, sysDirectories.docs, alertBackupResult);
+  } },
+  //The unsaved-changes prompt waits until a backup has actually been restored: asking on the way
+  //in would interrupt a writer who only meant to look at the list.
+  'restore-backup-clicked': { run: function(){
+    const showRestoreBackup = require('./components/views/restore-backup_display');
+    return showRestoreBackup(project, userSettings, function(projectPath){
+      proceedOrConfirmSave(detached(function(){ return openProjectAt(projectPath); }));
+    });
   } },
   'settings-clicked': { run: function(){
     const showSettings = require('./components/views/settings_display');

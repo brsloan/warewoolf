@@ -93,7 +93,7 @@ function showSettings(userSettings, autosaver, sysDirectories, autosaveProject, 
   backupTbl.appendChild(generateRow(autoBackupLabel, autoBackupCheck));
 
   var backupsLimitLabel = document.createElement('label');
-  backupsLimitLabel.innerText = 'Latest backups to keep (0=infinite): ';
+  backupsLimitLabel.innerText = 'Recent backups to keep, plus one a day for a month and one a week after (0=keep all): ';
   backupsLimitLabel.htmlFor = 'backups-to-keep-input';
 
   var backupLimitInput = document.createElement('input');

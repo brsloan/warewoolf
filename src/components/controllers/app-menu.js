@@ -87,6 +87,8 @@ function buildMenuTemplate(options){
         //fire. Backup stays reachable from this menu, where it is not competing for a key a writer
         //presses mid-sentence.
         item('Backup', 'save-backup-clicked'),
+        //No accelerator, for the same reason as Backup above.
+        item('Restore Backup', 'restore-backup-clicked'),
         separator,
         item('Import', 'import-clicked', { accelerator: 'CmdOrCtrl+Shift+I' }),
         item('Export', 'export-clicked', { accelerator: 'CmdOrCtrl+Shift+E' }),

@@ -8,6 +8,14 @@ Releases before v0.9.0 were never tagged or published; the work from that period
 
 ## [Unreleased]
 
+### Added
+
+- **File > Restore Backup.** Lists the Backups folder by date (this project's backups, or every project's) and opens the chosen one as its own copy beside the archive, so a backup no longer has to be found and unzipped by hand in the File Manager. The open project is left as it is, and unsaved changes are offered a save first.
+
+### Changed
+
+- **Backups are kept by day and week, not only by count.** The backups-to-keep setting still keeps that many of the newest, and now also keeps the newest backup of each day for the last 30 days and the newest of each week before that. Before, one busy day of opening and closing could push out a week of backups.
+
 ## [3.1.1] - 2026-09-30
 
 ### Changed

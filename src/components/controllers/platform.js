@@ -139,7 +139,7 @@ var EVENTS = [
   'file-manager-clicked', 'find-replace-clicked', 'headings-to-chaps-clicked', 'help-doc-clicked',
   'import-clicked', 'new-project-clicked', 'open-clicked',
   'outliner-clicked', 'properties-clicked', 'reboot-clicked', 'renumber-chapters-clicked',
-  'restore-chapter-clicked',
+  'restore-backup-clicked', 'restore-chapter-clicked',
   'save-as-clicked', 'save-backup-clicked', 'save-clicked', 'save-copy-clicked',
   'screenplay-names-clicked',
   'send-via-email-clicked', 'settings-clicked', 'shortcuts-clicked', 'spellcheck-clicked',
