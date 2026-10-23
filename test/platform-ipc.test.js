@@ -33,7 +33,7 @@ function platformOver(invokeImpl){
 //74 at once, and a hand-maintained list here would only be a second place to forget one.
 test('the backing implements every command the contract declares', function(){
   assert.deepStrictEqual(IMPLEMENTED.slice().sort(), Object.keys(COMMANDS).sort());
-  assert.strictEqual(IMPLEMENTED.length, 79);
+  assert.strictEqual(IMPLEMENTED.length, 87);
 });
 
 test('every command invokes the bridge under its own name, with the args passed through', async function(){
@@ -158,5 +158,5 @@ test('an event name outside the contract never reaches the bridge', function(){
     return err.code === CODES.INVALID_ARGUMENT;
   });
   assert.strictEqual(Object.keys(over.bridge._listeners).length, 0);
-  assert.strictEqual(EVENTS.length, 44);
+  assert.strictEqual(EVENTS.length, 45);
 });

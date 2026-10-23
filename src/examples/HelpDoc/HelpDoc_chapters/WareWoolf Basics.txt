@@ -12,7 +12,7 @@ To cycle through chapters, press **CMD/CTRL** + **Up** or **Down**. **CMD/CTRL**
 	If you move a chapter to  the end of the list, and then move it down one more space, it will jump to the ***Reference** *section. Any chapter in the reference section will not be included in project word counts or compiling.  This is for any material you wish to keep in the project, but which is not part of the novel itself.
 
 ## File Menu
-Pressing **ALT **will reveal the file menu at the top of the screen **(CONTROL + F2 **on Mac, but see note on alternate below**)**. Here you can import, export, compile, or use many other tools, all easily accessible without a mouse by navigating the menus with the **Arrow Keys** and **Escape**. In addition to the usual find/replace, spellcheck, etc., there is a File Manager, a Wi-Fi Manager (if on Linux), an Outliner, and other tools.
+Pressing **ALT **will reveal the file menu at the top of the screen **(CONTROL + F2 **on Mac, but see note on alternate below**)**. Here you can import, export, compile, or use many other tools, all easily accessible without a mouse by navigating the menus with the **Arrow Keys** and **Escape**. In addition to the usual find/replace, spellcheck, etc., there is a File Manager, a Wi-Fi Manager and a Bluetooth Manager (if on Linux), an Outliner, and other tools.
 	**NOTE**: You can also open the file menu as a popup menu by pressing **CMD/CTRL + M**. This is mainly for Macbook users since the screen-dimming function on the F2 key would require a three-button combo (Fn + Ctrl + F2) which is annoying, but it also gives a slightly better menu type for keyboard navigation, so it is available on all operating systems.
 
 ## Tool Menus

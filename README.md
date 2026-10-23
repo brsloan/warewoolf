@@ -37,6 +37,7 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 * Send Via Email: Email drafts of individual chapters or the entire manuscript to yourself at the press of a button.
 * Built In File Manager: Rename, delete, copy, move, and organize files within WareWoolf (for use in a writerDeck).
 * Built In Wi-Fi Manager: turn wi-fi on/off, connect to new networks, etc. (Linux only, for use in a writerDeck).
+* Built In Bluetooth Manager: pair and connect Bluetooth keyboards and other devices (Linux only, for use in a writerDeck).
 * Built In Battery Monitor: display battery percentage (Linux only, for use in a writerDeck)
 * File > Reboot: restart the machine from inside the app, after the usual save prompt and auto-backup (Linux only, for use in a writerDeck).
 * File > Shut Down: power the machine off the same way (Linux only).

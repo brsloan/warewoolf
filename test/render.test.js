@@ -2053,7 +2053,7 @@ var ALL_MENU_CHANNELS = [
   'outliner-clicked', 'convert-tabs-clicked', 'convert-substitutions-clicked',
   'about-clicked', 'exit-app-clicked', 'reboot-clicked', 'shutdown-clicked',
   'save-copy-clicked', 'help-doc-clicked', 'renumber-chapters-clicked', 'send-via-email-clicked',
-  'view-error-log-clicked', 'file-manager-clicked', 'wifi-manager-clicked', 'save-backup-clicked',
+  'view-error-log-clicked', 'file-manager-clicked', 'wifi-manager-clicked', 'bluetooth-manager-clicked', 'save-backup-clicked',
   'restore-backup-clicked',
   'settings-clicked', 'corkboard-clicked', 'file-opened-from-outside-warewoolf',
   'tab-indent-paragraphs-clicked', 'center-all-heads-clicked', 'dictionaries-clicked',

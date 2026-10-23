@@ -935,6 +935,17 @@ removable partitions with `lsblk -J` and mounts/unmounts/powers off through
 and `ejectDrive` look the id up in a fresh `listDrives()` before acting and
 reject `NOT_FOUND` otherwise, so the renderer cannot name the boot disk.
 
+`bluetoothGetStatus()`, `bluetoothEnable()`, `bluetoothDisable()`,
+`bluetoothListDevices()`, `bluetoothScan()`, `bluetoothPair({ address })`,
+`bluetoothConnect({ address })` and `bluetoothRemove({ address })` back the
+Bluetooth Manager (`bluetooth-manager.js`, `bluetooth-manager_display.js`),
+Linux only, through `bluetoothctl`'s one-command mode. Older BlueZ exits 0 on
+failure, so success is read from the output ("Pairing successful"), and each
+call has a kill timer because `bluetoothctl` waits forever for a bluetoothd
+that is not running. Pairing passes `--agent NoInputNoOutput` so a keyboard
+pairs Just Works, with no passkey to show mid-command. An address is checked
+against the `AA:BB:CC:DD:EE:FF` form before anything is spawned.
+
 ---
 
 ## Summary

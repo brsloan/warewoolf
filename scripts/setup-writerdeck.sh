@@ -15,8 +15,9 @@
 # What it does, in order:
 #
 #   1. Checks it is on a 64-bit Debian-family system with no desktop installed.
-#   2. Installs Xorg, the Matchbox window manager, xset, and udisks2 (apt-get),
-#      which WareWoolf's file dialogs use to mount and eject USB sticks.
+#   2. Installs Xorg, the Matchbox window manager, xset, udisks2 and bluez
+#      (apt-get): WareWoolf's file dialogs use udisks2 to mount and eject USB
+#      sticks, and its Bluetooth Manager uses bluez's bluetoothctl.
 #   3. Installs WareWoolf from a .deb - the one you pass with --deb, or the
 #      latest release downloaded from GitHub for this machine's architecture.
 #   4. Makes the machine log this user in automatically on the first console
@@ -212,10 +213,10 @@ note "User: $USER  Home: $HOME"
 # 2. Xorg + Matchbox
 # ---------------------------------------------------------------------------
 
-say "2. Installing Xorg, the Matchbox window manager, xset, and udisks2"
+say "2. Installing Xorg, the Matchbox window manager, xset, udisks2 and bluez"
 note "This is the slow step on a Pi: a no-desktop OS has almost none of the dependencies yet."
 run sudo apt-get update
-run sudo apt-get install -y xorg matchbox-window-manager x11-xserver-utils udisks2 curl ca-certificates
+run sudo apt-get install -y xorg matchbox-window-manager x11-xserver-utils udisks2 bluez curl ca-certificates
 
 # ---------------------------------------------------------------------------
 # 3. WareWoolf

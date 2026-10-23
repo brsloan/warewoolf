@@ -1,0 +1,6 @@
+[>c] # Bluetooth Manager
+
+This tool is only available in Linux, under the Tools menu beside the Wi-Fi Manager. It is for pairing a Bluetooth keyboard (or any other Bluetooth device) to a writerDeck that has no desktop to do it from. You will need a wired keyboard plugged in to do the pairing with; once the Bluetooth keyboard is paired, it reconnects by itself every time the machine starts.
+	To add a keyboard: make sure “Enable Bluetooth” is ticked, turn the keyboard on and put it in pairing mode (usually by holding its Bluetooth or Connect key until a light blinks), then choose **Scan**. WareWoolf searches for ten seconds and lists what it finds. Choose the keyboard in the list and press **Connect** (or Enter). There is no code to type: WareWoolf pairs, trusts and connects the keyboard in one go, and says so when it is done. Pick from the list soon after scanning; a device that has not been paired is only remembered for about thirty seconds.
+	Devices already paired are listed first, marked “paired” or “connected”. Connect reconnects one that has dropped, and **Forget** unpairs a device so it has to be paired again to come back.
+	If the Bluetooth Manager says bluetoothctl is not installed, or that bluetoothd is not running, see the Troubleshooting section of “Using WareWoolf For a WriterDeck”.

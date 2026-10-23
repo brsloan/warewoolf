@@ -169,7 +169,10 @@ function buildMenuTemplate(options){
         item('Center All Headings', 'center-all-heads-clicked'),
         ...(isLinux ? [
           separator,
-          item('Wi-Fi Manager', 'wifi-manager-clicked', { accelerator: 'CommandOrControl+W' })
+          item('Wi-Fi Manager', 'wifi-manager-clicked', { accelerator: 'CommandOrControl+W' }),
+          //No accelerator: a keyboard is paired once, not every session, so this does not need to
+          //spend a chord.
+          item('Bluetooth Manager', 'bluetooth-manager-clicked')
         ] : [])
       ]
     },

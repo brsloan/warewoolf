@@ -421,7 +421,7 @@ test('events are validated by name and unsubscribe cleanly', function(t){
   const seen = [];
   const handler = function(){ seen.push(1); };
 
-  assert.strictEqual(EVENTS.length, 44);
+  assert.strictEqual(EVENTS.length, 45);
   assert.ok(EVENTS.indexOf('save-clicked') > -1);
 
   const unsubscribe = built.platform.on('save-clicked', handler);
@@ -3957,6 +3957,189 @@ test('ejectDrive on Windows rejects IO_ERROR when the drive is still there after
 
   assert.strictEqual(err.code, CODES.IO_ERROR);
   assert.match(err.message, /STICK \(E:\)/);
+});
+
+//The Bluetooth Manager's commands, all through bluetoothctl's one-command mode.
+function bluetoothPlatform(responses, platformName){
+  const spawnFake = fakeSpawn(responses);
+  return {
+    spawnFake: spawnFake,
+    platform: wrap(createNodeBacking({ platform: platformName || 'linux', spawnProcess: spawnFake }))
+  };
+}
+
+test('bluetoothGetStatus reads Powered from "bluetoothctl show"', async function(t){
+  const on = bluetoothPlatform([{ chunks: ['Controller B8:27:EB:00:00:01 (public)\n\tName: writerdeck\n\tPowered: yes\n'] }]);
+  const off = bluetoothPlatform([{ chunks: ['Controller B8:27:EB:00:00:01 (public)\n\tPowered: no\n'] }]);
+
+  assert.strictEqual(await on.platform.bluetoothGetStatus(), 'enabled');
+  assert.strictEqual(await off.platform.bluetoothGetStatus(), 'disabled');
+  assert.strictEqual(on.spawnFake.calls[0].command, 'bluetoothctl');
+  assert.deepStrictEqual(on.spawnFake.calls[0].args, ['show']);
+});
+
+test('the bluetooth commands reject UNAVAILABLE when there is no adapter, no bluetoothctl, or no Linux', async function(t){
+  const noAdapter = bluetoothPlatform([{ chunks: ['No default controller available\n'], code: 1 }]);
+  const notInstalled = bluetoothPlatform([{ error: enoent('bluetoothctl') }]);
+  const notLinux = bluetoothPlatform([], 'win32');
+
+  const noAdapterErr = await rejection(noAdapter.platform.bluetoothGetStatus());
+  assert.strictEqual(noAdapterErr.code, CODES.UNAVAILABLE);
+  assert.match(noAdapterErr.message, /No Bluetooth adapter/);
+
+  const notInstalledErr = await rejection(notInstalled.platform.bluetoothListDevices());
+  assert.strictEqual(notInstalledErr.code, CODES.UNAVAILABLE);
+  assert.match(notInstalledErr.message, /bluez/);
+
+  assert.strictEqual((await rejection(notLinux.platform.bluetoothScan())).code, CODES.UNAVAILABLE);
+  assert.strictEqual(notLinux.spawnFake.calls.length, 0);
+});
+
+test('bluetoothEnable powers the adapter on, and a refusal carries BlueZ\'s own line', async function(t){
+  const ok = bluetoothPlatform([{ chunks: ['Changing power on succeeded\n'] }]);
+  await ok.platform.bluetoothEnable();
+  assert.deepStrictEqual(ok.spawnFake.calls[0].args, ['power', 'on']);
+
+  //Older BlueZ exits 0 even when it fails, so the text decides.
+  const blocked = bluetoothPlatform([{ chunks: ['Failed to set power on: org.bluez.Error.Blocked\n'], code: 0 }]);
+  const err = await rejection(blocked.platform.bluetoothEnable());
+  assert.strictEqual(err.code, CODES.IO_ERROR);
+  assert.match(err.message, /org\.bluez\.Error\.Blocked/);
+
+  const disable = bluetoothPlatform([{ chunks: ['Changing power off succeeded\n'] }]);
+  await disable.platform.bluetoothDisable();
+  assert.deepStrictEqual(disable.spawnFake.calls[0].args, ['power', 'off']);
+});
+
+test('bluetoothListDevices asks each device for its state and lists connected, then paired, then found', async function(t){
+  const { platform, spawnFake } = bluetoothPlatform([
+    { chunks: ['\x1b[0;94mDevice AA:BB:CC:DD:EE:01 Phone\x1b[0m\nDevice AA:BB:CC:DD:EE:02 K380\nDevice aa:bb:cc:dd:ee:03 Old Keyboard\n'] },
+    { chunks: ['Device AA:BB:CC:DD:EE:01 (public)\n\tName: Phone\n\tIcon: phone\n\tPaired: no\n\tConnected: no\n'] },
+    { chunks: ['Device AA:BB:CC:DD:EE:02 (public)\n\tName: Keys-To-Go\n\tIcon: input-keyboard\n\tPaired: yes\n\tConnected: yes\n'] },
+    { chunks: ['Device AA:BB:CC:DD:EE:03 (public)\n\tName: Old Keyboard\n\tIcon: input-keyboard\n\tPaired: yes\n\tConnected: no\n'] }
+  ]);
+
+  const devices = await platform.bluetoothListDevices();
+
+  assert.deepStrictEqual(spawnFake.calls[0].args, ['devices']);
+  assert.deepStrictEqual(spawnFake.calls.slice(1).map(function(c){ return c.args; }).sort(), [
+    ['info', 'AA:BB:CC:DD:EE:01'], ['info', 'AA:BB:CC:DD:EE:02'], ['info', 'AA:BB:CC:DD:EE:03']
+  ]);
+  assert.deepStrictEqual(devices, [
+    { address: 'AA:BB:CC:DD:EE:02', name: 'Keys-To-Go', paired: true, connected: true, icon: 'input-keyboard' },
+    { address: 'AA:BB:CC:DD:EE:03', name: 'Old Keyboard', paired: true, connected: false, icon: 'input-keyboard' },
+    { address: 'AA:BB:CC:DD:EE:01', name: 'Phone', paired: false, connected: false, icon: 'phone' }
+  ]);
+});
+
+test('bluetoothScan discovers for ten seconds, then lists what is known', async function(t){
+  const { platform, spawnFake } = bluetoothPlatform([
+    { chunks: ['Discovery started\n[NEW] Device AA:BB:CC:DD:EE:02 K380\n'] },
+    { chunks: ['Device AA:BB:CC:DD:EE:02 K380\n'] },
+    { chunks: ['\tName: K380\n\tPaired: no\n\tConnected: no\n'] }
+  ]);
+
+  const devices = await platform.bluetoothScan();
+
+  assert.deepStrictEqual(spawnFake.calls[0].args, ['--timeout', '10', 'scan', 'on']);
+  assert.deepStrictEqual(devices.map(function(d){ return d.address; }), ['AA:BB:CC:DD:EE:02']);
+});
+
+test('bluetoothScan rejects IO_ERROR when discovery will not start', async function(t){
+  const { platform } = bluetoothPlatform([{ chunks: ['Failed to start discovery: org.bluez.Error.NotReady\n'] }]);
+
+  const err = await rejection(platform.bluetoothScan());
+
+  assert.strictEqual(err.code, CODES.IO_ERROR);
+  assert.match(err.message, /NotReady/);
+});
+
+test('bluetoothPair pairs without a passkey, trusts, then connects', async function(t){
+  const { platform, spawnFake } = bluetoothPlatform([
+    { chunks: ['Attempting to pair with AA:BB:CC:DD:EE:02\n[CHG] Device AA:BB:CC:DD:EE:02 Paired: yes\nPairing successful\n'] },
+    { chunks: ['Changing AA:BB:CC:DD:EE:02 trust succeeded\n'] },
+    { chunks: ['Attempting to connect to AA:BB:CC:DD:EE:02\nConnection successful\n'] }
+  ]);
+
+  await platform.bluetoothPair({ address: 'aa:bb:cc:dd:ee:02' });
+
+  assert.deepStrictEqual(spawnFake.calls.map(function(c){ return c.args; }), [
+    ['--agent', 'NoInputNoOutput', 'pair', 'AA:BB:CC:DD:EE:02'],
+    ['trust', 'AA:BB:CC:DD:EE:02'],
+    ['connect', 'AA:BB:CC:DD:EE:02']
+  ]);
+});
+
+test('bluetoothPair carries on through a device that is already paired', async function(t){
+  const { platform, spawnFake } = bluetoothPlatform([
+    { chunks: ['Failed to pair: org.bluez.Error.AlreadyExists\n'], code: 1 },
+    { chunks: ['Changing AA:BB:CC:DD:EE:02 trust succeeded\n'] },
+    { chunks: ['Connection successful\n'] }
+  ]);
+
+  await platform.bluetoothPair({ address: 'AA:BB:CC:DD:EE:02' });
+
+  assert.strictEqual(spawnFake.calls.length, 3);
+});
+
+test('bluetoothPair stops at a refused pairing and says why', async function(t){
+  const { platform, spawnFake } = bluetoothPlatform([
+    { chunks: ['Attempting to pair with AA:BB:CC:DD:EE:02\nFailed to pair: org.bluez.Error.AuthenticationFailed\n'], code: 1 }
+  ]);
+
+  const err = await rejection(platform.bluetoothPair({ address: 'AA:BB:CC:DD:EE:02' }));
+
+  assert.strictEqual(err.code, CODES.IO_ERROR);
+  assert.strictEqual(err.message, 'Failed to pair: org.bluez.Error.AuthenticationFailed');
+  assert.strictEqual(spawnFake.calls.length, 1);
+});
+
+test('bluetoothConnect and bluetoothRemove act on the one address', async function(t){
+  const connect = bluetoothPlatform([{ chunks: ['Connection successful\n'] }]);
+  await connect.platform.bluetoothConnect({ address: 'AA:BB:CC:DD:EE:02' });
+  assert.deepStrictEqual(connect.spawnFake.calls[0].args, ['connect', 'AA:BB:CC:DD:EE:02']);
+
+  const failed = bluetoothPlatform([{ chunks: ['Failed to connect: org.bluez.Error.Failed br-connection-page-timeout\n'] }]);
+  assert.strictEqual((await rejection(failed.platform.bluetoothConnect({ address: 'AA:BB:CC:DD:EE:02' }))).code, CODES.IO_ERROR);
+
+  const remove = bluetoothPlatform([{ chunks: ['[DEL] Device AA:BB:CC:DD:EE:02 K380\nDevice has been removed\n'] }]);
+  await remove.platform.bluetoothRemove({ address: 'AA:BB:CC:DD:EE:02' });
+  assert.deepStrictEqual(remove.spawnFake.calls[0].args, ['remove', 'AA:BB:CC:DD:EE:02']);
+});
+
+test('the bluetooth commands refuse anything that is not a Bluetooth address, without spawning', async function(t){
+  const { platform, spawnFake } = bluetoothPlatform([]);
+
+  assert.strictEqual((await rejection(platform.bluetoothPair({}))).code, CODES.INVALID_ARGUMENT);
+  assert.strictEqual((await rejection(platform.bluetoothPair({ address: '--help' }))).code, CODES.INVALID_ARGUMENT);
+  assert.strictEqual((await rejection(platform.bluetoothConnect({ address: 'AA:BB:CC:DD:EE' }))).code, CODES.INVALID_ARGUMENT);
+  assert.strictEqual((await rejection(platform.bluetoothRemove({ address: 'AA:BB:CC:DD:EE:02; reboot' }))).code, CODES.INVALID_ARGUMENT);
+  assert.strictEqual(spawnFake.calls.length, 0);
+});
+
+//With bluetoothd stopped, bluetoothctl waits for it forever. The timer is what ends that.
+test('a bluetoothctl that never answers is killed and reported as the service not running', async function(t){
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const child = fakeChildProcess();
+  child.kill = function(){
+    setImmediate(function(){ child.emit('close', null); });
+  };
+  const platform = wrap(createNodeBacking({
+    platform: 'linux',
+    spawnProcess: function(){
+      setImmediate(function(){ child.stdout.emit('data', Buffer.from('Waiting to connect to bluetoothd...')); });
+      return child;
+    }
+  }));
+
+  const pending = rejection(platform.bluetoothGetStatus());
+  await new Promise(function(resolve){ setImmediate(resolve); });
+  await new Promise(function(resolve){ setImmediate(resolve); });
+  t.mock.timers.tick(10000);
+  const err = await pending;
+
+  assert.strictEqual(err.code, CODES.UNAVAILABLE);
+  assert.match(err.message, /bluetoothd/);
 });
 
 test('the network/hardware commands refuse arguments they cannot act on', async function(t){

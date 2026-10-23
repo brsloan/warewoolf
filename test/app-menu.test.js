@@ -132,9 +132,11 @@ test('the platform-only menus and items come and go with the platform', function
   assert.ok(itemFor(linux.items, 'reboot-clicked'), 'Reboot is a writerDeck item');
   assert.ok(itemFor(linux.items, 'shutdown-clicked'), 'Shut Down is a writerDeck item');
   assert.ok(itemFor(linux.items, 'wifi-manager-clicked'));
+  assert.ok(itemFor(linux.items, 'bluetooth-manager-clicked'), 'Bluetooth Manager is a writerDeck item');
   assert.strictEqual(itemFor(windows.items, 'reboot-clicked'), undefined);
   assert.strictEqual(itemFor(windows.items, 'shutdown-clicked'), undefined);
   assert.strictEqual(itemFor(windows.items, 'wifi-manager-clicked'), undefined);
+  assert.strictEqual(itemFor(windows.items, 'bluetooth-manager-clicked'), undefined);
 });
 
 //render.js answers the same two lists with a message each, for a command that reaches it anyway

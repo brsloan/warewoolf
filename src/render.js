@@ -2705,6 +2705,10 @@ const menuCommands = {
     const showWifiManager = require('./components/views/wifi-manager_display');
     showWifiManager();
   } },
+  'bluetooth-manager-clicked': { run: function(){
+    const showBluetoothManager = require('./components/views/bluetooth-manager_display');
+    showBluetoothManager();
+  } },
   'save-backup-clicked': { run: function(){
     const { backupProject } = require('./components/controllers/backup-project');
     backupProject(project, userSettings, sysDirectories.docs, alertBackupResult);

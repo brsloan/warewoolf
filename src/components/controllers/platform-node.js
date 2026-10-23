@@ -340,6 +340,14 @@ function createNodeBacking(deps){
     listDrives: listDrives,
     mountDrive: mountDrive,
     ejectDrive: ejectDrive,
+    bluetoothGetStatus: bluetoothGetStatus,
+    bluetoothEnable: bluetoothEnable,
+    bluetoothDisable: bluetoothDisable,
+    bluetoothListDevices: bluetoothListDevices,
+    bluetoothScan: bluetoothScan,
+    bluetoothPair: bluetoothPair,
+    bluetoothConnect: bluetoothConnect,
+    bluetoothRemove: bluetoothRemove,
 
     on: on,
     off: off
@@ -2934,6 +2942,251 @@ function createNodeBacking(deps){
 
         return runTool('udisksctl', ['power-off', '-b', drive.parent, '--no-user-interaction'], 'ejectDrive', needs);
       }).then(function(){ return undefined; }, function(){ return undefined; });
+    });
+  }
+
+  // ------------------------------------------------------------------------------------------
+  // Group K (bluetooth)
+  // ------------------------------------------------------------------------------------------
+
+  //A Bluetooth address, in the form bluetoothctl prints and takes back. Checked before anything is
+  //spawned: an address always crosses as its own argv element, but this keeps a stray option or a
+  //half-typed value from reaching bluetoothctl at all.
+  function requireBluetoothAddress(args){
+    var address = args == null ? undefined : args.address;
+    requireText(address, 'address');
+    if(!/^[0-9A-F]{2}(:[0-9A-F]{2}){5}$/i.test(address))
+      throw PlatformError(CODES.INVALID_ARGUMENT, 'Not a Bluetooth address: ' + address);
+    return address.toUpperCase();
+  }
+
+  //Runs bluetoothctl in its one-command mode and resolves its output, colour codes stripped,
+  //whatever the exit code: older BlueZ exits 0 even on failure, so each command reads the text for
+  //itself. With bluetoothd not running, bluetoothctl prints "Waiting to connect to bluetoothd..."
+  //and never exits, which is why there is a timer here and nowhere else in this group.
+  function runBluetoothctl(args, command, timeoutMs){
+    return new Promise(function(resolve, reject){
+      if(currentPlatform() !== 'linux'){
+        reject(PlatformError(CODES.UNAVAILABLE,
+          'The Bluetooth Manager is only available on Linux.', { command: command }));
+        return;
+      }
+
+      var needs = 'bluetoothctl (the bluez package)';
+      var child;
+      try{
+        child = spawnProcess('bluetoothctl', args);
+      }
+      catch(spawnErr){
+        reject(toolUnavailableOrIoError(spawnErr, command, needs));
+        return;
+      }
+
+      var chunks = [];
+      var finished = false;
+      var timedOut = false;
+
+      var timer = setTimeout(function(){
+        timedOut = true;
+        try{
+          child.kill();
+        }
+        catch(killErr){
+          //Already gone.
+        }
+      }, timeoutMs);
+      if(timer && typeof timer.unref === 'function')
+        timer.unref();
+
+      child.stdout.on('data', function(data){ chunks.push(data); });
+      child.stderr.on('data', function(data){ chunks.push(data); });
+
+      child.on('error', function(err){
+        if(finished) return;
+        finished = true;
+        clearTimeout(timer);
+        reject(toolUnavailableOrIoError(err, command, needs));
+      });
+
+      child.on('close', function(exitCode){
+        if(finished) return;
+        finished = true;
+        clearTimeout(timer);
+
+        var output = Buffer.concat(chunks).toString()
+          .replace(/\x1b\[[0-9;]*[A-Za-z]/g, '')
+          .replace(/\r/g, '')
+          .trim();
+
+        if(/No default controller available/i.test(output)){
+          reject(PlatformError(CODES.UNAVAILABLE, 'No Bluetooth adapter was found.', { command: command }));
+          return;
+        }
+        if(timedOut && /Waiting to connect to bluetoothd/i.test(output)){
+          reject(PlatformError(CODES.UNAVAILABLE,
+            'The Bluetooth service (bluetoothd) is not running.', { command: command }));
+          return;
+        }
+        if(timedOut){
+          reject(PlatformError(CODES.IO_ERROR, output || 'bluetoothctl did not answer in time.', { command: command }));
+          return;
+        }
+
+        resolve({ code: exitCode, output: output });
+      });
+    });
+  }
+
+  //The last line that names a failure is the one worth showing a writer - the rest is bluetoothctl
+  //narrating ("Attempting to pair with ...").
+  function bluetoothFailure(result, fallback, command){
+    var failure = result.output.split('\n').filter(function(line){
+      return /Failed|Error|not available/i.test(line);
+    }).pop();
+    return PlatformError(CODES.IO_ERROR, (failure || result.output || fallback).trim(),
+      { command: command, exitCode: result.code });
+  }
+
+  function bluetoothFailed(result){
+    return result.code !== 0 || /Failed|org\.bluez\.Error|not available/i.test(result.output);
+  }
+
+  function bluetoothGetStatus(){
+    return runBluetoothctl(['show'], 'bluetoothGetStatus', 10000).then(function(result){
+      var powered = /^\s*Powered:\s*(yes|no)/im.exec(result.output);
+      if(powered == null)
+        throw bluetoothFailure(result, 'Could not read the Bluetooth adapter.', 'bluetoothGetStatus');
+      return powered[1].toLowerCase() === 'yes' ? 'enabled' : 'disabled';
+    });
+  }
+
+  //Powers the adapter as a whole, the way wifiEnable/wifiDisable toggle the radio. An adapter that
+  //rfkill has blocked refuses with org.bluez.Error.Blocked, which is passed on as it is.
+  function setBluetoothPower(on, command){
+    return runBluetoothctl(['power', on ? 'on' : 'off'], command, 10000).then(function(result){
+      if(bluetoothFailed(result))
+        throw bluetoothFailure(result, 'Could not turn Bluetooth ' + (on ? 'on' : 'off') + '.', command);
+      return undefined;
+    });
+  }
+
+  function bluetoothEnable(){
+    return setBluetoothPower(true, 'bluetoothEnable');
+  }
+
+  function bluetoothDisable(){
+    return setBluetoothPower(false, 'bluetoothDisable');
+  }
+
+  //`devices` names every device BlueZ knows of - paired ones, and anything a recent scan found -
+  //and `info` says which of them are paired and connected. Asked per device rather than through
+  //`devices Paired`, which older BlueZ (Bullseye's 5.55) does not have.
+  function bluetoothListDevices(){
+    return runBluetoothctl(['devices'], 'bluetoothListDevices', 10000).then(function(result){
+      var seen = {};
+      var devices = [];
+      result.output.split('\n').forEach(function(line){
+        var match = /^Device\s+([0-9A-F]{2}(?::[0-9A-F]{2}){5})\s*(.*)$/i.exec(line.trim());
+        if(match == null)
+          return;
+        var address = match[1].toUpperCase();
+        if(seen[address])
+          return;
+        seen[address] = true;
+        devices.push({ address: address, name: match[2] || address });
+      });
+
+      return Promise.all(devices.map(function(device){
+        return runBluetoothctl(['info', device.address], 'bluetoothListDevices', 10000).then(function(info){
+          return describeBluetoothDevice(device, info.output);
+        }, function(){
+          return describeBluetoothDevice(device, '');
+        });
+      }));
+    }).then(function(devices){
+      //Connected first, then paired, then whatever a scan turned up - the order a writer looks for
+      //their own keyboard in.
+      function rank(device){
+        return device.connected ? 0 : (device.paired ? 1 : 2);
+      }
+      return devices.sort(function(a, b){
+        return rank(a) - rank(b) || a.name.localeCompare(b.name);
+      });
+    });
+  }
+
+  function describeBluetoothDevice(device, infoOutput){
+    function field(name){
+      var match = new RegExp('^\\s*' + name + ':\\s*(.*)$', 'im').exec(infoOutput);
+      return match ? match[1].trim() : null;
+    }
+    return {
+      address: device.address,
+      name: field('Name') || field('Alias') || device.name,
+      paired: field('Paired') === 'yes',
+      connected: field('Connected') === 'yes',
+      icon: field('Icon')
+    };
+  }
+
+  //Discovery lasts only as long as the bluetoothctl that started it, so this one is given --timeout
+  //and left to run; a keyboard in pairing mode turns up within a few seconds. Resolves the device
+  //list as it stands afterwards. BlueZ forgets an unpaired device about thirty seconds after
+  //discovery stops, which is the window a writer has to pick it.
+  function bluetoothScan(){
+    return runBluetoothctl(['--timeout', '10', 'scan', 'on'], 'bluetoothScan', 25000).then(function(result){
+      if(/Failed to start discovery/i.test(result.output))
+        throw bluetoothFailure(result, 'Could not scan for devices.', 'bluetoothScan');
+      return bluetoothListDevices();
+    });
+  }
+
+  //Pair, then trust (so the device reconnects by itself at every boot), then connect. The agent is
+  //NoInputNoOutput, which makes a keyboard pair "Just Works": no passkey to read off the screen and
+  //type on the keyboard being paired, which this one-command mode has no way to show mid-pair.
+  function bluetoothPair(args){
+    return Promise.resolve().then(function(){
+      var address = requireBluetoothAddress(args);
+
+      return runBluetoothctl(['--agent', 'NoInputNoOutput', 'pair', address], 'bluetoothPair', 45000).then(function(result){
+        var paired = /Pairing successful/i.test(result.output) || /AlreadyExists/i.test(result.output);
+        if(!paired)
+          throw bluetoothFailure(result, 'Could not pair with ' + address + '.', 'bluetoothPair');
+
+        return runBluetoothctl(['trust', address], 'bluetoothPair', 10000);
+      }).then(function(result){
+        if(bluetoothFailed(result))
+          throw bluetoothFailure(result, 'Paired, but could not trust ' + address + '.', 'bluetoothPair');
+
+        return connectBluetooth(address, 'bluetoothPair');
+      });
+    });
+  }
+
+  function bluetoothConnect(args){
+    return Promise.resolve().then(function(){
+      return connectBluetooth(requireBluetoothAddress(args), 'bluetoothConnect');
+    });
+  }
+
+  function connectBluetooth(address, command){
+    return runBluetoothctl(['connect', address], command, 30000).then(function(result){
+      if(/Connection successful|AlreadyConnected/i.test(result.output))
+        return undefined;
+      throw bluetoothFailure(result, 'Could not connect to ' + address + '.', command);
+    });
+  }
+
+  //Unpairs and forgets the device, so it has to be paired again to come back.
+  function bluetoothRemove(args){
+    return Promise.resolve().then(function(){
+      var address = requireBluetoothAddress(args);
+
+      return runBluetoothctl(['remove', address], 'bluetoothRemove', 10000).then(function(result){
+        if(!/Device has been removed/i.test(result.output) && bluetoothFailed(result))
+          throw bluetoothFailure(result, 'Could not remove ' + address + '.', 'bluetoothRemove');
+        return undefined;
+      });
     });
   }
 

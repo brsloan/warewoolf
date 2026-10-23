@@ -84,6 +84,7 @@ WareWoolf’s Wi-Fi Manager talks to NetworkManager through nmcli. Raspberry Pi 
 **Getting to a terminal.** Everything on the Pi is still there behind WareWoolf. Close WareWoolf (Ctrl+Shift+X) and you land at a shell prompt; “startx” reopens it. Or SSH in from another computer.
 	**Updating WareWoolf.** The Check For Updates button in Help > About tells you when a new version is out. On Linux it cannot install it for you, so close WareWoolf, download the new .deb at the console or over SSH, and install it as in step 4. Or run the setup script again: it reinstalls the latest release and leaves everything else as it was.
 	**Email passwords.** A Lite image has no keyring service, so WareWoolf has nowhere secure to hand your Gmail app password to. When you save it, tick “Protect With Passphrase?” in the Send dialog; WareWoolf will ask for the passphrase once per session.
+	**A Bluetooth keyboard.** Tools > Bluetooth Manager pairs one; see that chapter. You need a wired keyboard to do the pairing with, once. After that the Bluetooth keyboard reconnects by itself at every boot.
 	**Screen blanking.** The xset lines in ~/.xinitrc stop X from blanking the screen after ten minutes. If you would like it to blank, to save a battery, delete those three lines.
 
 ## Rebooting or Shutting Down From Inside WareWoolf
@@ -98,6 +99,7 @@ On Linux, the File menu ends with **Reboot** and **Shut Down** items (they aren�
 	**WareWoolf closes and immediately reopens.** ~/.bash_profile has “exec startx” in it. Remove the “exec”.
 	**The machine turns off right after booting.** ~/.xinitrc ends with systemctl poweroff and WareWoolf is failing to start. SSH in, or mount the card on another computer, and remove that line, then find out why WareWoolf is not starting.
 	**The Wi-Fi Manager says nmcli is not installed, or shows nothing.** NetworkManager is not running. See step 9.
+	**The Bluetooth Manager says bluetoothctl is not installed, or that bluetoothd is not running.** Install BlueZ and start it: “sudo apt-get install -y bluez” then “sudo systemctl enable --now bluetooth”. If it says no adapter was found, this machine has no Bluetooth (a Pi Zero 2 W, 3, 4 and 5 all do; an older Pi needs a USB dongle).
 	**File > Reboot or Shut Down says “Interactive authentication required.”** systemd is not treating your login as a local session, which usually means X was started from somewhere other than the console autologin. Reboot from the console, or from WareWoolf once you have booted normally.
 	**The keys on my keyboard are not what WareWoolf expects.** Open the Shortcut Helper (Ctrl+H) and rebind them.
 	**Something else went wrong.** Welcome to tinkering with Linux. The issue tracker at github.com/brsloan/warewoolf/issues is a good place to ask.

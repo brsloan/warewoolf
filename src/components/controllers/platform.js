@@ -132,7 +132,7 @@ var SAVED_SECRET = '\u0000warewoolf:saved-secret\u0000';
 //prevent. A test cross-checks the list against index.js so a name cannot drift again.
 var EVENTS = [
   'file-opened-from-outside-warewoolf',
-  'about-clicked', 'add-chapter-clicked', 'center-all-heads-clicked', 'compile-clicked',
+  'about-clicked', 'add-chapter-clicked', 'bluetooth-manager-clicked', 'center-all-heads-clicked', 'compile-clicked',
   'convert-first-lines-clicked', 'convert-italics-clicked', 'convert-substitutions-clicked',
   'convert-tabs-clicked',
   'corkboard-clicked', 'delete-chapter-clicked', 'dictionaries-clicked', 'exit-app-clicked', 'export-clicked',
@@ -562,7 +562,28 @@ var COMMANDS = {
   //Unmounts (Linux: then powers the disk off, best-effort) so the drive is safe to pull. Resolves
   //only once the OS has let go of it: a drive that is still busy rejects IO_ERROR with the OS's own
   //reason rather than letting the writer pull a stick with a backup half-flushed onto it.
-  ejectDrive: { group: 'K', params: ['id'], returns: 'void' }
+  ejectDrive: { group: 'K', params: ['id'], returns: 'void' },
+  //The Bluetooth Manager beside the Wi-Fi Manager, so a writerDeck can take a Bluetooth keyboard
+  //without a desktop to pair it from. Linux only, through bluetoothctl (BlueZ); every one rejects
+  //UNAVAILABLE off Linux, when bluetoothctl is not installed, when bluetoothd is not running, and
+  //when there is no adapter - all ordinary off a writerDeck, the same discipline as the wifi
+  //commands. A refusal from BlueZ itself is IO_ERROR carrying its own line ("Failed to pair: ...").
+  //
+  //`address` is the device's Bluetooth address as bluetoothListDevices reports it, checked against
+  //the AA:BB:CC:DD:EE:FF form before anything is spawned (INVALID_ARGUMENT otherwise).
+  bluetoothGetStatus: { group: 'K', params: [], returns: "'enabled' | 'disabled', the adapter's power state" },
+  bluetoothEnable: { group: 'K', params: [], returns: 'void' },
+  bluetoothDisable: { group: 'K', params: [], returns: 'void' },
+  bluetoothListDevices: { group: 'K', params: [], returns: '{ address, name, paired, connected, icon }[]',
+    note: 'Connected devices first, then paired, then whatever a recent scan found. `icon` is the hint BlueZ gives ("input-keyboard"), or null.' },
+  //Scans for ten seconds, then resolves the list as bluetoothListDevices would.
+  bluetoothScan: { group: 'K', params: [], returns: '{ address, name, paired, connected, icon }[]' },
+  //Pairs, trusts (so the device reconnects by itself at boot) and connects, in one. Pairs as
+  //NoInputNoOutput, so a keyboard pairs without a passkey to type.
+  bluetoothPair: { group: 'K', params: ['address'], returns: 'void' },
+  bluetoothConnect: { group: 'K', params: ['address'], returns: 'void' },
+  //Unpairs and forgets the device.
+  bluetoothRemove: { group: 'K', params: ['address'], returns: 'void' }
 };
 
 //Wraps a backing in the contract: one async method per COMMANDS entry, every rejection a
