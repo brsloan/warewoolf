@@ -293,6 +293,22 @@ test('closePopups removes popup elements, exits search view, and focuses the edi
   assert.strictEqual(focusCalls, 1);
 });
 
+//A native focus() on .ql-editor after the corkboard's cards had focus put the caret back at the
+//top of the script. Quill's own focus() restores the range it saved on blur, so that is the one
+//closePopups has to reach when the editor has a Quill.
+test('closePopups focuses the editor through its Quill when it has one, not .ql-editor directly', function(){
+  const qlEditor = buildEditorFixture();
+  let nativeFocusCalls = 0;
+  let quillFocusCalls = 0;
+  qlEditor.focus = function(){ nativeFocusCalls++; };
+  document.getElementById('editor-container').__quill = { focus: function(){ quillFocusCalls++; } };
+
+  closePopups();
+
+  assert.strictEqual(quillFocusCalls, 1);
+  assert.strictEqual(nativeFocusCalls, 0);
+});
+
 test('closePopupDialogs focuses the editor when no popup remains after removing popup-dialogs', function(){
   const qlEditor = buildEditorFixture();
   let focusCalls = 0;

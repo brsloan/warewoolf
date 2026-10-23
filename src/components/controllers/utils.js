@@ -1,7 +1,15 @@
 const { logError } = require('./error-log');
 
+//Through the editor's Quill (Quill.find reads the same __quill) rather than a bare focus() on
+//.ql-editor. A popup that took focus into a field of its own - the corkboard's cards - moved the
+//document's selection there, and a native focus() puts the caret back at the top of the document
+//and scrolls to it. Quill's focus() restores the range it saved on blur and keeps the scroll.
 function focusEditor(){
-    document.getElementById('editor-container').getElementsByClassName('ql-editor')[0].focus();
+    var container = document.getElementById('editor-container');
+    if(container.__quill)
+        container.__quill.focus();
+    else
+        container.getElementsByClassName('ql-editor')[0].focus();
 }
 
 function closePopups(){
