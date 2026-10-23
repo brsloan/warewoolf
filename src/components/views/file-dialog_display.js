@@ -1,5 +1,6 @@
 const { closePopupDialogs, createButton, sanitizeFilenameWithExt, describeDialog } = require('../controllers/utils');
 const { getFileList, getParentDirectory } = require('../controllers/file-manager');
+const { attachDriveShortcuts, isDriveOption } = require('./drive-shortcuts_display');
 
 function stopDefaultPropagation(keyEvent){
   keyEvent.preventDefault();
@@ -33,7 +34,7 @@ async function showFileDialog(options, callback){
     dirShortcutSelect.size = 20;
     selectFieldsContainer.appendChild(dirShortcutSelect);
     dirShortcutSelect.addEventListener('keydown', async function(e){
-        if(e.key === "Enter"){
+        if(e.key === "Enter" && !isDriveOption(dirShortcutSelect.selectedOptions[0])){
             await populateFileList(dirShortcutSelect.value, fileListSelect, currentDirDisplay, options.filters[filterSelect.value]);
         }
         else if(e.key === "ArrowRight"){
@@ -46,6 +47,14 @@ async function showFileDialog(options, callback){
     fileListSelect.classList.add("file-manager-list");
     fileListSelect.setAttribute('aria-label', 'Files');
     selectFieldsContainer.appendChild(fileListSelect);
+
+    var drives = attachDriveShortcuts(dirShortcutSelect, {
+      browse: function(dirPath){
+        return populateFileList(dirPath, fileListSelect, currentDirDisplay, options.filters[filterSelect.value]);
+      },
+      currentDirectory: function(){ return currentDirDisplay.innerText; }
+    });
+    popup.appendChild(drives.status);
 
     var filenameIn = document.createElement('input');
     filenameIn.classList.add('save-input');
@@ -218,7 +227,8 @@ async function populateFileList(directoryPath, listElement, currentDirDisplay, f
 
     listElement.innerHTML = "";
 
-    var files = await getFileList(directoryPath);
+    //getFileList resolves undefined when the listing fails - a drive pulled out while it was showing.
+    var files = (await getFileList(directoryPath)) || [];
 
     files.sort(function(a,b){
         return b.isDirectory - a.isDirectory;

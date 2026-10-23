@@ -3801,6 +3801,164 @@ test("shutdownSystem rejects IO_ERROR with systemctl's own output when the shutd
   assert.match(err.message, /Interactive authentication required/);
 });
 
+//lsblk -J as Pi OS Bookworm prints it: the boot SD card (not removable) and a two-partition stick
+//with only its second partition mounted.
+function lsblkStick(sda1Mount, sda2Mount){
+  return JSON.stringify({ blockdevices: [
+    { path: '/dev/mmcblk0', pkname: null, label: null, mountpoint: null, rm: false, hotplug: false, type: 'disk', fstype: null,
+      children: [
+        { path: '/dev/mmcblk0p1', pkname: 'mmcblk0', label: 'bootfs', mountpoint: '/boot/firmware', rm: false, hotplug: false, type: 'part', fstype: 'vfat' },
+        { path: '/dev/mmcblk0p2', pkname: 'mmcblk0', label: 'rootfs', mountpoint: '/', rm: false, hotplug: false, type: 'part', fstype: 'ext4' }
+      ] },
+    { path: '/dev/sda', pkname: null, label: null, mountpoint: null, rm: true, hotplug: true, type: 'disk', fstype: null,
+      children: [
+        { path: '/dev/sda1', pkname: 'sda', label: 'STICK', mountpoint: sda1Mount, rm: true, hotplug: true, type: 'part', fstype: 'vfat' },
+        { path: '/dev/sda2', pkname: 'sda', label: null, mountpoint: sda2Mount, rm: true, hotplug: true, type: 'part', fstype: 'exfat' }
+      ] }
+  ] });
+}
+const LSBLK_STICK = lsblkStick(null, '/media/pi/data');
+
+test('listDrives on Linux offers only removable partitions with a filesystem, mounted or not', async function(t){
+  const spawnFake = fakeSpawn([{ chunks: [LSBLK_STICK] }]);
+  const platform = wrap(createNodeBacking({ platform: 'linux', spawnProcess: spawnFake }));
+
+  const drives = await platform.listDrives();
+
+  assert.strictEqual(spawnFake.calls[0].command, 'lsblk');
+  assert.deepStrictEqual(drives.map(function(d){ return [d.id, d.name, d.path, d.mounted]; }), [
+    ['/dev/sda1', 'STICK', null, false],
+    ['/dev/sda2', 'sda2', '/media/pi/data', true]
+  ]);
+});
+
+//Older util-linux prints the flags as strings.
+test('listDrives on Linux reads the "1"/"0" flags older lsblk prints', async function(t){
+  const older = JSON.stringify({ blockdevices: [
+    { path: '/dev/sdb', pkname: null, label: 'BARE', mountpoint: null, rm: '1', hotplug: '1', type: 'disk', fstype: 'vfat' }
+  ] });
+  const platform = wrap(createNodeBacking({ platform: 'linux', spawnProcess: fakeSpawn([{ chunks: [older] }]) }));
+
+  const drives = await platform.listDrives();
+
+  assert.deepStrictEqual(drives.map(function(d){ return d.id; }), ['/dev/sdb']);
+});
+
+test('listDrives on Windows lists drive letters with media in them, by label', async function(t){
+  const cim = JSON.stringify([
+    { DeviceID: 'C:', VolumeName: 'OS', DriveType: 3, Size: 512 },
+    { DeviceID: 'D:', VolumeName: '', DriveType: 5, Size: null },
+    { DeviceID: 'E:', VolumeName: 'STICK', DriveType: 2, Size: 16 }
+  ]);
+  const spawnFake = fakeSpawn([{ chunks: [cim] }]);
+  const platform = wrap(createNodeBacking({ platform: 'win32', spawnProcess: spawnFake }));
+
+  const drives = await platform.listDrives();
+
+  assert.strictEqual(spawnFake.calls[0].command, 'powershell.exe');
+  assert.deepStrictEqual(drives, [
+    { id: 'C:', name: 'OS (C:)', path: 'C:', mounted: true, removable: false },
+    { id: 'E:', name: 'STICK (E:)', path: 'E:', mounted: true, removable: true }
+  ]);
+});
+
+//ConvertTo-Json prints a lone object, not a one-element array, when there is only one drive.
+test('listDrives on Windows accepts a single drive printed as an object', async function(t){
+  const cim = JSON.stringify({ DeviceID: 'C:', VolumeName: null, DriveType: 3, Size: 512 });
+  const platform = wrap(createNodeBacking({ platform: 'win32', spawnProcess: fakeSpawn([{ chunks: [cim] }]) }));
+
+  assert.deepStrictEqual((await platform.listDrives()).map(function(d){ return d.name; }), ['C:']);
+});
+
+test('listDrives rejects UNAVAILABLE when lsblk is not installed', async function(t){
+  const platform = wrap(createNodeBacking({ platform: 'linux', spawnProcess: fakeSpawn([{ error: enoent('lsblk') }]) }));
+
+  assert.strictEqual((await rejection(platform.listDrives())).code, CODES.UNAVAILABLE);
+});
+
+test('mountDrive mounts through udisksctl and resolves where it landed', async function(t){
+  const spawnFake = fakeSpawn([
+    { chunks: [LSBLK_STICK] },
+    { chunks: ['Mounted /dev/sda1 at /media/pi/STICK.\n'] }
+  ]);
+  const platform = wrap(createNodeBacking({ platform: 'linux', spawnProcess: spawnFake }));
+
+  const result = await platform.mountDrive({ id: '/dev/sda1' });
+
+  assert.deepStrictEqual(result, { path: '/media/pi/STICK' });
+  assert.strictEqual(spawnFake.calls[1].command, 'udisksctl');
+  assert.deepStrictEqual(spawnFake.calls[1].args, ['mount', '-b', '/dev/sda1', '--no-user-interaction']);
+});
+
+//The guard that keeps the renderer from naming the boot card: an id is looked up, never passed on.
+test('mountDrive and ejectDrive refuse a device listDrives does not offer, without running udisksctl', async function(t){
+  const spawnFake = fakeSpawn([{ chunks: [LSBLK_STICK] }, { chunks: [LSBLK_STICK] }]);
+  const platform = wrap(createNodeBacking({ platform: 'linux', spawnProcess: spawnFake }));
+
+  assert.strictEqual((await rejection(platform.mountDrive({ id: '/dev/mmcblk0p2' }))).code, CODES.NOT_FOUND);
+  assert.strictEqual((await rejection(platform.ejectDrive({ id: '/dev/mmcblk0p2' }))).code, CODES.NOT_FOUND);
+  assert.ok(spawnFake.calls.every(function(call){ return call.command === 'lsblk'; }));
+});
+
+test('mountDrive rejects UNAVAILABLE off Linux, and when udisksctl is not installed', async function(t){
+  const offLinux = wrap(createNodeBacking({ platform: 'win32', spawnProcess: fakeSpawn([]) }));
+  assert.strictEqual((await rejection(offLinux.mountDrive({ id: 'E:' }))).code, CODES.UNAVAILABLE);
+
+  const noUdisks = wrap(createNodeBacking({
+    platform: 'linux',
+    spawnProcess: fakeSpawn([{ chunks: [LSBLK_STICK] }, { error: enoent('udisksctl') }])
+  }));
+  const err = await rejection(noUdisks.mountDrive({ id: '/dev/sda1' }));
+  assert.strictEqual(err.code, CODES.UNAVAILABLE);
+  assert.match(err.message, /udisks2/);
+});
+
+test("ejectDrive on Linux rejects IO_ERROR with udisksctl's reason when the drive is busy", async function(t){
+  const platform = wrap(createNodeBacking({
+    platform: 'linux',
+    spawnProcess: fakeSpawn([{ chunks: [LSBLK_STICK] }, { stderrChunks: ['Error unmounting /dev/sda2: target is busy'], code: 1 }])
+  }));
+
+  const err = await rejection(platform.ejectDrive({ id: '/dev/sda2' }));
+
+  assert.strictEqual(err.code, CODES.IO_ERROR);
+  assert.match(err.message, /target is busy/);
+});
+
+test('ejectDrive on Linux unmounts, then powers the stick off once nothing on it is mounted', async function(t){
+  const spawnFake = fakeSpawn([{ chunks: [LSBLK_STICK] }, { code: 0 }, { chunks: [lsblkStick(null, null)] }, { code: 0 }]);
+  const platform = wrap(createNodeBacking({ platform: 'linux', spawnProcess: spawnFake }));
+
+  await platform.ejectDrive({ id: '/dev/sda2' });
+
+  assert.deepStrictEqual(spawnFake.calls[1].args, ['unmount', '-b', '/dev/sda2', '--no-user-interaction']);
+  assert.deepStrictEqual(spawnFake.calls[3].args, ['power-off', '-b', '/dev/sda', '--no-user-interaction']);
+});
+
+test('ejectDrive on Linux leaves the stick powered while another of its partitions is mounted', async function(t){
+  const spawnFake = fakeSpawn([
+    { chunks: [lsblkStick('/media/pi/STICK', '/media/pi/data')] },
+    { code: 0 },
+    { chunks: [lsblkStick('/media/pi/STICK', null)] }
+  ]);
+  const platform = wrap(createNodeBacking({ platform: 'linux', spawnProcess: spawnFake }));
+
+  await platform.ejectDrive({ id: '/dev/sda2' });
+
+  assert.strictEqual(spawnFake.calls.length, 3);
+});
+
+//InvokeVerb never reports a refusal, so the script's own exit code (drive still there) is the signal.
+test('ejectDrive on Windows rejects IO_ERROR when the drive is still there afterwards', async function(t){
+  const cim = JSON.stringify([{ DeviceID: 'E:', VolumeName: 'STICK', DriveType: 2, Size: 16 }]);
+  const platform = wrap(createNodeBacking({ platform: 'win32', spawnProcess: fakeSpawn([{ chunks: [cim] }, { code: 1 }]) }));
+
+  const err = await rejection(platform.ejectDrive({ id: 'E:' }));
+
+  assert.strictEqual(err.code, CODES.IO_ERROR);
+  assert.match(err.message, /STICK \(E:\)/);
+});
+
 test('the network/hardware commands refuse arguments they cannot act on', async function(t){
   const platform = wrap(createNodeBacking({ spawnProcess: fakeSpawn([]) }));
 

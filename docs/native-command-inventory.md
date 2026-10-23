@@ -926,6 +926,15 @@ still tell "nothing to report" apart from "something is actually wrong" —
 `wifi-manager.js`'s seven wrappers all apply the same distinction, logging a real failure
 but not the ordinary absence of `nmcli`/a battery off a Pi.
 
+`listDrives()`, `mountDrive({ id })` and `ejectDrive({ id })` back the Drives
+section of the file dialogs and the File Manager (`drives.js`,
+`drive-shortcuts_display.js`). Windows lists drive letters through PowerShell's
+`Win32_LogicalDisk` and ejects with Explorer's own Eject verb; Linux lists
+removable partitions with `lsblk -J` and mounts/unmounts/powers off through
+`udisksctl`; macOS reads `/Volumes` and ejects with `diskutil`. `mountDrive`
+and `ejectDrive` look the id up in a fresh `listDrives()` before acting and
+reject `NOT_FOUND` otherwise, so the renderer cannot name the boot disk.
+
 ---
 
 ## Summary

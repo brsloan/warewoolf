@@ -1216,6 +1216,13 @@ hr {
   float: left;
 }
 
+.drive-status {
+  clear: both;
+  min-height: 1.2em;
+  margin: 4px 0;
+  font-size: 0.9em;
+}
+
 .to-be-cut {
   font-style: italic;
   color: var(--text-muted);

@@ -543,7 +543,26 @@ var COMMANDS = {
   rebootSystem: { group: 'K', params: [], returns: 'void (the machine goes down; nothing resolves after it)' },
   //File > Shut Down, rebootSystem's twin: the same Linux-only item, the same rejections, and
   //`systemctl poweroff` in place of `systemctl reboot`.
-  shutdownSystem: { group: 'K', params: [], returns: 'void (the machine goes down; nothing resolves after it)' }
+  shutdownSystem: { group: 'K', params: [], returns: 'void (the machine goes down; nothing resolves after it)' },
+  //The file dialogs' Drives list, so a writer can back up to a USB stick without a mouse. Group K,
+  //not E: E browses paths the renderer already has, and these ask the OS which disks exist, the
+  //same spawn-a-system-tool shape as wifi and power. Windows asks PowerShell for its drive letters,
+  //Linux asks lsblk for removable partitions (mounted or not), macOS reads /Volumes.
+  //
+  //`id` is what mountDrive/ejectDrive take back: a drive letter ("E:"), a block device
+  //("/dev/sda1"), or a /Volumes path. `path` is where to browse, null while the drive is unmounted.
+  listDrives: { group: 'K', params: [], returns: '{ id, name, path, mounted, removable }[]',
+    note: 'Rejects UNAVAILABLE when the lister (powershell/lsblk) is missing. An empty list is a resolved value: a machine with no drives to offer is not a failure.' },
+  //Linux only - Windows and macOS mount a stick themselves the moment it is plugged in. Through
+  //udisksctl, which mounts under /media/<user> without sudo for a local active session; on Pi OS
+  //Lite nothing else would mount the stick at all. Refuses NOT_FOUND for an id listDrives would not
+  //offer, so this cannot be pointed at the boot disk or any other non-removable device.
+  mountDrive: { group: 'K', params: ['id'], returns: '{ path }',
+    note: 'UNAVAILABLE off Linux, and when udisksctl (the udisks2 package) is not installed.' },
+  //Unmounts (Linux: then powers the disk off, best-effort) so the drive is safe to pull. Resolves
+  //only once the OS has let go of it: a drive that is still busy rejects IO_ERROR with the OS's own
+  //reason rather than letting the writer pull a stick with a backup half-flushed onto it.
+  ejectDrive: { group: 'K', params: ['id'], returns: 'void' }
 };
 
 //Wraps a backing in the contract: one async method per COMMANDS entry, every rejection a

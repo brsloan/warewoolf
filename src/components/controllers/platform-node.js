@@ -337,6 +337,9 @@ function createNodeBacking(deps){
     getBatteryCapacity: getBatteryCapacity,
     rebootSystem: rebootSystem,
     shutdownSystem: shutdownSystem,
+    listDrives: listDrives,
+    mountDrive: mountDrive,
+    ejectDrive: ejectDrive,
 
     on: on,
     off: off
@@ -2654,6 +2657,284 @@ function createNodeBacking(deps){
       ? PlatformError(CODES.UNAVAILABLE,
         label + ' needs systemctl, which is not installed on this machine.', { command: command })
       : fromNodeError(err, { command: command });
+  }
+
+  // ------------------------------------------------------------------------------------------
+  // Group K (drives)
+  // ------------------------------------------------------------------------------------------
+
+  //Runs a tool to completion and resolves { code, stdout, stderr } whatever the exit code - each
+  //drive command decides for itself what a non-zero exit means. A missing binary rejects
+  //UNAVAILABLE naming `needs`, the same ENOENT rule as the nmcli and systemctl commands above.
+  function runTool(binary, args, command, needs){
+    return new Promise(function(resolve, reject){
+      var child;
+      try{
+        child = spawnProcess(binary, args);
+      }
+      catch(spawnErr){
+        reject(toolUnavailableOrIoError(spawnErr, command, needs));
+        return;
+      }
+
+      var stdout = [];
+      var stderr = [];
+      var spawnFailed = false;
+
+      child.stdout.on('data', function(data){ stdout.push(data); });
+      child.stderr.on('data', function(data){ stderr.push(data); });
+
+      child.on('error', function(err){
+        spawnFailed = true;
+        reject(toolUnavailableOrIoError(err, command, needs));
+      });
+
+      child.on('close', function(exitCode){
+        if(spawnFailed) return;
+        resolve({
+          code: exitCode,
+          stdout: Buffer.concat(stdout).toString(),
+          stderr: Buffer.concat(stderr).toString()
+        });
+      });
+    });
+  }
+
+  function toolUnavailableOrIoError(err, command, needs){
+    return err != null && err.code === 'ENOENT'
+      ? PlatformError(CODES.UNAVAILABLE, command + ' needs ' + needs + ', which is not installed on this machine.', { command: command })
+      : fromNodeError(err, { command: command });
+  }
+
+  function toolFailure(result, fallback, command){
+    var output = (result.stderr + '\n' + result.stdout).trim();
+    return PlatformError(CODES.IO_ERROR, output || fallback, { command: command, exitCode: result.code });
+  }
+
+  function runPowerShell(script, command){
+    return runTool('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], command, 'PowerShell');
+  }
+
+  function listDrives(){
+    var platformName = currentPlatform();
+
+    if(platformName === 'win32')
+      return listWindowsDrives();
+    if(platformName === 'linux')
+      return listLinuxDrives();
+    if(platformName === 'darwin')
+      return listMacDrives();
+
+    return Promise.resolve([]);
+  }
+
+  //DriveType 2 is removable, 3 fixed, 4 network, 5 optical. A drive with no Size has no media in it
+  //(an empty card reader, an empty DVD tray), and listing it would only offer a folder that cannot
+  //be opened.
+  function listWindowsDrives(){
+    var script = 'Get-CimInstance Win32_LogicalDisk | Select-Object DeviceID,VolumeName,DriveType,Size | ConvertTo-Json -Compress';
+
+    return runPowerShell(script, 'listDrives').then(function(result){
+      if(result.code !== 0)
+        throw toolFailure(result, 'Could not list drives.', 'listDrives');
+
+      var text = result.stdout.trim();
+      if(text === '')
+        return [];
+
+      var disks = JSON.parse(text);
+      if(!Array.isArray(disks))
+        disks = [disks];
+
+      return disks.filter(function(disk){
+        return disk.Size != null && [2, 3, 4, 5].indexOf(disk.DriveType) !== -1;
+      }).map(function(disk){
+        return {
+          id: disk.DeviceID,
+          name: disk.VolumeName ? disk.VolumeName + ' (' + disk.DeviceID + ')' : disk.DeviceID,
+          path: disk.DeviceID,
+          mounted: true,
+          removable: disk.DriveType === 2 || disk.DriveType === 5
+        };
+      });
+    });
+  }
+
+  //lsblk reports RM/HOTPLUG as booleans on newer util-linux and as "1"/"0" on older releases.
+  function lsblkFlag(value){
+    return value === true || value === '1' || value === 1;
+  }
+
+  //Removable or hot-plugged block devices that carry a filesystem - a stick's partitions, or a
+  //stick formatted with no partition table at all. The SD card the Pi boots from is neither, so it
+  //never appears here and can never be ejected out from under the running system.
+  function listLinuxDrives(){
+    return runTool('lsblk', ['-J', '-o', 'PATH,PKNAME,LABEL,MOUNTPOINT,RM,HOTPLUG,TYPE,FSTYPE'], 'listDrives', 'lsblk')
+      .then(function(result){
+        if(result.code !== 0)
+          throw toolFailure(result, 'Could not list drives.', 'listDrives');
+
+        var devices = [];
+        (function collect(list, parentRemovable){
+          (list || []).forEach(function(device){
+            var removable = parentRemovable || lsblkFlag(device.rm) || lsblkFlag(device.hotplug);
+            devices.push(Object.assign({}, device, { removable: removable }));
+            collect(device.children, removable);
+          });
+        })(JSON.parse(result.stdout).blockdevices, false);
+
+        return devices.filter(function(device){
+          return device.removable && device.fstype && device.fstype !== 'swap'
+            && (device.type === 'part' || device.type === 'disk');
+        }).map(function(device){
+          var mountpoint = device.mountpoint || null;
+          return {
+            id: device.path,
+            name: device.label || path.posix.basename(device.path),
+            path: mountpoint,
+            mounted: mountpoint != null,
+            removable: true,
+            parent: device.pkname ? '/dev/' + device.pkname : null
+          };
+        });
+      });
+  }
+
+  function listMacDrives(){
+    var entries;
+    try{
+      entries = fs.readdirSync('/Volumes', { withFileTypes: true });
+    }
+    catch(err){
+      return Promise.reject(fromNodeError(err, { command: 'listDrives' }));
+    }
+
+    return Promise.resolve(entries.filter(function(entry){
+      //The startup disk appears in /Volumes as a symlink back to "/"; Home and Documents already
+      //cover it.
+      if(entry.name.charAt(0) === '.')
+        return false;
+      try{
+        return fs.realpathSync('/Volumes/' + entry.name) !== '/';
+      }
+      catch(err){
+        return false;
+      }
+    }).map(function(entry){
+      return { id: '/Volumes/' + entry.name, name: entry.name, path: '/Volumes/' + entry.name, mounted: true, removable: true };
+    }));
+  }
+
+  //Both mountDrive and ejectDrive act only on a drive listDrives offers right now. That is the
+  //guard against the renderer naming /dev/mmcblk0p2: an id is looked up, never passed through.
+  function findDrive(args, command){
+    requireText(args.id, 'id');
+
+    return listDrives().then(function(drives){
+      var drive = drives.find(function(candidate){ return candidate.id === args.id; });
+      if(drive == null)
+        throw PlatformError(CODES.NOT_FOUND, 'No drive "' + args.id + '" is attached.', { command: command, id: args.id });
+      return drive;
+    });
+  }
+
+  function mountDrive(args){
+    if(currentPlatform() !== 'linux')
+      return Promise.reject(PlatformError(CODES.UNAVAILABLE,
+        'Mounting a drive by hand is only needed on Linux.', { command: 'mountDrive' }));
+
+    return findDrive(args, 'mountDrive').then(function(drive){
+      if(drive.mounted)
+        return { path: drive.path };
+
+      return runTool('udisksctl', ['mount', '-b', drive.id, '--no-user-interaction'], 'mountDrive', 'udisksctl (the udisks2 package)')
+        .then(function(result){
+          if(result.code !== 0)
+            throw toolFailure(result, 'Could not mount ' + drive.name + '.', 'mountDrive');
+
+          //"Mounted /dev/sda1 at /media/pi/STICK" - with a trailing period on older udisks2.
+          var match = /\bat (.+?)\.?\s*$/.exec(result.stdout.trim());
+          if(match)
+            return { path: match[1] };
+
+          return findDrive(args, 'mountDrive').then(function(mounted){
+            if(!mounted.mounted)
+              throw PlatformError(CODES.IO_ERROR, 'Could not mount ' + drive.name + '.', { command: 'mountDrive' });
+            return { path: mounted.path };
+          });
+        });
+    });
+  }
+
+  function ejectDrive(args){
+    return findDrive(args, 'ejectDrive').then(function(drive){
+      var platformName = currentPlatform();
+
+      if(platformName === 'win32')
+        return ejectWindowsDrive(drive);
+      if(platformName === 'darwin')
+        return runTool('diskutil', ['eject', drive.id], 'ejectDrive', 'diskutil').then(function(result){
+          if(result.code !== 0)
+            throw toolFailure(result, 'Could not eject ' + drive.name + '.', 'ejectDrive');
+        });
+
+      return ejectLinuxDrive(drive);
+    });
+  }
+
+  //Explorer's own Eject verb, then a check that the drive is actually gone: InvokeVerb returns at
+  //once and says nothing when Windows refuses because a file is open. The id is a drive letter
+  //findDrive matched against the live list, so it is safe to place inside the script.
+  function ejectWindowsDrive(drive){
+    if(!/^[A-Za-z]:$/.test(drive.id))
+      return Promise.reject(PlatformError(CODES.INVALID_ARGUMENT, 'Not a drive letter: ' + drive.id, { command: 'ejectDrive' }));
+
+    var script = [
+      "$item = (New-Object -ComObject Shell.Application).Namespace(17).ParseName('" + drive.id + "')",
+      "if($item -eq $null){ exit 2 }",
+      "$item.InvokeVerb('Eject')",
+      "for($i = 0; $i -lt 20; $i++){",
+      "  Start-Sleep -Milliseconds 250",
+      "  if((Get-CimInstance Win32_LogicalDisk -Filter \"DeviceID='" + drive.id + "'\").Size -eq $null){ exit 0 }",
+      "}",
+      "exit 1"
+    ].join('\n');
+
+    return runPowerShell(script, 'ejectDrive').then(function(result){
+      if(result.code !== 0)
+        throw PlatformError(CODES.IO_ERROR,
+          'Windows did not eject ' + drive.name + '. Close anything open on it and try again.',
+          { command: 'ejectDrive', exitCode: result.code });
+    });
+  }
+
+  //Unmount is what makes the stick safe to pull, so its failure is the command's failure. Powering
+  //the disk off afterwards only turns the stick's light out; a polkit refusal there leaves an
+  //unmounted, already-safe drive, so it is not reported. It is skipped while another partition of
+  //the same stick is still mounted, which powering off would cut out from under its writes.
+  function ejectLinuxDrive(drive){
+    var needs = 'udisksctl (the udisks2 package)';
+    var unmount = drive.mounted
+      ? runTool('udisksctl', ['unmount', '-b', drive.id, '--no-user-interaction'], 'ejectDrive', needs)
+      : Promise.resolve({ code: 0, stdout: '', stderr: '' });
+
+    return unmount.then(function(result){
+      if(result.code !== 0)
+        throw toolFailure(result, 'Could not unmount ' + drive.name + '.', 'ejectDrive');
+
+      if(drive.parent == null)
+        return undefined;
+
+      return listLinuxDrives().then(function(drives){
+        var siblingMounted = drives.some(function(other){
+          return other.parent === drive.parent && other.mounted;
+        });
+        if(siblingMounted)
+          return undefined;
+
+        return runTool('udisksctl', ['power-off', '-b', drive.parent, '--no-user-interaction'], 'ejectDrive', needs);
+      }).then(function(){ return undefined; }, function(){ return undefined; });
+    });
   }
 
   // ------------------------------------------------------------------------------------------
