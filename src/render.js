@@ -736,6 +736,18 @@ function trackListSelection(selection){
   return selection;
 }
 
+//Puts a document into one of the two editors. A load is not an edit, so it goes in with 'api', and
+//the undo history has to go with the document it was recorded in - by hand, because both editors
+//keep Quill's history in userOnly mode. That records nothing for an 'api' change and transforms the
+//stack against it instead, and against a load, which replaces the whole document, every deletion
+//still waiting to be undone became an insert at the end of the new one: Ctrl+Z in the chapter just
+//opened put the text deleted from the last one onto its foot, as a user edit to be saved with it.
+//loadScreenplayDelta clears the history the same way for a script.
+function loadIntoEditor(quill, contents){
+  quill.setContents(contents, 'api');
+  quill.history.clear();
+}
+
 async function displayChapterByIndex(ind){
   clearCurrentChapterIfUnchanged();
   ind = parseInt(ind);
@@ -748,7 +760,7 @@ async function displayChapterByIndex(ind){
   if(loc == null){
     project.activeChapterIndex = 0;
     editorQuill.disable();
-    editorQuill.setText("");
+    loadIntoEditor(editorQuill, getEmptyDelta());
     applyEditorMode();
     updateFileList();
     return;
@@ -795,10 +807,10 @@ async function displayChapterByIndex(ind){
     recordScriptPagesOnOpen(chap, contents);
   }
   else
-    editorQuill.setContents(contents, 'api');
+    loadIntoEditor(editorQuill, contents);
   refreshPageMarks();
   refreshFormatBlock();
-  notesQuill.setContents(notes, 'api');
+  loadIntoEditor(notesQuill, notes);
   updateFileList();
   announceChapter(chap);
 }
@@ -927,14 +939,14 @@ async function refreshNotesDisplay(){
     var activeChapter = project.getActiveChapter();
     let savedNotes = activeChapter ? await activeChapter.getNotesContentOrFile() : null;
     let currentNotes = savedNotes ? savedNotes : getEmptyDelta();
-    notesQuill.setContents(currentNotes, 'api');
+    loadIntoEditor(notesQuill, currentNotes);
 
     notesHeader.innerText = 'Chapter Notes';
   }
   else{
     let savedNotes = await project.notesChap.getNotesContentOrFile();
     let currentNotes = savedNotes ? savedNotes : getEmptyDelta();
-    notesQuill.setContents(currentNotes, 'api');
+    loadIntoEditor(notesQuill, currentNotes);
 
     notesHeader.innerText = 'Project Notes';
   }
@@ -1664,7 +1676,7 @@ async function deleteChapter(ind){
       await displayChapterByIndex(chapterList.toCombinedIndex(project, next));
     else{
       editorQuill.disable();
-      editorQuill.setText("");
+      loadIntoEditor(editorQuill, getEmptyDelta());
     }
   }
 

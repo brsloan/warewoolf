@@ -208,7 +208,7 @@ async function freshRender(){
 function makeChap(title, opts){
   opts = opts || {};
   var contents = opts.contents || { ops: [{ insert: (opts.text || title || 'chapter') + '\n' }] };
-  var notes = { ops: [{ insert: '\n' }] };
+  var notes = { ops: [{ insert: (opts.notes || '') + '\n' }] };
   return {
     title: title,
     contents: contents,
@@ -219,8 +219,10 @@ function makeChap(title, opts){
     getContentsOrFile: async function(){ return this.contents ? this.contents : contents; },
     getNotesFile: function(){ return notes; },
     //Reads the live .notes property (as the real chapter.js does), not the closed-over `notes`
-    //above, so a test that reassigns chap.notes after construction sees that value here too.
-    getNotesContentOrFile: function(){ return this.notes; },
+    //above, so a test that reassigns chap.notes after construction sees that value here too - and,
+    //also like chapter.js, goes back to the "file" once clearCurrentChapterIfUnchanged() has let go
+    //of what was in memory. Without that, a chapter's notes vanished the first time it was shown.
+    getNotesContentOrFile: function(){ return this.notes ? this.notes : notes; },
     deleteFile: opts.deleteFile || function(){}
   };
 }
@@ -1138,6 +1140,76 @@ test('typing in the notes pane updates the project-wide notes chapter while proj
 
   assert.deepStrictEqual(r.project.notesChap.notes, r.notesQuill.getContents());
   assert.strictEqual(r.project.notesChap.hasUnsavedChanges, true);
+});
+
+//An undo history belongs to the document it was recorded in. Both editors keep Quill's history in
+//userOnly mode, which records nothing for the 'api' load of another document and transforms the
+//stack against it instead - and a load replaces the whole document, which leaves an undone
+//deletion as an insert at the end of whatever came in. Ctrl+Z in the chapter just opened put the
+//text deleted from the last one onto its foot, as a user edit, so the chapter was marked unsaved
+//and the stray text went to disk with the next save.
+test('undo in a chapter just opened does not bring back text deleted from the last one', async function(){
+  var r = await freshRender();
+  var c0 = makeChap('c0', { text: 'It was a dark and stormy night.' });
+  var c1 = makeChap('c1', { text: 'Call me Ishmael.' });
+  r.project.chapters = [c0, c1];
+  await r.displayChapterByIndex(0);
+
+  r.editorQuill.deleteText(18, 7, 'user'); //"stormy "
+  assert.strictEqual(r.editorQuill.getText(), 'It was a dark and night.\n');
+
+  await r.displayChapterByIndex(1);
+  r.editorQuill.history.undo();
+
+  assert.strictEqual(r.editorQuill.getText(), 'Call me Ishmael.\n');
+  assert.strictEqual(c1.hasUnsavedChanges, false, 'nothing was done to c1');
+
+  //Cleared, not switched off: what is done in this chapter is still undone in it.
+  r.editorQuill.insertText(0, 'Reader, ', 'user');
+  r.editorQuill.history.undo();
+  assert.strictEqual(r.editorQuill.getText(), 'Call me Ishmael.\n');
+});
+
+test('undo in the notes of a chapter just opened does not bring back notes deleted from the last one', async function(){
+  var r = await freshRender();
+  var c0 = makeChap('c0', { notes: 'Cut the storm scene.' });
+  var c1 = makeChap('c1', { notes: 'Ishmael narrates.' });
+  r.project.chapters = [c0, c1];
+  r.userSettings.displayChapNotes = true;
+  await r.displayChapterByIndex(0);
+
+  r.notesQuill.deleteText(8, 6, 'user'); //"storm "
+  assert.strictEqual(r.notesQuill.getText(), 'Cut the scene.\n');
+
+  await r.displayChapterByIndex(1);
+  r.notesQuill.history.undo();
+
+  assert.strictEqual(r.notesQuill.getText(), 'Ishmael narrates.\n');
+  assert.strictEqual(c1.hasUnsavedChanges, false, 'nothing was done to c1\'s notes');
+});
+
+//The same load by another road: Ctrl/Cmd+F3 swaps the notes panel between the chapter's notes and
+//the project's (refreshNotesDisplay), without the chapter changing at all.
+test('undo after swapping chapter notes for project notes does not carry an edit across', async function(){
+  var r = await freshRender();
+  r.project.initNotesChap();
+  r.project.notesChap.notes = { ops: [{ insert: 'The whole book is one night.\n' }] };
+  var c0 = makeChap('c0', { notes: 'Cut the storm scene.' });
+  r.project.chapters = [c0];
+  r.userSettings.displayChapNotes = true;
+  await r.displayChapterByIndex(0);
+
+  r.notesQuill.deleteText(8, 6, 'user'); //"storm "
+  assert.strictEqual(r.notesQuill.getText(), 'Cut the scene.\n');
+
+  dispatchAndCaptureJsdomErrors(document, ctrlKeydown('F3'));
+  await flushMicrotasks();
+  assert.strictEqual(document.getElementById('notes-header').innerText, 'Project Notes');
+
+  r.notesQuill.history.undo();
+
+  assert.strictEqual(r.notesQuill.getText(), 'The whole book is one night.\n');
+  assert.ok(!r.project.notesChap.hasUnsavedChanges, 'nothing was done to the project notes');
 });
 
 test('displayChapterByIndex clears and disables the editor instead of throwing when chapters/reference/trash are all empty', async function(){
