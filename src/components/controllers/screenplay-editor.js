@@ -22,7 +22,8 @@ const { ELEMENT_TYPES } = require('../blots/screenplay');
 //One invariant makes this safe: the HTML only ever comes from the delta, through
 //deltaToScreenplayHtml below, never from a file or the clipboard. Silent, so the text-change
 //handler (which acts on 'user' only) marks nothing dirty; the history is cleared because a load
-//is not something to undo.
+//is not something to undo. render.js loads a script through loadScriptIntoEditor, which hands the
+//script back the history it had when it was last shown (undo-histories.js).
 function loadScreenplayDelta(quill, delta){
   quill.root.innerHTML = deltaToScreenplayHtml(delta);
   quill.update('silent');

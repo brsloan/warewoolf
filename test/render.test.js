@@ -1212,6 +1212,197 @@ test('undo after swapping chapter notes for project notes does not carry an edit
   assert.ok(!r.project.notesChap.hasUnsavedChanges, 'nothing was done to the project notes');
 });
 
+//The other half of the same rule: a history goes with its document, so it comes back with it too.
+//See undo-histories.js.
+test('undo in a chapter left and come back to undoes what was done in it before', async function(){
+  var r = await freshRender();
+  var c0 = makeChap('c0', { text: 'It was a dark and stormy night.' });
+  var c1 = makeChap('c1', { text: 'Call me Ishmael.' });
+  r.project.chapters = [c0, c1];
+  await r.displayChapterByIndex(0);
+
+  r.editorQuill.deleteText(18, 7, 'user'); //"stormy "
+  await r.displayChapterByIndex(1);
+  await r.displayChapterByIndex(0);
+  assert.strictEqual(r.editorQuill.getText(), 'It was a dark and night.\n');
+
+  //Typed straight after coming back, so inside the history's merge window: it is still an entry
+  //of its own, and the first Ctrl+Z takes only it.
+  r.editorQuill.insertText(0, 'Yes. ', 'user');
+  r.editorQuill.history.undo();
+  assert.strictEqual(r.editorQuill.getText(), 'It was a dark and night.\n');
+
+  r.editorQuill.history.undo();
+  assert.strictEqual(r.editorQuill.getText(), 'It was a dark and stormy night.\n');
+  assert.strictEqual(c0.contents.ops[0].insert, 'It was a dark and stormy night.\n', 'the undo is recorded on the chapter like any edit');
+
+  r.editorQuill.history.redo();
+  assert.strictEqual(r.editorQuill.getText(), 'It was a dark and night.\n');
+});
+
+//The case the text check is there for. A history is edits at positions in one text, and Replace
+//All rewrites a chapter without going through the editor - replayed against the new text, the
+//undo would put "stormy " back in the wrong place.
+test('undo does nothing in a chapter whose text was changed while it was away', async function(){
+  var { replaceAllInChapter } = require('../src/components/controllers/findreplace');
+  var r = await freshRender();
+  var c0 = makeChap('c0', { text: 'It was a dark and stormy night.' });
+  var c1 = makeChap('c1', { text: 'Call me Ishmael.' });
+  r.project.chapters = [c0, c1];
+  await r.displayChapterByIndex(0);
+
+  r.editorQuill.deleteText(18, 7, 'user'); //"stormy "
+  await r.displayChapterByIndex(1);
+  await replaceAllInChapter('dark', 'very very dark', c0, {});
+  await r.displayChapterByIndex(0);
+  assert.strictEqual(r.editorQuill.getText(), 'It was a very very dark and night.\n');
+
+  r.editorQuill.history.undo();
+  assert.strictEqual(r.editorQuill.getText(), 'It was a very very dark and night.\n');
+});
+
+//A saved chapter lets go of its text and comes back from its file, through MarkdownFic. That is
+//the same text, so the history survives Ctrl+S and autosave as well as an unsaved chapter's does.
+test('undo in a chapter saved while it was away still undoes what was done in it', async function(){
+  var { parseMDF, convertDeltaToMDF } = require('../src/components/controllers/markdownFic');
+  var r = await freshRender();
+  var c0 = makeChap('c0', { contents: { ops: [
+    { insert: 'It was a ' }, { insert: 'dark', attributes: { italic: true } }, { insert: ' and stormy night.\n' }
+  ] } });
+  var c1 = makeChap('c1', { text: 'Call me Ishmael.' });
+  r.project.chapters = [c0, c1];
+  await r.displayChapterByIndex(0);
+
+  r.editorQuill.deleteText(18, 7, 'user'); //"stormy "
+  //What saveFile() leaves behind: the text on disk, none in memory, and nothing unsaved.
+  var file = convertDeltaToMDF(c0.contents);
+  c0.getFile = async function(){ return parseMDF(file); };
+  c0.hasUnsavedChanges = false;
+
+  await r.displayChapterByIndex(1);
+  assert.strictEqual(c0.contents, null, 'the saved chapter let go of its text');
+  await r.displayChapterByIndex(0);
+
+  r.editorQuill.history.undo();
+  assert.strictEqual(r.editorQuill.getText(), 'It was a dark and stormy night.\n');
+  assert.strictEqual(c0.hasUnsavedChanges, true);
+});
+
+//In All Chapters searches each chapter by showing it, and comes back to the one it started from
+//when nothing turns up - a round trip the writer never asked for, which used to take their undo.
+test('a Find through every chapter that comes back empty leaves undo where it was', async function(){
+  var { find } = require('../src/components/controllers/findreplace');
+  var r = await freshRender();
+  var c0 = makeChap('c0', { text: 'It was a dark and stormy night.' });
+  var c1 = makeChap('c1', { text: 'Call me Ishmael.' });
+  var c2 = makeChap('c2', { text: 'Happy families are all alike.' });
+  r.project.chapters = [c0, c1, c2];
+  await r.displayChapterByIndex(0);
+
+  r.editorQuill.deleteText(18, 7, 'user'); //"stormy "
+  var found = await find(r.editorQuill, r.project, 'zebra', 0, true, r.displayChapterByIndex, {});
+  assert.strictEqual(found, -1);
+  assert.strictEqual(r.project.activeChapterIndex, 0);
+
+  r.editorQuill.history.undo();
+  assert.strictEqual(r.editorQuill.getText(), 'It was a dark and stormy night.\n');
+});
+
+//The history is filed under the chapter that was in the editor, not under whatever
+//project.getActiveChapter() names by the next load: Move to Trash takes the chapter out of its list
+//first, so by then the active index points at the chapter that slid into its place.
+test('a chapter moved to the trash takes its undo history with it', async function(){
+  var r = await freshRender();
+  var c0 = makeChap('c0', { text: 'It was a dark and stormy night.' });
+  var c1 = makeChap('c1', { text: 'Call me Ishmael.' });
+  r.project.chapters = [c0, c1];
+  await r.displayChapterByIndex(0);
+
+  r.editorQuill.deleteText(18, 7, 'user'); //"stormy "
+  await r.moveToTrash(0);
+  assert.strictEqual(r.editorQuill.getText(), 'Call me Ishmael.\n');
+
+  r.editorQuill.history.undo();
+  assert.strictEqual(r.editorQuill.getText(), 'Call me Ishmael.\n');
+  assert.strictEqual(c1.hasUnsavedChanges, false, 'nothing was done to c1');
+
+  //c0 is the last of the combined list now: chapters, then reference, then trash.
+  await r.displayChapterByIndex(1);
+  assert.strictEqual(r.project.trash[0], c0);
+  r.editorQuill.history.undo();
+  assert.strictEqual(r.editorQuill.getText(), 'It was a dark and stormy night.\n');
+});
+
+test('undo in the notes of a chapter come back to undoes what was done in them', async function(){
+  var r = await freshRender();
+  var c0 = makeChap('c0', { notes: 'Cut the storm scene.' });
+  var c1 = makeChap('c1', { notes: 'Ishmael narrates.' });
+  r.project.chapters = [c0, c1];
+  r.userSettings.displayChapNotes = true;
+  await r.displayChapterByIndex(0);
+
+  r.notesQuill.deleteText(8, 6, 'user'); //"storm "
+  await r.displayChapterByIndex(1);
+  await r.displayChapterByIndex(0);
+
+  r.notesQuill.history.undo();
+  assert.strictEqual(r.notesQuill.getText(), 'Cut the storm scene.\n');
+});
+
+test('chapter notes and project notes each keep their own undo across the Ctrl/Cmd+F3 swap', async function(){
+  var r = await freshRender();
+  r.project.initNotesChap();
+  r.project.notesChap.notes = { ops: [{ insert: 'The whole book is one night.\n' }] };
+  var c0 = makeChap('c0', { notes: 'Cut the storm scene.' });
+  r.project.chapters = [c0];
+  r.userSettings.displayChapNotes = true;
+  await r.displayChapterByIndex(0);
+
+  r.notesQuill.deleteText(8, 6, 'user'); //"storm "
+
+  dispatchAndCaptureJsdomErrors(document, ctrlKeydown('F3'));
+  await flushMicrotasks();
+  assert.strictEqual(document.getElementById('notes-header').innerText, 'Project Notes');
+  r.notesQuill.deleteText(0, 10, 'user'); //"The whole "
+  assert.strictEqual(r.notesQuill.getText(), 'book is one night.\n');
+
+  dispatchAndCaptureJsdomErrors(document, ctrlKeydown('F3'));
+  await flushMicrotasks();
+  assert.strictEqual(document.getElementById('notes-header').innerText, 'Chapter Notes');
+  r.notesQuill.history.undo();
+  assert.strictEqual(r.notesQuill.getText(), 'Cut the storm scene.\n');
+
+  dispatchAndCaptureJsdomErrors(document, ctrlKeydown('F3'));
+  await flushMicrotasks();
+  r.notesQuill.history.undo();
+  assert.strictEqual(r.notesQuill.getText(), 'The whole book is one night.\n');
+});
+
+//A script goes into the editor by its HTML rather than setContents, and comes back with its
+//history the same way.
+test('undo in a script come back to undoes what was done in it', async function(){
+  var r = await freshRender();
+  var script = scriptWithScenes();
+  var prose = makeChap('Notes');
+  prose.filename = 'Notes.txt';
+  r.project.chapters = [script, prose];
+  await r.displayChapterByIndex(0);
+  assert.strictEqual(r.editorMode(), 'screenplay');
+
+  var before = r.editorQuill.getContents();
+  var at = r.editorQuill.getText().indexOf('Two.');
+  r.editorQuill.deleteText(at, 4, 'user');
+  assert.ok(r.editorQuill.getText().indexOf('Two.') < 0);
+
+  await r.displayChapterByIndex(1);
+  assert.strictEqual(r.editorMode(), 'prose');
+  await r.displayChapterByIndex(0);
+  assert.strictEqual(r.editorMode(), 'screenplay');
+
+  r.editorQuill.history.undo();
+  assert.deepStrictEqual(r.editorQuill.getContents().ops, before.ops);
+});
+
 test('displayChapterByIndex clears and disables the editor instead of throwing when chapters/reference/trash are all empty', async function(){
   var r = await freshRender();
   r.project.chapters = [];

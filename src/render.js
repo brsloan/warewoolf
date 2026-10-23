@@ -9,6 +9,7 @@ const chapterList = require('./components/controllers/chapter-list');
 const { registerKeybindings } = require('./components/controllers/keybindings');
 const { applyQuillShortcuts, splitDeltaAtIndices } = require('./components/controllers/quill-utils');
 const { attachAutocorrect } = require('./components/controllers/autocorrect');
+const { createUndoHistories } = require('./components/controllers/undo-histories');
 const { registerFootnoteBlots } = require('./components/blots/footnotes');
 const { registerScreenplayFormats, SCREENPLAY_FORMATS } = require('./components/blots/screenplay');
 const {
@@ -736,16 +737,30 @@ function trackListSelection(selection){
   return selection;
 }
 
-//Puts a document into one of the two editors. A load is not an edit, so it goes in with 'api', and
-//the undo history has to go with the document it was recorded in - by hand, because both editors
-//keep Quill's history in userOnly mode. That records nothing for an 'api' change and transforms the
-//stack against it instead, and against a load, which replaces the whole document, every deletion
-//still waiting to be undone became an insert at the end of the new one: Ctrl+Z in the chapter just
-//opened put the text deleted from the last one onto its foot, as a user edit to be saved with it.
-//loadScreenplayDelta clears the history the same way for a script.
-function loadIntoEditor(quill, contents){
-  quill.setContents(contents, 'api');
-  quill.history.clear();
+//Each editor keeps an undo history per document it shows - see undo-histories.js.
+var editorHistories = createUndoHistories(editorQuill);
+var notesHistories = createUndoHistories(notesQuill);
+
+//Puts a document into one of the two editors, `owner` being the chapter (or the project's notes
+//chapter) it belongs to. A load is not an edit, so it goes in with 'api', and the undo history has
+//to go with the document it was recorded in - by hand, because both editors keep Quill's history in
+//userOnly mode. That records nothing for an 'api' change and transforms the stack against it
+//instead, and against a load, which replaces the whole document, every deletion still waiting to be
+//undone became an insert at the end of the new one: Ctrl+Z in the chapter just opened put the text
+//deleted from the last one onto its foot, as a user edit to be saved with it. The history the
+//document had when it was last shown comes back with it, if its text is still what it was then.
+function loadIntoEditor(quill, contents, owner){
+  var histories = quill === notesQuill ? notesHistories : editorHistories;
+  histories.load(owner, function(){
+    quill.setContents(contents, 'api');
+  });
+}
+
+//The same for a script, which goes in through its HTML rather than setContents.
+function loadScriptIntoEditor(contents, owner){
+  editorHistories.load(owner, function(){
+    loadScreenplayDelta(editorQuill, contents);
+  });
 }
 
 async function displayChapterByIndex(ind){
@@ -803,14 +818,14 @@ async function displayChapterByIndex(ind){
   //its HTML rather than through setContents - see screenplay-editor.js for why.
   applyEditorMode();
   if(editorMode() === 'screenplay'){
-    loadScreenplayDelta(editorQuill, contents);
+    loadScriptIntoEditor(contents, chap);
     recordScriptPagesOnOpen(chap, contents);
   }
   else
-    loadIntoEditor(editorQuill, contents);
+    loadIntoEditor(editorQuill, contents, chap);
   refreshPageMarks();
   refreshFormatBlock();
-  loadIntoEditor(notesQuill, notes);
+  loadIntoEditor(notesQuill, notes, correctNotesChap);
   updateFileList();
   announceChapter(chap);
 }
@@ -939,14 +954,14 @@ async function refreshNotesDisplay(){
     var activeChapter = project.getActiveChapter();
     let savedNotes = activeChapter ? await activeChapter.getNotesContentOrFile() : null;
     let currentNotes = savedNotes ? savedNotes : getEmptyDelta();
-    loadIntoEditor(notesQuill, currentNotes);
+    loadIntoEditor(notesQuill, currentNotes, activeChapter);
 
     notesHeader.innerText = 'Chapter Notes';
   }
   else{
     let savedNotes = await project.notesChap.getNotesContentOrFile();
     let currentNotes = savedNotes ? savedNotes : getEmptyDelta();
-    loadIntoEditor(notesQuill, currentNotes);
+    loadIntoEditor(notesQuill, currentNotes, project.notesChap);
 
     notesHeader.innerText = 'Project Notes';
   }
