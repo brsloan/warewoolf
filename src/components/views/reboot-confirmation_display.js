@@ -3,7 +3,9 @@ const { createButton, describeDialog } = require('../controllers/utils');
 //File > Reboot (Linux only) restarts the machine, which is easy to mistake for restarting the app.
 //So it asks first, before the unsaved-work prompt and the backup, and starts on No: two presses of
 //Enter from the menu should not be enough to take the machine down by accident.
-function displayRebootConfirmation(onConfirm){
+//
+//File > Shut Down has the same trap and uses the same popup, passing its own warning.
+function displayRebootConfirmation(onConfirm, warning = "This will reboot your computer, not the program. Continue?"){
   if(document.querySelector('.reboot-confirm-popup'))
     return null;
 
@@ -17,7 +19,7 @@ function displayRebootConfirmation(onConfirm){
   describeDialog(popup, warningTitle, 'alertdialog');
 
   var message = document.createElement("p");
-  message.innerText = "This will reboot your computer, not the program. Continue?";
+  message.innerText = warning;
   message.classList.add('warning-text');
   popup.appendChild(message);
 

@@ -336,6 +336,7 @@ function createNodeBacking(deps){
     wifiDisable: wifiDisable,
     getBatteryCapacity: getBatteryCapacity,
     rebootSystem: rebootSystem,
+    shutdownSystem: shutdownSystem,
 
     on: on,
     off: off
@@ -2590,19 +2591,32 @@ function createNodeBacking(deps){
   //this usually resolves a moment before the machine goes down, and on a fast enough shutdown the
   //'close' event never arrives at all. Nothing is scheduled after it either way.
   function rebootSystem(){
+    return systemctlPowerAction('reboot', 'Reboot', 'rebootSystem');
+  }
+
+  //File > Shut Down, the same Linux-only item as Reboot and answered the same way: everything said
+  //about rebootSystem above holds for `systemctl poweroff` too.
+  function shutdownSystem(){
+    return systemctlPowerAction('poweroff', 'Shut down', 'shutdownSystem');
+  }
+
+  //The body rebootSystem and shutdownSystem share. `verb` is the systemctl subcommand, `label` is
+  //how the messages name the action to a writer, `command` is the contract command reported in the
+  //error details.
+  function systemctlPowerAction(verb, label, command){
     return new Promise(function(resolve, reject){
       if(currentPlatform() !== 'linux'){
         reject(PlatformError(CODES.UNAVAILABLE,
-          'Reboot is only available on Linux.', { command: 'rebootSystem' }));
+          label + ' is only available on Linux.', { command: command }));
         return;
       }
 
       var systemctl;
       try{
-        systemctl = spawnProcess('systemctl', ['reboot']);
+        systemctl = spawnProcess('systemctl', [verb]);
       }
       catch(spawnErr){
-        reject(rebootUnavailableOrIoError(spawnErr));
+        reject(systemctlUnavailableOrIoError(spawnErr, label, command));
         return;
       }
 
@@ -2614,7 +2628,7 @@ function createNodeBacking(deps){
 
       systemctl.on('error', function(err){
         spawnFailed = true;
-        reject(rebootUnavailableOrIoError(err));
+        reject(systemctlUnavailableOrIoError(err, label, command));
       });
 
       systemctl.on('close', function(exitCode){
@@ -2627,19 +2641,19 @@ function createNodeBacking(deps){
 
         var output = Buffer.concat(chunks).toString().trim();
         reject(PlatformError(CODES.IO_ERROR,
-          output || ('systemctl reboot exited with code ' + exitCode),
-          { command: 'rebootSystem', exitCode: exitCode }));
+          output || ('systemctl ' + verb + ' exited with code ' + exitCode),
+          { command: command, exitCode: exitCode }));
       });
     });
   }
 
   //unavailableOrIoError above names nmcli in its message, which would be the wrong binary to blame
   //here. Same ENOENT rule, different missing thing.
-  function rebootUnavailableOrIoError(err){
+  function systemctlUnavailableOrIoError(err, label, command){
     return err != null && err.code === 'ENOENT'
       ? PlatformError(CODES.UNAVAILABLE,
-        'Reboot needs systemctl, which is not installed on this machine.', { command: 'rebootSystem' })
-      : fromNodeError(err, { command: 'rebootSystem' });
+        label + ' needs systemctl, which is not installed on this machine.', { command: command })
+      : fromNodeError(err, { command: command });
   }
 
   // ------------------------------------------------------------------------------------------

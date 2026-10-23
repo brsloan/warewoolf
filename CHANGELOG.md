@@ -11,6 +11,7 @@ Releases before v0.9.0 were never tagged or published; the work from that period
 ### Added
 
 - **File > Restore Backup.** Lists the Backups folder by date (this project's backups, or every project's) and opens the chosen one as its own copy beside the archive, so a backup no longer has to be found and unzipped by hand in the File Manager. The open project is left as it is, and unsaved changes are offered a save first.
+- **File > Shut Down, on Linux only**, beside Reboot. It warns "This will shut down your computer, not the program. Continue?" (starting on No), then goes out the way Reboot does - unsaved changes are checked and the auto-backup runs first - and powers the machine off with `systemctl poweroff`.
 
 ### Changed
 

@@ -2051,7 +2051,7 @@ var ALL_MENU_CHANNELS = [
   'headings-to-chaps-clicked', 'convert-italics-clicked', 'split-chapter-clicked',
   'add-chapter-clicked', 'delete-chapter-clicked', 'restore-chapter-clicked', 'shortcuts-clicked',
   'outliner-clicked', 'convert-tabs-clicked', 'convert-substitutions-clicked',
-  'about-clicked', 'exit-app-clicked', 'reboot-clicked',
+  'about-clicked', 'exit-app-clicked', 'reboot-clicked', 'shutdown-clicked',
   'save-copy-clicked', 'help-doc-clicked', 'renumber-chapters-clicked', 'send-via-email-clicked',
   'view-error-log-clicked', 'file-manager-clicked', 'wifi-manager-clicked', 'save-backup-clicked',
   'restore-backup-clicked',
@@ -2309,6 +2309,57 @@ test('reboot-clicked asks to save first, once confirmed, when there are unsaved 
   findButton('Continue Without Saving').onclick();
   await flushMicrotasks();
   assert.ok(currentBridge().invoked.includes('rebootSystem'));
+});
+
+//shutdown-clicked is reboot-clicked's twin, down to the popup it asks in.
+test('shutdown-clicked warns that it shuts down the computer, not the program, before anything else', async function(){
+  var r = await freshRender();
+  r.project.hasUnsavedChanges = false;
+  r.project.filename = '';
+
+  currentBridge().handlers['shutdown-clicked']();
+  await flushMicrotasks();
+
+  var popup = document.querySelector('.reboot-confirm-popup');
+  assert.ok(popup);
+  assert.match(popup.querySelector('p').innerText, /shut down your computer, not the program/);
+  assert.ok(!currentBridge().invoked.includes('shutdownSystem'),
+    'should not take the machine down before the warning is answered');
+
+  findButton('No').onclick();
+  await flushMicrotasks();
+  assert.ok(!currentBridge().invoked.includes('shutdownSystem'));
+  assert.strictEqual(document.querySelector('.reboot-confirm-popup'), null);
+});
+
+test('shutdown-clicked shuts down once confirmed when there are no unsaved changes', async function(){
+  var r = await freshRender();
+  r.project.hasUnsavedChanges = false;
+  r.project.filename = '';
+
+  currentBridge().handlers['shutdown-clicked']();
+  findButton('Yes').onclick();
+  await flushMicrotasks();
+
+  assert.ok(currentBridge().invoked.includes('shutdownSystem'));
+  assert.ok(!currentBridge().invoked.includes('rebootSystem'));
+});
+
+test('shutdown-clicked asks to save first, once confirmed, when there are unsaved changes', async function(){
+  var r = await freshRender();
+  r.project.chapters = [makeChap('Unsaved', { hasUnsavedChanges: true })];
+  r.project.hasUnsavedChanges = true;
+
+  currentBridge().handlers['shutdown-clicked']();
+  findButton('Yes').onclick();
+
+  assert.ok(findButton('Continue Without Saving'));
+  assert.ok(!currentBridge().invoked.includes('shutdownSystem'),
+    'should not take the machine down before the prompt is answered');
+
+  findButton('Continue Without Saving').onclick();
+  await flushMicrotasks();
+  assert.ok(currentBridge().invoked.includes('shutdownSystem'));
 });
 
 //---------------------------------------------------------------------------

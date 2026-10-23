@@ -142,7 +142,7 @@ var EVENTS = [
   'restore-backup-clicked', 'restore-chapter-clicked',
   'save-as-clicked', 'save-backup-clicked', 'save-clicked', 'save-copy-clicked',
   'screenplay-names-clicked',
-  'send-via-email-clicked', 'settings-clicked', 'shortcuts-clicked', 'spellcheck-clicked',
+  'send-via-email-clicked', 'settings-clicked', 'shortcuts-clicked', 'shutdown-clicked', 'spellcheck-clicked',
   'split-chapter-clicked', 'tab-indent-paragraphs-clicked', 'view-error-log-clicked',
   'wifi-manager-clicked', 'word-count-clicked',
   'app-update-downloaded', 'app-update-failed'
@@ -540,7 +540,10 @@ var COMMANDS = {
   //same as the command not existing. A systemctl that runs and refuses (no polkit authorization for
   //the session, say) is IO_ERROR carrying its own output, so "this build cannot reboot here" and
   //"the machine would not let me" stay tellable apart.
-  rebootSystem: { group: 'K', params: [], returns: 'void (the machine goes down; nothing resolves after it)' }
+  rebootSystem: { group: 'K', params: [], returns: 'void (the machine goes down; nothing resolves after it)' },
+  //File > Shut Down, rebootSystem's twin: the same Linux-only item, the same rejections, and
+  //`systemctl poweroff` in place of `systemctl reboot`.
+  shutdownSystem: { group: 'K', params: [], returns: 'void (the machine goes down; nothing resolves after it)' }
 };
 
 //Wraps a backing in the contract: one async method per COMMANDS entry, every rejection a

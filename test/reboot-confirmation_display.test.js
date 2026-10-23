@@ -30,6 +30,15 @@ test('the confirmation warns that it reboots the computer and starts on No', fun
   assert.strictEqual(document.activeElement, getButton('No'));
 });
 
+//File > Shut Down asks in the same popup with its own words.
+test('a caller can pass its own warning', function(){
+  displayRebootConfirmation(function(){}, 'This will shut down your computer, not the program. Continue?');
+
+  assert.strictEqual(document.querySelector('.reboot-confirm-popup p').innerText,
+    'This will shut down your computer, not the program. Continue?');
+  assert.strictEqual(document.activeElement, getButton('No'));
+});
+
 test('Yes continues and takes the popup down', function(){
   var confirmed = 0;
   displayRebootConfirmation(function(){ confirmed++; });

@@ -421,7 +421,7 @@ test('events are validated by name and unsubscribe cleanly', function(t){
   const seen = [];
   const handler = function(){ seen.push(1); };
 
-  assert.strictEqual(EVENTS.length, 43);
+  assert.strictEqual(EVENTS.length, 44);
   assert.ok(EVENTS.indexOf('save-clicked') > -1);
 
   const unsubscribe = built.platform.on('save-clicked', handler);
@@ -3763,6 +3763,39 @@ test("rebootSystem rejects IO_ERROR with systemctl's own output when the reboot 
   }));
 
   const err = await rejection(platform.rebootSystem());
+
+  assert.strictEqual(err.code, CODES.IO_ERROR);
+  assert.match(err.message, /Interactive authentication required/);
+});
+
+//File > Shut Down shares rebootSystem's body; these check it reaches it with "poweroff".
+test('shutdownSystem spawns "systemctl poweroff" on Linux and resolves once it is accepted', async function(t){
+  const spawnFake = fakeSpawn([{ code: 0 }]);
+  const platform = wrap(createNodeBacking({ platform: 'linux', spawnProcess: spawnFake }));
+
+  await platform.shutdownSystem();
+
+  assert.strictEqual(spawnFake.calls[0].command, 'systemctl');
+  assert.deepStrictEqual(spawnFake.calls[0].args, ['poweroff']);
+});
+
+test('shutdownSystem rejects UNAVAILABLE off Linux, without spawning anything', async function(t){
+  const spawnFake = fakeSpawn([{ code: 0 }]);
+  const platform = wrap(createNodeBacking({ platform: 'darwin', spawnProcess: spawnFake }));
+
+  const err = await rejection(platform.shutdownSystem());
+
+  assert.strictEqual(err.code, CODES.UNAVAILABLE);
+  assert.strictEqual(spawnFake.calls.length, 0);
+});
+
+test("shutdownSystem rejects IO_ERROR with systemctl's own output when the shutdown is refused", async function(t){
+  const platform = wrap(createNodeBacking({
+    platform: 'linux',
+    spawnProcess: fakeSpawn([{ stderrChunks: ['Interactive authentication required.'], code: 1 }])
+  }));
+
+  const err = await rejection(platform.shutdownSystem());
 
   assert.strictEqual(err.code, CODES.IO_ERROR);
   assert.match(err.message, /Interactive authentication required/);

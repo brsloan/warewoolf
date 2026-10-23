@@ -130,8 +130,10 @@ test('the platform-only menus and items come and go with the platform', function
   assert.deepStrictEqual(menus(mac), ['warewoolf', 'File', 'Edit', 'Tools', 'View', 'Help']);
 
   assert.ok(itemFor(linux.items, 'reboot-clicked'), 'Reboot is a writerDeck item');
+  assert.ok(itemFor(linux.items, 'shutdown-clicked'), 'Shut Down is a writerDeck item');
   assert.ok(itemFor(linux.items, 'wifi-manager-clicked'));
   assert.strictEqual(itemFor(windows.items, 'reboot-clicked'), undefined);
+  assert.strictEqual(itemFor(windows.items, 'shutdown-clicked'), undefined);
   assert.strictEqual(itemFor(windows.items, 'wifi-manager-clicked'), undefined);
 });
 

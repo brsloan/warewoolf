@@ -2386,6 +2386,11 @@ function rebootMachine(){
   backupThenFinish(rebootSystem, 'Reboot Without Backup');
 }
 
+//File > Shut Down, Linux only, and the same route out as Reboot for the same reasons.
+function shutdownMachine(){
+  backupThenFinish(shutdownSystem, 'Shut Down Without Backup');
+}
+
 //Exit and Reboot differ only in what ends the session, so the part before that is shared: run the
 //auto-backup if one is configured and the project has somewhere to be backed up to, report its
 //progress, and hand over once it is done. `finish` is also what the alert's skip button calls, so
@@ -2419,6 +2424,15 @@ function rebootSystem(){
     require('./components/controllers/error-log').logError(err);
     const showBlockedActionAlert = require('./components/views/blocked-action_display');
     showBlockedActionAlert('Could not reboot: ' + err.message);
+  });
+}
+
+//As rebootSystem: a refusal is shown, not only logged.
+function shutdownSystem(){
+  platform.shutdownSystem().catch(function(err){
+    require('./components/controllers/error-log').logError(err);
+    const showBlockedActionAlert = require('./components/views/blocked-action_display');
+    showBlockedActionAlert('Could not shut down: ' + err.message);
   });
 }
 
@@ -2659,6 +2673,12 @@ const menuCommands = {
   'reboot-clicked': { run: function(){
     const displayRebootConfirmation = require('./components/views/reboot-confirmation_display');
     displayRebootConfirmation(function(){ proceedOrConfirmSave(rebootMachine, true); });
+  } },
+  //Linux only, like Reboot, and asks the same way with its own warning.
+  'shutdown-clicked': { run: function(){
+    const displayRebootConfirmation = require('./components/views/reboot-confirmation_display');
+    displayRebootConfirmation(function(){ proceedOrConfirmSave(shutdownMachine, true); },
+      'This will shut down your computer, not the program. Continue?');
   } },
   'save-copy-clicked': { run: function(){ saveProjectCopy(); } },
   'help-doc-clicked': { run: function(){ return openHelpDoc(); } },

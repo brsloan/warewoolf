@@ -114,7 +114,9 @@ function buildMenuTemplate(options){
           //No accelerator, deliberately, and for a stronger version of the reason Backup and
           //Dictionaries do without one: every other item on this menu can be undone or answered,
           //and a chord that takes the machine down cannot.
-          item('Reboot', 'reboot-clicked')
+          item('Reboot', 'reboot-clicked'),
+          //Same reasoning, same lack of an accelerator.
+          item('Shut Down', 'shutdown-clicked')
         ] : []),
         separator,
         item('Exit', 'exit-app-clicked', { accelerator: 'CmdOrCtrl+Shift+X' })

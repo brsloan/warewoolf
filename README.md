@@ -39,6 +39,7 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 * Built In Wi-Fi Manager: turn wi-fi on/off, connect to new networks, etc. (Linux only, for use in a writerDeck).
 * Built In Battery Monitor: display battery percentage (Linux only, for use in a writerDeck)
 * File > Reboot: restart the machine from inside the app, after the usual save prompt and auto-backup (Linux only, for use in a writerDeck).
+* File > Shut Down: power the machine off the same way (Linux only).
 * Word Counts / Goal: See total count, chapter count, session count, and set a goal to see a progress bar showing how close you are to completion.
 * Each chapter is saved as an individual file only loaded when you are working on that chapter. This keeps very long novels from slowing the application at all, even with low-memory computers such as a Raspberry Pi.
 * Outliner.
