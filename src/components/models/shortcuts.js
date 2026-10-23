@@ -325,6 +325,7 @@ const MENU_ACCELERATORS = [
   { label: 'Find/Replace', key: 'F', mod: true },
   { label: 'Spell Check', key: '7', mod: true },
   { label: 'Outliner', key: 'O', mod: true },
+  { label: 'Corkboard', key: '9', mod: true },
   { label: 'Wi-Fi Manager', key: 'W', mod: true },
   { label: 'Shortcuts', key: 'H', mod: true },
   { label: 'Shortcuts', key: 'H', mod: true, shift: true },

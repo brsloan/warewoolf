@@ -143,7 +143,7 @@ function buildMenuTemplate(options){
         item('Spell Check', 'spellcheck-clicked', { accelerator: 'CommandOrControl+7' }),
         separator,
         item('Outliner', 'outliner-clicked', { accelerator: 'CommandOrControl+O' }),
-        item('Corkboard', 'corkboard-clicked'),
+        item('Corkboard', 'corkboard-clicked', { accelerator: 'CommandOrControl+9' }),
         //Absent from a novel's menu rather than greyed out in it, the way the writerDeck items
         //below are: the other screenplay differences are one menu offering the same tool in a
         //different shape (Page Count, the Outliner by scene), and this is a tool a novel has no

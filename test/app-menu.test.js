@@ -163,3 +163,17 @@ test('index.js builds its menu from the template and hand-writes no menu items o
   var sent = (main.match(/webContents\.send\(['"][a-z-]+-clicked['"]/g) || []);
   assert.deepStrictEqual(sent, ["webContents.send('exit-app-clicked'"]);
 });
+
+//Ctrl/Cmd+9, beside Spell Check's 7 and Word Count's 8 on the Tools menu it shares with them.
+test('the Corkboard opens on CommandOrControl+9', function(){
+  var corkboard = null;
+  build('prose').template.forEach(function(menu){
+    (menu.submenu || []).forEach(function(entry){
+      if(entry.label === 'Corkboard')
+        corkboard = entry;
+    });
+  });
+
+  assert.ok(corkboard);
+  assert.strictEqual(corkboard.accelerator, 'CommandOrControl+9');
+});
