@@ -417,7 +417,16 @@ test('the PDF page puts the title page alone first, escaped, and starts each cha
 test('the PDF page carries a "Surname / Title / page" header top right, left off the first page', function(){
   const css = new JSDOM(convertMdfcToPdfPage('Text.\n', 'Frankenstein', 'Mary  Shelley', true)).window.document.querySelector('style').textContent;
   assert.match(css, /@page \{\s*@top-right \{\s*content: "Shelley \/ Frankenstein \/ " counter\(page\);/);
-  assert.match(css, /@page :first \{\s*@top-right \{\s*content: none;/);
+  assert.match(css, /@page :first \{\s*counter-increment: page 0;\s*@top-right \{\s*content: none;/);
+});
+
+//A title page does not count; without one, the first page is chapter one's and is page 1.
+test('the page count skips a title page and only a title page', function(){
+  const withTitle = new JSDOM(convertMdfcToPdfPage('Text.\n', 'T', 'A', true)).window.document.querySelector('style').textContent;
+  const without = new JSDOM(convertMdfcToPdfPage('Text.\n', 'T', 'A', false)).window.document.querySelector('style').textContent;
+  assert.match(withTitle, /counter-increment: page 0;/);
+  assert.doesNotMatch(without, /counter-increment/);
+  assert.match(without, /@page :first \{\s*@top-right \{\s*content: none;/);
 });
 
 test('the running header drops a missing author and cannot close the stylesheet early', function(){

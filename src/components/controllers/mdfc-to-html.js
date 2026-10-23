@@ -355,7 +355,7 @@ function convertMdfcToHtmlPage(text, title, author = null, insertTitle = false, 
     //Escaped on the way in: the template writes the title into <title> as-is, ahead of the
     //stylesheet, so a title holding "</style>" would otherwise be what the replace below finds.
     var page = convertMdfcToHtmlPage(text, escapeHtmlText(title), author, false, false, justifyLeft);
-    page = page.replace('</style>', getPrintCss() + getRunningHeaderCss(title, author) + '    </style>');
+    page = page.replace('</style>', getPrintCss() + getRunningHeaderCss(title, author, insertTitle) + '    </style>');
     return page.replace('<body>', '<body>' + titlePage);
   }
 
@@ -367,7 +367,10 @@ function convertMdfcToHtmlPage(text, title, author = null, insertTitle = false, 
   //margin boxes since 131, and with them present it draws no header of its own. The surname is the
   //last word of the author's name; a missing author or title is left out of the line rather than
   //leaving an empty slot between slashes.
-  function getRunningHeaderCss(title, author){
+  //
+  //Numbering starts on the first page of text. A title page, when there is one, does not step the
+  //page counter, so the page after it is 1 rather than 2.
+  function getRunningHeaderCss(title, author, hasTitlePage){
     var surname = author ? String(author).trim().split(/\s+/).pop() : '';
     var parts = [surname, title ? String(title).trim() : ''].filter(function(part){ return part.length > 0; });
     var lead = parts.length > 0 ? cssString(parts.join(' / ') + ' / ') + ' ' : '';
@@ -382,6 +385,7 @@ function convertMdfcToHtmlPage(text, title, author = null, insertTitle = false, 
       "      }" +
       "    }" +
       "    @page :first {" +
+      (hasTitlePage ? "      counter-increment: page 0;" : "") +
       "      @top-right {" +
       "        content: none;" +
       "      }" +
