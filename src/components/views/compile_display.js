@@ -24,7 +24,7 @@ function showCompileOptions(project, sysDirectories, userSettings){
 
     var typeSelect = document.createElement("select");
     typeSelect.id = "filetype-select";
-    const typeOptions = [".docx", ".txt", ".mdfc", ".md", ".html", ".epub"];
+    const typeOptions = [".docx", ".txt", ".mdfc", ".md", ".html", ".epub", ".pdf"];
     typeOptions.forEach(function(op){
       var txtOp = document.createElement("option");
       txtOp.value = op;
@@ -93,7 +93,8 @@ function showCompileOptions(project, sysDirectories, userSettings){
     compTbl.appendChild(generateRow(maxWidthLabel, maxWidthCheck));
 
     //.epub as well as .html: an epub is a book of web pages, and it carries the same stylesheet
-    //written against the same classes, so the same rule reaches it.
+    //written against the same classes, so the same rule reaches it. So is a .pdf, printed from that
+    //same page.
     var justifyLabel = document.createElement('label');
     justifyLabel.innerText = 'Justify left-aligned text: ';
     justifyLabel.htmlFor = 'justify-left-check';
@@ -119,13 +120,13 @@ function showCompileOptions(project, sysDirectories, userSettings){
     compileForm.appendChild(cancelBtn);
 
     typeSelect.onchange = function(){
-      if(typeSelect.value != '.docx' && typeSelect.value != '.html' && typeSelect.value != '.epub')
+      if(typeSelect.value != '.docx' && typeSelect.value != '.html' && typeSelect.value != '.epub' && typeSelect.value != '.pdf')
         titlePageCheck.disabled = true;
       else {
         titlePageCheck.disabled = false;
       }
       maxWidthCheck.disabled = typeSelect.value != '.html';
-      justifyCheck.disabled = typeSelect.value != '.html' && typeSelect.value != '.epub';
+      justifyCheck.disabled = typeSelect.value != '.html' && typeSelect.value != '.epub' && typeSelect.value != '.pdf';
     }
 
     compileForm.onsubmit = function(e){
@@ -155,11 +156,11 @@ function showCompileOptions(project, sysDirectories, userSettings){
       });
     };
 
-    if(userSettings.compileType != '.docx' && userSettings.compileType != '.html' && userSettings.compileType != '.epub')
+    if(userSettings.compileType != '.docx' && userSettings.compileType != '.html' && userSettings.compileType != '.epub' && userSettings.compileType != '.pdf')
       titlePageCheck.disabled = true;
 
     maxWidthCheck.disabled = typeSelect.value != '.html';
-    justifyCheck.disabled = typeSelect.value != '.html' && typeSelect.value != '.epub';
+    justifyCheck.disabled = typeSelect.value != '.html' && typeSelect.value != '.epub' && typeSelect.value != '.pdf';
 
     popup.appendChild(compileForm);
     document.body.appendChild(popup);

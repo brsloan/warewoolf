@@ -429,18 +429,24 @@ function createNodeBacking(deps){
     onSetTheme(args == null ? null : args.mode);
   }
 
-  //The screenplay PDF. The HTML is the renderer's (screenplay-export.js) and the printing is the
-  //host's: index.js supplies onPrintToPdf, which loads the page in a hidden window and writes
-  //webContents.printToPDF's bytes to `path`. Without one - a test, a backing with no window -
-  //this rejects rather than resolving to a file that does not exist.
+  //The screenplay PDF, and a novel's compiled one. The HTML is the renderer's (screenplay-export.js,
+  //mdfc-to-html.js) and the printing is the host's: index.js supplies onPrintToPdf, which loads the
+  //page in a hidden window and writes webContents.printToPDF's bytes to `path`. Without one - a
+  //test, a backing with no window - this rejects rather than resolving to a file that does not
+  //exist. The layout is checked here, before the host is reached, so a typo cannot quietly print a
+  //novel with a screenplay's margins.
   function printToPdf(args){
     requireText(args == null ? null : args.html, 'html');
     requireText(args == null ? null : args.path, 'path');
 
+    var layout = args.layout == null ? 'screenplay' : args.layout;
+    if(layout !== 'screenplay' && layout !== 'book')
+      throw PlatformError(CODES.INVALID_ARGUMENT, 'Unknown PDF layout "' + layout + '".');
+
     if(onPrintToPdf == null)
       throw PlatformError(CODES.UNAVAILABLE, 'PDF printing is not available in this environment.');
 
-    return Promise.resolve(onPrintToPdf(args.html, args.path)).then(function(){ return undefined; });
+    return Promise.resolve(onPrintToPdf(args.html, args.path, layout)).then(function(){ return undefined; });
   }
 
   function showAppMenu(){

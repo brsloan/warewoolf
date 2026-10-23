@@ -370,11 +370,18 @@ test('printToPdf hands the page to the host\'s printer, and rejects UNAVAILABLE 
   const printed = [];
   const withPrinter = createPlatform(createNodeBacking({
     paths: { userData: fs.mkdtempSync(path.join(os.tmpdir(), 'warewoolf-print-')) },
-    onPrintToPdf: function(html, filePath){ printed.push([html, filePath]); return Promise.resolve('ignored'); }
+    onPrintToPdf: function(html, filePath, layout){ printed.push([html, filePath, layout]); return Promise.resolve('ignored'); }
   }));
 
   assert.strictEqual(await withPrinter.printToPdf({ html: '<p>x</p>', path: '/out/script.pdf' }), undefined);
-  assert.deepStrictEqual(printed, [['<p>x</p>', '/out/script.pdf']]);
+  assert.deepStrictEqual(printed, [['<p>x</p>', '/out/script.pdf', 'screenplay']]);
+
+  await withPrinter.printToPdf({ html: '<p>y</p>', path: '/out/novel.pdf', layout: 'book' });
+  assert.deepStrictEqual(printed[1], ['<p>y</p>', '/out/novel.pdf', 'book']);
+
+  const badLayout = await rejection(withPrinter.printToPdf({ html: '<p>x</p>', path: '/out/x.pdf', layout: 'poster' }));
+  assert.strictEqual(badLayout.code, CODES.INVALID_ARGUMENT);
+  assert.strictEqual(printed.length, 2);
 
   const withoutPrinter = platformIn(t).platform;
   const err = await rejection(withoutPrinter.printToPdf({ html: '<p>x</p>', path: '/out/script.pdf' }));

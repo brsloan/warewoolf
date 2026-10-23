@@ -368,3 +368,35 @@ test('compileProject writes the scene-break mark into an epub chapter', async fu
   assert.match(chapterHtml, /class="center">#</);
 });
 
+
+//A novel's PDF is printed by the host from the compiled HTML page - no PDF library - so what the
+//compile owes is the right page, the right path and the 'book' layout handed to printToPdf.
+test('compileProject prints a .pdf through the host in the book layout, with a title page when asked', async function(t){
+  const printed = [];
+  installBridge({ onPrintToPdf: function(html, filePath, layout){ printed.push({ html, filePath, layout }); } });
+  t.after(function(){ installBridge(); });
+
+  var project = makeTestProject([makeChapter(textDelta('First words.')), makeChapter(textDelta('Second words.'))]);
+  var options = { type: '.pdf', insertStrng: '***', insertHead: true, generateTitlePage: true };
+
+  await new Promise(function(resolve){
+    compileProject(project, {}, options, '/out/Test Project.pdf', resolve);
+  });
+
+  assert.strictEqual(printed.length, 1);
+  assert.strictEqual(printed[0].filePath, '/out/Test Project.pdf');
+  assert.strictEqual(printed[0].layout, 'book');
+  assert.match(printed[0].html, /<div class="title-page"><h1 class="center">Test Project<\/h1><h2 class="center">by Test Author<\/h2><\/div>/);
+  assert.match(printed[0].html, /<h1>Chapter 1<\/h1>[\s\S]*First words\.[\s\S]*<h1>Chapter 2<\/h1>[\s\S]*Second words\./);
+});
+
+//Without a printer (a headless backing) there is no PDF, and the compile must not report one.
+test('compileProject rejects a .pdf it cannot print instead of reporting it written', async function(t){
+  var project = makeTestProject([makeChapter(textDelta('Some prose.'))]);
+  var options = { type: '.pdf', insertStrng: '***', insertHead: false, generateTitlePage: false };
+  var called = false;
+
+  await assert.rejects(compileProject(project, {}, options, tempFilePath(t, '.pdf'), function(){ called = true; }),
+    function(err){ return err.code === 'UNAVAILABLE'; });
+  assert.strictEqual(called, false);
+});

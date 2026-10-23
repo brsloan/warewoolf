@@ -2,7 +2,7 @@ const { convertDeltaToMDF } = require('./markdownFic');
 const Quill = require('quill');
 const { convertDeltaToDocx, saveDocx } = require('./delta-to-docx');
 const { logError } = require('./error-log');
-const { convertMdfcToHtmlPage, convertMdfcToHtml } = require('./mdfc-to-html');
+const { convertMdfcToHtmlPage, convertMdfcToHtml, convertMdfcToPdfPage } = require('./mdfc-to-html');
 const { convertMdfcToMd } = require('./mdfc-to-md');
 const { htmlChaptersToEpub } = require('./epub');
 const { convertToPlainText } = require('./quill-utils');
@@ -49,6 +49,10 @@ async function compileProject(project, userSettings, options, filepath, cback = 
             await compileHtml(filepath, allChaps, project.title, project.author, options.generateTitlePage, options.htmlMaxWidth, options.justifyLeftAligned);
             cback();
             break;
+        case ".pdf":
+            await compilePdf(filepath, allChaps, project.title, project.author, options.generateTitlePage, options.justifyLeftAligned);
+            cback();
+            break;
           case ".epub":
             await compileEpub(filepath, project.chapters, project.title, project.author, options, cback);
             break;
@@ -89,6 +93,16 @@ async function compileHtml(dir, allChaps, title, author, insertTitle, maxWidth, 
   catch(err){
     logError(err);
   }
+}
+
+//Printed by the host (the printToPdf command's 'book' layout) from the same HTML .html compiles to,
+//so a novel's PDF needs no PDF library. Unlike its neighbours this does not swallow its failure: a
+//PDF is the one format here that can fail for want of a printer (UNAVAILABLE), and that should not
+//be reported as a finished compile. Left to propagate to compile_display.js's .catch, which logs it
+//once - the same path compileDocx's failed write takes.
+async function compilePdf(filepath, allChaps, title, author, insertTitle, justifyLeft){
+  var page = convertMdfcToPdfPage(convertDeltaToMDF(allChaps), title, author, insertTitle, justifyLeft);
+  await platform.printToPdf({ path: filepath, html: page, layout: 'book' });
 }
 
 async function compileMd(dir, allChaps){

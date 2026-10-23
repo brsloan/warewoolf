@@ -4,7 +4,7 @@ const assert = require('node:assert');
 //than reading the rules off the page as text.
 const { JSDOM } = require('jsdom');
 
-const { convertMdfcToHtml, convertMdfcToHtmlPage } = require('../src/components/controllers/mdfc-to-html');
+const { convertMdfcToHtml, convertMdfcToHtmlPage, convertMdfcToPdfPage } = require('../src/components/controllers/mdfc-to-html');
 
 test('headings convert at every level', function(){
   assert.strictEqual(
@@ -397,4 +397,24 @@ test('a page written without the option carries no justify rules', function(){
 
   assert.doesNotMatch(page, bareJustifyRule);
   assert.doesNotMatch(page, leftJustifyRule);
+});
+
+test('the PDF page puts the title page alone first, escaped, and starts each chapter on a new page', function(){
+  const page = convertMdfcToPdfPage('# One\nText & more.\n# Two\nMore.\n', 'Rats & <Mice>', 'A. Writer', true);
+  const doc = new JSDOM(page).window.document;
+
+  const titlePage = doc.body.firstElementChild;
+  assert.strictEqual(titlePage.className, 'title-page');
+  assert.strictEqual(titlePage.querySelector('h1').textContent, 'Rats & <Mice>');
+  assert.strictEqual(titlePage.querySelector('h2').textContent, 'by A. Writer');
+
+  const css = doc.querySelector('style').textContent;
+  assert.match(css, /\.title-page \{\s*break-after: page;/);
+  assert.match(css, /h1 \{\s*break-before: page;/);
+  assert.deepStrictEqual(Array.from(doc.querySelectorAll('body > h1')).map(function(h){ return h.textContent; }), ['One', 'Two']);
+});
+
+test('the PDF page has no title page unless asked', function(){
+  const doc = new JSDOM(convertMdfcToPdfPage('Text.\n', 'Title', 'Author', false)).window.document;
+  assert.strictEqual(doc.querySelector('.title-page'), null);
 });

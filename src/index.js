@@ -319,12 +319,24 @@ function host(){
       //get it: a script's length is its page count, and that depends on the exact face. But a
       //data: URL has no origin Chromium will let read file:// - the url()s index.css uses would
       //be refused - so the same four files go in as @font-face rules with the bytes inlined.
-      onPrintToPdf: function(html, filePath){
+      //
+      //A novel's compiled PDF (layout 'book') takes the same window with a book's page instead: an
+      //inch all round and the page number centred at the foot. Its page asks only for serif faces
+      //the system already has, so nothing is inlined into it.
+      onPrintToPdf: function(html, filePath, layout){
+        var isBook = layout === 'book';
         var printer = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true } });
-        var page = html.replace('<head>', '<head><style>' + screenplayFontFaces() + '</style>');
+        var page = isBook ? html : html.replace('<head>', '<head><style>' + screenplayFontFaces() + '</style>');
         var done = printer.webContents.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(page))
           .then(function(){
-            return printer.webContents.printToPDF({
+            return printer.webContents.printToPDF(isBook ? {
+              pageSize: 'Letter',
+              printBackground: false,
+              margins: { marginType: 'custom', top: 1, bottom: 1, left: 1, right: 1 },
+              displayHeaderFooter: true,
+              headerTemplate: '<div></div>',
+              footerTemplate: '<div style="width:100%;font-family:Georgia,serif;font-size:10pt;text-align:center;padding-bottom:0.4in"><span class="pageNumber"></span></div>'
+            } : {
               pageSize: 'Letter',
               printBackground: false,
               margins: { marginType: 'custom', top: 1, bottom: 1, left: 1.5, right: 1 },

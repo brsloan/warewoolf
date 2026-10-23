@@ -334,7 +334,73 @@ function convertMdfcToHtmlPage(text, title, author = null, insertTitle = false, 
   
     return htmlTemplate;
   }
-  
+
+  //A compiled novel's PDF page: the same HTML the .html compile writes, with a printed book's
+  //stylesheet on top - a serif face at 12pt, every chapter heading starting a fresh page, and the
+  //title page (when asked for) alone on the first. The page size, margins and page numbers are the
+  //printToPdf command's 'book' layout, not this page's; Chromium's header/footer templates are the
+  //only place a page number can come from.
+  //
+  //The title page is built here rather than through convertMdfcToHtmlPage's insertTitle, which
+  //only stacks the title above chapter one - a book's title wants a page to itself, and some room
+  //above it.
+  function convertMdfcToPdfPage(text, title, author = null, insertTitle = false, justifyLeft = false){
+    var titlePage = '';
+    if(insertTitle){
+      titlePage = '<div class="title-page"><h1 class="center">' + escapeHtmlText(title) + '</h1>';
+      if(author)
+        titlePage += '<h2 class="center">by ' + escapeHtmlText(author) + '</h2>';
+      titlePage += '</div>';
+    }
+
+    var page = convertMdfcToHtmlPage(text, title, author, false, false, justifyLeft);
+    page = page.replace('</style>', getPrintCss() + '    </style>');
+    return page.replace('<body>', '<body>' + titlePage);
+  }
+
+  function getPrintCss(){
+    return "    body {" +
+      "      font-family: Georgia, \"Times New Roman\", \"Liberation Serif\", \"DejaVu Serif\", serif;" +
+      "      font-size: 12pt;" +
+      "      line-height: 1.5;" +
+      "      color: black;" +
+      "      margin: 0;" +
+      "    }" +
+      "    h1 {" +
+      "      break-before: page;" +
+      "      margin-top: 2in;" +
+      "      margin-bottom: 0.5in;" +
+      "      text-align: center;" +
+      "      font-weight: normal;" +
+      "    }" +
+      "    h1, h2, h3, h4 {" +
+      "      break-after: avoid;" +
+      "    }" +
+      "    p {" +
+      "      orphans: 2;" +
+      "      widows: 2;" +
+      "    }" +
+      "    .title-page {" +
+      "      break-after: page;" +
+      "      padding-top: 3in;" +
+      "    }" +
+      "    .title-page h1 {" +
+      "      break-before: auto;" +
+      "      margin-top: 0;" +
+      "    }" +
+      "    .title-page h2 {" +
+      "      font-weight: normal;" +
+      "    }" +
+      "    a {" +
+      "      color: inherit;" +
+      "      text-decoration: none;" +
+      "    }";
+  }
+
+  function escapeHtmlText(text){
+    return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
   //An unasked-for page is written exactly as it always was, with no body rule at all, so a file
   //already styled by whatever reads it is not given a width it never had.
   function getHtmlTemplate(maxWidth = false, justifyLeft = false){
@@ -414,5 +480,6 @@ function convertWindowsToLinuxLineEndings(text) {
 module.exports = {
     convertMdfcToHtml,
     convertMdfcToHtmlPage,
+    convertMdfcToPdfPage,
     getJustifyLeftCss
 };

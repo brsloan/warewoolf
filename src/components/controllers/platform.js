@@ -170,8 +170,9 @@ var COMMANDS = {
   //HTML; printing it is a main-process affair (a hidden window and webContents.printToPDF), so it
   //is a command here rather than anything the renderer could do. Group A because the backing
   //reaches it through a callback index.js supplies, like setTheme. Tauri: a webview print API.
-  printToPdf: { group: 'A', params: ['html', 'path'], returns: 'void',
-    note: 'Letter, an inch and a half on the left and an inch elsewhere, a page number top right. Rejects UNAVAILABLE where no printer callback was supplied (tests, a headless backing).' },
+  //`layout` 'book' is a novel's compiled PDF: the same hidden window, a different page.
+  printToPdf: { group: 'A', params: ['html', 'path'], optional: ['layout'], returns: 'void',
+    note: '`layout` is "screenplay" (the default) or "book". A screenplay is Letter, an inch and a half on the left and an inch elsewhere, a page number top right. A book is Letter, an inch all round, a page number centred at the foot. Rejects UNAVAILABLE where no printer callback was supplied (tests, a headless backing).' },
   //What the application menu is for: `project` is \'novel\' | \'screenplay\', `document` is
   //\'prose\' | \'screenplay\' (the document in the editor - a Reference note in a screenplay project
   //is prose). The host rebuilds the menu from it (app-menu.js): Word Count reads Page Count for a
