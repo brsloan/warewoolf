@@ -336,9 +336,9 @@ function convertMdfcToHtmlPage(text, title, author = null, insertTitle = false, 
   }
 
   //A compiled novel's PDF page: the same HTML the .html compile writes, with a printed book's
-  //stylesheet on top - a serif face at 12pt, every chapter heading starting a fresh page, and the
-  //title page (when asked for) alone on the first. The page size and margins are the printToPdf
-  //command's 'book' layout, not this page's.
+  //stylesheet on top - a serif face at 12pt, double spaced as manuscript format asks, every chapter
+  //heading starting a fresh page, and the title page (when asked for) alone on the first. The page
+  //size and margins are the printToPdf command's 'book' layout, not this page's.
   //
   //The title page is built here rather than through convertMdfcToHtmlPage's insertTitle, which
   //only stacks the title above chapter one - a book's title wants a page to itself, and some room
@@ -402,7 +402,7 @@ function convertMdfcToHtmlPage(text, title, author = null, insertTitle = false, 
     return "    body {" +
       "      font-family: Georgia, \"Times New Roman\", \"Liberation Serif\", \"DejaVu Serif\", serif;" +
       "      font-size: 12pt;" +
-      "      line-height: 1.5;" +
+      "      line-height: 2;" +
       "      color: black;" +
       "      margin: 0;" +
       "    }" +

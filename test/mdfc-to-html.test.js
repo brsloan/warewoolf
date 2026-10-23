@@ -411,6 +411,7 @@ test('the PDF page puts the title page alone first, escaped, and starts each cha
   const css = doc.querySelector('style').textContent;
   assert.match(css, /\.title-page \{\s*break-after: page;/);
   assert.match(css, /h1 \{\s*break-before: page;/);
+  assert.match(css, /line-height: 2;/, 'manuscript format is double spaced');
   assert.deepStrictEqual(Array.from(doc.querySelectorAll('body > h1')).map(function(h){ return h.textContent; }), ['One', 'Two']);
 });
 
