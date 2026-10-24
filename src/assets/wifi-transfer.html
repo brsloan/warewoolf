@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>WareWoolf Wi-Fi Transfer</title>
+<!-- Served by wifi-transfer-server.js to a phone or laptop on the deck's network. Self-contained:
+     the deck may have no internet, so nothing is loaded from anywhere else, and every name shown
+     goes in through textContent. -->
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f6f4ef;
+    --fg: #1d1c1a;
+    --muted: #6b675f;
+    --card: #ffffff;
+    --line: #dcd7cc;
+    --accent: #2f5d50;
+    --accent-fg: #ffffff;
+    --bad: #a3322a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #171716;
+      --fg: #ecebe7;
+      --muted: #a29e95;
+      --card: #222220;
+      --line: #3a3935;
+      --accent: #7fb9a6;
+      --accent-fg: #10201b;
+      --bad: #ee8a80;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font: 17px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 34rem; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  h2 { font-size: 1.05rem; margin: 0 0 10px; }
+  p { margin: 0 0 12px; }
+  .muted { color: var(--muted); font-size: 0.92rem; }
+  section {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px;
+    margin-top: 16px;
+  }
+  label { display: block; font-weight: 600; margin-bottom: 6px; }
+  input[type="text"] {
+    width: 100%;
+    font: inherit;
+    font-size: 1.6rem;
+    letter-spacing: 0.25em;
+    text-align: center;
+    padding: 10px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--fg);
+  }
+  button, .button {
+    display: inline-block;
+    font: inherit;
+    font-weight: 600;
+    padding: 10px 18px;
+    border: 0;
+    border-radius: 8px;
+    background: var(--accent);
+    color: var(--accent-fg);
+    text-decoration: none;
+    cursor: pointer;
+  }
+  button:disabled { opacity: 0.5; cursor: default; }
+  .row { display: flex; gap: 10px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
+  ul { list-style: none; padding: 0; margin: 0; }
+  li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-top: 1px solid var(--line);
+  }
+  li:first-child { border-top: 0; }
+  .name { overflow-wrap: anywhere; }
+  .size { color: var(--muted); font-size: 0.88rem; white-space: nowrap; }
+  .message { min-height: 1.4em; margin-top: 10px; }
+  .message.bad { color: var(--bad); }
+  progress { width: 100%; height: 10px; margin-top: 10px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>WareWoolf Wi-Fi Transfer</h1>
+  <p class="muted">This page works only while Wi-Fi Transfer is switched on on the deck.</p>
+
+  <section id="pair-view">
+    <form id="pair-form">
+      <label for="code-input">Code shown on the deck</label>
+      <input id="code-input" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="000 000">
+      <div class="row"><button id="pair-button" type="submit">Connect</button></div>
+    </form>
+    <p id="pair-message" class="message" role="status"></p>
+  </section>
+
+  <div id="main-view" hidden>
+    <section>
+      <h2>From the deck</h2>
+      <p id="offers-empty" class="muted">Nothing offered yet. On the deck, choose what to send and press Add to Page; it appears here.</p>
+      <ul id="offers-list"></ul>
+    </section>
+
+    <section>
+      <h2>Send to the deck</h2>
+      <p class="muted">Files wait in the deck's inbox until you import them there. The deck takes the types File &gt; Import reads, and .zip project backups.</p>
+      <input id="file-input" type="file" multiple>
+      <div class="row"><button id="send-button" type="button" disabled>Send</button></div>
+      <progress id="send-progress" max="1" value="0" hidden></progress>
+      <p id="send-message" class="message" role="status"></p>
+      <ul id="sent-list"></ul>
+    </section>
+  </div>
+</main>
+<script>
+(function(){
+  var pairView = document.getElementById('pair-view');
+  var mainView = document.getElementById('main-view');
+  var pairForm = document.getElementById('pair-form');
+  var codeInput = document.getElementById('code-input');
+  var pairButton = document.getElementById('pair-button');
+  var pairMessage = document.getElementById('pair-message');
+  var offersList = document.getElementById('offers-list');
+  var offersEmpty = document.getElementById('offers-empty');
+  var fileInput = document.getElementById('file-input');
+  var sendButton = document.getElementById('send-button');
+  var sendProgress = document.getElementById('send-progress');
+  var sendMessage = document.getElementById('send-message');
+  var sentList = document.getElementById('sent-list');
+
+  var accept = [];
+  var maxUploadBytes = Infinity;
+  var sending = false;
+  var pollTimer = null;
+
+  function formatSize(bytes){
+    if(bytes < 1024) return bytes + ' B';
+    if(bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
+    return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+  }
+
+  function say(element, text, bad){
+    element.textContent = text || '';
+    element.classList.toggle('bad', !!bad);
+  }
+
+  function showPairing(message, bad){
+    clearTimeout(pollTimer);
+    mainView.hidden = true;
+    pairView.hidden = false;
+    pairButton.disabled = false;
+    say(pairMessage, message, bad);
+  }
+
+  function listItem(name, size, link){
+    var li = document.createElement('li');
+    var label = document.createElement('span');
+    label.className = 'name';
+    label.textContent = name;
+    var right = document.createElement('span');
+    right.className = 'size';
+    right.textContent = formatSize(size);
+    li.appendChild(label);
+    if(link){
+      var wrap = document.createElement('span');
+      wrap.className = 'row';
+      wrap.style.marginTop = '0';
+      wrap.appendChild(right);
+      wrap.appendChild(link);
+      li.appendChild(wrap);
+    }
+    else
+      li.appendChild(right);
+    return li;
+  }
+
+  function render(state){
+    accept = state.accept || [];
+    maxUploadBytes = state.maxUploadBytes || Infinity;
+    fileInput.accept = accept.map(function(ext){ return '.' + ext; }).join(',');
+
+    offersList.textContent = '';
+    (state.offers || []).forEach(function(offer){
+      var link = document.createElement('a');
+      link.className = 'button';
+      link.href = '/api/offers/' + encodeURIComponent(offer.id);
+      link.setAttribute('download', offer.name);
+      link.textContent = 'Download';
+      offersList.appendChild(listItem(offer.name, offer.size, link));
+    });
+    offersEmpty.hidden = (state.offers || []).length > 0;
+
+    sentList.textContent = '';
+    (state.received || []).slice().reverse().forEach(function(file){
+      sentList.appendChild(listItem(file.name + ' - in the inbox', file.size));
+    });
+  }
+
+  function refresh(){
+    clearTimeout(pollTimer);
+    return fetch('/api/state', { credentials: 'same-origin', cache: 'no-store' }).then(function(response){
+      if(response.status === 401){
+        showPairing(mainView.hidden ? '' : 'The deck ended this session. Enter the new code shown on the deck.', !mainView.hidden);
+        return;
+      }
+      return response.json().then(function(state){
+        pairView.hidden = true;
+        mainView.hidden = false;
+        render(state);
+        schedule();
+      });
+    }).catch(function(){
+      if(!mainView.hidden)
+        say(sendMessage, 'Cannot reach the deck. Wi-Fi Transfer may have been switched off there.', true);
+      schedule();
+    });
+  }
+
+  //Only while the page is in front, so a phone left in a pocket is not what keeps the deck's
+  //server from switching itself off.
+  function schedule(){
+    clearTimeout(pollTimer);
+    if(!document.hidden && !mainView.hidden)
+      pollTimer = setTimeout(refresh, 4000);
+  }
+
+  document.addEventListener('visibilitychange', function(){
+    if(!document.hidden && !mainView.hidden)
+      refresh();
+  });
+
+  pairForm.addEventListener('submit', function(e){
+    e.preventDefault();
+    var code = codeInput.value.replace(/\D/g, '');
+    if(code.length !== 6){
+      say(pairMessage, 'The code is six digits.', true);
+      return;
+    }
+    pairButton.disabled = true;
+    say(pairMessage, 'Connecting...');
+    fetch('/api/pair', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: code })
+    }).then(function(response){
+      return response.json().then(function(body){
+        if(response.ok){
+          codeInput.value = '';
+          say(pairMessage, '');
+          return refresh();
+        }
+        var text = body.error || 'Could not connect.';
+        if(body.triesLeft != null)
+          text += ' ' + body.triesLeft + (body.triesLeft === 1 ? ' try' : ' tries') + ' left.';
+        showPairing(text, true);
+      });
+    }).catch(function(){
+      showPairing('Cannot reach the deck. Is Wi-Fi Transfer still on?', true);
+    });
+  });
+
+  codeInput.addEventListener('input', function(){
+    var digits = codeInput.value.replace(/\D/g, '').slice(0, 6);
+    codeInput.value = digits.length > 3 ? digits.slice(0, 3) + ' ' + digits.slice(3) : digits;
+  });
+
+  fileInput.addEventListener('change', function(){
+    sendButton.disabled = sending || fileInput.files.length === 0;
+    say(sendMessage, '');
+  });
+
+  function extensionOf(name){
+    var dot = name.lastIndexOf('.');
+    return dot === -1 ? '' : name.slice(dot + 1).toLowerCase();
+  }
+
+  //XMLHttpRequest rather than fetch, for the upload progress a phone on slow Wi-Fi needs to see.
+  function uploadOne(file){
+    return new Promise(function(resolve){
+      if(accept.indexOf(extensionOf(file.name)) === -1){
+        resolve({ ok: false, text: file.name + ': the deck does not take this kind of file.' });
+        return;
+      }
+      if(file.size > maxUploadBytes){
+        resolve({ ok: false, text: file.name + ': too big. The limit is ' + formatSize(maxUploadBytes) + '.' });
+        return;
+      }
+      var xhr = new XMLHttpRequest();
+      xhr.open('PUT', '/api/upload?name=' + encodeURIComponent(file.name));
+      xhr.withCredentials = true;
+      xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+      xhr.upload.onprogress = function(e){
+        if(e.lengthComputable){
+          sendProgress.max = e.total;
+          sendProgress.value = e.loaded;
+        }
+      };
+      xhr.onload = function(){
+        var body = {};
+        try { body = JSON.parse(xhr.responseText); } catch(err) {}
+        if(xhr.status === 201)
+          resolve({ ok: true, text: 'Sent ' + body.name + '.' });
+        else if(xhr.status === 401)
+          resolve({ ok: false, ended: true, text: 'The deck ended this session.' });
+        else
+          resolve({ ok: false, text: file.name + ': ' + (body.error || 'not sent.') });
+      };
+      xhr.onerror = function(){
+        resolve({ ok: false, text: file.name + ': the connection to the deck was lost.' });
+      };
+      xhr.send(file);
+    });
+  }
+
+  sendButton.addEventListener('click', function(){
+    var files = Array.prototype.slice.call(fileInput.files);
+    if(files.length === 0 || sending)
+      return;
+    sending = true;
+    sendButton.disabled = true;
+    fileInput.disabled = true;
+    sendProgress.hidden = false;
+    var problems = [];
+    var sent = 0;
+
+    files.reduce(function(previous, file, i){
+      return previous.then(function(stop){
+        if(stop)
+          return true;
+        say(sendMessage, 'Sending ' + file.name + (files.length > 1 ? ' (' + (i + 1) + ' of ' + files.length + ')' : '') + '...');
+        sendProgress.value = 0;
+        return uploadOne(file).then(function(result){
+          if(result.ok)
+            sent++;
+          else
+            problems.push(result.text);
+          return !!result.ended;
+        });
+      });
+    }, Promise.resolve(false)).then(function(ended){
+      sending = false;
+      fileInput.disabled = false;
+      fileInput.value = '';
+      sendProgress.hidden = true;
+      sendButton.disabled = true;
+      if(ended){
+        showPairing('The deck ended this session. Enter the new code shown on the deck.', true);
+        return;
+      }
+      var summary = sent > 0 ? 'Sent ' + sent + (sent === 1 ? ' file' : ' files') + ' to the deck\'s inbox.' : '';
+      say(sendMessage, [summary].concat(problems).filter(Boolean).join(' '), problems.length > 0);
+      refresh();
+    });
+  });
+
+  refresh();
+})();
+</script>
+</body>
+</html>

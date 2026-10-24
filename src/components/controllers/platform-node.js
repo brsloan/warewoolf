@@ -61,6 +61,7 @@ const { sanitizeFilename } = require('./utils');
 //than reimplements.
 const { decryptLegacy, isLegacyBlob } = require('./crypto');
 const getCredentialStore = require('../models/credential-store');
+const { createTransferServer } = require('./wifi-transfer-server');
 
 //The renderer stops knowing any of these. Today they are spelled out in chapter.js, which means the
 //renderer knows how a chapter is laid out on disk; after Phase 4 it knows only titles and the
@@ -138,6 +139,9 @@ const SQUIRREL_UPDATE_TAG_PATTERN = /^v\d+\.\d+\.\d+$/;
 //Linux-only sysfs path for battery state - absent by construction on Windows/macOS, which is what
 //makes getBatteryCapacity's UNAVAILABLE path exercisable in this test suite without a real Pi.
 const POWER_SUPPLY_PATH = '/sys/class/power_supply';
+//Wi-Fi Transfer's inbox, under the documents directory beside "backups": where a file sent from a
+//phone waits until the writer imports or discards it on the deck.
+const TRANSFER_INBOX_DIRNAME = 'WareWoolf Inbox';
 
 //`services` maps a credential service name to the directory its store lives in. Only 'email' exists
 //today, in userData, which is exactly where credential-store.js already keeps credentials.json and
@@ -226,6 +230,10 @@ function createNodeBacking(deps){
   //shape applies, even though the commands themselves are declared in group K.
   var onStartSquirrelUpdate = options.onStartSquirrelUpdate || function(){};
   var onQuitAndInstallUpdate = options.onQuitAndInstallUpdate || function(){};
+  //Wi-Fi Transfer's server, made on first use: one per backing, so the four wifiTransfer* commands
+  //all talk to the same one. `options.wifiTransfer` passes the server's own test seams through
+  //(chooseAddress, port, idleLimitMs, page) - see wifi-transfer-server.js.
+  var transferServer = null;
 
   //Stores are cached rather than rebuilt per call because a passphrase-derived session key lives in
   //the store's closure. Discarding the instance is therefore how lockCredential locks: the key has
@@ -348,6 +356,10 @@ function createNodeBacking(deps){
     bluetoothPair: bluetoothPair,
     bluetoothConnect: bluetoothConnect,
     bluetoothRemove: bluetoothRemove,
+    wifiTransferStart: wifiTransferStart,
+    wifiTransferStop: wifiTransferStop,
+    wifiTransferStatus: wifiTransferStatus,
+    wifiTransferOffer: wifiTransferOffer,
 
     on: on,
     off: off
@@ -3193,6 +3205,66 @@ function createNodeBacking(deps){
           throw bluetoothFailure(result, 'Could not remove ' + address + '.', 'bluetoothRemove');
         return undefined;
       });
+    });
+  }
+
+  // ------------------------------------------------------------------------------------------
+  // Group K (Wi-Fi Transfer)
+  // ------------------------------------------------------------------------------------------
+
+  //A writerDeck feature, so Linux only like the Bluetooth Manager - UNAVAILABLE anywhere else,
+  //before a socket is ever opened.
+  function transfer(command){
+    if(currentPlatform() !== 'linux')
+      throw PlatformError(CODES.UNAVAILABLE, 'Wi-Fi Transfer is only available on Linux.', { command: command });
+    if(paths.docs == null)
+      throw PlatformError(CODES.UNAVAILABLE, 'Wi-Fi Transfer has no documents directory to keep its inbox in.', { command: command });
+
+    if(transferServer == null){
+      var seams = options.wifiTransfer || {};
+      transferServer = createTransferServer({
+        inboxDir: path.join(paths.docs, TRANSFER_INBOX_DIRNAME),
+        log: log,
+        chooseAddress: seams.chooseAddress,
+        port: seams.port,
+        idleLimitMs: seams.idleLimitMs,
+        page: seams.page
+      });
+    }
+    return transferServer;
+  }
+
+  function wifiTransferStart(){
+    return transfer('wifiTransferStart').start();
+  }
+
+  function wifiTransferStop(){
+    transfer('wifiTransferStop').stop(null);
+    return undefined;
+  }
+
+  function wifiTransferStatus(){
+    return transfer('wifiTransferStatus').status();
+  }
+
+  //The same three attachment kinds sendEmail takes, built the same way (resolveAttachments), so
+  //offering the book to a phone is emailing it without the email. The bytes are held in memory
+  //for as long as the server runs and dropped when it stops; the temp files resolveAttachments
+  //made for a zip or an epub are removed before this resolves.
+  function wifiTransferOffer(args){
+    var server = transfer('wifiTransferOffer');
+    if(!server.status().running)
+      return Promise.reject(PlatformError(CODES.INVALID_ARGUMENT, 'Wi-Fi Transfer is not switched on.', { command: 'wifiTransferOffer' }));
+
+    return resolveAttachments(args.attachments == null ? [] : args.attachments).then(function(resolved){
+      var files = resolved.attachments.map(function(attachment){
+        var content = Buffer.isBuffer(attachment.content)
+          ? attachment.content
+          : Buffer.from(String(attachment.content), attachment.encoding || 'utf8');
+        return { name: attachment.filename, content: content };
+      });
+      resolved.cleanup();
+      return server.offer(files);
     });
   }
 

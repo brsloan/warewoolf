@@ -19,7 +19,19 @@ const { createIpcBacking } = require('./platform-ipc');
 //instance, the same reason file-manager.js/docx-import.js do.
 var platform = createPlatform(createIpcBacking());
 
+//`options.filepaths`, when given, are the files to import, and no file dialog is shown - Wi-Fi
+//Transfer's inbox has already said which file the writer means.
 function initiateImport(sysDirectories, options, addImportedChapter, cback){
+  if(options.filepaths != null && options.filepaths.length > 0){
+    try{
+      importFilesAsync(options.filepaths.slice(), options, addImportedChapter, cback, sysDirectories);
+    }
+    catch(err){
+      logError(err);
+      hideWorking();
+    }
+    return;
+  }
 
   const dialogOptions = {
     title: 'Import files...',

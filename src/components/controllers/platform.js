@@ -144,7 +144,7 @@ var EVENTS = [
   'screenplay-names-clicked',
   'send-via-email-clicked', 'settings-clicked', 'shortcuts-clicked', 'shutdown-clicked', 'spellcheck-clicked',
   'split-chapter-clicked', 'tab-indent-paragraphs-clicked', 'view-error-log-clicked',
-  'wifi-manager-clicked', 'word-count-clicked',
+  'wifi-manager-clicked', 'wifi-transfer-clicked', 'word-count-clicked',
   'app-update-downloaded', 'app-update-failed'
 ];
 
@@ -584,7 +584,25 @@ var COMMANDS = {
   bluetoothPair: { group: 'K', params: ['address'], returns: 'void' },
   bluetoothConnect: { group: 'K', params: ['address'], returns: 'void' },
   //Unpairs and forgets the device.
-  bluetoothRemove: { group: 'K', params: ['address'], returns: 'void' }
+  bluetoothRemove: { group: 'K', params: ['address'], returns: 'void' },
+  //Wi-Fi Transfer (File > Wi-Fi Transfer, Linux only): a page on the deck's local network that a
+  //phone or laptop opens to download what the writer offers and to upload files into an inbox. The
+  //server lives on the native side (wifi-transfer-server.js) and is switched on only while the
+  //dialog has it on. Every one rejects UNAVAILABLE off Linux; start rejects UNAVAILABLE too when the
+  //deck has no private network address to listen on.
+  //
+  //Nothing that arrives is acted on here. Uploads only land in the inbox (`inbox.path`, under the
+  //documents directory), and the dialog imports or discards them through the commands that already
+  //exist for that - so this group adds no write the renderer can aim anywhere.
+  wifiTransferStart: { group: 'K', params: [], returns: 'the same object wifiTransferStatus resolves',
+    note: 'Resolves the running status unchanged when the server is already on: a fresh code comes from stopping and starting.' },
+  wifiTransferStop: { group: 'K', params: [], returns: 'void' },
+  wifiTransferStatus: { group: 'K', params: [],
+    returns: '{ running, url, code, connected, offers: { name, size }[], received: { name, size }[], inbox: { path, files: { name, size, modified }[] }, stopReason }',
+    note: '`code` is null once a device has connected with it. `received` is what this session took in. `stopReason` says why the server switched itself off (idle, too many wrong codes), and is null while running or after an ordinary stop.' },
+  //Takes the same attachment descriptors as sendEmail, built the same way, and resolves the status.
+  //An offer replaces one of the same name. Rejects INVALID_ARGUMENT while the server is off.
+  wifiTransferOffer: { group: 'K', params: ['attachments'], returns: 'the same object wifiTransferStatus resolves' }
 };
 
 //Wraps a backing in the contract: one async method per COMMANDS entry, every rejection a

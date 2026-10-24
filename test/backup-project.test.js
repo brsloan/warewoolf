@@ -7,7 +7,7 @@ const unzipper = require('unzipper');
 
 const BACKSLASH = String.fromCharCode(92);
 
-const { backupProject, archiveProject, deleteOldBackups, selectBackupsToKeep, listProjectBackups, restoreBackup } = require('../src/components/controllers/backup-project');
+const { backupProject, archiveProject, deleteOldBackups, selectBackupsToKeep, listProjectBackups, restoreBackup, adoptBackup } = require('../src/components/controllers/backup-project');
 const { normalizeSlashes } = require('../src/components/controllers/path-utils');
 
 //The modules under test hold their own createPlatform(createIpcBacking()) instance and reach the
@@ -304,4 +304,40 @@ test('restoreBackup unzips beside the archive, never over an earlier restore, an
 
 test('restoreBackup refuses a file that is not a backup', async function(t){
   await assert.rejects(restoreBackup('/somewhere/notes.zip'), /Not a WareWoolf backup/);
+});
+
+//Wi-Fi Transfer's inbox hands a backup sent from a phone to adoptBackup.
+test('adoptBackup moves a backup into the Backups directory and restores it there', async function(t){
+  const project = makeProjectFixture(t);
+  const inbox = makeTempDir(t, 'wwbackup-inbox-');
+  const docs = makeTempDir(t, 'wwbackup-docs-');
+  const archiveName = await new Promise(function(resolve, reject){
+    archiveProject(project, inbox, function(err, name){ err ? reject(err) : resolve(name); });
+  });
+  const userSettings = { backupDirectory: '', save: function(){} };
+
+  const projectPath = await adoptBackup(normalizeSlashes(path.join(inbox, archiveName)), userSettings, normalizeSlashes(docs));
+
+  assert.strictEqual(userSettings.backupDirectory, normalizeSlashes(docs) + '/backups');
+  assert.ok(fs.existsSync(path.join(docs, 'backups', archiveName)));
+  assert.ok(!fs.existsSync(path.join(inbox, archiveName)), 'moved, not copied');
+  assert.strictEqual(projectPath, normalizeSlashes(docs) + '/backups/' + archiveName.slice(0, -4) + '/' + project.filename);
+  assert.ok(fs.existsSync(projectPath));
+});
+
+test('adoptBackup leaves a .zip that is not a backup, or one already in Backups, where it is', async function(t){
+  const inbox = makeTempDir(t, 'wwbackup-inbox-');
+  const docs = makeTempDir(t, 'wwbackup-docs-');
+  fs.writeFileSync(path.join(inbox, 'photos.zip'), 'not a backup');
+  fs.mkdirSync(path.join(docs, 'backups'));
+  fs.writeFileSync(path.join(docs, 'backups', 'novel20260101120000.zip'), 'already here');
+  fs.writeFileSync(path.join(inbox, 'novel20260101120000.zip'), 'from the phone');
+  const userSettings = { backupDirectory: normalizeSlashes(path.join(docs, 'backups')), save: function(){} };
+
+  await assert.rejects(adoptBackup(normalizeSlashes(path.join(inbox, 'photos.zip')), userSettings, docs), /not a WareWoolf backup/);
+  await assert.rejects(adoptBackup(normalizeSlashes(path.join(inbox, 'novel20260101120000.zip')), userSettings, docs), /already in the Backups directory/);
+
+  assert.ok(fs.existsSync(path.join(inbox, 'photos.zip')));
+  assert.strictEqual(fs.readFileSync(path.join(inbox, 'novel20260101120000.zip'), 'utf8'), 'from the phone');
+  assert.strictEqual(fs.readFileSync(path.join(docs, 'backups', 'novel20260101120000.zip'), 'utf8'), 'already here');
 });

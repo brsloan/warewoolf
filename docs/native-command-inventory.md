@@ -946,6 +946,18 @@ that is not running. Pairing passes `--agent NoInputNoOutput` so a keyboard
 pairs Just Works, with no passkey to show mid-command. An address is checked
 against the `AA:BB:CC:DD:EE:FF` form before anything is spawned.
 
+`wifiTransferStart()`, `wifiTransferStop()`, `wifiTransferStatus()` and
+`wifiTransferOffer({ attachments })` back File > Wi-Fi Transfer
+(`wifi-transfer.js`, `wifi-transfer_display.js`), Linux only. The server is
+`wifi-transfer-server.js`, a Node `http` server in the main process: it listens
+on the deck's private IPv4 address only, answers only clients on that subnet
+that name that address in `Host`, and wants a one-time six-digit code (then an
+HttpOnly, SameSite=Strict cookie) before anything else. Uploads land in
+`<docs>/WareWoolf Inbox` and nothing more - importing or discarding them goes
+through the existing Import flow, `adoptBackup` (an archive moved into Backups
+and restored), and `deleteEntry`. `wifiTransferOffer` takes `sendEmail`'s
+attachment descriptors and builds them with the same `resolveAttachments`.
+
 ---
 
 ## Summary

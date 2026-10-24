@@ -95,6 +95,10 @@ function buildMenuTemplate(options){
         item('Compile', 'compile-clicked', { accelerator: 'CmdOrCtrl+Shift+C' }),
         separator,
         item('Send via Email', 'send-via-email-clicked', { accelerator: 'CommandOrControl+Alt+E' }),
+        //A writerDeck item, gated like the Wi-Fi Manager: a phone or laptop on the same network
+        //downloads the book from the deck, or sends files to its inbox. No accelerator - it opens a
+        //port, so it should be chosen, not stumbled into.
+        ...(isLinux ? [item('Wi-Fi Transfer', 'wifi-transfer-clicked')] : []),
         separator,
         item('Properties', 'properties-clicked', { accelerator: 'CmdOrCtrl+P' }),
         item('Settings', 'settings-clicked'),

@@ -531,6 +531,23 @@ function runImportFilesAsyncWithMetadata(ctrl, filepaths, options, sysDirectorie
   });
 }
 
+test('initiateImport imports the files it is given without opening a file dialog', async function(){
+  const dir = tempDir();
+  const file = path.join(dir, 'from-phone.txt');
+  fs.writeFileSync(file, 'Sent From The Phone\r\nBody.');
+
+  const options = { fileType: { id: 'txtSelect' }, txtOptions: plainTextOptions(), filepaths: [file] };
+  const added = [];
+  await new Promise(function(resolve){
+    importCtrl.initiateImport({ temp: dir, docs: dir }, options, function(delta, title){
+      added.push(title);
+    }, resolve);
+  });
+
+  assert.deepStrictEqual(added, ['Sent From The Phone']);
+  assert.deepStrictEqual(options.filepaths, [file], 'the caller\'s list is left as it was');
+});
+
 test('importFilesAsync imports a single plain text file end-to-end', async function(){
   const dir = tempDir();
   const file = path.join(dir, 'story.txt');

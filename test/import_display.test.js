@@ -182,6 +182,39 @@ test('submitting builds an options object matching the selected file type and pa
   assert.strictEqual(capturedOptions.txtOptions.chapLabels, 'firstLine');
 });
 
+//Wi-Fi Transfer's Import button: the file is already chosen, so the dialog names it, offers only the
+//types that read its extension, starts on the one asked for, and passes the path straight through.
+test('a preset inbox file is named, limits the types to its extension, and is imported without a file dialog', function(t){
+  var capturedOptions;
+  var showImportOptions = freshImportDisplay({
+    initiateImport: function(sysDirectories, options){ capturedOptions = options; }
+  });
+
+  showImportOptions({ docs: '/proj/docs' }, function(){}, function(){}, null,
+    { filepaths: ['/home/me/Documents/WareWoolf Inbox/notes.md'], fileTypeId: 'mdfcSelect' });
+
+  assert.match(document.querySelector('.popup p').innerText, /Importing notes\.md\./);
+  assert.strictEqual(document.getElementById('mdfcSelect').checked, true);
+  assert.strictEqual(document.getElementById('docxSelect').disabled, true);
+  assert.strictEqual(document.getElementById('txtSelect').disabled, true);
+  assert.strictEqual(document.getElementById('mdfcSelect').disabled, false);
+
+  document.querySelector('form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+  assert.strictEqual(capturedOptions.fileType.id, 'mdfcSelect');
+  assert.deepStrictEqual(capturedOptions.filepaths, ['/home/me/Documents/WareWoolf Inbox/notes.md']);
+});
+
+test('a preset whose type this project does not offer falls back to the first type that reads the file', function(t){
+  var showImportOptions = freshImportDisplay({ initiateImport: function(){} });
+
+  showImportOptions({ docs: '/proj/docs' }, function(){}, function(){}, { type: 'screenplay' },
+    { filepaths: ['/inbox/draft.txt'], fileTypeId: 'mdfcSelect' });
+
+  var checked = document.querySelector('input[name="typeSelect"]:checked');
+  assert.strictEqual(checked.id, 'fountainSelect');
+  assert.strictEqual(document.getElementById('fdxSelect').disabled, true);
+});
+
 function captureSubmittedOptions(prepare, fileTypeId){
   var capturedOptions;
   var showImportOptions = freshImportDisplay({

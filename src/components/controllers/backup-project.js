@@ -186,6 +186,26 @@ async function restoreBackup(backupPath){
   return projectPath;
 }
 
+//A backup that arrived from somewhere else - Wi-Fi Transfer's inbox - joins the Backups directory
+//and is restored from there like any other, so Restore Backup lists it afterwards too. Moved, not
+//copied. Checked before anything moves: a .zip that is not named like a WareWoolf backup is left
+//where it is, and so is one whose name is already in the Backups directory, rather than replacing
+//a backup the writer may be relying on. Resolves to the restored .woolf file's path.
+async function adoptBackup(zipPath, userSettings, docsDir){
+  var filename = basename(zipPath);
+  if(backupProjectName(filename) == null)
+    throw new Error(filename + ' is not a WareWoolf backup. A backup is named after its project and the'
+      + ' time it was made, like "My Novel20260101120000.zip".');
+
+  await ensureBackupDirectory(userSettings, docsDir, function(){});
+  var destPath = join(userSettings.backupDirectory, filename);
+  if(await platform.pathExists({ path: destPath }))
+    throw new Error(filename + ' is already in the Backups directory. Open it from File > Restore Backup.');
+
+  await platform.moveEntry({ source: zipPath, destination: destPath });
+  return restoreBackup(destPath);
+}
+
 //The create is used only for its side effect; the path handed back is built here rather than taken
 //from the command's own return value, so this function's answer does not depend on what group E
 //chooses to normalize.
@@ -231,5 +251,6 @@ module.exports = {
   deleteOldBackups,
   selectBackupsToKeep,
   listProjectBackups,
-  restoreBackup
+  restoreBackup,
+  adoptBackup
 }

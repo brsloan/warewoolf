@@ -8,7 +8,7 @@ const path = require('path');
 const errorLog = require('../src/components/controllers/error-log');
 const newProject = require('../src/components/models/project');
 const emailDocPath = require.resolve('../src/components/controllers/email-doc');
-const { prepareAndEmail, emailFile } = require(emailDocPath);
+const { prepareAndEmail, buildAttachments, emailFile } = require(emailDocPath);
 const { createPlatform } = require('../src/components/controllers/platform');
 const { createNodeBacking } = require('../src/components/controllers/platform-node');
 
@@ -354,4 +354,23 @@ test('a saved password that has gone away is reported, not sent as the sentinel'
 
   assert.match(resp, /No saved password/);
   assert.strictEqual(transportCalls, 0);
+});
+
+//Wi-Fi Transfer offers exactly what this would attach, so the descriptors are built apart from the
+//sending.
+test('buildAttachments describes the chosen document, or the whole project as an archive', async function(){
+  const project = makeProjectWithActiveDoc('chapters', 'Chapter One');
+  project.directory = '/books/novel/';
+  project.chapsDirectory = 'novel_chapters/';
+  project.filename = 'novel.woolf';
+
+  const text = await buildAttachments(project, {}, fakeEditorQuill(), '.txt', { compile: false });
+  assert.strictEqual(text.length, 1);
+  assert.strictEqual(text[0].filename, 'Chapter One.txt');
+  assert.match(text[0].content, /^Hello world/);
+
+  const zip = await buildAttachments(project, {}, fakeEditorQuill(), '.zip', { compile: false });
+  assert.deepStrictEqual(zip, [{ projectArchive: {
+    projectDir: '/books/novel/', chapsDir: 'novel_chapters/', sourceFilename: 'novel.woolf'
+  } }]);
 });

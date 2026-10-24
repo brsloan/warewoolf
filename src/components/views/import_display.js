@@ -8,7 +8,11 @@ const { initiateImport } = require('../controllers/import');
 //left out, since a script has no chapters and the Scenes sidebar would not even show one. A novel
 //project gets the prose formats, and only those: the script formats are left out of its dialog the
 //way the prose formats are left out of a screenplay's. docs/screenplay-plan.md, Phase 7.
-function showImportOptions(sysDirectories, addImportedChapter, onFinish, project){
+//
+//`preset` is { filepaths, fileTypeId }, from Wi-Fi Transfer's inbox: the file is already chosen, so
+//the dialog names it, starts on the type its extension suggests, offers only the types that read
+//that extension, and imports it without a file dialog.
+function showImportOptions(sysDirectories, addImportedChapter, onFinish, project, preset){
   var screenplay = !!(project && project.type === 'screenplay');
 
   removeElementsByClass('popup');
@@ -19,6 +23,14 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish, project
   popupTitle.innerText = 'Import Documents';
   popup.appendChild(popupTitle);
   describeDialog(popup, popupTitle);
+
+  if(preset != null){
+    var presetNote = document.createElement('p');
+    presetNote.innerText = 'Importing ' + preset.filepaths.map(function(filepath){
+      return filepath.split(/[\\/]/).pop();
+    }).join(', ') + '.';
+    popup.appendChild(presetNote);
+  }
 
   var importForm = document.createElement("form");
 
@@ -362,6 +374,8 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish, project
     var importOptions = {
       fileType: filetypes[document.querySelector('input[name="typeSelect"]:checked').value]
     };
+    if(preset != null)
+      importOptions.filepaths = preset.filepaths;
     importOptions.txtOptions = {
       convertFirstLines: convertFirstLinesCheck.checked,
       convertItalics: {
@@ -420,6 +434,18 @@ function showImportOptions(sysDirectories, addImportedChapter, onFinish, project
   var htmlSelect = document.getElementById('htmlSelect');
   var epubSelect = document.getElementById('epubSelect');
   var defaultSelect = document.getElementById(screenplay ? 'fountainSelect' : 'docxSelect');
+  if(preset != null){
+    var extension = preset.filepaths[0].split('.').pop().toLowerCase();
+    filetypes.forEach(function(type){
+      if(type.extensions.indexOf(extension) === -1)
+        document.getElementById(type.id).disabled = true;
+    });
+    var presetSelect = document.getElementById(preset.fileTypeId);
+    if(presetSelect != null && !presetSelect.disabled)
+      defaultSelect = presetSelect;
+    else
+      defaultSelect = document.querySelector('input[name="typeSelect"]:not(:disabled)') || defaultSelect;
+  }
   defaultSelect.checked = true;
 
   var isChecked = function(radio){ return !!(radio && radio.checked); };

@@ -428,7 +428,7 @@ test('events are validated by name and unsubscribe cleanly', function(t){
   const seen = [];
   const handler = function(){ seen.push(1); };
 
-  assert.strictEqual(EVENTS.length, 45);
+  assert.strictEqual(EVENTS.length, 46);
   assert.ok(EVENTS.indexOf('save-clicked') > -1);
 
   const unsubscribe = built.platform.on('save-clicked', handler);
@@ -4147,6 +4147,78 @@ test('a bluetoothctl that never answers is killed and reported as the service no
 
   assert.strictEqual(err.code, CODES.UNAVAILABLE);
   assert.match(err.message, /bluetoothd/);
+});
+
+//Wi-Fi Transfer's four commands. The server itself is tested in wifi-transfer-server.test.js; these
+//prove the backing gates it to Linux, keeps its inbox under the documents directory, and that what
+//the commands return survives the bridge.
+function transferPlatform(t, platformName){
+  const dir = tempDir(t);
+  const backing = createNodeBacking({
+    platform: platformName || 'linux',
+    paths: { userData: dir, docs: dir },
+    wifiTransfer: {
+      chooseAddress: function(){ return { address: '127.0.0.1', netmask: '255.0.0.0' }; },
+      port: 0,
+      page: '<!doctype html><title>page</title>'
+    }
+  });
+  const platform = wrap(backing);
+  t.after(function(){ return platform.wifiTransferStop().catch(function(){}); });
+  return { dir: dir, platform: platform };
+}
+
+test('the Wi-Fi Transfer commands reject UNAVAILABLE off Linux, before anything listens', async function(t){
+  const { platform } = transferPlatform(t, 'win32');
+
+  for(const name of ['wifiTransferStart', 'wifiTransferStop', 'wifiTransferStatus', 'wifiTransferOffer']){
+    const err = await rejection(platform[name]({ attachments: [] }));
+    assert.strictEqual(err.code, CODES.UNAVAILABLE, name);
+    assert.match(err.message, /only available on Linux/);
+  }
+});
+
+test('wifiTransferStart, Offer, Status and Stop drive one server, with the inbox under the documents directory', async function(t){
+  const { dir, platform } = transferPlatform(t);
+
+  const off = await platform.wifiTransferStatus();
+  assert.strictEqual(off.running, false);
+  assert.strictEqual(off.inbox.path, path.join(dir, 'WareWoolf Inbox').split(path.sep).join('/'));
+
+  const offRefused = await rejection(platform.wifiTransferOffer({ attachments: [{ filename: 'a.txt', content: 'a' }] }));
+  assert.strictEqual(offRefused.code, CODES.INVALID_ARGUMENT);
+
+  const on = await platform.wifiTransferStart();
+  assert.strictEqual(on.running, true);
+  assert.match(on.code, /^\d{3} \d{3}$/);
+  assert.ok(fs.existsSync(path.join(dir, 'WareWoolf Inbox')));
+
+  const offered = await platform.wifiTransferOffer({ attachments: [
+    { filename: 'Book.txt', content: 'The whole book.' },
+    { filename: 'Book.docx', content: Buffer.from('docx').toString('base64'), encoding: 'base64' }
+  ] });
+  assert.deepStrictEqual(offered.offers, [{ name: 'Book.txt', size: 15 }, { name: 'Book.docx', size: 4 }]);
+
+  await platform.wifiTransferStop();
+  const stopped = await platform.wifiTransferStatus();
+  assert.strictEqual(stopped.running, false);
+  assert.deepStrictEqual(stopped.offers, []);
+});
+
+test('wifiTransferOffer builds a project archive the way sendEmail does, and leaves no temp files', async function(t){
+  const { dir, platform } = transferPlatform(t);
+  const project = makeBackupProjectFixture(dir);
+  await platform.wifiTransferStart();
+  const scoped = scopedTmpdir(t);
+
+  const offered = await platform.wifiTransferOffer({ attachments: [{ projectArchive: {
+    projectDir: dir, chapsDir: project.chapsDir, sourceFilename: project.filename
+  } }] });
+
+  assert.strictEqual(offered.offers.length, 1);
+  assert.match(offered.offers[0].name, /\d{14}\.zip$/);
+  assert.ok(offered.offers[0].size > 0);
+  assert.deepStrictEqual(fs.readdirSync(scoped), []);
 });
 
 test('the network/hardware commands refuse arguments they cannot act on', async function(t){

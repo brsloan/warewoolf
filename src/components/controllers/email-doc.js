@@ -28,6 +28,14 @@ const { logError } = require('./error-log');
 //already in memory off disk - which now goes through the platform facade. Every caller already
 //waits on `callback` rather than on this returning, so nothing about the reporting changes.
 async function prepareAndEmail(project, userSettings, editorQuill, platform, sender, pass, receiver, filetype, compileOptions, callback){
+  var attachments = await buildAttachments(project, userSettings, editorQuill, filetype, compileOptions);
+  emailFile(platform, sender, pass, receiver, attachments, callback);
+}
+
+//The attachment descriptors for what the dialog asked for - the shape sendEmail takes, and
+//wifiTransferOffer too, which is why this is its own function: Wi-Fi Transfer offers a phone
+//exactly what Send via Email would have attached.
+async function buildAttachments(project, userSettings, editorQuill, filetype, compileOptions){
   var delt;
   var filename;
 
@@ -44,101 +52,59 @@ async function prepareAndEmail(project, userSettings, editorQuill, platform, sen
     filename = chapTitle == "" ? "untitled" : chapTitle;
   }
 
-  if(filetype == ".docx"){
-    await emailDeltaAsDocx(platform, project, userSettings, filename, delt, compileOptions, sender, pass, receiver, callback);
-  }
-  else if(filetype == ".mdfc"){
-    emailDeltaAsMdfc(platform, filename, delt, sender, pass, receiver, callback);
-  }
-  else if(filetype == ".zip"){
-    emailAsZip(platform, project, sender, pass, receiver, callback);
-  }
-  else if(filetype == '.md'){
-    emailDeltaAsMd(platform, filename, delt, sender, pass, receiver, callback);
-  }
-  else if(filetype == '.html'){
-    emailDeltaAsHtml(platform, filename, project, compileOptions, delt, sender, pass, receiver, callback);
-  }
-  else if(filetype == '.epub'){
-    await emailAsEpub(platform, filename, project, compileOptions, delt, sender, pass, receiver, callback);
-  }
-  else {
-    //default to txt
-    emailDeltaAsTxt(platform, filename, delt, sender, pass, receiver, callback);
-  }
+  if(filetype == ".docx")
+    return docxAttachments(project, userSettings, filename, delt, compileOptions);
+  if(filetype == ".mdfc")
+    return [{ filename: filename + '.mdfc', content: convertDeltaToMDF(delt) }];
+  if(filetype == ".zip")
+    return zipAttachments(project);
+  if(filetype == '.md')
+    return [{ filename: filename + '.md', content: convertMdfcToMd(convertDeltaToMDF(delt)) }];
+  if(filetype == '.html')
+    return htmlAttachments(filename, project, compileOptions, delt);
+  if(filetype == '.epub')
+    return epubAttachments(filename, project, compileOptions, delt);
 
+  //default to txt
+  return [{ filename: filename + '.txt', content: convertToPlainText(delt) }];
 }
 
 //The manuscript title page's project-wide word count is counted here now rather than inside
 //delta-to-docx - see the note on convertDeltaToDocx for why.
-async function emailDeltaAsDocx(platform, project, userSettings, filename, delt, options, sender, pass, receiver, callback){
+async function docxAttachments(project, userSettings, filename, delt, options){
   var totalWordCount = options && options.generateTitlePage ? await getTotalWordCount(project) : 0;
   var doc = convertDeltaToDocx(delt, options, project, userSettings.addressInfo, totalWordCount);
-  packageDocxBase64(doc, (docString) => {
-    var attachments = [
-      {
-          filename: filename + '.docx',
-          content: docString,
-          encoding: 'base64'
-      }
-    ]
-    emailFile(platform, sender, pass, receiver, attachments, callback);
+  return new Promise(function(resolve){
+    packageDocxBase64(doc, (docString) => {
+      resolve([
+        {
+            filename: filename + '.docx',
+            content: docString,
+            encoding: 'base64'
+        }
+      ]);
+    });
   });
 }
 
-function emailDeltaAsMd(platform, filename, delt, sender, pass, receiver, callback){
-  var attachments = [
-    {
-      filename: filename + '.md',
-      content: convertMdfcToMd(convertDeltaToMDF(delt))
-    }
-  ];
-
-  emailFile(platform, sender, pass, receiver, attachments, callback);
-}
-
-function emailDeltaAsHtml(platform, filename, project, compileOptions, delt, sender, pass, receiver, callback){
+function htmlAttachments(filename, project, compileOptions, delt){
   var generateTitle = compileOptions ? compileOptions.generateTitlePage : false;
   var title = compileOptions.compile ? project.title : project.getActiveChapter().title;
 
-  var attachments = [
+  return [
     {
       filename: filename + '.html',
       content: convertMdfcToHtmlPage(convertDeltaToMDF(delt), title, project.author, generateTitle)
     }
   ];
-
-  emailFile(platform, sender, pass, receiver, attachments, callback);
-}
-
-function emailDeltaAsMdfc(platform, filename, delt, sender, pass, receiver, callback){
-  var attachments = [
-    {
-      filename: filename + '.mdfc',
-      content: convertDeltaToMDF(delt)
-    }
-  ];
-
-  emailFile(platform, sender, pass, receiver, attachments, callback);
-}
-
-function emailDeltaAsTxt(platform, filename, delt, sender, pass, receiver, callback){
-  var attachments = [
-    {
-      filename: filename + '.txt',
-      content: convertToPlainText(delt)
-    }
-  ];
-
-  emailFile(platform, sender, pass, receiver, attachments, callback);
 }
 
 //No filename is given for the archive itself - sendEmail's projectArchive attachment allocates one
 //natively (project title + timestamp), the same reason archiveProject (group H) allocates rather
 //than takes one. "Cannot back up a project with no filename" now comes back as sendEmail's own
 //rejection (archiveProject's own guard, reached through platform-node.js), not a check made here.
-function emailAsZip(platform, project, sender, pass, receiver, callback){
-  var attachments = [
+function zipAttachments(project){
+  return [
     {
       projectArchive: {
         projectDir: project.directory,
@@ -147,11 +113,9 @@ function emailAsZip(platform, project, sender, pass, receiver, callback){
       }
     }
   ];
-
-  emailFile(platform, sender, pass, receiver, attachments, callback);
 }
 
-async function emailAsEpub(platform, filename, project, compileOptions, delt, sender, pass, receiver, callback){
+async function epubAttachments(filename, project, compileOptions, delt){
   var generateTitle = compileOptions ? compileOptions.generateTitlePage : false;
   var title = compileOptions.compile ? project.title : project.getActiveChapter().title;
   var htmlChapters = [];
@@ -173,14 +137,12 @@ async function emailAsEpub(platform, filename, project, compileOptions, delt, se
 
   var entries = assembleEpubEntries(title, project.author, htmlChapters, generateTitle);
 
-  var attachments = [
+  return [
     {
       filename: filename + '.epub',
       epubEntries: entries
     }
   ];
-
-  emailFile(platform, sender, pass, receiver, attachments, callback);
 }
 
 function emailFile(platform, sender, pass, receiver, attachments, callback){
@@ -200,5 +162,6 @@ function emailFile(platform, sender, pass, receiver, attachments, callback){
 
 module.exports = {
   prepareAndEmail,
+  buildAttachments,
   emailFile
 }

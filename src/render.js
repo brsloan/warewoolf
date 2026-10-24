@@ -2543,6 +2543,30 @@ function proceedOrConfirmSave(continueFunc, refreshFileListFirst){
     continueFunc();
 }
 
+//File > Import, and Wi-Fi Transfer's Import button, which hands over `preset` - the inbox file the
+//writer chose, and the file type its extension suggests (see import_display.js).
+function showImportDialog(preset){
+  const showImportOptions = require('./components/views/import_display');
+  //The finish callback carries the imported book's own title and author when the format had any -
+  //only an epub does. applyBookMetadata (import.js) decides what to do with it.
+  const { applyBookMetadata } = require('./components/controllers/import');
+  showImportOptions(sysDirectories, detached(addImportedChapter), detached(async function(bookMetadata){
+    applyBookMetadata(project, bookMetadata);
+    //An imported script takes the place of a screenplay project's script (installScript), and
+    //its title page comes with it: the project's title page, title and author become the
+    //imported script's, the way a .fountain's own title page wins on load. A script with no
+    //title page of its own leaves the project's alone.
+    if(bookMetadata && Array.isArray(bookMetadata.titlePage) && bookMetadata.titlePage.length > 0 &&
+        project.isScreenplay()){
+      newChapter.adoptTitlePage(project, bookMetadata.titlePage);
+      project.hasUnsavedChanges = true;
+    }
+    await displayChapterByIndex(project.activeChapterIndex);
+    if(project.chapters.length > 0)
+      editorQuill.enable();
+  }), project, preset);
+}
+
 //Most menu/IPC commands share one shape: lazily require a view module and call it with some
 //subset of (project, userSettings, sysDirectories, ...), sometimes only while the editor has
 //focus. Collecting them here means the focus guard - previously an ad-hoc `if(editorHasFocus())`
@@ -2563,25 +2587,7 @@ const menuCommands = {
   'open-clicked': { run: function(){ proceedOrConfirmSave(openAProject); } },
   'new-project-clicked': { run: function(){ createNewProject(); } },
   'import-clicked': { run: function(){
-    const showImportOptions = require('./components/views/import_display');
-    //The finish callback carries the imported book's own title and author when the format had any -
-    //only an epub does. applyBookMetadata (import.js) decides what to do with it.
-    const { applyBookMetadata } = require('./components/controllers/import');
-    showImportOptions(sysDirectories, detached(addImportedChapter), detached(async function(bookMetadata){
-      applyBookMetadata(project, bookMetadata);
-      //An imported script takes the place of a screenplay project's script (installScript), and
-      //its title page comes with it: the project's title page, title and author become the
-      //imported script's, the way a .fountain's own title page wins on load. A script with no
-      //title page of its own leaves the project's alone.
-      if(bookMetadata && Array.isArray(bookMetadata.titlePage) && bookMetadata.titlePage.length > 0 &&
-          project.isScreenplay()){
-        newChapter.adoptTitlePage(project, bookMetadata.titlePage);
-        project.hasUnsavedChanges = true;
-      }
-      await displayChapterByIndex(project.activeChapterIndex);
-      if(project.chapters.length > 0)
-        editorQuill.enable();
-    }), project);
+    showImportDialog();
   } },
   'export-clicked': { run: function(){
     const showExportOptions = require('./components/views/export_display');
@@ -2708,6 +2714,20 @@ const menuCommands = {
   'bluetooth-manager-clicked': { run: function(){
     const showBluetoothManager = require('./components/views/bluetooth-manager_display');
     showBluetoothManager();
+  } },
+  //Only ever sent on Linux - app-menu.js puts the item nowhere else.
+  'wifi-transfer-clicked': { run: function(){
+    const showWifiTransfer = require('./components/views/wifi-transfer_display');
+    showWifiTransfer(project, userSettings, editorQuill, sysDirectories, {
+      importFile: function(filepath, fileTypeId){
+        showImportDialog({ filepaths: [filepath], fileTypeId: fileTypeId });
+      },
+      //A restored backup opens the way Restore Backup's does: unsaved changes are offered a save
+      //first.
+      openProject: function(projectPath){
+        proceedOrConfirmSave(detached(function(){ return openProjectAt(projectPath); }));
+      }
+    });
   } },
   'save-backup-clicked': { run: function(){
     const { backupProject } = require('./components/controllers/backup-project');

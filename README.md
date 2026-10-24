@@ -35,6 +35,7 @@ For a more in-depth overview of WareWoolf, please see [the Wiki](https://github.
 * Keep notes on each chapter and project as a whole
 * "Reference" section of chapters list holds documents you don't want included in compile or word counts. Keep character lists, location info, etc.
 * Send Via Email: Email drafts of individual chapters or the entire manuscript to yourself at the press of a button.
+* Wi-Fi Transfer: download the book or a backup to a phone or laptop on the same Wi-Fi, or send files from it to the deck's inbox to import, with a one-time code and no email password (Linux only, for use in a writerDeck).
 * Built In File Manager: Rename, delete, copy, move, and organize files within WareWoolf (for use in a writerDeck).
 * Built In Wi-Fi Manager: turn wi-fi on/off, connect to new networks, etc. (Linux only, for use in a writerDeck).
 * Built In Bluetooth Manager: pair and connect Bluetooth keyboards and other devices (Linux only, for use in a writerDeck).

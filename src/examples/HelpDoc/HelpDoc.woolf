@@ -161,6 +161,12 @@
 			"summary": null
 		},
 		{
+			"title": "Wi-Fi Transfer",
+			"filename": "Wi-Fi Transfer.txt",
+			"filter": null,
+			"summary": null
+		},
+		{
 			"title": "Word Counts",
 			"filename": "Word Counts.txt",
 			"filter": null,
