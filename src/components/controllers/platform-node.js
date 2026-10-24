@@ -2298,8 +2298,17 @@ function createNodeBacking(deps){
     });
   }
 
+  //A spawn that found no such binary. Usually ENOENT, but when the search fails and some folder on
+  //PATH could not be read, the spawn reports EACCES instead - every WSL install, whose PATH carries
+  //Windows folders Linux may not read, so a missing bluetoothctl there arrived as a permission
+  //error and was logged instead of reading "not installed". Only ever applied to a spawn's own
+  //error, never to a file operation, where EACCES still means what it says.
+  function isMissingBinary(err){
+    return err != null && (err.code === 'ENOENT' || err.code === 'EACCES');
+  }
+
   function unavailableOrIoError(err, command){
-    return err != null && err.code === 'ENOENT'
+    return isMissingBinary(err)
       ? PlatformError(CODES.UNAVAILABLE, command + ' needs nmcli, which is not installed on this machine.', { command: command })
       : fromNodeError(err, { command: command });
   }
@@ -2677,9 +2686,9 @@ function createNodeBacking(deps){
   }
 
   //unavailableOrIoError above names nmcli in its message, which would be the wrong binary to blame
-  //here. Same ENOENT rule, different missing thing.
+  //here. Same missing-binary rule, different missing thing.
   function systemctlUnavailableOrIoError(err, label, command){
-    return err != null && err.code === 'ENOENT'
+    return isMissingBinary(err)
       ? PlatformError(CODES.UNAVAILABLE,
         label + ' needs systemctl, which is not installed on this machine.', { command: command })
       : fromNodeError(err, { command: command });
@@ -2691,7 +2700,7 @@ function createNodeBacking(deps){
 
   //Runs a tool to completion and resolves { code, stdout, stderr } whatever the exit code - each
   //drive command decides for itself what a non-zero exit means. A missing binary rejects
-  //UNAVAILABLE naming `needs`, the same ENOENT rule as the nmcli and systemctl commands above.
+  //UNAVAILABLE naming `needs`, the same missing-binary rule as the nmcli and systemctl commands above.
   function runTool(binary, args, command, needs){
     return new Promise(function(resolve, reject){
       var child;
@@ -2727,7 +2736,7 @@ function createNodeBacking(deps){
   }
 
   function toolUnavailableOrIoError(err, command, needs){
-    return err != null && err.code === 'ENOENT'
+    return isMissingBinary(err)
       ? PlatformError(CODES.UNAVAILABLE, command + ' needs ' + needs + ', which is not installed on this machine.', { command: command })
       : fromNodeError(err, { command: command });
   }

@@ -3410,6 +3410,14 @@ function enoent(command){
   return err;
 }
 
+//What a spawn of a missing binary reports when some folder on PATH could not be read - every
+//WSL install, whose PATH carries Windows folders. Seen as 'spawn bluetoothctl EACCES'.
+function spawnEacces(command){
+  const err = new Error('spawn ' + command + ' EACCES');
+  err.code = 'EACCES';
+  return err;
+}
+
 //Stubs only the one path getBatteryCapacity reads (/sys/class/power_supply, absent by
 //construction on this suite's own Windows/macOS/CI machines), falling through to the *real*
 //fs.readdirSync for anything else - captured before patching, since fs.readdirSync has already
@@ -3480,6 +3488,16 @@ test('wifiListNetworks rejects UNAVAILABLE when nmcli is not installed', async f
 
   const err = await rejection(platform.wifiListNetworks());
   assert.strictEqual(err.code, CODES.UNAVAILABLE);
+});
+
+test('wifiListNetworks rejects UNAVAILABLE, not PERMISSION_DENIED, on a spawn EACCES', async function(t){
+  const platform = wrap(createNodeBacking({
+    spawnProcess: fakeSpawn([{ error: spawnEacces('nmcli') }])
+  }));
+
+  const err = await rejection(platform.wifiListNetworks());
+  assert.strictEqual(err.code, CODES.UNAVAILABLE);
+  assert.match(err.message, /not installed/);
 });
 
 test('wifiConnect spawns nmcli with ssid/psk as separate argv elements and resolves on success', async function(t){
@@ -3760,6 +3778,18 @@ test('rebootSystem rejects UNAVAILABLE when systemctl is not installed', async f
   assert.match(err.message, /systemctl/);
 });
 
+test('rebootSystem rejects UNAVAILABLE, not PERMISSION_DENIED, on a spawn EACCES', async function(t){
+  const platform = wrap(createNodeBacking({
+    platform: 'linux',
+    spawnProcess: fakeSpawn([{ error: spawnEacces('systemctl') }])
+  }));
+
+  const err = await rejection(platform.rebootSystem());
+
+  assert.strictEqual(err.code, CODES.UNAVAILABLE);
+  assert.match(err.message, /systemctl/);
+});
+
 //The case a writer can actually do something about: systemctl ran and logind refused the session.
 //IO_ERROR rather than UNAVAILABLE, and carrying systemctl's own words, since "reboot failed" on its
 //own tells them nothing about why.
@@ -4000,6 +4030,14 @@ test('the bluetooth commands reject UNAVAILABLE when there is no adapter, no blu
 
   assert.strictEqual((await rejection(notLinux.platform.bluetoothScan())).code, CODES.UNAVAILABLE);
   assert.strictEqual(notLinux.spawnFake.calls.length, 0);
+});
+
+test('the bluetooth commands reject UNAVAILABLE, not PERMISSION_DENIED, on a spawn EACCES (WSL)', async function(t){
+  const { platform } = bluetoothPlatform([{ error: spawnEacces('bluetoothctl') }]);
+
+  const err = await rejection(platform.bluetoothGetStatus());
+  assert.strictEqual(err.code, CODES.UNAVAILABLE);
+  assert.match(err.message, /bluez/);
 });
 
 test('bluetoothEnable powers the adapter on, and a refusal carries BlueZ\'s own line', async function(t){

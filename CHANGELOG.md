@@ -21,6 +21,10 @@ Releases before v0.9.0 were never tagged or published; the work from that period
 
 - **Backups are kept by day and week, not only by count.** The backups-to-keep setting still keeps that many of the newest, and now also keeps the newest backup of each day for the last 30 days and the newest of each week before that. Before, one busy day of opening and closing could push out a week of backups.
 
+### Fixed
+
+- **A missing `nmcli`, `systemctl` or `bluetoothctl` says "not installed" under WSL too.** When a command is not found and a folder on the PATH cannot be read, as WSL's Windows folders often cannot, Linux reports a permission error instead of "not found". The Wi-Fi Manager, Bluetooth Manager, Reboot and Shut Down showed and logged that as a failure instead of saying the tool was not installed.
+
 ## [3.1.1] - 2026-09-30
 
 ### Changed
